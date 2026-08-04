@@ -1,6 +1,6 @@
 # agentic-sdlc
 
-> Governed agentic software-delivery loop with Sandcastle-style Git worktree sandboxing, durable tracker truth, and TypeScript SDK & CLI. Inspired by [mattpocock/sandcastle](https://github.com/mattpocock/sandcastle).
+> Governed agentic software-delivery loop with Git worktree sandboxing, durable tracker truth, and TypeScript SDK & CLI.
 
 ---
 
@@ -17,8 +17,8 @@ Unlike unconstrained agent setups that pollute your active working copy or run u
 
 ## Features
 
-- 🛠️ **CLI & Programmatic SDK**: Run via `npx agentic-sdlc` or embed in custom Node.js/TypeScript workflows via `import { supervise } from 'agentic-sdlc'`.
-- 🏰 **Sandcastle-Style Worktree & Docker Isolation**: Automated git worktree creation, containerized Docker runner environments (`createDockerSandbox`), branch management, commit/push handling, and teardown.
+- 🛠️ **CLI & Programmatic SDK**: Run via `npx agentic-sdlc` or embed in custom Node.js/TypeScript workflows via `import { createSupervisor } from 'agentic-sdlc'`.
+- 🏰 **Git Worktree & Docker Isolation**: Automated git worktree creation, containerized Docker runner environments (`createDockerSandbox`), branch management, commit/push handling, and teardown.
 - 📋 **Tracker Adapters**: Built-in support for GitHub Projects, Jira (REST API), and local JSON trackers.
 - 🤖 **Multi-Model Routing**: Map semantic lanes (`triage`, `planning`, `execution`, `review`) to specialized model profiles with automatic fallback chains.
 - 🎯 **Stage-Scoped Goal Mode**: Bounded continuations and retry safety nets.
@@ -77,7 +77,7 @@ npx agentic-sdlc validate
 You can orchestrate `agentic-sdlc` programmatically within your CI/CD pipelines, custom CLI tools, or serverless workers:
 
 ```typescript
-import { supervise, validatePolicy, createLocalTracker, createProcessRunner, Policy } from 'agentic-sdlc';
+import { createSupervisor, validatePolicy, createLocalTracker, createProcessRunner, Policy } from 'agentic-sdlc';
 import { readFile } from 'node:fs/promises';
 
 // Load and validate policy
@@ -112,7 +112,7 @@ flowchart TD
     end
 
     subgraph Package ["agentic-sdlc (Installed NPM Tool & SDK)"]
-        CLI["bin/agentic-sdlc.js\n(npx agentic-sdlc)"]
+        CLI["dist/bin.js\n(npx agentic-sdlc)"]
         SDK["src/index.ts\n(Programmatic TS API)"]
         
         subgraph Engine ["Core Engine"]
@@ -120,14 +120,15 @@ flowchart TD
             Validator["src/policy.ts\n(Policy Validator)"]
         end
 
-        subgraph Sandcastle ["Sandcastle Sandbox Primitive"]
+        subgraph Sandbox ["Git Worktree Sandbox Primitive"]
             WorktreeMgr["src/sandbox/worktree.ts\n(Git Worktree Lifecycle)"]
+            DockerMgr["src/sandbox/docker.ts\n(Docker Container Sandbox)"]
             DetachedTree["Detached Planning Worktree"]
             BranchTree["Agentic Branch Worktree"]
         end
 
         subgraph Adapters ["Decoupled Adapters"]
-            TrackerAdapter["Tracker Adapters\n(GitHub Projects, Local JSON)"]
+            TrackerAdapter["Tracker Adapters\n(GitHub Projects, Jira, Local JSON)"]
             RunnerAdapter["Runner Adapters\n(Claude Code, Gemini CLI, etc.)"]
         end
     end
@@ -149,9 +150,9 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     autonumber
-    participant T as Tracker (GitHub / Local JSON)
+    participant T as Tracker (GitHub / Jira / Local JSON)
     participant S as agentic-sdlc Supervisor
-    participant W as Sandcastle Worktree Manager
+    participant W as Git Worktree Sandbox Manager
     participant R as Runner Adapter
     participant C as Agent CLI (Claude / Gemini)
 

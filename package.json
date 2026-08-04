@@ -1,13 +1,13 @@
 {
   "name": "agentic-sdlc",
   "version": "0.1.0",
-  "description": "Governed agentic software-delivery loop with Sandcastle-style worktree sandboxing and durable tracker truth",
+  "description": "Governed agentic software-delivery loop with Git worktree sandboxing and durable tracker truth",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "agentic-sdlc": "./bin/agentic-sdlc.js"
+    "agentic-sdlc": "./dist/bin.js"
   },
   "exports": {
     ".": {
@@ -17,7 +17,6 @@
   },
   "files": [
     "dist",
-    "bin",
     "assets",
     "references",
     "LICENSE"
@@ -25,12 +24,11 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "node --test",
+    "test": "node --test test/**/*.ts",
     "prepublishOnly": "npm run build && npm run typecheck && npm test"
   },
   "keywords": [
     "agentic-sdlc",
-    "sandcastle",
     "ai-agents",
     "claude-code",
     "gemini",

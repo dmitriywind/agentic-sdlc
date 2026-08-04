@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createJiraTracker, formatJiraExecutionHeader } from '../dist/index.js';
+import type { RunResult } from '../dist/index.js';
 
 test('formatJiraExecutionHeader formats model and cost summary', () => {
-  const result = {
+  const result: RunResult = {
     ticket: 'SDLC-101',
     run: 'plan',
     revision: '1',
     outcome: 'completed',
     summary: 'Plan finalized',
     execution: {
-      model: 'gemini-3.6-flash',
+      model: 'fast-model-1',
       profile: 'fast',
       effort: 'medium',
       route: 'default',
@@ -25,7 +26,7 @@ test('formatJiraExecutionHeader formats model and cost summary', () => {
   };
 
   const header = formatJiraExecutionHeader(result);
-  assert.match(header, /gemini-3\.6-flash/);
+  assert.match(header, /fast-model-1/);
   assert.match(header, /1,500/);
 });
 

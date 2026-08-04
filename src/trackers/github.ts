@@ -86,7 +86,12 @@ function parseMarkers(comments: Array<{ body: string }>, prefix: string): any[] 
     .filter(Boolean);
 }
 
-export function estimateModelCost(model?: string, usage?: any, summary?: string): number | undefined {
+export function estimateModelCost(
+  model?: string,
+  usage?: any,
+  summary?: string,
+  customRates?: [number, number]
+): number | undefined {
   if (typeof usage?.cost === 'number') return usage.cost;
 
   let inputTokens = usage?.inputTokens;
@@ -100,14 +105,15 @@ export function estimateModelCost(model?: string, usage?: any, summary?: string)
 
   if (inputTokens === undefined && outputTokens === undefined && !totalTokens) return undefined;
 
-  let rates = [2.5, 10.0];
-  if (!model) rates = [2.5, 10.0];
-  else if (/gemini-3\.6-flash/i.test(model)) rates = [0.5, 3.0];
-  else if (/claude-haiku/i.test(model)) rates = [1.0, 5.0];
-  else if (/claude-sonnet/i.test(model)) rates = [3.0, 15.0];
-  else if (/claude-opus/i.test(model)) rates = [15.0, 75.0];
-  else if (/gpt-5\.6-sol|gpt-5\.6-terra/i.test(model)) rates = [2.5, 10.0];
-  else if (/qwen/i.test(model)) rates = [0, 0];
+  let rates: [number, number] = customRates ?? [2.5, 10.0];
+  if (!customRates && model) {
+    const name = model.toLowerCase();
+    if (name.includes('local') || name.includes('free')) rates = [0, 0];
+    else if (name.includes('flash') || name.includes('haiku') || name.includes('small') || name.includes('mini')) rates = [0.5, 3.0];
+    else if (name.includes('opus') || name.includes('large') || name.includes('max')) rates = [15.0, 75.0];
+    else if (name.includes('sonnet') || name.includes('pro') || name.includes('medium')) rates = [3.0, 15.0];
+    else rates = [2.5, 10.0];
+  }
 
   if (inputTokens !== undefined || outputTokens !== undefined) {
     const inCost = ((inputTokens ?? 0) * rates[0]) / 1000000;
