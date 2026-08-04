@@ -4,10 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, test } from 'node:test';
-import { install } from '../scripts/install.mjs';
-import { createRunner } from '../scripts/process-runner.mjs';
-import { createSupervisor, validatePolicy } from '../scripts/supervisor.mjs';
-import { formatExecutionHeader } from '../scripts/github-project.mjs';
+import { install, createProcessRunner as createRunner, createSupervisor, validatePolicy, formatExecutionHeader } from '../dist/index.js';
 
 const featurePath = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'process.feature');
 const boundScenarios = new Set();

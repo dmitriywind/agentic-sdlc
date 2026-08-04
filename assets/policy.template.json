@@ -1,13 +1,13 @@
 {
   "$schemaVersion": 2,
   "tracker": {
-    "adapter": ".agents/skills/agentic-sdlc/scripts/local-tracker.mjs",
+    "adapter": "local-tracker",
     "options": {
       "path": ".agentic-sdlc/tracker.json"
     }
   },
   "runner": {
-    "adapter": ".agents/skills/agentic-sdlc/scripts/process-runner.mjs",
+    "adapter": "process-runner",
     "goal": {
       "enabled": true,
       "maxContinuations": 2

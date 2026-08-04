@@ -13,7 +13,7 @@ model names, credentials, deployment providers, and project vocabulary.
 | Portable process | This specification |
 | Project choices | Installed policy |
 | Work and delivery facts | Tracker |
-| Executable behavior | Skill scripts, proven by `assets/process.feature` |
+| Executable behavior | Tool engine & SDK, proven by `assets/process.feature` |
 | Local diagnostics | Disposable runtime directory |
 
 An authority may link to another authority but must not copy it. Tracker facts win after a
