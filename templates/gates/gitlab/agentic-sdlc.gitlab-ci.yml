@@ -1,0 +1,137 @@
+# Include from .gitlab-ci.yml:  include: { local: templates/gates/gitlab/agentic-sdlc.gitlab-ci.yml }
+# Secrets (masked CI/CD variables): AGENTIC_FORGE_TOKEN, AGENTIC_BOARD_TOKEN, AGENTIC_REVIEW_TOKEN.
+# Project settings: "Pipelines must succeed", fast-forward merge, merge trains on the trunk.
+# Event -> gate wiring only.
+# set: your deploy job names (deploy-staging, deploy-production) and vcs.release_prefix (release/).
+
+.agentic:
+  image: node:22
+  variables:
+    GIT_DEPTH: "0"   # shipped walks the full history and tags
+  before_script:
+    - npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+    - git config user.name "agentic-sdlc" && git config user.email "agentic-sdlc@noreply.invalid"
+
+# MR jobs read the binding (and skills) from the TARGET branch, never the MR's copy:
+# a git worktree of origin/<target> is the --root every gate below runs against.
+.agentic-mr:
+  extends: .agentic
+  # The worktree shares this checkout's objects, so the MR head sha stays readable as data (factory-class).
+  before_script:
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - export AGENTIC_ROOT="$(mktemp -d)/target"
+    - git worktree add --detach "$AGENTIC_ROOT" "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - test -f "$AGENTIC_ROOT/.agents/binding.yml"
+    - (cd "$AGENTIC_ROOT" && npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}")   # not from the MR tree: its .npmrc is untrusted
+
+ticket-linkage:
+  extends: .agentic-mr
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - agentic-sdlc --root "$AGENTIC_ROOT" gate branch-names --ref "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+    - agentic-sdlc --root "$AGENTIC_ROOT" gate linkage --cr "$CI_MERGE_REQUEST_IID"
+    - agentic-sdlc --root "$AGENTIC_ROOT" gate factory-class --cr "$CI_MERGE_REQUEST_IID"
+
+board-in-review:
+  extends: .agentic-mr
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TITLE =~ /^(Draft|WIP):/
+      variables: { EVENT: draft }
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables: { EVENT: ready }
+  script:
+    - agentic-sdlc --root "$AGENTIC_ROOT" gate board-sync --cr "$CI_MERGE_REQUEST_IID" --event "$EVENT"
+
+# Reads the MR's own .agents/skills (static file checks with the published CLI).
+skill-regression:
+  extends: .agentic
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - if git diff --name-only "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME...HEAD" | grep -q '^\.agents/'; then agentic-sdlc gate skill-regression; fi
+
+# Trunk pipeline after a merge. set: your trunk branch if it is not the default branch.
+board-merged:
+  extends: .agentic
+  stage: .post
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - agentic-sdlc gate board-sync --sha "$CI_COMMIT_SHA" --event merged
+
+# Release line push: its tickets go In release.
+board-in-release:
+  extends: .agentic
+  stage: .post
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\//
+  script:
+    - agentic-sdlc gate board-sync --event in-release --release "${CI_COMMIT_BRANCH#release/}"
+
+# Shipped follows the deploy job's real result: on_success / on_failure evaluate the jobs in needs.
+# set: first-env and last-env must match product.environments in the binding
+shipped-first-env:
+  extends: .agentic
+  stage: .post
+  needs: [deploy-staging]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+  script:
+    - agentic-sdlc gate shipped first-env --sha "$CI_COMMIT_SHA" --result success
+
+shipped-first-env-failed:
+  extends: .agentic
+  stage: .post
+  needs: [deploy-staging]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_failure
+  script:
+    - agentic-sdlc gate shipped first-env --sha "$CI_COMMIT_SHA" --result failure
+
+# The last environment deploys from the release line.
+shipped-last-env:
+  extends: .agentic
+  stage: .post
+  needs: [deploy-production]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\//
+      when: on_success
+  script:
+    - agentic-sdlc gate shipped last-env --sha "$CI_COMMIT_SHA" --result success
+
+shipped-last-env-failed:
+  extends: .agentic
+  stage: .post
+  needs: [deploy-production]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\//
+      when: on_failure
+  script:
+    - agentic-sdlc gate shipped last-env --sha "$CI_COMMIT_SHA" --result failure
+
+signal-on-red:
+  extends: .agentic
+  stage: .post
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_failure
+  script:
+    - agentic-sdlc gate signal-on-red --run "$CI_PIPELINE_ID"
+
+# Optional: a pipeline schedule with SDLC_CYCLE=1 runs one factory cycle (see templates/runner/routine.md).
+factory-cycle:
+  stage: .post
+  image: node:22
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SDLC_CYCLE == "1"
+  script:
+    - sh templates/runner/setup.sh
+    # set: your headless agent command with the prompt "Load the sdlc skill and run one cycle."
+    - echo "run your agent here"

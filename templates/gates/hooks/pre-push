@@ -1,0 +1,5 @@
+#!/bin/sh
+# Git client hook. Install: cp templates/gates/hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+# Or: git config core.hooksPath .githooks, with this file in .githooks/.
+# Refuses a push of a branch outside the binding's patterns. Server-side CI repeats the check.
+exec npx --no-install agentic-sdlc gate branch-names --stdin-prepush

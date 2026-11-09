@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-import { runCli } from './cli.js';
+import { main } from './cli.ts';
 
-runCli().catch((error) => {
-  console.error(error.message);
-  process.exitCode = 1;
-});
+process.exitCode = await main(process.argv.slice(2));

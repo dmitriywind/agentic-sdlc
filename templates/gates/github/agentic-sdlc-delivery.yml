@@ -1,0 +1,72 @@
+name: agentic-sdlc delivery
+# Deploy and trunk runs -> shipped / signal-on-red. Trunk push -> merged backstop. Release line push -> In release.
+on:
+  workflow_run:
+    # set: your staging deploy workflow name, your production deploy workflow name, your trunk CI workflow name
+    workflows: ["Deploy staging", "Deploy production", "CI"]
+    types: [completed]
+  push:
+    # set: your vcs.trunk and your vcs.release_prefix, e.g. release/**
+    branches: [main, "release/**"]
+
+permissions:
+  contents: write   # gate shipped tags the released revision
+  issues: write
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
+  AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+  CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+  RUN_NAME: ${{ github.event.workflow_run.name }}
+  RUN_ID: ${{ github.event.workflow_run.id }}
+  RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+  RELEASE_PREFIX: release/   # set: your vcs.release_prefix
+
+jobs:
+  delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # shipped walks the full history and tags
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+      - name: Git identity for tags
+        run: |
+          git config user.name "agentic-sdlc"
+          git config user.email "agentic-sdlc@users.noreply.github.com"
+
+      - name: Shipped
+        if: github.event_name == 'workflow_run'
+        run: |
+          # Only a real result counts: skipped, cancelled, action_required and the rest are no deploy.
+          case "$CONCLUSION" in
+            success) result=success ;;
+            failure|timed_out) result=failure ;;
+            *) echo "conclusion $CONCLUSION: nothing shipped"; exit 0 ;;
+          esac
+          # set: the deploy/publish workflow for the first environment; its env name must match product.environments
+          if [ "$RUN_NAME" = "Deploy staging" ]; then agentic-sdlc gate shipped first-env --sha "$RUN_SHA" --result "$result"; fi
+          # set: the deploy/publish workflow for the last environment; its env name must match product.environments
+          if [ "$RUN_NAME" = "Deploy production" ]; then agentic-sdlc gate shipped last-env --sha "$RUN_SHA" --result "$result"; fi
+
+      - name: Signal on red
+        # Trunk and release pushes only: a red PR run is the CR's business, not a signal.
+        if: >-
+          github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+          (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out')
+        run: agentic-sdlc gate signal-on-red --run "$RUN_ID"
+
+      - name: Merged
+        # set: your vcs.trunk
+        if: github.event_name == 'push' && github.ref_name == 'main'
+        run: agentic-sdlc gate board-sync --sha "$GITHUB_SHA" --event merged
+
+      - name: Release line
+        if: github.event_name == 'push' && startsWith(github.ref_name, 'release/')
+        run: agentic-sdlc gate board-sync --event in-release --release "${GITHUB_REF_NAME#"$RELEASE_PREFIX"}"

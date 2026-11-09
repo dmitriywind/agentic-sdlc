@@ -1,19 +1,19 @@
-# Agentic Rules & Self-Service Guide
+# agentic-sdlc
 
-Welcome to `agentic-sdlc`. This repository is a self-service TypeScript developer tool and SDK that orchestrates governed agentic coding loops.
+A portable software factory: a skill pack (`skills/`), a binding template (`templates/binding.yml`),
+and a thin CLI (`src/`) with board, forge and VCS ports, repo gates, the run ledger and the bench.
+`references/architecture.md` is the contract; read it before you change any part.
 
-## Commands for Agents
+## Commands
 
-- **Build**: `npm run build` (runs `tsup` to build ESM and `.d.ts` definitions in `dist/`)
-- **Typecheck**: `npm run typecheck` (runs `tsc --noEmit`)
-- **Test**: `npm test` (runs `node --test` across all BDD test scenarios)
-- **Validate Policy**: `npx agentic-sdlc validate`
-- **Run Supervisor**: `npx agentic-sdlc supervise --once --read-only`
+- Build: `npm run build`
+- Typecheck: `npm run typecheck`
+- Test: `npm test` (one file: `node --test test/<name>.test.ts`)
+- Skill pack check: `npx agentic-sdlc gate skill-regression`
 
----
+## Rules
 
-<!-- agentic-sdlc:start -->
-## Agentic SDLC
-
-Work and delivery evidence live in the tracker configured by `agentic-sdlc-policy.json`. Use `npx agentic-sdlc` for installation, validation, or supervision; its specification is the portable authority. Keep project rules as a pointer—do not duplicate the workflow here.
-<!-- agentic-sdlc:end -->
+- A process rule lives only in `skills/`. A project value lives only in the binding. `src/` holds mechanism only.
+- A skill calls `agentic-sdlc board|forge|vcs <verb>`, never a vendor CLI.
+- A change to a port, a binding key or a skill's interface changes `references/architecture.md` in the same change.
+- Trunk-based on every VCS. No long-lived branch.

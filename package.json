@@ -1,42 +1,23 @@
 {
   "name": "agentic-sdlc",
-  "version": "0.1.0",
-  "description": "Governed agentic software-delivery loop with Git worktree sandboxing and durable tracker truth",
+  "version": "2.0.0-alpha.0",
+  "description": "Software factory / agentic SDLC: any board, any forge, any VCS, trunk-based",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "bin": {
-    "agentic-sdlc": "./dist/bin.js"
-  },
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
-  "files": [
-    "dist",
-    "assets",
-    "references",
-    "LICENSE"
-  ],
+  "bin": { "agentic-sdlc": "./dist/bin.js" },
+  "exports": { ".": { "import": "./dist/index.js" } },
+  "files": ["dist", "skills", "scorers", "templates", "references", "docs", "LICENSE"],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/**/*.ts",
+    "test": "npm run build && node --test test/*.test.ts",
     "prepublishOnly": "npm run build && npm run typecheck && npm test"
   },
-  "keywords": [
-    "agentic-sdlc",
-    "ai-agents",
-    "claude-code",
-    "gemini",
-    "sdlc",
-    "worktree-sandbox"
-  ],
-  "author": "",
+  "keywords": ["software-factory", "agentic-sdlc", "ai-agents", "trunk-based", "kanban", "github", "jira", "linear", "mercurial", "perforce"],
   "license": "Apache-2.0",
+  "engines": { "node": ">=22.18" },
+  "dependencies": { "yaml": "^2.0.0" },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
