@@ -1,7 +1,6 @@
 ---
 name: redundant-tests
 applies_to: [implement-spec]
-tier: fast
 scale: pass-fail
 ---
 

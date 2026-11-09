@@ -2,7 +2,7 @@
 # Install at: .github/workflows/factory-cycle-codex.yml
 # Secrets: CODEX_API_KEY (an OpenAI API key), AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_REVIEW_TOKEN.
 # Two jobs (forge.review_runtime: separate): `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
-# `review` runs right after it with the review token and the review prompt only.
+# `review` starts when the cycle finishes, with the review token and the review prompt only; `dead-man` runs `ledger stale`.
 # Note: a ChatGPT-login auth.json can also work in CI (seed it with `codex login`, keep it in a secret
 # store, one runner at a time, tokens rotate), but the OpenAI docs call it an advanced path for trusted
 # runners and say an API key is the right way to authenticate automation. This template uses the key.
@@ -25,6 +25,7 @@ jobs:
       AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
       AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
     steps:
+      # pin to a commit SHA (actions/checkout, actions/setup-node)
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -44,6 +45,7 @@ jobs:
     timeout-minutes: 60
     env:
       AGENTIC_SDLC_UNATTENDED: "1"
+      AGENTIC_SDLC_ROLE: review
       AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
       AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
       AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
@@ -58,3 +60,18 @@ jobs:
         run: codex exec --sandbox workspace-write "$(sed '1,/^---$/d' .agents/review-prompt.md)"
         env:
           CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+  dead-man:
+    needs: [cycle, review]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts || npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+      # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
+      - run: npx agentic-sdlc ledger stale --max-hours 3   # set: a few cadences

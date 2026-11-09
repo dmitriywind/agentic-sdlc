@@ -51,6 +51,7 @@ Rules for the hosted endpoint:
 - Bind to loopback or a private interface and check the bind address with `npx agentic-sdlc mcp --help`.
 - Put it behind TLS (a reverse proxy or the platform's ingress). Never expose plain HTTP.
 - The server holds the board and forge tokens of the process that started it. Run it as the implementer identity, never with the review token.
+- By default it leaves out `forge_approve` and `forge_status`. Only a server for the review runtime starts with `mcp --allow approve,status`.
 
 ## Route 3: vendor MCP tools only
 Map the vendor's tools to the board verbs in the binding:
@@ -65,6 +66,5 @@ The verbs and their meaning stay the same. Forge verbs (`forge open`, `status`, 
 those on a shell or the MCP server. Gates still run in CI. Keep this route for intake and triage bots, not for the full cycle.
 
 ## Limits and unknowns
-- The binding has `board.mcp`; a `forge.mcp` key is mentioned in the contract but not in the template. Check `validate` before using it.
 - Streamable HTTP versus SSE transport for `mcp --http`: check the CLI help; not stated in the contract.
 - A runtime with neither shell nor MCP cannot run the cycle; it can still be an intake (create a Signals item).

@@ -1,7 +1,7 @@
 # Flows
 
-How work moves through the agentic-sdlc v2 factory. The contract is `references/architecture.md`
-and `skills/sdlc/SKILL.md`.
+How work moves through the agentic-sdlc v2 factory. The contract is `references/architecture.md`;
+the process rules are in `skills/sdlc/SKILL.md`.
 
 ## 1. Ticket lifecycle
 
@@ -46,7 +46,7 @@ stateDiagram-v2
 
 ## 2. One cycle
 
-Purpose: show the order of work in one scheduled run.
+Purpose: show the order of work in one scheduled run, and the review run after it.
 
 ```mermaid
 sequenceDiagram
@@ -54,28 +54,30 @@ sequenceDiagram
   participant O as Orchestrator (sdlc)
   participant W as Subagents
   participant B as Board
-  S->>O: Load sdlc, run one cycle
-  O->>B: board list, forge list, last heartbeats
+  participant R as Review runtime
+  S->>O: /agentic-sdlc:sdlc run one cycle
+  O->>B: board list, forge list, trusted heartbeats, ledger summary
   O->>W: Triage each Signal
   W->>B: Move to Ideas, Backlog or Cancelled
-  O->>W: Review each draft CR
-  W->>B: Report, ready CR or send back
   O->>W: Implement top of Ready
   W->>B: Draft CR, ticket In review
   O->>W: Shape Backlog until min_ready is met
   W->>B: Ticket moves to Ready
   O->>B: Write heartbeat with ledger rows
-  O->>W: judge-run on finished runs
-  W->>B: Scores into the next heartbeat
-  opt every N cycles
+  O->>W: judge-run per run (ledger plan, grade, ledger record)
+  W->>B: One scores comment per run
+  opt ledger summary shows learning.due
     O->>W: improve-factory
-    W->>B: One factory CR
+    W->>B: One draft factory CR
   end
+  S->>R: After the cycle finishes: review-pr
+  R->>B: Review drafts and factory CRs
 ```
 
 - The orchestrator routes, waits and reports. Subagents do the work.
 - After `time_budget_minutes` nothing new starts.
 - A failed step goes in the heartbeat `errors`. The cycle goes on.
+- With `forge.review_runtime: same` the cycle reviews drafts itself, before implementing.
 
 ## 3. Change request hand-off
 
@@ -84,31 +86,40 @@ Purpose: show how a draft CR becomes a merged change and a Done ticket.
 ```mermaid
 sequenceDiagram
   participant I as implement-spec
-  participant F as Forge + CI
+  participant F as Forge
+  participant C as CI (no secrets)
   participant G as Gates
   participant R as review-pr
   participant U as verify-ux
+  participant H as Human approver
   participant B as Board
   I->>F: Open draft CR, Closes id
-  F->>G: branch-names, linkage, factory-class
+  F->>G: branch-names, linkage, approval
   F->>G: board-sync (opened)
   G->>B: Ticket In review
-  R->>F: Read diff, run verify on head
+  F->>C: pull_request
+  C->>F: Required (install + verify), proofs-on-base
+  R->>F: Read diff, ticket, spec and CI results
   opt computer-use proof
     R->>U: dispatch verify-ux
-    U->>F: Attach evidence to CR
+    U->>F: Evidence from a preview of the head
   end
-  R->>F: Post review status as review identity
-  R->>F: Approve as review identity
+  R->>F: review status and approval as review identity
+  opt Full lane, or guardrail factory CR
+    R->>F: Ask a human owner to approve
+    H->>F: Approving review on the head
+    F->>G: approval (review submitted)
+  end
+  G->>F: human-approval
   R->>F: Mark ready, turn on automerge
-  F->>G: Required checks run
-  G-->>F: All green
-  F->>F: Merge to trunk
+  F->>F: Merge to trunk when every required check is green
   F->>G: board-sync (merged)
   G->>B: Ticket Done, Not shipped
 ```
 
-- The implementer never reviews its own CR.
+- The implementer never reviews its own CR. The review runtime never runs CR code.
+- A Fast-lane product CR merges on the agent review. A Full-lane one also needs a human
+  approval when `forge.human_approval` is `full-lane` or `always`.
 - Red or missing checks send the CR back to draft. The cause decides who fixes it.
 - A CR behind the trunk is synced and reviewed again.
 
@@ -146,19 +157,22 @@ flowchart TD
   HG["Human grades"] -->|"win over judge"| SCO
   SCO --> CL["Clusters with counts"]
   CL --> IMP["improve-factory:<br/>one proposal"]
-  IMP --> BEN["Bench suites"]
+  IMP --> BEN["bench compare:<br/>min cases, trials, Wilson bound"]
   BEN --> PAR["bench report:<br/>Pareto front"]
   PAR --> CR["Factory CR with proof"]
-  CR --> FC["Gate factory-class"]
-  FC -->|"tuning"| AM["Auto-merge"]
+  CR --> RV["review-pr"]
+  RV --> FC["Gate approval"]
+  FC -->|"tuning, if auto_merge_classes"| AM["Auto-merge"]
   FC -->|"guardrail"| OWN["Factory owner approval"]
   AM --> NV["New factory version"]
   OWN --> NV
   NV --> RUN
 ```
 
-- One change per proposal. A rule enters a skill only after the same mistake appears twice.
-- The change must not lower the bench score or raise cost beyond its gain.
+- One change per proposal, from `improve-factory` only.
+- The change must not lower the bench pass rate or raise cost beyond its gain.
+- Any change to skill text is `guardrail`. `tuning` is only the `models` map and a benched
+  skill's tier.
 - Weekly spend on learning stays under the budget. Over budget, the loop stops.
 - Unknown paths and deletions count as guardrail.
 

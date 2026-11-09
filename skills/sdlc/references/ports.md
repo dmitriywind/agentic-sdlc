@@ -15,7 +15,7 @@ meaning of each verb is unchanged. Write bodies to a file and pass `--body-file`
 | Add or drop `bug`, `feature`, `needs-human`, `signal:<stream>` | `board label <id> add\|remove <label>` |
 | Clear the assignee | `board assign <id> --none` |
 | Ticket comment (spec, decision, ask) | `board comment <id> --body-file <f>` |
-| Find a spec or heartbeat comment | `board comments <id> [--last <n>] [--marker <text>]` |
+| Find a spec, heartbeat or evidence comment by a trusted author | `board comments <id> [--last <n>] [--marker <text>] --trusted` |
 | Cancel or complete and close | `board close <id> --reason not_planned\|completed` |
 | Link a sub-issue | `board child <parent> <child>` |
 | Find duplicates | `board list --search <text>` |
@@ -24,7 +24,6 @@ meaning of each verb is unchanged. Write bodies to a file and pass `--body-file`
 | Where am I, what changed, merge base | `vcs head`, `vcs changed [--since <rev>]`, `vcs base` |
 | Publish the change line | `vcs push` |
 | Cut a release line at a revision | `vcs cut <rev> <release>` |
-| Product code at the merge base, head tests kept | `vcs checkout-tests <rev> <paths…>` |
 | Open the draft CR | `forge open --source <b> --title <t> --body-file <f> --draft` |
 | Read a CR (head, `closes`, checks, behind, `mergeSha`) | `forge view <n>` |
 | Find the CR of a revision | `forge view --sha <sha>` |
@@ -35,7 +34,13 @@ meaning of each verb is unchanged. Write bodies to a file and pass `--body-file`
 | Bring the CR up to the trunk | `forge sync <n>` |
 | Merge when every required check is green | `forge automerge <n>` |
 | CR comment (review report) | `forge comment <n> --body-file <f>` |
-| Post the review or verify status | `forge status <sha> --context <c> --state success\|failure\|pending --description <d> [--url <u>]` |
+| Post the review status (review runtime only) | `forge status <sha> --context <c> --state success\|failure\|pending --description <d> [--url <u>]` |
+| Approve as the review identity (review runtime only) | `forge approve <n>` |
+| Read the CR's reviews | `forge approvals <n>` |
 | Read CI runs | `forge runs [--ref <r>] [--failed]` |
+| Start a stage | `dispatch <skill> --ticket <id>` or `--cr <n>`, `[--run-model <m>]` |
+| Runs, measures, learning due | `ledger runs`, `ledger summary` |
+| Judge input and output | `ledger plan --run <id>`, `ledger record --run <id> --file <scores.json>` |
+| Bench (improve-factory only) | `bench build\|run\|report\|compare` |
 
 Gates (`agentic-sdlc gate <name>`) are run by CI, never by an agent.

@@ -1,13 +1,15 @@
 # Profile: individual (subscription token) or enterprise (API key).
 # Install at: .gitlab-ci.yml (merge the jobs) or a file included from it.
 # Create a pipeline schedule (CI/CD > Schedules) with variable SDLC_CYCLE=1 on your cadence.
-# CI/CD variables (masked; set ONE auth variable, the API key outranks the token):
+# CI/CD variables (masked; set ONE auth variable, the API key outranks the token; setup.sh refuses
+# ANTHROPIC_API_KEY when the binding's profile is individual):
 #   individual: CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`)
 #   enterprise: ANTHROPIC_API_KEY
 # Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, and AGENTIC_REVIEW_TOKEN (the names your binding uses).
 # AGENTIC_REVIEW_TOKEN must reach the review job only (forge.review_runtime: separate). Project CI/CD
 # variables reach every job, so keep it in a protected environment named `factory-review`
 # (variable environment scope = factory-review); the cycle job has no environment and cannot read it.
+# The review starts when the cycle job ends (needs); the dead-man job runs `ledger stale` after both.
 
 .factory:
   image: node:22
@@ -16,24 +18,48 @@
   timeout: 1h
   variables:
     AGENTIC_SDLC_UNATTENDED: "1"
+    CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: "1"
   before_script:
-    # set: confirm the install method in the Claude Code docs
-    - npm i -g @anthropic-ai/claude-code
-    - sh .agents/runner-setup.sh
+    - npm i -g @anthropic-ai/claude-code   # set: pin an exact Claude Code version
+    - sh .agents/runner-setup.sh           # also the ANTHROPIC_API_KEY guard for the individual profile
 
 factory-cycle:
   extends: .factory
   resource_group: factory-cycle
   script:
-    - claude -p "$(sed '1,/^---$/d' .agents/cycle-prompt.md)" --output-format json --max-budget-usd 5
+    - >-
+      claude -p "$(sed '1,/^---$/d' .agents/cycle-prompt.md)"
+      --plugin-dir node_modules/agentic-sdlc
+      --output-format json --max-budget-usd 5 --max-turns 200
+      --permission-mode acceptEdits
+      --allowedTools "Bash(npx agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
+      --disallowedTools "Bash(npx agentic-sdlc forge approve *)"
 
 factory-review:
   extends: .factory
   needs: [factory-cycle]
   resource_group: factory-review
   environment: { name: factory-review, action: access }  # scopes AGENTIC_REVIEW_TOKEN to this job
+  variables:
+    AGENTIC_SDLC_ROLE: review   # the plugin hook allows forge approve only here
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $SDLC_CYCLE == "1"'
       when: always  # review even when the cycle failed
   script:
-    - claude -p "$(sed '1,/^---$/d' .agents/review-prompt.md)" --output-format json --max-budget-usd 5
+    - >-
+      claude -p "$(sed '1,/^---$/d' .agents/review-prompt.md)"
+      --plugin-dir node_modules/agentic-sdlc
+      --output-format json --max-budget-usd 5 --max-turns 200
+      --permission-mode acceptEdits
+      --allowedTools "Bash(npx agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
+
+factory-dead-man:
+  image: node:22
+  needs: [factory-cycle, factory-review]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SDLC_CYCLE == "1"'
+      when: always
+  script:
+    - npm ci --ignore-scripts || npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+    # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
+    - npx agentic-sdlc ledger stale --max-hours 3   # set: a few cadences

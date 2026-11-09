@@ -1,29 +1,29 @@
 {
-  "_comment": "Profile: enterprise. Two deployments (forge.review_runtime: separate): POST each entry of `deployments` to https://api.anthropic.com/v1/deployments?beta=true with headers x-api-key: $ANTHROPIC_API_KEY, anthropic-beta: managed-agents-2026-04-01, anthropic-version: 2026-10-21. Create the agents (/v1/agents) and two environments (/v1/environments) first and put their ids below: the cycle environment gets the board and forge tokens and AGENTIC_SDLC_UNATTENDED=1 but never AGENTIC_REVIEW_TOKEN; the review environment gets the same plus AGENTIC_REVIEW_TOKEN. The review runs 15 minutes after each cycle. The shape of initial_events content, budget and the repo resource is not verified: check the Managed Agents docs. Manage: POST /v1/deployments/{id}/pause|unpause|run|archive; runs: GET /v1/deployment_runs.",
   "deployments": [
     {
-      "agent": "<set: agent id from POST /v1/agents; give it the sdlc skill, bash, and the agentic-sdlc MCP server>",
-      "environment_id": "<set: cycle environment id; the repo and the binding's env vars as secrets, without AGENTIC_REVIEW_TOKEN>",
+      "name": "agentic-sdlc cycle",
+      "agent": "<set: agent id from POST /v1/agents; give it the agentic-sdlc plugin skills, bash, and the agentic-sdlc MCP server>",
+      "environment_id": "<set: cycle environment id; the repo, the binding's env vars, AGENTIC_SDLC_UNATTENDED=1 and AGENTIC_REVIEW_FIRE_CMD; never AGENTIC_REVIEW_TOKEN>",
       "initial_events": [
         {
           "type": "user.message",
-          "content": "<set: the text of templates/runner/cycle-prompt.md below the --- line>"
+          "content": [{ "type": "text", "text": "<set: the text of templates/runner/cycle-prompt.md below the --- line>" }]
         }
       ],
       "schedule": { "type": "cron", "expression": "0,30 * * * *", "timezone": "UTC" },
-      "budget": "<set: per-run budget, shape per the Managed Agents docs>"
+      "budget": { "type": "limit", "max_list_cost": { "amount": "500", "currency": "USD" } }
     },
     {
+      "name": "agentic-sdlc review",
       "agent": "<set: agent id from POST /v1/agents; give it the sdlc and review-pr skills, bash, and the agentic-sdlc MCP server>",
-      "environment_id": "<set: review environment id; the cycle's secrets plus AGENTIC_REVIEW_TOKEN>",
+      "environment_id": "<set: review environment id; the cycle's secrets plus AGENTIC_REVIEW_TOKEN and AGENTIC_SDLC_ROLE=review>",
       "initial_events": [
         {
           "type": "user.message",
-          "content": "<set: the text of templates/runner/review-prompt.md below the --- line>"
+          "content": [{ "type": "text", "text": "<set: the text of templates/runner/review-prompt.md below the --- line>" }]
         }
       ],
-      "schedule": { "type": "cron", "expression": "15,45 * * * *", "timezone": "UTC" },
-      "budget": "<set: per-run budget, shape per the Managed Agents docs>"
+      "budget": { "type": "limit", "max_list_cost": { "amount": "500", "currency": "USD" } }
     }
   ]
 }

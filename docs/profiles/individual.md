@@ -8,7 +8,7 @@ No API keys. Nothing stored outside the repo and the board.
 ```bash
 npx agentic-sdlc init --profile individual --harness <name> --board github --forge github --vcs git
 ```
-Init writes the defaults below and `validate` warns when the binding names an executor kind that needs an API key.
+Init writes the template defaults; the excerpt shows the keys this profile cares about. `validate` warns when the binding names an executor kind that needs an API key.
 
 ## Binding excerpt
 ```yaml
@@ -23,14 +23,20 @@ forge:
   review_runtime: separate                       # review-pr runs in its own scheduled job, the only one with the review token
   options: { repo: me/app, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
   review_identity: my-reviewer-account           # a second account or fine-grained token
+  human_approval: full-lane                      # full-lane | always | never: who besides the agent review approves
 # traces: omitted (none), or files in the runner's scratch dir
 learning:
   every_cycles: 20
-  bench_size: 5                                  # small suites
-  budget_usd_per_week: 10                        # keep inside the plan's weekly allowance
+  bench_size: 10
+  bench_min_cases: 20                            # bench compare needs this many shared cases
+  bench_trials: 3                                # and this many trials per case
+  auto_merge_classes: []                         # add tuning once a bench baseline exists
+  budget_usd_per_week: 50                        # lower it to stay inside the plan's weekly allowance
 # agent_command: "<subscription CLI headless command with {model} {prompt_file} {workdir}>"   # bench only
 ```
 Executors: `harness` only, plus `command` for a headless CLI logged in with the subscription.
+With `human_approval: full-lane` you approve Full-lane CRs yourself from your own account, which
+must not be `review_identity`. The runner templates fail when `ANTHROPIC_API_KEY` is set.
 
 ## Recommended runtime per ecosystem
 | Ecosystem | Runtime | Guide |
@@ -46,9 +52,9 @@ Read each guide's terms caveat before you put a consumer login in CI. Some vendo
 
 ## Security checklist
 - [ ] A separate review token: `review_token_env` belongs to a second account or a fine-grained token, and only the review runtime holds it (`forge.review_runtime: separate`: the runner templates' review job or task runs `review-prompt.md`; the cycle never sees the token).
-- [ ] `CODEOWNERS` maps `.agents/**`, `.github/**`, `.claude/**` to the factory owner (see [forges.md](../forges.md)).
+- [ ] The trunk ruleset requires `human-approval`; the `approval` gate holds `guardrail` factory CRs for the factory owner and Full-lane CRs per `forge.human_approval` (see [forges.md](../forges.md)).
 - [ ] Secrets only as env var names in the binding. No values in the repo, board or CR comments.
-- [ ] Sandbox: `cloud` or `container`. `--unattended` refuses `local`.
+- [ ] Sandbox: `cloud` or `container`. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses `local`.
 - [ ] The bot account has no admin or bypass right on the trunk.
 - [ ] A cloud scheduled task acts as your account. Give its repo access the least scope the vendor allows.
 - [ ] Trunk protection is on: change request only, green required checks, one approving review.

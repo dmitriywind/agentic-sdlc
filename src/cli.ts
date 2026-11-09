@@ -8,13 +8,13 @@ const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, string]>
   validate: [() => import('./install.ts'), false, 'check the binding and skills'],
   doctor: [() => import('./install.ts'), false, 'validate, then probe board, forge and vcs'],
   board: [() => import('./board/index.ts'), true, 'list get create move set label assign comment comments close child'],
-  forge: [() => import('./forge/index.ts'), true, 'open view diff list ready draft sync automerge approve comment status runs'],
+  forge: [() => import('./forge/index.ts'), true, 'open view diff list ready draft sync automerge approve approvals comment status runs'],
   vcs: [() => import('./vcs/index.ts'), true, 'start head changed base push cut tag tags drop checkout-tests'],
-  dispatch: [() => import('./dispatch.ts'), true, 'dispatch <skill> --ticket <id> [--cr <n>] [--workdir <d>]'],
-  gate: [() => import('./gates.ts'), true, 'branch-names linkage factory-class board-sync shipped signal-on-red skill-regression'],
-  ledger: [() => import('./ledger.ts'), true, 'read heartbeats, aggregate runs and measures'],
+  dispatch: [() => import('./dispatch.ts'), true, 'dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>]'],
+  gate: [() => import('./gates.ts'), true, 'branch-names linkage approval proofs-on-base board-sync shipped signal-on-red skill-regression'],
+  ledger: [() => import('./ledger.ts'), true, 'runs summary plan record stale hash: the run ledger from heartbeats'],
   bench: [() => import('./bench.ts'), true, 'build propose run report compare'],
-  mcp: [() => import('./mcp.ts'), true, 'serve the port verbs as MCP tools: stdio, or --http --port <p> with AGENTIC_SDLC_MCP_TOKEN'],
+  mcp: [() => import('./mcp.ts'), true, 'serve the port verbs as MCP tools: stdio, or --http --port <p> with AGENTIC_SDLC_MCP_TOKEN; --allow approve,status'],
 };
 
 const help = () =>

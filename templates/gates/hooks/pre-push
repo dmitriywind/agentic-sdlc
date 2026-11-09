@@ -1,5 +1,6 @@
 #!/bin/sh
-# Git client hook. Install: cp templates/gates/hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
-# Or: git config core.hooksPath .githooks, with this file in .githooks/.
+# Git client hook, installed by `agentic-sdlc init` at .agents/hooks/pre-push.
+# Enable: git config core.hooksPath .agents/hooks
 # Refuses a push of a branch outside the binding's patterns. Server-side CI repeats the check.
+# Runs the project's pinned agentic-sdlc devDependency.
 exec npx --no-install agentic-sdlc gate branch-names --stdin-prepush

@@ -18,3 +18,21 @@ test('bundled CLI: init, validate, and an MCP tool call', { skip: !existsSync(bi
   assert.equal(out.result?.isError, undefined, JSON.stringify(out));
   assert.match(out.result.content[0].text, /"status": "Signals"/);
 });
+
+test('package: plugin manifest matches package.json; every template YAML and JSON parses', async () => {
+  const { readFileSync, readdirSync, statSync } = await import('node:fs');
+  const { parseAllDocuments } = await import('yaml');
+  const root = join(import.meta.dirname, '..');
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const plugin = JSON.parse(readFileSync(join(root, '.claude-plugin', 'plugin.json'), 'utf8'));
+  assert.equal(plugin.name, pkg.name);
+  assert.equal(plugin.version, pkg.version);
+  for (const f of ['.claude-plugin', 'hooks']) assert.ok(pkg.files.includes(f), f);
+  JSON.parse(readFileSync(join(root, 'hooks', 'hooks.json'), 'utf8'));
+  const walk = (d: string): string[] => readdirSync(d).flatMap((n) => statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]);
+  for (const f of walk(join(root, 'templates'))) {
+    const text = readFileSync(f, 'utf8');
+    if (f.endsWith('.json')) JSON.parse(text);
+    if (/\.ya?ml$/.test(f)) for (const doc of parseAllDocuments(text)) assert.deepEqual(doc.errors, [], f);
+  }
+});

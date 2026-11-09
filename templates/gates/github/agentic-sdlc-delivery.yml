@@ -29,13 +29,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # pin to a commit SHA (actions/checkout, actions/setup-node)
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # shipped walks the full history and tags
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+      - name: Install agentic-sdlc (the pinned devDependency)
+        env:
+          AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
+        run: |
+          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
+            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+          else
+            npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"   # set: AGENTIC_SDLC_VERSION to an exact version
+          fi
       - name: Git identity for tags
         run: |
           git config user.name "agentic-sdlc"

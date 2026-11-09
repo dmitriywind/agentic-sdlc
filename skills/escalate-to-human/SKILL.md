@@ -1,7 +1,9 @@
 ---
 name: escalate-to-human
 description: Decide whether a person must act before work continues and, if so, hold the ticket with needs-human and one structured ask. Use when another skill is unsure of its authority, meets a trigger below, or needs a product ruling, a credential or a device.
-tier: fast
+user-invocable: false
+metadata:
+  tier: fast
 ---
 
 # Escalate to a human
@@ -31,7 +33,7 @@ calls another skill. Read the binding (`.agents/binding.yml`) and the hold rules
    - P0: a P0 is set.
    A feature counts as important only when the importance doc says so; carry no list of your own.
    A routine step (sync, retry, cosmetic choice) is never escalated. An item above the size
-   limit is not escalated; it goes back to shape (see [`sdlc`](../sdlc/SKILL.md) Board).
+   limit is not escalated; it goes back to shape (see [Board](../sdlc/references/board.md#board)).
 3. **Record.** On `proceed`: one line in the calling skill's ticket comment,
    `escalate-to-human: proceed`, naming the sources that settled it. On `escalate`: the comment
    below. Done when the result is on the ticket.

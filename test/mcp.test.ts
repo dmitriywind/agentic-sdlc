@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cli, handle, startHttp } from '../src/mcp.ts';
+import { allowList, cli, handle, startHttp } from '../src/mcp.ts';
 import { fakeCtx } from './helpers.ts';
 
 const rpc = (method: string, params?: object) => ({ jsonrpc: '2.0', id: 1, method, params });
@@ -15,7 +15,9 @@ test('tools/list has board_move with a schema; unknown method is -32601', async 
   const t = r.result.tools.find((x: any) => x.name === 'board_move');
   assert.deepEqual(t.inputSchema.required, ['id', 'status']);
   assert.equal(t.inputSchema.properties.only_from.type, 'string');
-  assert.equal(r.result.tools.length, 35);
+  const names = r.result.tools.map((x: any) => x.name);
+  assert.equal(names.length, 34);
+  for (const n of ['forge_approve', 'forge_status', 'vcs_tag']) assert.ok(!names.includes(n), n);
   assert.equal(((await handle(rpc('nope'), ctx)) as any).error.code, -32601);
 });
 
@@ -67,4 +69,17 @@ test('mcp --help prints usage and exits 0 instead of reading stdin', async () =>
   const orig = console.log; let out = ''; console.log = (s: string) => { out += s; };
   try { assert.equal(await cli(['--help'], ctx), 0); } finally { console.log = orig; }
   assert.match(out, /--http/);
+});
+
+test('--allow approve,status serves the review-identity tools; they are refused otherwise', async () => {
+  const { ctx } = fakeCtx('.', {}, () => ({}));
+  const names = async (allow?: Set<string>) => ((await handle(rpc('tools/list'), ctx, allow)) as any).result.tools.map((t: any) => t.name);
+  assert.ok((await names(allowList('approve,status'))).includes('forge_status'));
+  assert.deepEqual((await names(allowList('approve'))).filter((n: string) => n === 'forge_approve' || n === 'forge_status'), ['forge_approve']);
+  const r = await call(ctx, 'forge_approve', { n: '1' });
+  assert.equal(r.result.isError, true);
+  assert.match(r.result.content[0].text, /unknown tool/);
+  assert.throws(() => allowList('merge'), /--allow takes approve,status/);
+  const err = console.error; console.error = () => {};
+  try { assert.equal(await cli(['--allow', 'merge'], ctx), 2); } finally { console.error = err; }
 });

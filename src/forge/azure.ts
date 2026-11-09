@@ -71,6 +71,13 @@ export function azure(ctx: AdapterContext): Forge {
       const me = (await call('GET', `${org}/_apis/connectionData`, undefined, 'review_token_env')).authenticatedUser.id;
       await call('PUT', `${git}/pullrequests/${n}/reviewers/${me}`, { vote: 10 }, 'review_token_env');
     },
+    // ponytail: votes carry no commit; the head stands in, so the branch policy must reset votes on push.
+    async approvals(n) {
+      const p = await call('GET', `${git}/pullrequests/${n}`);
+      const sha = p.lastMergeSourceCommit?.commitId ?? '';
+      const vote = (v: number) => (v >= 5 ? 'approved' : v <= -5 ? 'changes_requested' : 'pending');
+      return (p.reviewers ?? []).map((x: any) => ({ user: x.uniqueName ?? x.displayName ?? '', state: vote(x.vote), sha }));
+    },
     async runs(q = {}) {
       const qs = new URLSearchParams();
       if (q.ref) qs.set('branchName', `refs/heads/${q.ref}`);

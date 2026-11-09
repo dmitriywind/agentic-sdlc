@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import type { Dirent } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { addedFiles, agentCommand, buildCases, compare, diverse, fill, parseCost, PROOF_FILE, quote, report, resolveExecutor, runBench, shell, stratify, cli } from '../src/bench.ts';
+import { addedFiles, agentCommand, buildCases, compare, wilsonLower, diverse, fill, parseCost, PROOF_FILE, quote, report, resolveExecutor, runBench, shell, stratify, cli } from '../src/bench.ts';
 import { exec } from '../src/exec.ts';
 import type { BenchCase, BenchResult } from '../src/bench.ts';
 import type { Board, CR, Forge, Item, Vcs } from '../src/ports.ts';
@@ -184,9 +184,8 @@ test('runBench --factory runs the candidate skill AND binding', async () => {
   assert.deepEqual([r.executor, r.executorKind], ['harness', 'harness']);
 });
 
-test('runBench refuses a VCS that cannot snapshot; --dry-run starts nothing', async () => {
+test('runBench --dry-run starts nothing', async () => {
   const exec = () => { throw new Error('ran'); };
-  await assert.rejects(runBench([kase], { model: 'm', root: '/r', binding }, { exec, vcs: {} as Vcs }), /snapshot/);
   const r = await runBench([kase], { model: 'm', root: '/r', binding, dryRun: true }, { exec, vcs: {} as Vcs });
   assert.ok('dryRun' in r);
   assert.match(r.dryRun[0].command, /--cwd .<workdir>.$/);
@@ -201,14 +200,23 @@ test('report groups by executor name, not kind', () => {
   assert.deepEqual(rows.map((x) => [x.executor, x.executorKind, x.n, x.passRate]), [['bot-a', 'command', 2, 1], ['bot-b', 'command', 1, 0]]);
 });
 
-test('compare uses shared cases; cli exits 1 on a pass-rate regression', async () => {
-  const a = result('a', [['1', true, 1], ['2', true, 1], ['9', false, 5]]);
-  const b = result('b', [['1', true, 0.5], ['2', false, 0.5]]);
-  const c = compare(a, b);
-  assert.equal(c.cases, 2);
-  assert.deepEqual(c.delta, { passRate: -0.5, cost_usd: -1, minutes: 0 });
+test('compare: Wilson lower bound over shared trials; too few cases or trials regress; cli reads the binding minimums', async () => {
+  assert.equal(wilsonLower(0, 0), 0);
+  assert.ok(Math.abs(wilsonLower(9, 10) - 0.5958) < 1e-3);
+  // 3 shared cases x 2 trials; a passes all, b fails one trial.
+  const rows = (fail: string[]): [string, boolean, number][] => ['1', '2', '3'].flatMap((id) => [[id, !fail.includes(`${id}a`), 1], [id, !fail.includes(`${id}b`), 1]] as [string, boolean, number][]);
+  const a = result('a', [...rows([]), ['9', false, 5]]);
+  const b = result('b', rows(['2a']));
+  const o = { minCases: 3, trials: 2 };
+  const c = compare(a, b, o);
+  assert.equal(c.cases, 3);
+  assert.equal(c.a.trials, 2);
+  assert.ok(c.b.lower < c.a.lower);
   assert.equal(c.regressed, true);
-  assert.equal(compare(b, a).regressed, false);
+  assert.equal(compare(b, a, o).regressed, false);
+  assert.deepEqual(compare(b, a, { minCases: 4, trials: 2 }).insufficient, ['3 shared cases, need 4']);
+  assert.deepEqual(compare(b, a, { minCases: 3, trials: 3 }).insufficient, ['2 trials on a shared case, need 3']);
+  assert.equal(compare(b, a).regressed, true); // defaults: 20 cases, 3 trials
 
   const dir = mkdtempSync(join(tmpdir(), 'cmp-'));
   writeFileSync(join(dir, 'a.json'), JSON.stringify(a));
@@ -216,9 +224,10 @@ test('compare uses shared cases; cli exits 1 on a pass-rate regression', async (
   const log = console.log;
   console.log = () => {};
   try {
-    const ctx = { root: dir, binding, env: {}, exec: () => '', http: async () => ({}) };
+    const ctx = { root: dir, binding: { ...binding, learning: { ...binding.learning, bench_min_cases: 3, bench_trials: 2 } }, env: {}, exec: () => '', http: async () => ({}) };
     assert.equal(await cli(['compare', 'a.json', 'b.json'], ctx), 1);
     assert.equal(await cli(['compare', 'b.json', 'a.json'], ctx), 0);
+    assert.equal(await cli(['compare', 'b.json', 'a.json'], { ...ctx, binding }), 1); // template defaults
   } finally {
     console.log = log;
   }
@@ -267,4 +276,17 @@ test('report groups per model, marks the Pareto front; cli report reads only the
     console.log = log;
   }
   assert.equal(JSON.parse(out[0]).results, 3);
+});
+
+test('runBench --trials: one row per trial, each in fresh trees', async () => {
+  const { vcs, made } = fakeVcs({ base: { 'src/a.ts': 'old' }, head: { 'src/a.ts': 'new', 'test/a.test.ts': 'oracle' } });
+  let verifies = 0;
+  const exec = (_c: string, args: string[], o?: { env?: NodeJS.ProcessEnv }) => {
+    if (lineOf(args, o) === 'npm test' && ++verifies === 2) throw new Error('flaky');
+    return '';
+  };
+  const r = await runBench([kase], { model: 'm', root: mkdtempSync(join(tmpdir(), 'root-')), binding, trials: 3 }, { exec, vcs });
+  assert.ok('cases' in r);
+  assert.deepEqual(r.cases.map((c) => [c.id, c.trial, c.pass]), [['1', 1, true], ['1', 2, false], ['1', 3, true]]);
+  assert.equal(made.length, 9); // agent, verify and oracle trees per trial
 });

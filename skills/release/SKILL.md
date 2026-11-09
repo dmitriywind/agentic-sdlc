@@ -1,7 +1,9 @@
 ---
 name: release
 description: Decide whether the trunk is ready for the last environment, choose what ships, set Release Version and cut the release line. Use when the Product owner asks for a release, or to plan the next version after a failed release.
-tier: balanced
+disable-model-invocation: true
+metadata:
+  tier: balanced
 ---
 
 # Release

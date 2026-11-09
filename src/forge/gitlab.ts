@@ -64,6 +64,11 @@ export function gitlab(ctx: AdapterContext): Forge {
       }, 'review_token_env');
     },
     async approve(n) { await call('POST', `/merge_requests/${n}/approve`, {}, 'review_token_env'); },
+    // ponytail: GitLab lists current approvers without a commit; the MR's head stands in, so the project must reset approvals on push.
+    async approvals(n) {
+      const [m, a] = await Promise.all([call('GET', `/merge_requests/${n}`), call('GET', `/merge_requests/${n}/approvals`)]);
+      return (a.approved_by ?? []).map((x: any) => ({ user: x.user?.username ?? '', state: 'approved', sha: m.sha }));
+    },
     async runs(q = {}) {
       const qs = new URLSearchParams({ per_page: '30' });
       if (q.ref) qs.set('ref', q.ref);

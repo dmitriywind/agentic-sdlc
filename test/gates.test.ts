@@ -4,7 +4,9 @@ import { cpSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
-import { boardSync, branchNames, diffPaths, factoryClass, globToRegExp, linkage, shipped, shippedOptions, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
+import { approval, approvers, boardSync, branchNames, diffPaths, globToRegExp, linkage, proofFiles, proofsOnBase, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
+import { shippedOptions } from '../src/binding.ts';
+import { PROOF_FILE } from '../src/bench.ts';
 import { compare } from '../src/bench.ts';
 
 const binding = {
@@ -78,7 +80,7 @@ test('linkage: product CR needs exactly one open ticket named by the source', as
   assert.equal((await linkage(d, 'two')).ok, false);
   assert.match((await linkage(d, 'closed')).errors.join(), /not open/);
   assert.match((await linkage(d, 'unnamed')).errors.join(), /does not name/);
-  assert.deepEqual(await linkage(d, 'fac'), { ok: true, factory: true, class: 'tuning', errors: [] });
+  assert.deepEqual(await linkage(d, 'fac'), { ok: true, factory: true, class: 'guardrail', errors: [] }); // skill text change
   assert.equal((await linkage(d, 'mixed')).ok, false);
 });
 
@@ -138,10 +140,14 @@ test('signal-on-red: redacted summary, deduplicated, string ids', async () => {
 test('skill-regression: valid pack passes, bad frontmatter and broken links listed', () => {
   const root = mkdtempSync(join(tmpdir(), 'sk-'));
   const mkSkill = (n: string, text: string) => { mkdirSync(join(root, '.agents', 'skills', n), { recursive: true }); writeFileSync(join(root, '.agents', 'skills', n, 'SKILL.md'), text); };
-  mkSkill('good', '---\nname: good\ndescription: d\ntier: fast\n---\nsee [x](https://x.y) and [r](SKILL.md#a)\n');
-  assert.deepEqual(skillRegression(root), []);
-  mkSkill('bad', '---\nname: bad\ntier: huge\n---\n[l](missing.md)\n');
-  const errs = skillRegression(root).join('\n');
+  mkSkill('good', '---\nname: good\ndescription: d\nmetadata:\n  tier: fast\n---\nsee [x](https://x.y) and [r](SKILL.md#a)\n');
+  assert.deepEqual(skillRegression(root), { errors: [], warnings: [] });
+  mkSkill('old', '---\nname: old\ndescription: d\ntier: deep\n---\nx\n');
+  assert.deepEqual(skillRegression(root), { errors: [], warnings: ['old: top-level tier is deprecated; move it to metadata.tier'] });
+  mkSkill('none', '---\nname: none\ndescription: d\n---\nx\n');
+  mkSkill('bad', '---\nname: bad\nmetadata:\n  tier: huge\n---\n[l](missing.md)\n');
+  const errs = skillRegression(root).errors.join('\n');
+  assert.match(errs, /none: frontmatter metadata.tier missing/);
   assert.match(errs, /bad: frontmatter description missing/);
   assert.match(errs, /tier huge invalid/);
   assert.match(errs, /broken link missing.md/);
@@ -151,9 +157,9 @@ test('skill-regression: the shipped scorers pass; bad scorer frontmatter is list
   const root = mkdtempSync(join(tmpdir(), 'sc-'));
   mkdirSync(join(root, '.agents', 'skills'), { recursive: true });
   cpSync(new URL('../scorers', import.meta.url), join(root, '.agents', 'scorers'), { recursive: true });
-  assert.deepEqual(skillRegression(root), []);
+  assert.deepEqual(skillRegression(root).errors, []);
   writeFileSync(join(root, '.agents', 'scorers', 'bad.md'), '---\nname: bad\napplies_to: implement-spec\ntier: huge\nscale: 1-10\n---\nq\n');
-  assert.deepEqual(skillRegression(root), ['scorers/bad.md: applies_to must be "*" or a list of skills', 'scorers/bad.md: tier huge invalid', 'scorers/bad.md: scale 1-10 invalid']);
+  assert.deepEqual(skillRegression(root).errors, ['scorers/bad.md: applies_to must be "*" or a list of skills', 'scorers/bad.md: scale 1-10 invalid']);
 });
 
 test('diffPaths: old and new path; quoted or ambiguous headers fail closed', () => {
@@ -163,38 +169,143 @@ test('diffPaths: old and new path; quoted or ambiguous headers fail closed', () 
   assert.equal(diffPaths('diff --git a/x b/y b/z\n'), null);
 });
 
-test('linkage/factory-class: rename out of factory, quoted path, guardrail vs tuning binding', async () => {
-  const headBinding = (over: Record<string, unknown>) => JSON.stringify({ ...binding, ...over });
+const skillMd = (tier: string, body = 'rules\n', extra = '') => `---\nname: a\ndescription: d\nmetadata:\n  tier: ${tier}\n${extra}---\n${body}`;
+
+/** Classes the CRs whose diffs and files at base/head shas are given; a suite for skill `a` lives in d.root. */
+function classFakes(benched: boolean) {
+  const root = mkdtempSync(join(tmpdir(), 'cls-'));
+  if (benched) {
+    mkdirSync(join(root, '.agents', 'bench', 'suites'), { recursive: true });
+    writeFileSync(join(root, '.agents', 'bench', 'suites', 's.json'), JSON.stringify({ name: 's', skill: 'a', cases: [{ id: '1' }] }));
+  }
   const md = '.agents/skills/a/SKILL.md';
   const bdiff = 'diff --git a/.agents/binding.yml b/.agents/binding.yml\n';
-  const { d, statuses } = fakes([], {
-    ren: {}, q: {}, skill: {}, del: {},
-    tune: { headSha: 'tune' }, guard: { headSha: 'guard' }, gate: {}, nohead: { headSha: 'missing' },
-  }, {
+  const mdiff = `diff --git a/${md} b/${md}\n`;
+  const files: Record<string, string> = {
+    'base:binding': JSON.stringify(binding),
+    'tune:binding': JSON.stringify({ ...binding, models: { ...binding.models, fast: 'f2' } }),
+    'guard:binding': JSON.stringify({ ...binding, paths: { factory: [] } }),
+    'base:skill': skillMd('fast'),
+    'tier:skill': skillMd('deep'),
+    'text:skill': skillMd('fast', 'other rules\n'),
+    'both:skill': skillMd('deep', 'other rules\n'),
+    'desc:skill': skillMd('deep', 'rules\n', 'license: x\n'),
+    'badtier:skill': skillMd('huge'),
+  };
+  const crs: Record<string, Partial<CR>> = {}, diffs: Record<string, string> = {};
+  for (const [n, d] of Object.entries({ tune: bdiff, guard: bdiff, nohead: bdiff, tier: mdiff, text: mdiff, both: mdiff, desc: mdiff, badtier: mdiff })) {
+    crs[n] = { headSha: n, baseSha: 'base', source: `factory/${n}` };
+    diffs[n] = d;
+  }
+  Object.assign(crs, { ren: {}, q: {}, del: {}, gate: {} });
+  Object.assign(diffs, {
     ren: 'diff --git a/src/app.ts b/.agents/app.ts\n',
     q: 'diff --git "a/.agents/\\303\\251" "b/.agents/\\303\\251"\n',
-    skill: `diff --git a/${md} b/${md}\n`,
-    del: `diff --git a/${md} b/${md}\ndeleted file mode 100644\n`,
-    tune: bdiff, guard: bdiff, nohead: bdiff,
+    del: `${mdiff}deleted file mode 100644\n`,
     gate: 'diff --git a/.agents/gates.yml b/.agents/gates.yml\n',
   });
-  d.headFile = (_p, sha) => sha === 'tune' ? headBinding({ models: { ...binding.models, fast: 'f2' } })
-    : sha === 'guard' ? headBinding({ paths: { factory: [] } }) : undefined;
-  assert.equal((await linkage(d, 'ren')).class, 'product');
-  assert.equal((await linkage(d, 'q')).class, 'product');
-  assert.equal((await linkage(d, 'skill')).class, 'tuning');
-  assert.equal((await linkage(d, 'del')).class, 'guardrail');
-  assert.equal((await linkage(d, 'tune')).class, 'tuning');
-  assert.equal((await linkage(d, 'gate')).class, 'guardrail');
-  assert.equal((await linkage(d, 'nohead')).class, 'guardrail');
-  assert.deepEqual(await linkage(d, 'guard'), { ok: true, factory: true, class: 'guardrail', errors: [] });
+  const f = fakes([], crs, diffs);
+  f.d.root = root;
+  f.d.fileAt = (p, sha) => files[`${sha}:${p.endsWith('binding.yml') ? 'binding' : 'skill'}`];
+  return f;
+}
 
-  assert.equal((await factoryClass(d, 'guard')).state, 'failure');
-  assert.equal((await factoryClass(d, 'tune')).state, 'success');
-  d.binding = { ...binding, learning: { auto_merge_classes: [] } };
-  assert.equal((await factoryClass(d, 'tune')).state, 'failure');
-  d.binding = binding;
-  assert.deepEqual(statuses.map((s) => [s.sha, s.context, s.state]), [['guard', 'factory-owner', 'failure'], ['tune', 'factory-owner', 'success'], ['tune', 'factory-owner', 'failure']]);
+test('classify: rename out of factory, quoted path, models-only binding, metadata.tier with a bench suite', async () => {
+  const { d } = classFakes(true);
+  const cls = async (n: string) => (await linkage(d, n)).class;
+  assert.equal(await cls('ren'), 'product');
+  assert.equal(await cls('q'), 'product');
+  assert.equal(await cls('tune'), 'tuning');
+  assert.equal(await cls('tier'), 'tuning');
+  for (const n of ['del', 'gate', 'nohead', 'guard', 'text', 'both', 'desc', 'badtier']) assert.equal(await cls(n), 'guardrail', n);
+  assert.deepEqual(await linkage(d, 'guard'), { ok: true, factory: true, class: 'guardrail', errors: [] });
+  // No bench suite for the skill: a tier change cannot be measured, so it is guardrail.
+  assert.equal((await linkage(classFakes(false).d, 'tier')).class, 'guardrail');
+});
+
+test('approvers: latest decisive review per user, on the head only', () => {
+  assert.deepEqual(approvers([
+    { user: 'Ann', state: 'approved', sha: 'h' }, { user: 'ann', state: 'commented', sha: 'h' },
+    { user: 'bob', state: 'approved', sha: 'h' }, { user: 'bob', state: 'changes_requested', sha: 'h' },
+    { user: 'cy', state: 'approved', sha: 'old' },
+  ], 'h'), ['ann']);
+});
+
+test('approval: classes and the human-approval status per forge.human_approval', async () => {
+  const f = classFakes(true);
+  const prod = (n: string, lane?: string) => {
+    f.items.push(item(n, 'In review', lane ? { lane } : {}));
+    return { closes: [n], headSha: `h${n}`, source: `${n}/x` };
+  };
+  const reviews: Record<string, { user: string; state: string; sha: string }[]> = {
+    full: [{ user: 'factory-bot', state: 'approved', sha: 'hfull' }],
+    fullok: [{ user: 'Dana', state: 'approved', sha: 'hfullok' }],
+    guard: [{ user: 'dana', state: 'approved', sha: 'guard' }],
+    guardok: [{ user: 'fo', state: 'approved', sha: 'guard' }],
+  };
+  const crs: Record<string, Partial<CR>> = { fast: prod('fast', 'Fast'), full: prod('full', 'Full'), fullok: prod('fullok', 'Full'), nolane: prod('nolane') };
+  const view = f.d.forge.view;
+  f.d.forge.view = async (n: string) => (crs[n] ? { ...(await view(n)), ...crs[n] } : n === 'guardok' ? view('guard') : view(n));
+  const diff = f.d.forge.diff;
+  f.d.forge.diff = async (n: string) => (crs[n] ? 'diff --git a/src/x.ts b/src/x.ts\n' : diff(n === 'guardok' ? 'guard' : n));
+  f.d.forge.approvals = async (n: string) => reviews[n] ?? [];
+  f.d.binding = { ...binding, owners: { factory: 'fo', bots: ['factory-bot'] }, forge: { review_identity: 'reviewer' } };
+  const st = async (n: string) => { const r = await approval(f.d, n); return `${r.class}:${r.state}`; };
+  assert.equal(await st('fast'), 'product-fast:success');
+  assert.equal(await st('full'), 'product-full:pending'); // a bot's approval is not a human's
+  assert.equal(await st('fullok'), 'product-full:success');
+  assert.equal(await st('nolane'), 'product-full:pending'); // no lane fails closed to Full
+  assert.equal(await st('tune'), 'tuning:success');
+  assert.equal(await st('guard'), 'guardrail:pending'); // a human, but not owners.factory
+  assert.equal(await st('guardok'), 'guardrail:success');
+  f.d.binding = { ...f.d.binding, forge: { human_approval: 'always' }, learning: { auto_merge_classes: [] } } as any;
+  assert.equal(await st('fast'), 'product-fast:pending');
+  assert.equal(await st('tune'), 'tuning:pending');
+  f.d.binding = { ...f.d.binding, forge: { human_approval: 'never' } } as any;
+  assert.equal(await st('full'), 'product-full:success');
+  assert.ok(f.statuses.every((s) => s.context === 'human-approval'));
+  assert.equal(f.statuses.find((s) => s.sha === 'hfullok').description, 'product-full: approved by dana');
+});
+
+test('proofFiles: new and changed proof paths, deletions skipped', () => {
+  const diff = [
+    'diff --git a/src/a.ts b/src/a.ts', '--- a/src/a.ts',
+    'diff --git a/test/a.test.ts b/test/a.test.ts', 'new file mode 100644',
+    'diff --git a/test/old.test.ts b/test/old.test.ts', 'deleted file mode 100644',
+    'diff --git a/src/b.spec.ts b/src/b.spec.ts', '',
+  ].join('\n');
+  assert.deepEqual(proofFiles(diff, PROOF_FILE), ['test/a.test.ts', 'src/b.spec.ts']);
+});
+
+test('proofs-on-base: each new proof must fail on the merge base; factory CRs pass; unset command fails closed', async () => {
+  const diff = 'diff --git a/src/a.ts b/src/a.ts\ndiff --git a/test/a.test.ts b/test/a.test.ts\ndiff --git a/test/b.test.ts b/test/b.test.ts\n';
+  const f = fakes([], { p: { headSha: 'h' }, fac: { headSha: 'fh' }, none: { headSha: 'nh' } }, { p: diff, fac: 'diff --git a/.agents/x b/.agents/x\n', none: 'diff --git a/src/a.ts b/src/a.ts\n' });
+  const tree: string[] = [];
+  f.d.vcs.head = async () => ({ ref: 'x', sha: 'HEAD1' });
+  f.d.vcs.base = async () => ({ sha: 'BASE1' });
+  f.d.vcs.checkoutTests = async (rev: string, paths: string[]) => { tree.push(`${rev}:${paths.join(',')}`); };
+  const ran: string[] = [];
+  let passing = new Set<string>();
+  f.d.run = (cmd) => { ran.push(cmd); return [...passing].some((p) => cmd.includes(p)); };
+  f.d.binding = { ...binding, commands: { proofs_on_base: 'npx test {files}' } };
+  const ok = await proofsOnBase(f.d, 'p');
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.files, ['test/a.test.ts', 'test/b.test.ts']);
+  assert.equal(ran.length, 2);
+  assert.match(ran[0], /^npx test .test\/a\.test\.ts.$/);
+  assert.deepEqual(tree, ['BASE1:test/a.test.ts,test/b.test.ts', 'HEAD1:']); // reset to HEAD afterwards
+  passing = new Set(['b.test']);
+  const bad = await proofsOnBase(f.d, 'p');
+  assert.deepEqual([bad.ok, bad.passedOnBase], [false, ['test/b.test.ts']]);
+  assert.equal((await proofsOnBase(f.d, 'fac')).ok, true);
+  assert.match((await proofsOnBase(f.d, 'none')).errors[0], /no new or changed proof/);
+  f.d.binding = binding;
+  assert.match((await proofsOnBase(f.d, 'p')).errors[0], /proofs_on_base is not set/);
+  assert.deepEqual(f.statuses.map((s) => [s.sha, s.context, s.state]), [
+    ['h', 'proofs-on-base', 'success'], ['h', 'proofs-on-base', 'failure'], ['fh', 'proofs-on-base', 'success'], ['nh', 'proofs-on-base', 'failure'], ['h', 'proofs-on-base', 'failure'],
+  ]);
+  f.d.forge.status = async () => { throw new Error('env var named by options.review_token_env (unset) is not set'); };
+  assert.equal((await proofsOnBase(f.d, 'fac')).posted, false);
 });
 
 test('shipped: only Done tickets whose merge sha is an ancestor; unknown ancestry ships nothing', async () => {
@@ -270,7 +381,8 @@ test('signal-on-red: only trunk or release refs; strict title', async () => {
 
 test('bench compare: no common cases or fewer cases in b is a regression', () => {
   const r = (ids: string[]) => ({ model: 'm', executor: 'harness', at: '', passRate: 1, cost_usd: 0, minutes: 0, cases: ids.map((id) => ({ id, pass: true, minutes: 1 })) }) as any;
-  assert.equal(compare(r(['1']), r(['2'])).regressed, true);
-  assert.equal(compare(r(['1', '2']), r(['1'])).regressed, true);
-  assert.equal(compare(r(['1']), r(['1', '2'])).regressed, false);
+  const o = { minCases: 1, trials: 1 };
+  assert.equal(compare(r(['1']), r(['2']), o).regressed, true);
+  assert.equal(compare(r(['1', '2']), r(['1']), o).regressed, true);
+  assert.equal(compare(r(['1']), r(['1', '2']), o).regressed, false);
 });

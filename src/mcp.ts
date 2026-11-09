@@ -32,7 +32,7 @@ const TOOLS: Record<string, Spec> = {
   board_label: S('board', 'label', ['id', 'op', 'label'], {}, 'Add or remove a label (op: add|remove).'),
   board_assign: S('board', 'assign', ['id'], { user: 'pos', none: 'boolean' }, 'Assign a user, or none.'),
   board_comment: S('board', 'comment', ['id'], {}, 'Comment on an item.', [], true),
-  board_comments: S('board', 'comments', ['id'], { last: 'integer', marker: 'string', author: 'strings' }, 'Read comments, newest first.'),
+  board_comments: S('board', 'comments', ['id'], { last: 'integer', marker: 'string', author: 'strings', trusted: 'boolean' }, 'Read comments, newest first; trusted keeps the binding bots and owners.'),
   board_close: S('board', 'close', ['id'], { reason: 'string' }, 'Close an item (reason: completed|not_planned).', ['reason']),
   board_child: S('board', 'child', ['parent', 'child'], {}, 'Attach child to parent.'),
   forge_open: S('forge', 'open', [], { source: 'string', title: 'string', draft: 'boolean' }, 'Open a change request.', ['source', 'title'], true),
@@ -44,6 +44,7 @@ const TOOLS: Record<string, Spec> = {
   forge_sync: S('forge', 'sync', ['n'], {}, 'Bring the change request up to date with its target.'),
   forge_automerge: S('forge', 'automerge', ['n'], {}, 'Enable automerge.'),
   forge_approve: S('forge', 'approve', ['n'], {}, 'Approve a change request.'),
+  forge_approvals: S('forge', 'approvals', ['n'], {}, 'Reviews of a change request: user, state, sha.'),
   forge_comment: S('forge', 'comment', ['n'], {}, 'Comment on a change request.', [], true),
   forge_status: S('forge', 'status', ['n'], { context: 'string', state: 'string', description: 'string', url: 'string' }, 'Post a commit status (n is the sha; state: pending|success|failure).', ['context', 'state', 'description']),
   forge_runs: S('forge', 'runs', [], { ref: 'string', failed: 'boolean' }, 'List CI runs.'),
@@ -53,13 +54,26 @@ const TOOLS: Record<string, Spec> = {
   vcs_base: S('vcs', 'base', [], {}, 'Base sha.'),
   vcs_push: S('vcs', 'push', [], {}, 'Push the current work.'),
   vcs_cut: S('vcs', 'cut', ['rev', 'release'], {}, 'Cut a release ref.'),
-  vcs_tag: S('vcs', 'tag', ['name', 'rev'], {}, 'Tag a revision.'),
   vcs_tags: S('vcs', 'tags', [], { prefix: 'string' }, 'List tags.'),
   vcs_drop: S('vcs', 'drop', ['name'], {}, 'Remove a tree made by vcs_start.'),
-  dispatch: S('dispatch', '', ['skill'], { ticket: 'string', cr: 'string', workdir: 'string', run_model: 'string', unattended: 'boolean' }, 'Resolve how to run a skill on a ticket.', ['ticket']),
+  dispatch: S('dispatch', '', ['skill'], { ticket: 'string', cr: 'string', workdir: 'string', run_model: 'string', unattended: 'boolean' }, 'Start a skill on a ticket or, for a factory CR, on cr.'),
   ledger_runs: S('ledger', 'runs', [], { since: 'integer', skill: 'string' }, 'Runs read from heartbeats.'),
-  ledger_summary: S('ledger', 'summary', [], { since: 'integer' }, 'Aggregated run measures.'),
+  ledger_summary: S('ledger', 'summary', [], { since: 'integer' }, 'Aggregated run measures and the learning trigger.'),
+  ledger_plan: S('ledger', 'plan', [], { run: 'string' }, 'Scorers, evidence and the hard-fact cap for one run.', ['run']),
 };
+
+/** Tools served only when `mcp --allow` names them: they speak as the review identity. */
+export const GUARDED: Record<string, string> = { approve: 'forge_approve', status: 'forge_status' };
+const served = (allow: Set<string>) => Object.keys(TOOLS).filter((n) => !Object.values(GUARDED).includes(n) || allow.has(n));
+/** `--allow approve,status` as tool names; unknown words throw. */
+export function allowList(arg: string | undefined): Set<string> {
+  const out = new Set<string>();
+  for (const w of (arg ?? '').split(',').map((x) => x.trim()).filter(Boolean)) {
+    if (!GUARDED[w]) throw new Error(`--allow takes ${Object.keys(GUARDED).join(',')}; not ${w}`);
+    out.add(GUARDED[w]);
+  }
+  return out;
+}
 
 const schema = (s: Spec) => {
   const properties: Record<string, object> = {};
@@ -90,10 +104,11 @@ function capture(fn: () => Promise<number>) {
   return p;
 }
 
-async function callTool(name: string, args: Record<string, unknown>, ctx: Ctx) {
-  const s = TOOLS[name];
+async function callTool(name: string, args: Record<string, unknown>, ctx: Ctx, allow: Set<string>) {
+  const s = served(allow).includes(name) ? TOOLS[name] : undefined;
   const fail = (text: string) => ({ content: [{ type: 'text', text }], isError: true });
   if (!s) return fail(`unknown tool '${name}'`);
+  if (name === 'dispatch' && args.ticket === undefined && args.cr === undefined) return fail('dispatch: ticket or cr required');
   const missing = [...s.pos, ...s.req, ...(s.body ? ['body'] : [])].filter((k) => args[k] === undefined);
   if (missing.length) return fail(`${name}: ${missing.join(', ')} required`);
   if (name === 'forge_view' && args.n === undefined && args.sha === undefined) return fail('forge_view: n or sha required');
@@ -125,7 +140,7 @@ async function callTool(name: string, args: Record<string, unknown>, ctx: Ctx) {
 const version = () => JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version as string;
 
 /** One JSON-RPC message in, the response out (null for notifications). */
-export async function handle(msg: any, ctx: Ctx): Promise<object | null> {
+export async function handle(msg: any, ctx: Ctx, allow: Set<string> = new Set()): Promise<object | null> {
   const id = msg?.id;
   const ok = (result: object) => ({ jsonrpc: '2.0', id, result });
   const err = (code: number, message: string) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
@@ -136,16 +151,16 @@ export async function handle(msg: any, ctx: Ctx): Promise<object | null> {
       return ok({ protocolVersion: '2025-06-18', serverInfo: { name: 'agentic-sdlc', version: version() }, capabilities: { tools: {} } });
     case 'ping': return ok({});
     case 'tools/list':
-      return ok({ tools: Object.entries(TOOLS).map(([name, s]) => ({ name, description: s.doc, inputSchema: schema(s) })) });
+      return ok({ tools: served(allow).map((name) => ({ name, description: TOOLS[name].doc, inputSchema: schema(TOOLS[name]) })) });
     case 'tools/call':
-      return ok(await callTool(String(msg.params?.name), msg.params?.arguments ?? {}, ctx));
+      return ok(await callTool(String(msg.params?.name), msg.params?.arguments ?? {}, ctx, allow));
     default: return err(-32601, `method not found: ${msg.method}`);
   }
 }
 
 const digest = (s: string) => createHash('sha256').update(s).digest();
 
-export function startHttp(ctx: Ctx, port: number, host = '127.0.0.1'): Promise<Server> {
+export function startHttp(ctx: Ctx, port: number, host = '127.0.0.1', allow: Set<string> = new Set()): Promise<Server> {
   const token = ctx.env.AGENTIC_SDLC_MCP_TOKEN;
   if (!token) return Promise.reject(new Error('AGENTIC_SDLC_MCP_TOKEN is required for --http'));
   const server = createServer(async (req, res) => {
@@ -160,7 +175,7 @@ export function startHttp(ctx: Ctx, port: number, host = '127.0.0.1'): Promise<S
     let msg: unknown;
     try { msg = JSON.parse(raw); } catch { return send(400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); }
     let r: object | null;
-    try { r = await handle(msg, ctx); }
+    try { r = await handle(msg, ctx, allow); }
     catch (e) { r = { jsonrpc: '2.0', id: (msg as any)?.id ?? null, error: { code: -32603, message: (e as Error).message } }; }
     r ? send(200, r) : send(202);
   });
@@ -169,16 +184,19 @@ export function startHttp(ctx: Ctx, port: number, host = '127.0.0.1'): Promise<S
 
 export const cli: PortCli = async (argv, ctx) => {
   if (argv.includes('--help') || argv.includes('-h')) {
-    console.log(`usage: agentic-sdlc mcp [--http [--port 8787] [--host 127.0.0.1]]
+    console.log(`usage: agentic-sdlc mcp [--http [--port 8787] [--host 127.0.0.1]] [--allow approve,status]
   default: JSON-RPC over stdio, one message per line.
-  --http: POST /mcp, JSON responses only (no SSE); requires Authorization: Bearer $AGENTIC_SDLC_MCP_TOKEN.`);
+  --http: POST /mcp, JSON responses only (no SSE); requires Authorization: Bearer $AGENTIC_SDLC_MCP_TOKEN.
+  --allow: also serve forge_approve and/or forge_status (review identity only).`);
     return 0;
   }
   const val = (flag: string) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };
+  let allow: Set<string>;
+  try { allow = allowList(val('--allow')); } catch (e) { console.error((e as Error).message); return 2; }
   if (argv.includes('--http')) {
     try {
       const host = val('--host') ?? '127.0.0.1';
-      const server = await startHttp(ctx, Number(val('--port') ?? 8787), host);
+      const server = await startHttp(ctx, Number(val('--port') ?? 8787), host, allow);
       console.error(`agentic-sdlc mcp listening on http://${host}:${(server.address() as { port: number }).port}/mcp`);
       await new Promise((r) => server.once('close', r));
       return 0;
@@ -188,7 +206,7 @@ export const cli: PortCli = async (argv, ctx) => {
     if (!line.trim()) continue;
     let msg: any, r: object | null;
     try { msg = JSON.parse(line); } catch { realWrite(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }) + '\n'); continue; }
-    try { r = await handle(msg, ctx); }
+    try { r = await handle(msg, ctx, allow); }
     catch (e) { r = { jsonrpc: '2.0', id: msg?.id ?? null, error: { code: -32603, message: (e as Error).message } }; }
     if (r) realWrite(JSON.stringify(r) + '\n');
   }

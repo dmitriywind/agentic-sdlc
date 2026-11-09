@@ -1,7 +1,6 @@
 ---
 name: done-conditions
 applies_to: "*"
-tier: fast
 scale: 0-4
 ---
 

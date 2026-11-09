@@ -81,19 +81,6 @@ test('azure: draft toggles isDraft; automerge sets autoCompleteSetBy', async () 
   await assert.rejects(f.sync('4'), /not supported/);
 });
 
-test('swarm: draft maps to needsRevision, ready to needsReview', async () => {
-  const review = { id: 11, description: 'T\n\nCloses 2', state: 'needsRevision', changes: [100], testStatus: 'pass' };
-  const { ctx, calls } = mk('swarm', { base_url: 'https://sw', user_env: 'U', ticket_env: 'TOK' }, (_m, url) =>
-    url.includes('/comments?') ? { data: { comments: [] } } : { data: { reviews: [review] } });
-  const f = createForge(ctx);
-  const cr = await f.view('11');
-  assert.equal(cr.draft, true);
-  assert.deepEqual(cr.closes, ['2']);
-  assert.deepEqual(cr.checks, [{ name: 'swarm-tests', state: 'success' }]);
-  await f.ready('11');
-  assert.equal(calls.find((c) => c.m === 'PATCH')!.body.state, 'needsReview');
-});
-
 test('github: uses gh with body on stdin, draft = ready --undo, status via api', async () => {
   const pull = { number: 5, html_url: 'u', title: 'T', head: { ref: 'b', sha: 'h' }, base: { ref: 'main', sha: 'm' }, draft: false, state: 'open', body: 'Closes 1', mergeable_state: 'behind' };
   const { ctx, execs, envs } = mk('github', { repo: 'o/r', token_env: 'TOK', review_token_env: 'REV' }, () => ({}), (a) =>
@@ -184,22 +171,22 @@ test('gitlab: base_url is required, no default host', () => {
   assert.throws(() => createForge(mk('gitlab', { project: 'p', token_env: 'TOK' }, () => ({})).ctx), /base_url/);
 });
 
-test('swarm: only the review identity status markers count; status and approve post as it', async () => {
-  const review = { id: 11, description: 'T', state: 'needsReview', changes: [100] };
-  const marker = (ctx: string) => `<!-- agentic-sdlc:status:${ctx}:success -->`;
-  const comments = [{ user: 'implementer', body: marker('review') }, { user: 'bot', body: marker('Required') }];
-  const auth: string[] = [];
-  const { ctx, calls } = mk('swarm', { base_url: 'https://sw', user_env: 'U', ticket_env: 'TOK', review_user: 'bot', review_token_env: 'REV' }, (_m, url) =>
-    url.includes('/comments?') ? { data: { comments } } : { data: { reviews: [review] } });
-  const http = ctx.http;
-  ctx.http = async (m, url, o) => { auth.push(o!.headers!.authorization); return http(m, url, o); };
-  const f = createForge(ctx);
-  assert.deepEqual((await f.view('11')).checks, [{ name: 'Required', state: 'success' }]);
-  auth.length = 0;
-  await f.status('100', { context: 'review', state: 'success', description: 'd' });
-  await f.approve('11');
-  const bot = 'Basic ' + Buffer.from('bot:r').toString('base64');
-  assert.equal(auth.at(-1), bot);
-  assert.equal(auth.at(-2), bot);
-  assert.deepEqual(calls.at(-1)!.body, { vote: 'up' });
+
+test('approvals: { user, state, sha } from every forge', async () => {
+  const gh = mk('github', { repo: 'o/r' }, () => ({}), (a) =>
+    a.includes('--paginate') ? '{"user":"ann","state":"approved","sha":"h1"}\n{"user":"bob","state":"changes_requested","sha":"h0"}\n' : '');
+  assert.deepEqual(await createForge(gh.ctx).approvals('5'), [{ user: 'ann', state: 'approved', sha: 'h1' }, { user: 'bob', state: 'changes_requested', sha: 'h0' }]);
+  assert.ok(gh.execs[0].includes('repos/o/r/pulls/5/reviews'));
+
+  const gl = mk('gitlab', { project: 'p', base_url: 'https://gl', token_env: 'TOK' }, (_m, url) =>
+    url.endsWith('/approvals') ? { approved_by: [{ user: { username: 'ann' } }] } : glMr());
+  assert.deepEqual(await createForge(gl.ctx).approvals('7'), [{ user: 'ann', state: 'approved', sha: 's1' }]);
+
+  const az = mk('azure', { org_url: 'https://dev.azure.com/o', project: 'p', repo: 'r', token_env: 'TOK' }, () =>
+    ({ lastMergeSourceCommit: { commitId: 'h' }, reviewers: [{ uniqueName: 'ann', vote: 10 }, { uniqueName: 'bob', vote: -10 }, { uniqueName: 'cy', vote: 0 }] }));
+  assert.deepEqual((await createForge(az.ctx).approvals('4')).map((r) => `${r.user}:${r.state}:${r.sha}`), ['ann:approved:h', 'bob:changes_requested:h', 'cy:pending:h']);
+
+  const bb = mk('bitbucket', { workspace: 'w', repo: 'r', token_env: 'TOK' }, () =>
+    ({ source: { commit: { hash: 'h' } }, participants: [{ role: 'REVIEWER', approved: true, user: { nickname: 'ann' } }, { role: 'PARTICIPANT', approved: false, user: { nickname: 'x' } }] }));
+  assert.deepEqual(await createForge(bb.ctx).approvals('3'), [{ user: 'ann', state: 'approved', sha: 'h' }]);
 });

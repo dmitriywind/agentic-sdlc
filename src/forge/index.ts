@@ -5,9 +5,8 @@ import { azure } from './azure.ts';
 import { bitbucket } from './bitbucket.ts';
 import { github } from './github.ts';
 import { gitlab } from './gitlab.ts';
-import { swarm } from './swarm.ts';
 
-const adapters = { github, gitlab, azure, bitbucket, swarm };
+const adapters = { github, gitlab, azure, bitbucket };
 
 export function createForge(ctx: AdapterContext): Forge {
   const make = adapters[ctx.binding.forge.adapter];
@@ -42,6 +41,7 @@ export const cli: PortCli = (argv, ctx) =>
         return {};
       }
       case 'approve': await f.approve(n()); return {};
+      case 'approvals': return f.approvals(n());
       case 'runs': return f.runs({ ref: a.get('ref'), failed: a.has('failed') });
       default: throw new UsageError(`unknown forge verb: ${verb ?? ''}`);
     }

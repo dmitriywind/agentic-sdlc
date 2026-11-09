@@ -1,28 +1,70 @@
-# Include from .gitlab-ci.yml:  include: { local: templates/gates/gitlab/agentic-sdlc.gitlab-ci.yml }
+# Include from .gitlab-ci.yml:  include: { local: .gitlab/agentic-sdlc.yml }
 # Secrets (masked CI/CD variables): AGENTIC_FORGE_TOKEN, AGENTIC_BOARD_TOKEN, AGENTIC_REVIEW_TOKEN.
-# Project settings: "Pipelines must succeed", fast-forward merge, merge trains on the trunk.
+# Scope them to the environment `agentic-gates` (variable environment scope): only jobs that declare it
+# read them, so `Required` and `proofs-on-base`, which run the MR's code, hold no secret.
+# Project settings: "Pipelines must succeed", fast-forward merge, merge trains on the trunk. Required
+# checks: ticket-linkage, Required, proofs-on-base, review, human-approval, skill-regression.
 # Event -> gate wiring only.
 # set: your deploy job names (deploy-staging, deploy-production) and vcs.release_prefix (release/).
 
+# Pinned CLI: the project's agentic-sdlc devDependency through `npm ci`; else AGENTIC_SDLC_VERSION (set it to an exact version).
+.agentic-cli: &agentic-cli
+  - |
+    if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
+      npm ci --ignore-scripts && export PATH="$PWD/node_modules/.bin:$PATH"
+    else
+      npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+    fi
+
 .agentic:
   image: node:22
+  environment: { name: agentic-gates, action: access }
   variables:
     GIT_DEPTH: "0"   # shipped walks the full history and tags
   before_script:
-    - npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+    - *agentic-cli
     - git config user.name "agentic-sdlc" && git config user.email "agentic-sdlc@noreply.invalid"
 
-# MR jobs read the binding (and skills) from the TARGET branch, never the MR's copy:
+# MR jobs read the binding (and the CLI) from the TARGET branch, never the MR's copy:
 # a git worktree of origin/<target> is the --root every gate below runs against.
 .agentic-mr:
   extends: .agentic
-  # The worktree shares this checkout's objects, so the MR head sha stays readable as data (factory-class).
+  # The worktree shares this checkout's objects, so the MR head sha stays readable as data (gate approval).
   before_script:
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - export AGENTIC_ROOT="$(mktemp -d)/target"
     - git worktree add --detach "$AGENTIC_ROOT" "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - test -f "$AGENTIC_ROOT/.agents/binding.yml"
-    - (cd "$AGENTIC_ROOT" && npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}")   # not from the MR tree: its .npmrc is untrusted
+    - cd "$AGENTIC_ROOT"   # not from the MR tree: its .npmrc is untrusted
+    - *agentic-cli
+    - cd "$CI_PROJECT_DIR"
+
+# Runs the MR's code with no secret (no environment).
+Required:
+  image: node:22
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - npm ci     # set: the binding's commands.install
+    - npm test   # set: the binding's commands.verify
+
+# The MR's new or changed proofs against the merge base's product code; posts status proofs-on-base.
+# No environment, so no agentic secret: the job's own result is the check ("Pipelines must succeed").
+# CI_JOB_TOKEN cannot post commit statuses; for the named status, give this job only a minimal
+# project access token (Developer, api) as AGENTIC_FORGE_TOKEN.
+proofs-on-base:
+  image: node:22
+  stage: test
+  variables:
+    GIT_DEPTH: "0"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - npm ci     # set: the binding's commands.install (puts the pinned agentic-sdlc devDependency in node_modules)
+    - export PATH="$PWD/node_modules/.bin:$PATH"
+    - command -v agentic-sdlc >/dev/null || npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+    - agentic-sdlc gate proofs-on-base --cr "$CI_MERGE_REQUEST_IID"
 
 ticket-linkage:
   extends: .agentic-mr
@@ -32,7 +74,27 @@ ticket-linkage:
   script:
     - agentic-sdlc --root "$AGENTIC_ROOT" gate branch-names --ref "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
     - agentic-sdlc --root "$AGENTIC_ROOT" gate linkage --cr "$CI_MERGE_REQUEST_IID"
-    - agentic-sdlc --root "$AGENTIC_ROOT" gate factory-class --cr "$CI_MERGE_REQUEST_IID"
+
+# Posts status human-approval. GitLab starts no pipeline on an approval: add a project webhook
+# (Merge request events, action approved/unapproved) to a relay that calls the pipeline trigger API with
+# AGENTIC_EVENT=approval and AGENTIC_CR=<iid>, or re-run the MR pipeline after approving.
+# (GitLab approval rules, Premium, can enforce the human approval natively instead.)
+human-approval:
+  extends: .agentic-mr
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables: { AGENTIC_CR: $CI_MERGE_REQUEST_IID }
+    - if: $CI_PIPELINE_SOURCE == "trigger" && $AGENTIC_EVENT == "approval"
+  before_script:
+    - git fetch origin "$CI_DEFAULT_BRANCH"
+    - export AGENTIC_ROOT="$(mktemp -d)/target"
+    - git worktree add --detach "$AGENTIC_ROOT" "origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-$CI_DEFAULT_BRANCH}"
+    - cd "$AGENTIC_ROOT"
+    - *agentic-cli
+    - cd "$CI_PROJECT_DIR"
+  script:
+    - agentic-sdlc --root "$AGENTIC_ROOT" gate approval --cr "$AGENTIC_CR"
 
 board-in-review:
   extends: .agentic-mr
@@ -45,15 +107,21 @@ board-in-review:
   script:
     - agentic-sdlc --root "$AGENTIC_ROOT" gate board-sync --cr "$CI_MERGE_REQUEST_IID" --event "$EVENT"
 
-# Reads the MR's own .agents/skills (static file checks with the published CLI).
+# Reads the MR's own .agents/skills (static file checks with the pinned CLI). No secret.
 skill-regression:
-  extends: .agentic
+  image: node:22
   stage: test
+  variables:
+    GIT_DEPTH: "0"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
-    - if git diff --name-only "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME...HEAD" | grep -q '^\.agents/'; then agentic-sdlc gate skill-regression; fi
+    - |
+      if git diff --name-only "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME...HEAD" | grep -q '^\.agents/'; then
+        if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then npm ci --ignore-scripts && export PATH="$PWD/node_modules/.bin:$PATH"; else npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"; fi
+        agentic-sdlc gate skill-regression
+      fi
 
 # Trunk pipeline after a merge. set: your trunk branch if it is not the default branch.
 board-merged:
@@ -125,13 +193,4 @@ signal-on-red:
   script:
     - agentic-sdlc gate signal-on-red --run "$CI_PIPELINE_ID"
 
-# Optional: a pipeline schedule with SDLC_CYCLE=1 runs one factory cycle (see templates/runner/routine.md).
-factory-cycle:
-  stage: .post
-  image: node:22
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule" && $SDLC_CYCLE == "1"
-  script:
-    - sh templates/runner/setup.sh
-    # set: your headless agent command with the prompt "Load the sdlc skill and run one cycle."
-    - echo "run your agent here"
+# The factory cycle and review pipelines: templates/runner/gitlab-ci-cycle.yml.

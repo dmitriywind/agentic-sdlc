@@ -1,7 +1,6 @@
 ---
 name: over-engineering
 applies_to: [implement-spec]
-tier: fast
 scale: pass-fail
 ---
 

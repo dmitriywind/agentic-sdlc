@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { clusters, flattenRuns, hashSkill, median, normaliseError, parseHeartbeat, readRuns, summarise, cli } from '../src/ledger.ts';
+import { clusters, flattenRuns, hashSkill, hardFacts, learningState, median, normaliseError, parseHeartbeat, readRuns, scoresComment, scorersFor, summarise, cli } from '../src/ledger.ts';
 import type { Board, Comment } from '../src/ports.ts';
 
 const beat = (hb: object, createdAt = '2026-11-08T00:00:00Z'): Comment => ({
@@ -127,4 +127,82 @@ test('summarise: byScorer, scorer-fail clusters across tickets, measures from ro
   // only runs on merged CRs 70 and 80 count: 4 / 2, not 6 / 2
   assert.deepEqual(s.measures, { costPerCR: 2, learningSpendShare: 0.25 });
   assert.equal(summarise(rows).measures.costPerCR, 2); // no merged list: every cr, 6 / 3
+});
+
+const scoresC = (o: object, author = 'bot', createdAt = '2026-11-08T12:00:00Z'): Comment =>
+  ({ id: 's', author, createdAt, body: `<!-- scores -->\n\`\`\`json\n${JSON.stringify(o)}\n\`\`\`` });
+
+test('readRuns: scores comments by bots and grade comments by owners apply; others are ignored', async () => {
+  const board = { comments: async () => [
+    { id: 'g2', author: 'stranger', createdAt: '', body: 'agentic-sdlc:grade a done-conditions 0' },
+    { id: 'g1', author: 'PO', createdAt: '', body: 'agentic-sdlc:grade a redundant-tests pass' },
+    scoresC({ run: 'a', scores: { 'done-conditions': 1 } }, 'mallory'),
+    scoresC({ run: 'a', scores: { 'done-conditions': 2, 'redundant-tests': 'fail' }, cap: 'outcome failed' }),
+    beat({ runs: [run({ id: 'a', score: 4 })] }),
+  ] } as unknown as Board;
+  const [a] = await readRuns(board, 'hb', ['bot'], {}, ['po', 'fo']);
+  assert.equal(a.score, 2);
+  assert.deepEqual(a.scores, { 'done-conditions': 2, 'redundant-tests': 'pass' }); // the owner's grade beats the judge
+});
+
+test('learningState: cycles since the last improve-factory heartbeat, due at every_cycles, week spend of learning skills', () => {
+  const now = Date.parse('2026-11-09T00:00:00Z');
+  const comments = [
+    beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: '5', skill: 'judge-run', cost_usd: 0.5 })] }),
+    beat({ at: '2026-11-07T00:00:00Z', runs: [run({ id: '4', cost_usd: 9 })] }),
+    beat({ at: '2026-11-06T00:00:00Z', runs: [run({ id: '3', skill: 'improve-factory', cost_usd: 2 })] }),
+    beat({ at: '2026-10-01T00:00:00Z', runs: [run({ id: '1', skill: 'bench', cost_usd: 7 })] }),
+  ];
+  assert.deepEqual(learningState(comments, 2, now), { due: true, cyclesSince: 2, spentWeekUsd: 2.5 });
+  assert.equal(learningState(comments, 3, now).due, false);
+  assert.equal(learningState(comments.slice(0, 2), 3, now).cyclesSince, 2); // no improve-factory yet: every heartbeat
+});
+
+test('plan scorers and caps; record validates names and scales and applies the cap', () => {
+  const root = mkdtempSync(join(tmpdir(), 'sc-'));
+  mkdirSync(join(root, '.agents', 'scorers'), { recursive: true });
+  writeFileSync(join(root, '.agents', 'scorers', 'r.md'), '---\nname: redundant-tests\napplies_to: [implement-spec]\nscale: pass-fail\n---\nq\n');
+  writeFileSync(join(root, '.agents', 'scorers', 'x.md'), '---\nname: release-only\napplies_to: [release]\nscale: 0-4\n---\nq\n');
+  assert.deepEqual(scorersFor(root, 'implement-spec').map((s) => s.name), ['done-conditions', 'redundant-tests']);
+  const r = run({ id: 'a', outcome: 'failed', cr: '7' }) as any;
+  const cr = { checks: [{ name: 'Required', state: 'failure' }, { name: 'lint', state: 'failure' }] } as any;
+  assert.deepEqual(hardFacts(r, cr, ['Required']), { score: 1, facts: ['outcome failed', 'red check on the head: Required'] });
+  assert.equal(hardFacts(run({}) as any), null);
+  const p = { run: r, scorers: scorersFor(root, 'implement-spec'), evidence: {}, cap: hardFacts(r, cr, ['Required']) };
+  const body = scoresComment(p, { scores: { 'done-conditions': 4, 'redundant-tests': 'pass' } }, 'T');
+  assert.ok(body.startsWith('<!-- scores -->\n'));
+  assert.deepEqual(JSON.parse(body.split('\n')[2]), { run: 'a', at: 'T', scores: { 'done-conditions': 1, 'redundant-tests': 'pass' }, cap: 'outcome failed; red check on the head: Required' });
+  assert.throws(() => scoresComment(p, { scores: { 'done-conditions': 5 } }), /not on scale 0-4/);
+  assert.throws(() => scoresComment(p, { scores: { 'done-conditions': 3, 'release-only': 2 } }), /does not apply/);
+  assert.throws(() => scoresComment(p, { scores: { 'redundant-tests': 'pass' } }), /done-conditions is required/);
+});
+
+test('cli: plan, record and stale on a local board', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'led-'));
+  const { createLocalBoard } = await import('../src/board/local.ts');
+  const binding = { board: { adapter: 'local', options: {} }, forge: { adapter: 'github', options: {} }, heartbeat: { ticket: '1' }, owners: { bots: ['local'] }, learning: { every_cycles: 1 } } as any;
+  const ctx = { root, binding, env: {}, exec: () => { throw new Error('no forge'); }, http: async () => ({}) };
+  const board = createLocalBoard({ ...ctx, options: {} });
+  await board.create({ title: 'heartbeat', body: '', status: 'Backlog' });
+  const out: string[] = [];
+  const log = console.log, err = console.error;
+  console.log = (s: string) => out.push(s);
+  console.error = () => {};
+  try {
+    assert.equal(await cli(['stale', '--max-hours', '2'], ctx), 1); // no heartbeat yet
+    await board.comment('1', beat({ runs: [run({ id: 'r9', outcome: 'timeout' })] }).body);
+    assert.equal(await cli(['stale', '--max-hours', '2'], ctx), 0);
+    assert.equal(await cli(['plan', '--run', 'r9'], ctx), 0);
+    assert.deepEqual(JSON.parse(out.at(-1)!).cap, { score: 1, facts: ['outcome timeout'] });
+    writeFileSync(join(root, 's.json'), JSON.stringify({ scores: { 'done-conditions': 3 } }));
+    assert.equal(await cli(['record', '--run', 'r9', '--file', 's.json'], ctx), 0);
+    assert.equal(await cli(['runs'], ctx), 0);
+    assert.equal(JSON.parse(out.at(-1)!)[0].score, 1);
+    assert.equal(await cli(['summary'], ctx), 0);
+    assert.deepEqual(JSON.parse(out.at(-1)!).learning, { due: true, cyclesSince: 1, spentWeekUsd: 0 });
+    assert.equal(await cli(['record', '--run', 'r9'], ctx), 2);
+    assert.equal(await cli(['plan', '--run', 'nope'], ctx), 1);
+  } finally {
+    console.log = log; console.error = err;
+  }
 });

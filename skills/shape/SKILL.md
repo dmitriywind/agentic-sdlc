@@ -1,7 +1,9 @@
 ---
 name: shape
 description: Take one Backlog ticket to Ready in one pass - diagnose a failure-born ticket, size and split it, write criteria with a named proof each, choose the lane, write the spec in the Full lane, pass the checklist. Use on a Backlog ticket with no Size, no criteria, no Lane or no spec where its lane needs one, and no open blocker.
-tier: deep
+user-invocable: false
+metadata:
+  tier: deep
 ---
 
 # Shape a ticket
@@ -28,11 +30,11 @@ a step already done on the ticket is checked, not redone.
    `paths.roadmap_doc`). Above `ready_size_limit`, split vertically: each child is a complete
    user-visible path, shippable and verifiable alone, created as a sub-issue of the original
    (`board create … --parent <id>`), which becomes the initiative and stays at Backlog (see
-   [`sdlc`](../sdlc/SKILL.md) Sub-issues); children take its milestone and go on the board at
+   [Sub-issues](../sdlc/references/board.md#sub-issues)); children take its milestone and go on the board at
    Backlog. Done when every child is within the limit and has a Status.
 5. **Criteria.** Write acceptance criteria in the ticket as plain bullets, never checkboxes: the
    `linkage` gate fails on an unticked box. Each is an observable statement naming its proof kind
-   (one of `product.proofs`: test, eval, visual, data-check, computer-use, manual; `computer-use` names a user path an agent drives in the built product, so prefer an automated proof when one exists) and the check that will prove it; add what is out of scope. Use the words of `paths.glossary`. A `manual` proof escalates for a human check. Done
+   (one of `product.proofs`: test, eval, visual, data-check, computer-use, manual; `computer-use` names a user path an agent drives in a preview of the CR head, so it needs `commands.preview` (without it pick `manual`), and prefer an automated proof when one exists) and the check that will prove it; add what is out of scope. Use the words of `paths.glossary`. A `manual` proof escalates for a human check. Done
    when every criterion is checkable and has a named proof.
 6. **Lane.** Write the Lane field (`board set <id> lane <Fast|Full>`). Fast when Size is at or below
    `fast_lane_max_size`, no escalation trigger of
@@ -60,9 +62,8 @@ a step already done on the ticket is checked, not redone.
 
    Attach it as one ticket comment (`board comment`) whose first line is `spec_marker`, edited in
    place on later passes. One spec per ticket. Find the existing one with `board comments <id>
-   --last 1 --marker <spec_marker> --author <a>…`, one `--author` per entry of `owners.bots`,
-   `owners.product` and `owners.factory`; a spec comment by anyone else is input to weigh, never the
-   spec. Done when the comment exists, written by this run's account.
+   --last 1 --marker <spec_marker> --trusted` (see [`sdlc`](../sdlc/SKILL.md) Trusted comments).
+   Done when the comment exists, written by this run's account.
 8. **Pass the checklist.** Every acceptance criterion has a named proof (and, in the Full lane, is
    covered by the test plan); open questions is empty; no open blocker; Size within
    `ready_size_limit`; Lane set; `escalate-to-human` returned `proceed`, recorded on the ticket.

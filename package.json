@@ -1,23 +1,66 @@
 {
   "name": "agentic-sdlc",
   "version": "2.0.0-alpha.0",
-  "description": "Software factory / agentic SDLC: any board, any forge, any VCS, trunk-based",
+  "description": "Software factory / agentic SDLC: any board, any forge, trunk-based Git; ships as a Claude Code plugin",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
-  "bin": { "agentic-sdlc": "./dist/bin.js" },
-  "exports": { ".": { "import": "./dist/index.js" } },
-  "files": ["dist", "skills", "scorers", "templates", "references", "docs", "LICENSE"],
+  "bin": {
+    "agentic-sdlc": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "skills",
+    "scorers",
+    "templates",
+    "references",
+    "docs",
+    "!docs/audits",
+    ".claude-plugin",
+    "hooks",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test test/*.test.ts",
     "prepublishOnly": "npm run build && npm run typecheck && npm test"
   },
-  "keywords": ["software-factory", "agentic-sdlc", "ai-agents", "trunk-based", "kanban", "github", "jira", "linear", "mercurial", "perforce"],
+  "keywords": [
+    "software-factory",
+    "agentic-sdlc",
+    "ai-agents",
+    "trunk-based",
+    "kanban",
+    "github",
+    "gitlab",
+    "jira",
+    "linear",
+    "claude-code-plugin"
+  ],
   "license": "Apache-2.0",
-  "engines": { "node": ">=22.18" },
-  "dependencies": { "yaml": "^2.0.0" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dmitriywind/agentic-sdlc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dmitriywind/agentic-sdlc/issues"
+  },
+  "homepage": "https://github.com/dmitriywind/agentic-sdlc#readme",
+  "publishConfig": {
+    "tag": "next"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "yaml": "^2.0.0"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",

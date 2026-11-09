@@ -3,8 +3,9 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse } from 'yaml';
-import type { AdapterContext, Binding, Board, CR, Forge, PortCli, Vcs } from './ports.ts';
-import { BINDING_PATH } from './binding.ts';
+import type { AdapterContext, Binding, Board, CR, Forge, PortCli, Review, Vcs } from './ports.ts';
+import { BINDING_PATH, shippedOptions } from './binding.ts';
+import { PROOF_FILE, fill, rule, shell } from './bench.ts';
 import { UsageError, guard, parseArgs } from './forge/util.ts';
 import { createBoard } from './board/index.ts';
 import { createForge } from './forge/index.ts';
@@ -17,7 +18,9 @@ export interface Deps {
   forge: Forge;
   vcs: Vcs;
   /** File content at a commit; undefined when unavailable (factory CRs then class as guardrail). */
-  headFile?: (path: string, sha: string) => string | undefined;
+  fileAt?: (path: string, sha: string) => string | undefined;
+  /** Runs a command line in the root; true when it exits 0. Only proofs-on-base runs commands. */
+  run?: (cmd: string) => boolean;
   /** Is commit a an ancestor of b? undefined when the VCS cannot tell (shipped then includes nothing). */
   isAncestor?: (a: string, b: string) => boolean | undefined;
 }
@@ -57,20 +60,64 @@ export function diffPaths(diff: string): string[] | null {
 }
 
 const TUNING_KEYS = ['models']; // cycle.*, stall_minutes, parallel_agents are guardrail: the bench cannot measure them
-const isSkillMd = (p: string) => p.startsWith('.agents/skills/') && p.endsWith('.md');
+const SKILL_MD = /^\.agents\/skills\/([^/]+)\/SKILL\.md$/;
+const TIERS = ['fast', 'balanced', 'deep'];
+
+/** Frontmatter (parsed) and body of a markdown file; undefined when either is missing or not YAML. */
+export function frontmatter(text: string): { fm: Record<string, any>; body: string } | undefined {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(text);
+  if (!m) return undefined;
+  try {
+    const fm = parse(m[1]);
+    return fm && typeof fm === 'object' && !Array.isArray(fm) ? { fm, body: m[2].replace(/\r\n/g, '\n') } : undefined;
+  } catch { return undefined; }
+}
+
+/**
+ * Skills with a bench suite: `.agents/bench/suites/*.json` holding at least one case. A suite's
+ * `skill` names its skill; absent, implement-spec (the skill the bench replays). Read from the root:
+ * a CR that touches a suite is guardrail anyway, so the root's suites are the base's.
+ */
+export function benchedSkills(root: string): Set<string> {
+  const dir = join(root, '.agents', 'bench', 'suites');
+  const out = new Set<string>();
+  if (!existsSync(dir)) return out;
+  for (const f of readdirSync(dir).filter((n) => n.endsWith('.json'))) {
+    try {
+      const suite = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+      if (Array.isArray(suite?.cases) && suite.cases.length) out.add(typeof suite.skill === 'string' ? suite.skill : 'implement-spec');
+    } catch { /* an unreadable suite benches nothing */ }
+  }
+  return out;
+}
+
+const tierOf = (fm: Record<string, any>) => fm.metadata?.tier;
+const withoutTier = (fm: Record<string, any>) => ({ ...fm, metadata: { ...fm.metadata, tier: undefined } });
 
 /** product | tuning | guardrail. Anything not provably tuning under paths.factory is guardrail. */
 export async function classify(d: Deps, cr: CR, diff: string): Promise<'product' | 'tuning' | 'guardrail'> {
   const paths = diffPaths(diff);
   if (!paths?.length || !paths.every((p) => matchesAny(p, factoryGlobs(d.binding)))) return 'product';
   if (/^deleted file mode/m.test(diff)) return 'guardrail'; // deleting a skill deletes rules
+  const at = (p: string, sha: string) => d.fileAt?.(p, sha);
+  let benched: Set<string> | undefined;
   for (const p of new Set(paths)) {
-    if (isSkillMd(p)) continue;
+    const skill = SKILL_MD.exec(p)?.[1];
+    if (skill) {
+      // Tuning only when the one change is metadata.tier and the skill has a bench suite to measure it.
+      const [b, h] = [at(p, cr.baseSha), at(p, cr.headSha)].map((t) => (t === undefined ? undefined : frontmatter(t)));
+      if (!b || !h || b.body !== h.body || !TIERS.includes(tierOf(h.fm)) || tierOf(b.fm) === tierOf(h.fm)) return 'guardrail';
+      if (!isDeepStrictEqual(withoutTier(b.fm), withoutTier(h.fm))) return 'guardrail';
+      if (!(benched ??= benchedSkills(d.root)).has(skill)) return 'guardrail';
+      continue;
+    }
     if (p !== BINDING_PATH) return 'guardrail';
-    let head: Record<string, unknown>;
-    try { head = parse(d.headFile?.(p, cr.headSha) ?? '') as Record<string, unknown>; } catch { return 'guardrail'; }
-    if (!head || typeof head !== 'object') return 'guardrail';
-    const base = d.binding as unknown as Record<string, unknown>;
+    let base: Record<string, unknown>, head: Record<string, unknown>;
+    try {
+      base = parse(at(p, cr.baseSha) ?? '') as Record<string, unknown>;
+      head = parse(at(p, cr.headSha) ?? '') as Record<string, unknown>;
+    } catch { return 'guardrail'; }
+    if (!base || typeof base !== 'object' || !head || typeof head !== 'object') return 'guardrail';
     const keys = new Set([...Object.keys(base), ...Object.keys(head)]);
     if ([...keys].some((k) => !TUNING_KEYS.includes(k) && !isDeepStrictEqual(base[k], head[k]))) return 'guardrail';
   }
@@ -80,11 +127,6 @@ const nameHas = (s: string, id: string) => new RegExp(`(^|[^A-Za-z0-9])${id.repl
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const patternRe = (p: string) =>
   new RegExp('^' + p.split(/(<ticket>|<name>)/).map((x) => x === '<ticket>' ? '[A-Za-z0-9_-]+' : x === '<name>' ? '[a-z0-9]+(?:-[a-z0-9]+)*' : esc(x)).join('') + '$');
-
-/** Shipped options derived from the product environments. */
-export function shippedOptions(envs: string[]): string[] {
-  return ['Not shipped', ...envs.slice(0, -1).map((e) => `On ${e}`), ...(envs.length > 1 ? ['In release'] : []), `On ${envs[envs.length - 1]}`];
-}
 
 export function branchNames(b: Binding, names: string[]): string[] {
   const v = b.vcs;
@@ -110,17 +152,97 @@ export async function linkage(d: Deps, n: string) {
   return { ok: !errors.length, factory: false, class: cls, errors };
 }
 
-/** Status context `factory-owner`: green for product CRs and auto-mergeable tuning, red otherwise (owner review decides). */
-export async function factoryClass(d: Deps, n: string) {
+export type ApprovalClass = 'product-fast' | 'product-full' | 'tuning' | 'guardrail';
+
+/** Users (lower case) whose latest decisive review (approved, changes requested, dismissed) approves `sha`. */
+export function approvers(reviews: Review[], sha: string): string[] {
+  const last = new Map<string, Review>();
+  for (const r of reviews) if (r.state !== 'commented' && r.state !== 'pending') last.set(r.user.toLowerCase(), r);
+  return [...last].filter(([, r]) => r.state === 'approved' && r.sha === sha).map(([u]) => u);
+}
+
+/**
+ * Status `human-approval`. product-fast passes; product-full needs a human approval on the head
+ * (forge.human_approval full-lane or always; always holds product-fast too; never passes both);
+ * tuning passes when auto-mergeable, else waits for owners.factory like guardrail. A human is
+ * anyone outside owners.bots and forge.review_identity. The lane is the closing ticket's Lane
+ * field; anything but Fast (unset, unreadable, several tickets) counts as Full.
+ */
+export async function approval(d: Deps, n: string) {
+  const b = d.binding;
   const cr = await d.forge.view(n);
   const cls = await classify(d, cr, await d.forge.diff(n));
-  const auto = cls === 'product' || (cls === 'tuning' && (d.binding.learning?.auto_merge_classes ?? []).includes('tuning'));
-  await d.forge.status(cr.headSha, {
-    context: 'factory-owner',
-    state: auto ? 'success' : 'failure',
-    description: auto ? `${cls}: no factory owner needed` : `${cls} factory change waits for owners.factory`,
-  });
-  return { cr: cr.n, class: cls, state: auto ? 'success' : 'failure' };
+  let klass: ApprovalClass;
+  if (cls !== 'product') klass = cls;
+  else {
+    const item = cr.closes.length === 1 ? await d.board.get(cr.closes[0]).catch(() => undefined) : undefined;
+    klass = String(item?.fields?.lane ?? '').toLowerCase() === 'fast' ? 'product-fast' : 'product-full';
+  }
+  const mode = b.forge.human_approval ?? 'full-lane';
+  const bots = [...(b.owners?.bots ?? []), b.forge.review_identity].filter(Boolean).map((u) => u.toLowerCase());
+  const owner = String(b.owners?.factory ?? '').toLowerCase();
+  let need: 'none' | 'human' | 'owner';
+  if (klass === 'guardrail') need = 'owner';
+  else if (klass === 'tuning') need = (b.learning?.auto_merge_classes ?? []).includes('tuning') ? 'none' : 'owner';
+  else need = mode === 'always' || (mode === 'full-lane' && klass === 'product-full') ? 'human' : 'none';
+  let by: string | undefined;
+  if (need !== 'none') {
+    const ok = approvers(await d.forge.approvals(n), cr.headSha);
+    by = need === 'owner' ? ok.find((u) => !!owner && u === owner) : ok.find((u) => !bots.includes(u));
+  }
+  const pass = need === 'none' || !!by;
+  const description = need === 'none' ? `${klass}: no human approval needed`
+    : pass ? `${klass}: approved by ${by}`
+    : `${klass}: waits for an approval of the head by ${need === 'owner' ? 'owners.factory' : 'a human'}`;
+  await d.forge.status(cr.headSha, { context: 'human-approval', state: pass ? 'success' : 'pending', description });
+  return { cr: cr.n, class: klass, need, state: pass ? 'success' : 'pending', ...(by ? { by } : {}) };
+}
+
+/** New or changed (not deleted) paths of a git diff that match the proof rule. */
+export function proofFiles(diff: string, isProof: RegExp): string[] {
+  const out: string[] = [];
+  for (const block of diff.split(/^(?=diff --git )/m)) {
+    if (!block.startsWith('diff --git ') || /^deleted file mode/m.test(block)) continue;
+    const path = diffPaths(block.split('\n')[0])?.[1];
+    if (path && isProof.test(path) && !out.includes(path)) out.push(path);
+  }
+  return out;
+}
+
+/**
+ * Status `proofs-on-base`: product code at the merge base with the CR's new or changed proof files
+ * kept, each file run alone with `commands.proofs_on_base` ({files}); success when every one fails.
+ * Meant for the no-secrets CI job, after install. The tree is reset to HEAD afterwards.
+ */
+export async function proofsOnBase(d: Deps, n: string) {
+  const cr = await d.forge.view(n);
+  const diff = await d.forge.diff(n);
+  const cls = await classify(d, cr, diff);
+  const tpl = d.binding.commands?.proofs_on_base;
+  const files = cls === 'product' ? proofFiles(diff, rule(d.binding, 'proof_pattern', PROOF_FILE)) : [];
+  const passedOnBase: string[] = [];
+  let error: string | undefined;
+  if (cls !== 'product') error = undefined;
+  else if (!tpl) error = 'commands.proofs_on_base is not set';
+  else if (!files.length) error = 'no new or changed proof file';
+  else if (!d.run) error = 'no command runner';
+  else {
+    const head = await d.vcs.head();
+    const base = (await d.vcs.base()).sha;
+    try {
+      await d.vcs.checkoutTests(base, files);
+      for (const f of files) if (d.run(fill(tpl, { files: f }))) passedOnBase.push(f);
+    } finally {
+      await d.vcs.checkoutTests(head.sha, []);
+    }
+    if (passedOnBase.length) error = `passes on the merge base: ${passedOnBase.join(', ')}`;
+  }
+  const description = cls !== 'product' ? `${cls}: no product proof` : error ?? `${files.length} proof file(s) fail on the merge base`;
+  let posted = true;
+  // The job holds no secrets by design; when it cannot post, its own check (exit code) carries the result.
+  try { await d.forge.status(cr.headSha, { context: 'proofs-on-base', state: error ? 'failure' : 'success', description: description.slice(0, 140) }); }
+  catch { posted = false; }
+  return { ok: !error, cr: cr.n, class: cls, files, passedOnBase, posted, errors: error ? [error] : [] };
 }
 
 const OPEN_EVENTS = ['opened', 'ready', 'draft'];
@@ -234,20 +356,23 @@ export async function signalOnRed(d: Deps, id: string) {
   return { created: true, id: item.id };
 }
 
-export function skillRegression(root: string): string[] {
+/** Skill frontmatter (name, description, metadata.tier), relative links, scorer frontmatter. A top-level tier still passes, with a warning. */
+export function skillRegression(root: string): { errors: string[]; warnings: string[] } {
   const dir = join(root, '.agents', 'skills');
-  if (!existsSync(dir)) return [`${dir} does not exist`];
-  const errors: string[] = [];
+  if (!existsSync(dir)) return { errors: [`${dir} does not exist`], warnings: [] };
+  const errors: string[] = [], warnings: string[] = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (!e.isDirectory()) continue;
     const file = join(dir, e.name, 'SKILL.md');
     if (!existsSync(file)) { errors.push(`${e.name}: SKILL.md missing`); continue; }
     const text = readFileSync(file, 'utf8');
-    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1];
-    if (fm === undefined) { errors.push(`${e.name}: no frontmatter`); continue; }
-    for (const k of ['name', 'description', 'tier']) if (!new RegExp(`^${k}:\\s*\\S`, 'm').test(fm)) errors.push(`${e.name}: frontmatter ${k} missing`);
-    const tier = /^tier:\s*(\S+)/m.exec(fm)?.[1];
-    if (tier && !['fast', 'balanced', 'deep'].includes(tier)) errors.push(`${e.name}: tier ${tier} invalid`);
+    const fm = frontmatter(text)?.fm;
+    if (!fm) { errors.push(`${e.name}: no frontmatter`); continue; }
+    for (const k of ['name', 'description']) if (typeof fm[k] !== 'string' || !fm[k].trim()) errors.push(`${e.name}: frontmatter ${k} missing`);
+    let tier = fm.metadata?.tier;
+    if (tier === undefined && fm.tier !== undefined) { tier = fm.tier; warnings.push(`${e.name}: top-level tier is deprecated; move it to metadata.tier`); }
+    if (tier === undefined) errors.push(`${e.name}: frontmatter metadata.tier missing`);
+    else if (!TIERS.includes(tier)) errors.push(`${e.name}: tier ${tier} invalid`);
     for (const m of text.matchAll(/\]\(([^)\s]+)\)/g)) {
       const link = m[1].split('#')[0];
       if (!link || /^[a-z][a-z0-9+.-]*:/i.test(link)) continue;
@@ -256,10 +381,10 @@ export function skillRegression(root: string): string[] {
   }
   const sdir = join(root, '.agents', 'scorers');
   if (existsSync(sdir)) for (const f of readdirSync(sdir).filter((n) => n.endsWith('.md'))) errors.push(...scorerErrors(f, readFileSync(join(sdir, f), 'utf8')));
-  return errors;
+  return { errors, warnings };
 }
 
-/** A scorer file's frontmatter: name, applies_to (list or "*"), tier, scale. */
+/** A scorer file's frontmatter: name, applies_to (list or "*"), scale. */
 function scorerErrors(f: string, text: string): string[] {
   let fm: any;
   try { fm = parse(/^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? ''); } catch { return [`scorers/${f}: frontmatter is not YAML`]; }
@@ -268,7 +393,6 @@ function scorerErrors(f: string, text: string): string[] {
   if (typeof fm.name !== 'string' || !fm.name) errors.push(`scorers/${f}: frontmatter name missing`);
   const at = fm.applies_to;
   if (at !== '*' && !(Array.isArray(at) && at.length && at.every((s: unknown) => typeof s === 'string' && s))) errors.push(`scorers/${f}: applies_to must be "*" or a list of skills`);
-  if (!['fast', 'balanced', 'deep'].includes(fm.tier)) errors.push(`scorers/${f}: tier ${fm.tier} invalid`);
   if (!['pass-fail', '0-4'].includes(fm.scale)) errors.push(`scorers/${f}: scale ${fm.scale} invalid`);
   return errors;
 }
@@ -284,9 +408,9 @@ export const cli: PortCli = (argv, base) =>
         binding: b, root: base.root,
         board: createBoard(ctxOf(b.board.options)), forge: createForge(ctxOf(b.forge.options)), vcs: createVcs(ctxOf(b.vcs.options ?? {})),
       };
-      if (b.vcs.adapter !== 'git') return d; // hg/p4: no ancestry or head-file lookup; gates fail closed
       const git = (args: string[]) => base.exec('git', args, { cwd: base.root });
-      d.headFile = (path, sha) => { try { return git(['show', `${sha}:${path}`]); } catch { return undefined; } };
+      d.run = (cmd) => { try { shell(base.exec, cmd, base.root); return true; } catch { return false; } };
+      d.fileAt = (path, sha) => { try { return git(['show', `${sha}:${path}`]); } catch { return undefined; } };
       d.isAncestor = (x, y) => {
         try { git(['merge-base', '--is-ancestor', x, y]); return true; } catch (e) { return (e as { status?: number }).status === 1 ? false : undefined; }
       };
@@ -316,12 +440,14 @@ export const cli: PortCli = (argv, base) =>
         if (!a.pos[0]) throw new UsageError('shipped <env> is required');
         return shipped(deps(), a.pos[0], a.need('sha'), a.need('result'));
       }
-      case 'factory-class': return factoryClass(deps(), a.need('cr'));
+      case 'approval': return approval(deps(), a.need('cr'));
+      case 'proofs-on-base': return fail(await proofsOnBase(deps(), a.need('cr')));
       case 'signal-on-red': return signalOnRed(deps(), a.need('run'));
       case 'skill-regression': {
-        const errors = skillRegression(base.root);
+        const { errors, warnings } = skillRegression(base.root);
+        for (const w of warnings) process.stderr.write(`warning: ${w}\n`);
         if (errors.length) throw new Error(errors.join('\n'));
-        return { ok: true };
+        return { ok: true, warnings };
       }
       default: throw new UsageError(`unknown gate: ${gate ?? ''}`);
     }

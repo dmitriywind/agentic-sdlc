@@ -1,0 +1,13 @@
+{
+  "name": "agentic-sdlc",
+  "version": "2.0.0-alpha.0",
+  "description": "Software factory skills for any board, forge and trunk-based Git: the sdlc process skills, a guard hook (no trunk push, forge approve only in the review runtime) and the agentic-sdlc MCP server.",
+  "author": { "name": "dmitriywind", "url": "https://github.com/dmitriywind" },
+  "homepage": "https://github.com/dmitriywind/agentic-sdlc#readme",
+  "repository": "https://github.com/dmitriywind/agentic-sdlc",
+  "license": "Apache-2.0",
+  "keywords": ["software-factory", "agentic-sdlc", "trunk-based"],
+  "mcpServers": {
+    "agentic-sdlc": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/mcp.mjs"] }
+  }
+}

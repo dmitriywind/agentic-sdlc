@@ -1,0 +1,94 @@
+name: agentic-sdlc verify
+# Runs the CR's own code, so: plain pull_request, no secrets, a read-only token (plus statuses for
+# proofs-on-base). The PR's copy of this file can do no harm. Job names are required checks in
+# ruleset.trunk.json: Required, proofs-on-base, skill-regression. No agent posts them.
+# Fork PRs get a read-only token: proofs-on-base then reports only as this job's check run.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agentic-verify-${{ github.event.pull_request.number || github.event.merge_group.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  Required:
+    name: Required
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # pin to a commit SHA (actions/checkout, actions/setup-node)
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm ci          # set: the binding's commands.install
+      - name: Verify
+        run: npm test        # set: the binding's commands.verify
+
+  proofs-on-base:
+    name: proofs-on-base
+    # The CR's new or changed proofs run against the merge base's product code: each must fail there.
+    # On a merge queue commit the proofs already passed this check on the PR head.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AGENTIC_FORGE_TOKEN: ${{ github.token }}
+      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
+      CR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm ci          # set: the binding's commands.install (puts the pinned agentic-sdlc devDependency in node_modules)
+      - name: Proofs on base
+        run: |
+          export PATH="$PWD/node_modules/.bin:$PATH"
+          command -v agentic-sdlc >/dev/null || npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+          agentic-sdlc gate proofs-on-base --cr "$CR"
+
+  skill-regression:
+    name: skill-regression
+    # Always runs, so the required check is green on a CR that does not touch .agents/**.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: factory
+        run: |
+          if git diff --name-only "$BASE_SHA"...HEAD | grep -q '^\.agents/'; then echo "run=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.factory.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: steps.factory.outputs.run == 'true'
+        run: |
+          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
+            npm ci --ignore-scripts && npx --no-install agentic-sdlc gate skill-regression
+          else
+            npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}" && agentic-sdlc gate skill-regression
+          fi
