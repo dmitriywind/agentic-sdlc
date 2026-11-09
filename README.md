@@ -1,198 +1,134 @@
 # agentic-sdlc
 
-> Governed agentic software-delivery loop with Git worktree sandboxing, durable tracker truth, and TypeScript SDK & CLI.
+A software factory that any project installs to deliver value continuously. Agents triage,
+shape, build, review and release work. Humans govern exceptions. The factory measures every
+run and proposes fixes to itself.
 
----
+- **Any board:** GitHub Projects, Jira, Linear, a local file, or an MCP server.
+- **Any forge and VCS:** GitHub, GitLab (also Heptapod for Mercurial), Azure DevOps, Bitbucket,
+  Helix Swarm for Perforce. Git, Mercurial, Perforce.
+- **Any executor per stage:** the harness's own subagent, a command bot, a webhook bot, a managed
+  agent, or a hosted coding agent by assignment.
+- **Any product:** service, web, mobile, library, data, ML, infra, firmware, docs. Environments
+  and proof kinds come from the binding.
+- **Trunk-based, always.** One trunk, short-lived change lines in, release lines out.
+- **No dependency on one machine.** Any scheduler runs the cycle: Claude scheduled tasks or
+  managed agents, Codex, Cursor automations, Antigravity remote agents, a Grok bot, or CI cron.
+  Agents without a shell use the `agentic-sdlc mcp` server.
+- **Two profiles.** `individual` runs on subscriptions only. `enterprise` adds API keys, managed
+  agents, bots, trace storage and a separate review app.
 
-## Overview
+| Start here | |
+|---|---|
+| [Docs index](docs/README.md) | Every guide. |
+| [Components](docs/architecture/components.md) and [flows](docs/architecture/flows.md) | Diagrams of the parts, trust boundaries, ticket lifecycle, cycle, review, release and learning. |
+| [Claude](docs/ecosystems/claude-code.md), [Codex](docs/ecosystems/codex.md), [Cursor](docs/ecosystems/cursor.md), [Antigravity](docs/ecosystems/antigravity.md), [Grok](docs/ecosystems/grok.md), [any other](docs/ecosystems/generic.md) | Install and run in each ecosystem. |
+| [Individual](docs/profiles/individual.md) and [enterprise](docs/profiles/enterprise.md) | Pick a profile. |
+| [Forges](docs/forges.md) | What each forge keeps natively. |
 
-`agentic-sdlc` is an installable developer tool and TypeScript library (`agentic-sdlc`) designed to run AI coding agents (Claude Code, Gemini CLI, etc.) in a governed, reproducible delivery loop.
+## How it fits together
 
-Unlike unconstrained agent setups that pollute your active working copy or run unattended without oversight, `agentic-sdlc`:
-1. **Never touches human checkouts**: All planning runs in detached worktrees, and all implementation runs execute in isolated `agentic/ticket-*` branch worktrees.
-2. **Durable Tracker Truth**: Work state, stage evidence, decisions, and escalations live in your tracker (GitHub Projects, Jira, or Local JSON), not in transient agent runtime memory.
-3. **Strict Policy Governance**: State machine transitions are enforced by `agentic-sdlc-policy.json`, with explicit human approval gates (`waiting:decision`) and evidence validation.
+| Layer | Where | Holds |
+|---|---|---|
+| Process | `.agents/skills/` | Every rule: statuses, routing, the cycle, lanes, review, release, escalation, learning. |
+| Binding | `.agents/binding.yml` | Every project value: board, forge, VCS, commands, paths, owners, model tiers, executors. |
+| Ports | `agentic-sdlc` CLI and MCP server | Board, forge and VCS verbs, CI gates, dispatch, the run ledger, the bench. |
 
----
+A scheduled agent loads the `sdlc` skill and runs one cycle. The skill routes each ticket to a
+step skill and starts it with `agentic-sdlc dispatch`. Every hand-off goes through the board and
+the forge. CI gates keep the guarantees an agent must not be trusted to keep.
+[`references/architecture.md`](references/architecture.md) is the contract.
 
-## Features
+## Skills
 
-- 🛠️ **CLI & Programmatic SDK**: Run via `npx agentic-sdlc` or embed in custom Node.js/TypeScript workflows via `import { createSupervisor } from 'agentic-sdlc'`.
-- 🏰 **Git Worktree & Docker Isolation**: Automated git worktree creation, containerized Docker runner environments (`createDockerSandbox`), branch management, commit/push handling, and teardown.
-- 📋 **Tracker Adapters**: Built-in support for GitHub Projects, Jira (REST API), and local JSON trackers.
-- 🤖 **Multi-Model Routing**: Map semantic lanes (`triage`, `planning`, `execution`, `review`) to specialized model profiles with automatic fallback chains.
-- 🎯 **Stage-Scoped Goal Mode**: Bounded continuations and retry safety nets.
-- 🛡️ **Fail-Closed Security**: Protected paths validation prevents unauthorized edits to sensitive repository files.
+| Skill | Tier | Does |
+|---|---|---|
+| `sdlc` | fast | The navigator: statuses, routing, the cycle, the hold, lanes, branches, executors. |
+| `triage-signal` | fast | One raw signal to one decision: Backlog, Ideas or Cancelled. |
+| `backlog-grooming` | balanced | Priority, dedupe, initiatives, decluttering. |
+| `shape` | deep | Backlog to Ready: size, split, criteria with proof, lane, spec. |
+| `implement-spec` | balanced | Proof first on one change line, then a draft CR. |
+| `review-pr` | balanced | Independent review and verify, then ready plus auto-merge, or send back. |
+| `release` | balanced | Choose what ships, set the version, cut the release line. |
+| `escalate-to-human` | fast | Decide whether a person must act; hold the ticket with one structured ask. |
+| `verify-ux` | balanced | Drive the built product as a user and attach evidence for `computer-use` criteria. |
+| `judge-run` | binding | Run every scorer on each finished run. Hard facts and human grades win. |
+| `improve-factory` | deep | Find the worst repeated failure and propose one factory change, with proof. |
+| `bench` | balanced | Curate suites from your own merged work; compare models and executors on cost and quality. |
 
----
+## Self-improvement
 
-## Installation
+The factory is defined in code: skills, scorers, the binding (stages, executors, MCPs, models,
+where each stage runs) and bench suites all live in the repo and change through factory CRs.
 
-Add `agentic-sdlc` to your TypeScript or JavaScript repository:
+1. **Every run is recorded.** A ledger row in the heartbeat holds skill, skill hash, executor,
+   model, cost, minutes, outcome, scores and a trace reference.
+2. **Every run is scored.** Scorers in `.agents/scorers/` are LLM-judge rubrics such as
+   `redundant-tests` or `scope-creep`. `judge-run` uses a different model than the run used. A
+   human grade from an owner overrides the judge.
+3. **Failures become factory fixes.** `improve-factory` counts failures by scorer and by error
+   ("redundant-tests failed 37 times across 21 tickets") and proposes one change per run.
+4. **Benchmarks come from your own work.** Suites are stratified by size and area. `bench report`
+   shows quality against cost per model and marks the Pareto front, which sets the model mapping.
+5. **Merge rules.** Class `tuning` (model tier mapping, clearer wording) can auto-merge when the
+   bench and `skill-regression` are green. Class `guardrail` (every new rule, scorer, gate,
+   executor or cycle number) waits for the factory owner's code-owner approval.
+6. **Measures.** Automation rate, DORA, cycle time, first-pass rate, cost per CR and per delivered
+   ticket, and the share of spend on scoring and bench.
+
+## Intake
+
+Work enters through the tools the team already uses. Any tool that creates a board item at
+Signals with a `signal:<stream>` label is an intake: a chat bot, a tracker form, a CR comment
+command, a monitoring alert. Product engineers put work in; factory engineers improve the factory.
+
+## Install
 
 ```bash
-npm install -D agentic-sdlc
-# or
-pnpm add -D agentic-sdlc
-# or
-yarn add -D agentic-sdlc
+npm i -D agentic-sdlc
 ```
-
----
-
-## Quickstart CLI Commands
-
-### 1. Initialize Project Policy & Rules Pointer
-Initialize `agentic-sdlc-policy.json` and inject the project rule pointer into `AGENTS.md` / `.cursorrules`:
 
 ```bash
-npx agentic-sdlc init
+npx agentic-sdlc init --profile individual --harness claude --board github --forge github --vcs git
 ```
-
-### 2. Validate Policy Configuration
-Check your policy file against normative specification rules:
 
 ```bash
-npx agentic-sdlc validate
+npx agentic-sdlc doctor
 ```
 
-### 3. Run Supervisor Loop
-- **Single Read-Only Dry Run**:
-  ```bash
-  npx agentic-sdlc supervise --once --read-only
-  ```
-- **Single Mutating Tick**:
-  ```bash
-  npx agentic-sdlc supervise --once
-  ```
-- **Continuous Daemon Mode**:
-  ```bash
-  npx agentic-sdlc supervise
-  ```
+`init` copies the skills, writes `.agents/binding.yml`, installs the gate templates for your forge
+and adds a pointer to `AGENTS.md`. Fill in the binding, then run `doctor` until every port is ok.
+Schedule the cycle as [`templates/runner/routine.md`](templates/runner/routine.md) says. See
+[`docs/forges.md`](docs/forges.md) for what each forge keeps natively and what is approximated.
 
----
+## CLI
 
-## Programmatic TypeScript SDK Usage
-
-You can orchestrate `agentic-sdlc` programmatically within your CI/CD pipelines, custom CLI tools, or serverless workers:
-
-```typescript
-import { createSupervisor, validatePolicy, createLocalTracker, createProcessRunner, Policy } from 'agentic-sdlc';
-import { readFile } from 'node:fs/promises';
-
-// Load and validate policy
-const policyRaw = await readFile('./agentic-sdlc-policy.json', 'utf8');
-const policy: Policy = validatePolicy(JSON.parse(policyRaw));
-
-// Instantiate adapters
-const tracker = createLocalTracker({ options: policy.tracker.options });
-const runner = createProcessRunner({ policy });
-
-// Create supervisor instance
-const supervisor = createSupervisor(policy, { tracker, runner });
-
-// Execute one tick
-const result = await supervisor.tick({ readOnly: false });
-
-console.log(`Executed ${result.actions.length} action(s). Results: ${result.results.length}`);
+```
+agentic-sdlc init | validate | doctor
+agentic-sdlc board  list|get|create|move|set|label|assign|comment|comments|close|child
+agentic-sdlc forge  open|view|diff|list|ready|draft|sync|automerge|approve|comment|status|runs
+agentic-sdlc vcs    start|head|changed|base|push|cut|tag|tags|drop|checkout-tests
+agentic-sdlc gate   branch-names|linkage|factory-class|board-sync|shipped|signal-on-red|skill-regression
+agentic-sdlc dispatch <skill> --ticket <id>
+agentic-sdlc ledger runs|summary|hash
+agentic-sdlc bench  build|propose|run|report|compare
+agentic-sdlc mcp    [--http --port <p>]   (port verbs as MCP tools; HTTP needs AGENTIC_SDLC_MCP_TOKEN)
 ```
 
----
+Every verb prints JSON. Exit 0 is success, 1 is a refused or failed action, 2 is a usage error.
 
-## Architecture & Schemas
+## Development
 
-### Component Architecture
-
-```mermaid
-flowchart TD
-    subgraph HostRepo ["Host Repository (Any Codebase)"]
-        PolicyConfig["agentic-sdlc-policy.json\n(Project Policy)"]
-        RulesPointer["AGENTS.md / .cursorrules\n(Concise 1-Line Pointer)"]
-        HumanDev["Human Governor / Developer"]
-    end
-
-    subgraph Package ["agentic-sdlc (Installed NPM Tool & SDK)"]
-        CLI["dist/bin.js\n(npx agentic-sdlc)"]
-        SDK["src/index.ts\n(Programmatic TS API)"]
-        
-        subgraph Engine ["Core Engine"]
-            Supervisor["src/supervisor.ts\n(Supervisor State Machine)"]
-            Validator["src/policy.ts\n(Policy Validator)"]
-        end
-
-        subgraph Sandbox ["Git Worktree Sandbox Primitive"]
-            WorktreeMgr["src/sandbox/worktree.ts\n(Git Worktree Lifecycle)"]
-            DockerMgr["src/sandbox/docker.ts\n(Docker Container Sandbox)"]
-            DetachedTree["Detached Planning Worktree"]
-            BranchTree["Agentic Branch Worktree"]
-        end
-
-        subgraph Adapters ["Decoupled Adapters"]
-            TrackerAdapter["Tracker Adapters\n(GitHub Projects, Jira, Local JSON)"]
-            RunnerAdapter["Runner Adapters\n(Claude Code, Gemini CLI, etc.)"]
-        end
-    end
-
-    HumanDev -->|Configures| PolicyConfig
-    HumanDev -->|Govern / Answer| TrackerAdapter
-    CLI --> SDK
-    SDK --> Supervisor
-    Supervisor --> Validator
-    Supervisor --> TrackerAdapter
-    Supervisor --> WorktreeMgr
-    WorktreeMgr --> DetachedTree
-    WorktreeMgr --> BranchTree
-    WorktreeMgr --> RunnerAdapter
+```bash
+npm install
 ```
 
-### Git Worktree Execution Flow
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant T as Tracker (GitHub / Jira / Local JSON)
-    participant S as agentic-sdlc Supervisor
-    participant W as Git Worktree Sandbox Manager
-    participant R as Runner Adapter
-    participant C as Agent CLI (Claude / Gemini)
-
-    S->>T: Read ticket snapshot (revision R1)
-    S->>S: Derive actionable stage rule (e.g. Implementation)
-    S->>W: createSandbox({ baseRef: 'main', ticketId: '42' })
-    W->>W: git worktree add -b agentic/ticket-42 ./worktree-42 main
-    S->>R: dispatch({ purpose: 'build', workspace: './worktree-42' })
-    R->>C: Execute bounded CLI inside isolated worktree
-    C-->>W: Commit changes & push branch
-    C-->>R: Return RunResult (outcome: completed, PR #10, evidence)
-    W->>W: Teardown worktree & clean temporary directory
-    R-->>S: Return normalized RunResult
-    S->>T: Publish evidence & pull request reference
-    S->>T: Advance stage (Implementation -> Review)
+```bash
+npm run typecheck && npm test && npm run build
 ```
 
----
-
-## Operating Guide
-
-### Developer Workflow
-1. **Admit Work**: Move a card on your tracker to `Backlog`.
-2. **Review Plans**: In `Planning`, `agentic-sdlc` attaches a detailed Markdown plan to the governing ticket for human review.
-3. **Answer Escalations (`waiting:decision`)**: If an agent needs product decisions or authorization, `agentic-sdlc` pauses the ticket and sets `waiting:decision`. Post an answer on the ticket to resume.
-4. **Review & Merge PRs**: Completed implementation runs generate pull requests from `agentic/ticket-*` branches.
-
-### AI Agent Operating Pointer
-AI agents operating in host repositories only need a single pointer in `AGENTS.md`:
-
-```markdown
-<!-- agentic-sdlc:start -->
-## Agentic SDLC
-
-Work and delivery evidence live in the tracker configured by `agentic-sdlc-policy.json`. Use `npx agentic-sdlc` for installation, validation, or supervision; its specification is the portable authority. Keep project rules as a pointer—do not duplicate the workflow here.
-<!-- agentic-sdlc:end -->
-```
-
----
+Node 22.18 or later. The only runtime dependency is `yaml`.
 
 ## License
 
-[Apache-2.0](LICENSE)
+Apache-2.0

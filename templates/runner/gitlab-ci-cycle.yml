@@ -1,0 +1,39 @@
+# Profile: individual (subscription token) or enterprise (API key).
+# Install at: .gitlab-ci.yml (merge the jobs) or a file included from it.
+# Create a pipeline schedule (CI/CD > Schedules) with variable SDLC_CYCLE=1 on your cadence.
+# CI/CD variables (masked; set ONE auth variable, the API key outranks the token):
+#   individual: CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`)
+#   enterprise: ANTHROPIC_API_KEY
+# Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, and AGENTIC_REVIEW_TOKEN (the names your binding uses).
+# AGENTIC_REVIEW_TOKEN must reach the review job only (forge.review_runtime: separate). Project CI/CD
+# variables reach every job, so keep it in a protected environment named `factory-review`
+# (variable environment scope = factory-review); the cycle job has no environment and cannot read it.
+
+.factory:
+  image: node:22
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SDLC_CYCLE == "1"'
+  timeout: 1h
+  variables:
+    AGENTIC_SDLC_UNATTENDED: "1"
+  before_script:
+    # set: confirm the install method in the Claude Code docs
+    - npm i -g @anthropic-ai/claude-code
+    - sh .agents/runner-setup.sh
+
+factory-cycle:
+  extends: .factory
+  resource_group: factory-cycle
+  script:
+    - claude -p "$(sed '1,/^---$/d' .agents/cycle-prompt.md)" --output-format json --max-budget-usd 5
+
+factory-review:
+  extends: .factory
+  needs: [factory-cycle]
+  resource_group: factory-review
+  environment: { name: factory-review, action: access }  # scopes AGENTIC_REVIEW_TOKEN to this job
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SDLC_CYCLE == "1"'
+      when: always  # review even when the cycle failed
+  script:
+    - claude -p "$(sed '1,/^---$/d' .agents/review-prompt.md)" --output-format json --max-budget-usd 5

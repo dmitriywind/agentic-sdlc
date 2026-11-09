@@ -1,0 +1,149 @@
+# Project binding for the sdlc skills (v2): every project value they read. Names and commands only.
+# Another project replaces this file and keeps .agents/skills/. Secrets never go here: name env vars.
+version: 2
+# profile picks the defaults init writes and what validate warns about (architecture.md section 10):
+#   individual: subscriptions only; harness executors or a local subscription CLI via `command`; no API keys, no org storage.
+#   enterprise: APIs and managed agents; all executor kinds, a separate review identity, traces on org storage, full bench.
+profile: individual # individual (subscriptions only) | enterprise (APIs, managed agents)
+owners:
+  product: your-product-owner   # rules the product: narrative, priorities, P0, releases, production approval
+  factory: your-factory-owner   # rules the factory: skills, binding, gates, guardrail learning proposals
+  bots: [your-factory-bot]      # accounts the factory runs as; only their heartbeats and specs are trusted (github login, jira accountId, linear user id, local: local)
+
+board:
+  adapter: github               # github | jira | linear | local
+  options:                      # adapter-specific; credentials only as env var names; validate rejects unknown keys
+    # github:  { owner: my-org, project_number: 1, repo: my-org/my-repo, token_env: AGENTIC_BOARD_TOKEN }
+    #          token_env (optional): env var holding a PAT with project scope, passed to gh as GH_TOKEN; Projects v2 needs it
+    # jira:    { base_url: https://example.atlassian.net, project_key: PROJ, email_env: JIRA_EMAIL, token_env: JIRA_TOKEN }
+    # linear:  { team_key: ENG, token_env: LINEAR_API_KEY }
+    # local:   {}                 # always .agents/board.json
+    {}
+  # mcp:                        # optional: drive the board through an MCP server instead of the CLI
+  #   server: my-board-connector
+  #   tools: { list: <tool>, get: <tool>, update: <tool> }
+  statuses: [Ideas, Signals, Backlog, Ready, In progress, In review, Done, Cancelled] # the process statuses, in order
+  fields:                       # logical field -> the tracker's field name
+    size: Size
+    priority: Priority
+    lane: Lane                  # shape writes it; implement-spec or review-pr may promote, nothing demotes
+    shipped: Shipped            # gates write it; release starts In release
+    release_version: Release Version
+  labels: { human: needs-human, bug: bug, feature: feature } # plus signal:<stream> and env_labels; no others
+  env_labels: [env:staging, env:production] # on a signal from a deployed environment
+  done_statuses: [Done, Cancelled] # left out of the heartbeat's items and oldestOpen
+  views: [Board, Signals, Human, Release, Roadmap] # saved views the sdlc skill describes
+  milestone: required           # every open ticket carries one milestone; children inherit the parent's
+  later_milestone: Later        # accepted, nice to have, no delivery date; nothing shapes or builds it
+  signal_streams: [alert, feedback, owner, security, ci, deploy] # label signal:<stream>
+
+forge:
+  adapter: github               # github | gitlab | azure | bitbucket | swarm
+  options:                      # adapter-specific; credentials only as env var names; validate rejects unknown keys
+    # review_token_env: the review identity's credential. forge status and forge approve use it and nothing else;
+    #   the implementer's token_env never posts a status, so an implementer cannot green its own review.
+    # github:    { repo: my-org/my-repo, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
+    #            token_env (optional): passed to gh as GH_TOKEN; unset = gh's own login
+    # gitlab:    { project: group/project, base_url: https://gitlab.com, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
+    # azure:     { org_url: https://dev.azure.com/my-org, project: my-project, repo: my-repo, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
+    # bitbucket: { workspace: my-ws, repo: my-repo, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
+    # swarm:     { base_url: https://swarm.example.com, user_env: SWARM_USER, ticket_env: SWARM_TICKET, review_user: reviewer-account, review_token_env: AGENTIC_REVIEW_TOKEN }
+    #            review_user: only its status marker comments count as checks
+    {}
+  review_identity: reviewer-account # the account behind review_token_env: posts the review status and the approving review
+  review_runtime: separate      # separate | same. separate: review-pr runs in its own scheduled runtime, the only one
+                                #   given review_token_env; the cycle never holds it. same: the cycle reviews too (validate warns)
+  review_check_name: review     # status context review-pr posts on a pass
+  verify_check_name: Required   # status context review-pr posts with verify's result on the head
+  required_checks: [Required, review, ticket-linkage, skill-regression, factory-owner] # must be green before merge
+  planned_checks: []            # wanted checks not supplied yet; review-pr names each absent one
+
+vcs:
+  adapter: git                  # git | hg | p4
+  # options:                    # adapter-specific; git reads none (remote is origin)
+  #   hg:  { mode: topic }      # topic | bookmark
+  #   p4:  { depot: depot, mainline: //depot/main, mode: stream } # stream | changelist; server from P4PORT
+  trunk: main                   # the one trunk; delivery is trunk-based on every VCS
+  change_pattern: "feature/<ticket>-<name>" # product change line; <name>: lowercase words joined by hyphens
+  factory_change_pattern: "sdlc/<name>"     # a CR that changes only paths.factory
+  release_prefix: release/      # release lines are <release_prefix><version>
+  tag_prefix: v                 # tag = tag_prefix + version
+  version_scheme: calver        # calver (YYYY.MM.N) | semver
+
+product:
+  kind: service                 # service | web | mobile | desktop | library | data | ml | infra | firmware | docs | other
+  environments: [staging, production] # ordered; the last is where users get value; Shipped options derive from it (library: [prerelease, registry]; mobile: [internal, beta, store])
+  proofs: [test, eval, visual, data-check, computer-use, manual] # kinds a criterion may name; computer-use = verify-ux drives the built product; manual always escalates for a human check
+
+executors:                      # who runs each skill; default is a harness subagent, model by the skill's tier
+  default: { kind: harness }
+  # implement-spec: { kind: assign, user: coding-bot }  # a hosted coding agent picked up by assignment
+  # review-pr: { kind: webhook, url_env: REVIEW_BOT_URL, token_env: REVIEW_BOT_TOKEN }
+  # release: { kind: command, run: "my-release-bot --ticket {ticket} --skill {skill}", secrets: [AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN], sandbox: container }
+  # triage-signal: { kind: managed, api: claude, agent_env: TRIAGE_AGENT_ID, environment_env: TRIAGE_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }  # api: claude | cursor (repo_url) | antigravity | generic (endpoint_env)
+  # Any executor may also declare its stage definition:
+  # verify-ux: { kind: harness, mcps: [browser], secrets: [TEST_USER_PASSWORD], sandbox: container, model: { tier: balanced } }
+  #   mcps: names from `mcps` below | secrets: env var names only, nothing else is passed | sandbox: cloud | container | local (--unattended refuses local) | model: { tier } or { id }, not both
+
+mcps:                           # tool servers executors may use; name -> { url | command, token_env? }; token_env names an env var, never a value
+  browser: { command: "npx @playwright/mcp" }
+  # docs: { url: "https://docs.example.com/mcp", token_env: DOCS_MCP_TOKEN }
+
+# traces:
+#   uri: "s3://my-bucket/agentic/{run_id}.jsonl" # where executors write run traces; must contain {run_id}
+
+models:                         # skills name a tier, never a model
+  fast: your-fast-model-id
+  balanced: your-balanced-model-id
+  deep: your-deep-model-id
+# agent_command: "my-agent --model {model} --prompt-file {prompt_file} --cwd {workdir}" # bench run only
+
+commands:
+  # setup: "bash .agents/runner-setup.sh" # prepares a fresh runner before the cycle
+  install: "npm ci"             # install dependencies in a fresh checkout
+  fast_check: "npm run typecheck" # implement-spec runs it before the draft CR
+  verify: "npm test"            # the full verify review-pr runs on the head
+  # light_verify: "npm run test:unit" # used when only paths.light_verify files changed
+  # rollback: "./deploy.sh rollback <released-rev>" # release cites its last recorded staging run
+
+paths:
+  guiding_narrative: docs/narrative.md  # judged first; only the Product owner moves it
+  roadmap_doc: docs/roadmap.md          # what each milestone contains and its readiness
+  importance_doc: AGENTS.md             # non-negotiables and what counts as important
+  glossary: GLOSSARY.md                 # the words criteria use
+  review_checklist: docs/review-checklist.md # review-pr and implement-spec apply it
+  test_standard: docs/test-standard.md  # what a test must be: tier, file, rule
+  security_policy: SECURITY.md          # triage-signal follows it for security reports
+  pr_template: .github/pull_request_template.md # the CR body implement-spec fills
+  sources_before_question: [docs/narrative.md, GLOSSARY.md] # escalate-to-human reads these first
+  factory: [".agents/**", ".github/**", ".claude/**"] # a change only here is a factory change: no ticket
+  light_verify: ["docs/**", "*.md", ".agents/**"] # a change only here runs commands.light_verify
+  lane_areas: []                # paths that force the Full lane, e.g. auth, money, crypto
+
+sizes: [XS, S, M, L, XL]        # smallest to largest
+ready_size_limit: M             # largest Size that may be Ready; above it shape splits
+fast_lane_max_size: S           # Fast lane: this Size or smaller, no trigger, no lane_areas path
+priorities: [P0, High, Default, Low] # first is the highest
+p0_setters: [owner, triage-signal] # who may set the first priority
+max_subissue_depth: 1           # sub-issues of sub-issues are not allowed beyond this
+spec_marker: "spec.md"          # first line of the spec comment
+stall_minutes: 60               # a ready CR with a required check red or missing this long returns to review-pr
+parallel_agents: 3              # most subagents running at once
+
+cycle:                          # Run one cycle (sdlc skill)
+  max_implementations: 1        # implementations started per cycle
+  min_ready: 2                  # keep at least this many tickets Ready or being shaped
+  time_budget_minutes: 60       # start nothing new after this
+  failure_limit: 2              # a step failing in this many heartbeats in a row is escalated
+
+heartbeat:
+  ticket: "HEARTBEAT-1"         # the ticket that holds heartbeat comments; off the board
+
+learning:                       # the self-improvement loop
+  every_cycles: 20              # run improve-factory every N cycles
+  min_evidence_runs: 5          # runs of evidence a failure needs before a change is proposed
+  bench_size: 10                # cases per bench run
+  auto_merge_classes: [tuning]  # classes that merge without the factory owner; guardrail never does
+  judge_tier: deep              # tier judge-run scores on (fast | balanced | deep)
+  budget_usd_per_week: 50       # learning and bench spend cap
+  # human_sample: 5             # runs per week judge-run offers to an owner for a human grade

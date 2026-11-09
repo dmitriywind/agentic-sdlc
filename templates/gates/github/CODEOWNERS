@@ -1,0 +1,6 @@
+# Copy to .github/CODEOWNERS. With require_code_owner_review in ruleset.trunk.json, a change to the
+# factory needs the factory owner's approving review; the review identity's approval (review-pr,
+# `forge approve`) does not satisfy it. set: replace <owners.factory> with the binding's owners.factory login or team.
+.agents/** @<owners.factory>
+.github/** @<owners.factory>
+.claude/** @<owners.factory>

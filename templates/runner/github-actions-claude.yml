@@ -1,0 +1,63 @@
+# Profile: individual (subscription token) or enterprise (API key).
+# Install at: .github/workflows/factory-cycle-claude.yml
+# Secrets (set ONE auth secret; the API key outranks the token, so never set both):
+#   individual: CLAUDE_CODE_OAUTH_TOKEN  (create with `claude setup-token`)
+#   enterprise: ANTHROPIC_API_KEY
+# Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_REVIEW_TOKEN (the names your binding uses).
+# Two jobs (forge.review_runtime: separate): `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
+# `review` runs right after it with the review token and the review prompt only.
+# Setup script and prompts come from `agentic-sdlc init` (.agents/runner-setup.sh, .agents/cycle-prompt.md, .agents/review-prompt.md).
+name: factory-cycle-claude
+on:
+  schedule:
+    - cron: "*/30 * * * *"  # set: your cadence
+  workflow_dispatch:
+concurrency: factory-cycle
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AGENTIC_SDLC_UNATTENDED: "1"
+      AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+      AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # set: confirm the install method in the Claude Code docs
+      - run: npm i -g @anthropic-ai/claude-code
+      - run: sh .agents/runner-setup.sh
+      - name: Run one cycle
+        # set: --allowedTools / --permission-mode for your trust level; `claude -p` denies unlisted tools that need approval
+        run: claude -p "$(sed '1,/^---$/d' .agents/cycle-prompt.md)" --output-format json --max-budget-usd 5
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}  # individual; remove for enterprise
+          # ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}            # enterprise; uncomment and remove the token line
+  review:
+    needs: cycle
+    if: ${{ !cancelled() }}  # review even when the cycle failed
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AGENTIC_SDLC_UNATTENDED: "1"
+      AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+      AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
+      AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm i -g @anthropic-ai/claude-code
+      - run: sh .agents/runner-setup.sh
+      - name: Review open CRs
+        run: claude -p "$(sed '1,/^---$/d' .agents/review-prompt.md)" --output-format json --max-budget-usd 5
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}  # individual; remove for enterprise
+          # ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}            # enterprise; uncomment and remove the token line

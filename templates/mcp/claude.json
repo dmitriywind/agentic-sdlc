@@ -1,0 +1,1 @@
+{"mcpServers": {"agentic-sdlc": {"type": "stdio", "command": "npx", "args": ["--no-install", "agentic-sdlc", "mcp"]}}}

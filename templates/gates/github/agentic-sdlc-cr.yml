@@ -1,0 +1,77 @@
+name: agentic-sdlc CR gate
+# Event -> gate wiring only. Process rules live in the CLI and the binding.
+# Job "ticket-linkage" and the "factory-owner" status are required checks in ruleset.trunk.json.
+# pull_request_target: this file and the binding come from the base branch, so a PR cannot change
+# what runs with these secrets. The PR's code is never checked out or run here; its number, head ref
+# and head sha reach the gates only as data (env). skill-regression reads PR files: agentic-sdlc-skills.yml.
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, edited, closed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  # closed has its own group so a late push can never cancel the merged move.
+  group: agentic-cr-${{ github.event.pull_request.number }}-${{ github.event.action == 'closed' && 'closed' || 'live' }}
+  cancel-in-progress: ${{ github.event.action != 'closed' }}
+
+jobs:
+  ticket-linkage:
+    name: ticket-linkage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Secret names the binding's options point at: forge token_env, board token_env, forge review_token_env.
+      GH_TOKEN: ${{ github.token }}
+      AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
+      AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+      AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
+      CR: ${{ github.event.pull_request.number }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      ACTION: ${{ github.event.action }}
+      DRAFT: ${{ github.event.pull_request.draft }}
+      MERGED: ${{ github.event.pull_request.merged }}
+    steps:
+      # Base branch only: the binding in force is the trunk's, not the PR's.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+      # The PR head as data only: its objects let factory-class read the head's files; it is never checked out or run.
+      - name: Fetch PR head objects
+        if: github.event.action != 'closed'
+        run: git fetch --no-tags origin "+refs/pull/$CR/head:refs/remotes/pr/head"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+
+      - name: Branch names
+        if: github.event.action != 'closed'
+        run: agentic-sdlc gate branch-names --ref "$HEAD_REF"
+
+      - name: Ticket linkage
+        if: github.event.action != 'closed' && github.event.pull_request.draft == false
+        run: agentic-sdlc gate linkage --cr "$CR"
+
+      - name: Factory owner
+        # Posts status factory-owner on the head (with the review identity's token).
+        if: github.event.action != 'closed'
+        run: agentic-sdlc gate factory-class --cr "$CR"
+
+      - name: Board sync
+        run: |
+          if [ "$ACTION" = closed ]; then
+            [ "$MERGED" = true ] || exit 0
+            event=merged
+          elif [ "$ACTION" = converted_to_draft ] || [ "$DRAFT" = true ]; then
+            event=draft
+          elif [ "$ACTION" = opened ] || [ "$ACTION" = reopened ] || [ "$ACTION" = ready_for_review ]; then
+            event=ready
+          else
+            exit 0
+          fi
+          agentic-sdlc gate board-sync --cr "$CR" --event "$event"

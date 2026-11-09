@@ -1,0 +1,78 @@
+# Merge into your bitbucket-pipelines.yml. Secrets (secured repository variables):
+# AGENTIC_FORGE_TOKEN, AGENTIC_BOARD_TOKEN, AGENTIC_REVIEW_TOKEN.
+# Branch restrictions on the trunk: merge check "successful build", 1 approval (the review identity's
+# forge approve), reset approvals on change, squash/fast-forward only, no direct push except the bot.
+# Bitbucket has no native auto-merge: the custom pipeline below is it.
+# PR steps read the binding from the TARGET branch (a git worktree of it is --root), never the PR's copy.
+# set: vcs.trunk (main), vcs.release_prefix (release/), and your deploy commands.
+image: node:22
+
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: ticket-linkage
+          clone:
+            depth: full
+          script:
+            - git fetch origin "$BITBUCKET_PR_DESTINATION_BRANCH"
+            - export AGENTIC_ROOT="$(mktemp -d)/target"
+            - git worktree add --detach "$AGENTIC_ROOT" "origin/$BITBUCKET_PR_DESTINATION_BRANCH"
+            - test -f "$AGENTIC_ROOT/.agents/binding.yml"
+            - (cd "$AGENTIC_ROOT" && npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}")   # not from the PR tree: its .npmrc is untrusted
+            - agentic-sdlc --root "$AGENTIC_ROOT" gate branch-names --ref "$BITBUCKET_BRANCH"
+            - agentic-sdlc --root "$AGENTIC_ROOT" gate linkage --cr "$BITBUCKET_PR_ID"
+            # Posts status factory-owner; the worktree shares this clone's objects, so the PR head is readable.
+            - agentic-sdlc --root "$AGENTIC_ROOT" gate factory-class --cr "$BITBUCKET_PR_ID"
+            - agentic-sdlc --root "$AGENTIC_ROOT" gate board-sync --cr "$BITBUCKET_PR_ID" --event ready
+            - if git diff --name-only "origin/$BITBUCKET_PR_DESTINATION_BRANCH...HEAD" | grep -q '^\.agents/'; then agentic-sdlc gate skill-regression; fi
+  branches:
+    main:   # set: your vcs.trunk
+      - step:
+          name: merged
+          script:
+            - npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+            - agentic-sdlc gate board-sync --sha "$BITBUCKET_COMMIT" --event merged
+      # Shipped follows the deploy's real result: after-script runs on success and on failure.
+      - step:
+          name: deploy first-env
+          clone:
+            depth: full   # shipped walks the full history and tags
+          script:
+            - echo "set: your first-environment deploy here"
+          after-script:
+            - npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+            - git config user.name "agentic-sdlc" && git config user.email "agentic-sdlc@noreply.invalid"
+            # set: first-env must match product.environments in the binding
+            - if [ "$BITBUCKET_EXIT_CODE" = 0 ]; then R=success; else R=failure; fi
+            - agentic-sdlc gate shipped first-env --sha "$BITBUCKET_COMMIT" --result "$R"
+    'release/*':   # set: your vcs.release_prefix
+      - step:
+          name: in-release
+          script:
+            - npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+            - agentic-sdlc gate board-sync --event in-release --release "${BITBUCKET_BRANCH#release/}"
+      - step:
+          name: deploy last-env
+          clone:
+            depth: full
+          script:
+            - echo "set: your last-environment deploy here"
+          after-script:
+            - npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+            - git config user.name "agentic-sdlc" && git config user.email "agentic-sdlc@noreply.invalid"
+            # set: last-env must match product.environments in the binding
+            - if [ "$BITBUCKET_EXIT_CODE" = 0 ]; then R=success; else R=failure; fi
+            - agentic-sdlc gate shipped last-env --sha "$BITBUCKET_COMMIT" --result "$R"
+  custom:
+    agentic-automerge:
+      # Schedule it (Pipelines > Schedules, every few minutes). Merges open CRs whose body carries
+      # the marker `<!-- agentic-sdlc:automerge -->` once their checks are green.
+      - step:
+          name: automerge
+          script:
+            - npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+            - >-
+              agentic-sdlc forge list --state open |
+              node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>JSON.parse(s).filter(c=>!c.draft&&(c.body||'').includes('<!-- agentic-sdlc:automerge -->')).forEach(c=>console.log(c.n)))" |
+              while read n; do agentic-sdlc forge automerge "$n" || true; done
