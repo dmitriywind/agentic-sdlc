@@ -1,0 +1,12 @@
+{
+  "name": "agentic-sdlc",
+  "description": "The agentic-sdlc software factory plugin.",
+  "owner": { "name": "dmitriywind", "url": "https://github.com/dmitriywind" },
+  "plugins": [
+    {
+      "name": "agentic-sdlc",
+      "source": "./",
+      "description": "sdlc process skills, a trunk and approval guard hook, and the agentic-sdlc MCP server."
+    }
+  ]
+}

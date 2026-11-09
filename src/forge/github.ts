@@ -58,6 +58,10 @@ export function github(ctx: AdapterContext): Forge {
       gh(a, undefined, withToken('review_token_env'));
     },
     async approve(n) { gh(['pr', 'review', n, '--approve', '--body', 'agentic-sdlc review: PASS'], undefined, withToken('review_token_env')); },
+    async approvals(n) {
+      const out = gh(['api', '--paginate', `${api}/pulls/${n}/reviews`, '--jq', '.[] | {user: .user.login, state: (.state | ascii_downcase), sha: .commit_id}']);
+      return out.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
+    },
     async runs(q = {}) {
       const a = ['run', 'list', '--limit', '30', '--json', 'databaseId,name,headBranch,headSha,status,conclusion,url,createdAt'];
       if (q.ref) a.push('--branch', q.ref);

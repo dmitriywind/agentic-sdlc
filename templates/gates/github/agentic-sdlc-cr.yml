@@ -1,12 +1,21 @@
 name: agentic-sdlc CR gate
 # Event -> gate wiring only. Process rules live in the CLI and the binding.
-# Job "ticket-linkage" and the "factory-owner" status are required checks in ruleset.trunk.json.
+# Required checks (ruleset.trunk.json): job "ticket-linkage" here; status "human-approval" posted here by
+# `gate approval`; "Required", "proofs-on-base" and "skill-regression" come from agentic-sdlc-verify.yml;
+# "review" is posted by review-pr in the review runtime.
 # pull_request_target: this file and the binding come from the base branch, so a PR cannot change
 # what runs with these secrets. The PR's code is never checked out or run here; its number, head ref
-# and head sha reach the gates only as data (env). skill-regression reads PR files: agentic-sdlc-skills.yml.
+# and head sha reach the gates only as data (env).
+# pull_request_review: GitHub runs this file from the PR's merge ref and gives fork PRs no secrets. A
+# same-repo branch can already run any workflow with repo secrets, so this adds no exposure; to close
+# that, keep AGENTIC_REVIEW_TOKEN in an environment limited to the trunk (deferred: App tokens). On a
+# fork PR the approval status updates on the next pull_request_target event or a re-run.
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, edited, closed]
+  pull_request_review:
+    types: [submitted, dismissed]
+  merge_group:   # merge queue: carries the PR head's review statuses to the queue commit
 
 permissions:
   contents: read
@@ -14,7 +23,7 @@ permissions:
 
 concurrency:
   # closed has its own group so a late push can never cancel the merged move.
-  group: agentic-cr-${{ github.event.pull_request.number }}-${{ github.event.action == 'closed' && 'closed' || 'live' }}
+  group: agentic-cr-${{ github.event.pull_request.number || github.event.merge_group.head_sha }}-${{ github.event.action == 'closed' && 'closed' || github.event_name }}
   cancel-in-progress: ${{ github.event.action != 'closed' }}
 
 jobs:
@@ -28,41 +37,53 @@ jobs:
       AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
       AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
       AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
+      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
+      EVENT: ${{ github.event_name }}
       CR: ${{ github.event.pull_request.number }}
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       ACTION: ${{ github.event.action }}
       DRAFT: ${{ github.event.pull_request.draft }}
       MERGED: ${{ github.event.pull_request.merged }}
     steps:
       # Base branch only: the binding in force is the trunk's, not the PR's.
+      # pin to a commit SHA (actions/checkout, actions/setup-node)
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.ref }}
+          ref: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref }}
           fetch-depth: 0
-      # The PR head as data only: its objects let factory-class read the head's files; it is never checked out or run.
+          persist-credentials: false
+      # The PR head as data only: its objects let `gate approval` read the head's files; it is never checked out or run.
       - name: Fetch PR head objects
-        if: github.event.action != 'closed'
+        if: github.event_name != 'merge_group' && github.event.action != 'closed'
         run: git fetch --no-tags origin "+refs/pull/$CR/head:refs/remotes/pr/head"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+      - name: Install agentic-sdlc (the trunk's pinned devDependency)
+        run: |
+          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
+            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+          else
+            # set: repo variable AGENTIC_SDLC_VERSION to an exact version, or add agentic-sdlc as a devDependency
+            npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+          fi
 
       - name: Branch names
-        if: github.event.action != 'closed'
+        if: github.event_name == 'pull_request_target' && github.event.action != 'closed'
         run: agentic-sdlc gate branch-names --ref "$HEAD_REF"
 
       - name: Ticket linkage
-        if: github.event.action != 'closed' && github.event.pull_request.draft == false
+        if: github.event_name == 'pull_request_target' && github.event.action != 'closed' && github.event.pull_request.draft == false
         run: agentic-sdlc gate linkage --cr "$CR"
 
-      - name: Factory owner
-        # Posts status factory-owner on the head (with the review identity's token).
-        if: github.event.action != 'closed'
-        run: agentic-sdlc gate factory-class --cr "$CR"
+      - name: Human approval
+        # Posts status human-approval on the head (with the review identity's token): computes the class
+        # and checks the approving reviews the class needs. Re-runs when a review is submitted or dismissed.
+        if: github.event_name != 'merge_group' && github.event.action != 'closed'
+        run: agentic-sdlc gate approval --cr "$CR"
 
       - name: Board sync
+        if: github.event_name == 'pull_request_target'
         run: |
           if [ "$ACTION" = closed ]; then
             [ "$MERGED" = true ] || exit 0
@@ -75,3 +96,20 @@ jobs:
             exit 0
           fi
           agentic-sdlc gate board-sync --cr "$CR" --event "$event"
+
+      - name: Carry PR statuses to the queue commit
+        # A merge queue needs every required check on its own commit. Required, proofs-on-base and
+        # skill-regression run there (agentic-sdlc-verify.yml); review and human-approval were earned on
+        # the PR head, so copy their state with the same token that posted them.
+        if: github.event_name == 'merge_group'
+        env:
+          GH_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
+          QUEUE_REF: ${{ github.event.merge_group.head_ref }}
+          QUEUE_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          n=$(echo "$QUEUE_REF" | sed -n 's|.*/pr-\([0-9]*\)-.*|\1|p')
+          head=$(gh pr view "$n" --repo "$GITHUB_REPOSITORY" --json headRefOid -q .headRefOid)
+          for ctx in review human-approval; do
+            state=$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/status" -q ".statuses[] | select(.context == \"$ctx\") | .state" | head -n1)
+            gh api "repos/$GITHUB_REPOSITORY/statuses/$QUEUE_SHA" -f state="${state:-pending}" -f context="$ctx" -f description="from PR #$n head" >/dev/null
+          done

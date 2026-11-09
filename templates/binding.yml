@@ -33,12 +33,10 @@ board:
   env_labels: [env:staging, env:production] # on a signal from a deployed environment
   done_statuses: [Done, Cancelled] # left out of the heartbeat's items and oldestOpen
   views: [Board, Signals, Human, Release, Roadmap] # saved views the sdlc skill describes
-  milestone: required           # every open ticket carries one milestone; children inherit the parent's
-  later_milestone: Later        # accepted, nice to have, no delivery date; nothing shapes or builds it
   signal_streams: [alert, feedback, owner, security, ci, deploy] # label signal:<stream>
 
 forge:
-  adapter: github               # github | gitlab | azure | bitbucket | swarm
+  adapter: github               # github | gitlab | azure | bitbucket
   options:                      # adapter-specific; credentials only as env var names; validate rejects unknown keys
     # review_token_env: the review identity's credential. forge status and forge approve use it and nothing else;
     #   the implementer's token_env never posts a status, so an implementer cannot green its own review.
@@ -47,23 +45,20 @@ forge:
     # gitlab:    { project: group/project, base_url: https://gitlab.com, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
     # azure:     { org_url: https://dev.azure.com/my-org, project: my-project, repo: my-repo, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
     # bitbucket: { workspace: my-ws, repo: my-repo, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
-    # swarm:     { base_url: https://swarm.example.com, user_env: SWARM_USER, ticket_env: SWARM_TICKET, review_user: reviewer-account, review_token_env: AGENTIC_REVIEW_TOKEN }
-    #            review_user: only its status marker comments count as checks
     {}
   review_identity: reviewer-account # the account behind review_token_env: posts the review status and the approving review
+  human_approval: full-lane     # full-lane | always | never. Which product CRs need one approving review by a human
+                                #   (not owners.bots, not review_identity) on the head: gate approval posts status human-approval
   review_runtime: separate      # separate | same. separate: review-pr runs in its own scheduled runtime, the only one
                                 #   given review_token_env; the cycle never holds it. same: the cycle reviews too (validate warns)
   review_check_name: review     # status context review-pr posts on a pass
-  verify_check_name: Required   # status context review-pr posts with verify's result on the head
-  required_checks: [Required, review, ticket-linkage, skill-regression, factory-owner] # must be green before merge
+  verify_check_name: Required   # CI job (no secrets) running commands.install and commands.verify; review-pr reads it
+  required_checks: [ticket-linkage, Required, proofs-on-base, review, human-approval, skill-regression] # must be green before merge
   planned_checks: []            # wanted checks not supplied yet; review-pr names each absent one
 
 vcs:
-  adapter: git                  # git | hg | p4
-  # options:                    # adapter-specific; git reads none (remote is origin)
-  #   hg:  { mode: topic }      # topic | bookmark
-  #   p4:  { depot: depot, mainline: //depot/main, mode: stream } # stream | changelist; server from P4PORT
-  trunk: main                   # the one trunk; delivery is trunk-based on every VCS
+  adapter: git                  # git (v2 supports git only)
+  trunk: main                   # the one trunk; delivery is trunk-based
   change_pattern: "feature/<ticket>-<name>" # product change line; <name>: lowercase words joined by hyphens
   factory_change_pattern: "sdlc/<name>"     # a CR that changes only paths.factory
   release_prefix: release/      # release lines are <release_prefix><version>
@@ -71,7 +66,6 @@ vcs:
   version_scheme: calver        # calver (YYYY.MM.N) | semver
 
 product:
-  kind: service                 # service | web | mobile | desktop | library | data | ml | infra | firmware | docs | other
   environments: [staging, production] # ordered; the last is where users get value; Shipped options derive from it (library: [prerelease, registry]; mobile: [internal, beta, store])
   proofs: [test, eval, visual, data-check, computer-use, manual] # kinds a criterion may name; computer-use = verify-ux drives the built product; manual always escalates for a human check
 
@@ -92,7 +86,7 @@ mcps:                           # tool servers executors may use; name -> { url 
 # traces:
 #   uri: "s3://my-bucket/agentic/{run_id}.jsonl" # where executors write run traces; must contain {run_id}
 
-models:                         # skills name a tier, never a model
+models:                         # skills name a tier (frontmatter metadata.tier), never a model; init --harness claude writes .claude/agents/sdlc-<tier>.md from this map
   fast: your-fast-model-id
   balanced: your-balanced-model-id
   deep: your-deep-model-id
@@ -102,7 +96,9 @@ commands:
   # setup: "bash .agents/runner-setup.sh" # prepares a fresh runner before the cycle
   install: "npm ci"             # install dependencies in a fresh checkout
   fast_check: "npm run typecheck" # implement-spec runs it before the draft CR
-  verify: "npm test"            # the full verify review-pr runs on the head
+  verify: "npm test"            # the full verify; the CI job Required runs it on the head (no secrets)
+  proofs_on_base: "npm test -- {files}" # gate proofs-on-base: runs the CR's new or changed proof files ({files}) against the merge base's product code
+  # preview: "./deploy-preview.sh {sha}" # optional: deploys a CR head for verify-ux
   # light_verify: "npm run test:unit" # used when only paths.light_verify files changed
   # rollback: "./deploy.sh rollback <released-rev>" # release cites its last recorded staging run
 
@@ -143,7 +139,10 @@ learning:                       # the self-improvement loop
   every_cycles: 20              # run improve-factory every N cycles
   min_evidence_runs: 5          # runs of evidence a failure needs before a change is proposed
   bench_size: 10                # cases per bench run
-  auto_merge_classes: [tuning]  # classes that merge without the factory owner; guardrail never does
+  bench_min_cases: 20           # bench compare needs at least this many shared cases, else regressed
+  bench_trials: 3               # trials per case; compare uses the Wilson lower bound of the pass rate
+  auto_merge_classes: []        # classes that merge without the factory owner (only tuning may be listed; guardrail never).
+                                #   Keep [] until a bench baseline exists, then [tuning].
   judge_tier: deep              # tier judge-run scores on (fast | balanced | deep)
   budget_usd_per_week: 50       # learning and bench spend cap
   # human_sample: 5             # runs per week judge-run offers to an owner for a human grade

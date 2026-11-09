@@ -34,14 +34,14 @@ const USAGE = `usage: agentic-sdlc board <verb>
   create --title <t> --body-file <f> --status <s> [--label <l>]... [--parent <id>] [--milestone <m>]
   move <id> <status> [--only-from <s>]    set <id> <field> <value> | --clear
   label <id> add|remove <label>           assign <id> <user> | --none
-  comment <id> --body-file <f>            comments <id> [--last <n>] [--marker <text>] [--author <a>]...
+  comment <id> --body-file <f>            comments <id> [--last <n>] [--marker <text>] [--author <a>]... [--trusted]
   close <id> --reason completed|not_planned    child <parent> <child>`;
 
 export const cli: PortCli = async (argv, base) => {
   const [verb, ...rest] = argv;
   try {
     if (!verb || verb === '--help') { console.log(USAGE); return verb ? 0 : 2; }
-    const a = parse(rest, ['clear', 'none']);
+    const a = parse(rest, ['clear', 'none', 'trusted']);
     const need = (n: number) => { if (a.pos.length < n) throw new Usage(`board ${verb}: missing argument`); };
     const req = (k: string) => a.one(k) ?? (() => { throw new Usage(`board ${verb}: --${k} is required`); })();
     const body = () => readFileSync(req('body-file'), 'utf8');
@@ -71,7 +71,10 @@ export const cli: PortCli = async (argv, base) => {
       case 'comments': {
         need(1);
         const last = a.one('last') ? Number(a.one('last')) : undefined;
-        const by = a.flags.author?.map((s) => s.toLowerCase());
+        // --trusted: the binding's bots and owners, added to any --author.
+        const o = base.binding.owners;
+        const authors = [...(a.flags.author ?? []), ...(a.has('trusted') ? [...(o?.bots ?? []), o?.product, o?.factory] : [])].filter((x): x is string => !!x);
+        const by = a.flags.author || a.has('trusted') ? authors.map((s) => s.toLowerCase()) : undefined;
         // --last applies after --author, so a forged comment never pushes a trusted one out.
         const list = await board.comments(id, { last: by ? undefined : last, marker: a.one('marker') });
         out = by ? list.filter((c) => by.includes(c.author?.toLowerCase())).slice(0, last) : list;

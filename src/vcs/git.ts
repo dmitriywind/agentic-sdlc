@@ -37,7 +37,8 @@ export function git(ctx: AdapterContext): Vcs {
       try { g('branch', '-D', name); } catch { /* branch already gone */ }
     },
     async checkoutTests(rev, paths) {
-      g('checkout', rev, '--', '.');
+      // read-tree also removes files HEAD added that rev lacks, so a proof cannot lean on new product code.
+      g('read-tree', '-u', '--reset', rev);
       if (paths.length) g('checkout', 'HEAD', '--', ...paths);
     },
     async snapshot(rev) {

@@ -57,62 +57,19 @@ test('git: start, changed, base, cut, tag, tags on a real repo', async () => {
   mkdirSync(join(workdir, 't'));
   writeFileSync(join(workdir, 't', 'x.test'), 'T');
   writeFileSync(join(workdir, 'a.txt'), 'changed');
+  writeFileSync(join(workdir, 'new.txt'), 'product code the proof could lean on');
   git(workdir, 'add', '.');
   git(workdir, 'commit', '-m', 'c');
   await w.checkoutTests(git(root, 'rev-parse', 'main'), ['t']);
   assert.equal(git(workdir, 'show', ':a.txt'), '1');
   assert.equal(git(workdir, 'show', ':t/x.test'), 'T');
+  assert.ok(!existsSync(join(workdir, 'new.txt')), 'a file HEAD added is not on the base');
+  await w.checkoutTests(git(workdir, 'rev-parse', 'HEAD'), []);
+  assert.ok(existsSync(join(workdir, 'new.txt')), 'checkout-tests HEAD restores the tree');
 
   await vcs.drop('t-1-x');
   assert.equal(git(root, 'branch', '--list', 't-1-x'), '');
   assert.ok(!existsSync(workdir));
-});
-
-const fakeCtx = (adapter: string, options: object, out: (cmd: string, a: string[]) => string) => {
-  const calls: string[][] = [];
-  const ctx = {
-    root: join(tmpdir(), 'r'), binding: binding(adapter, options), options, env: {} as any,
-    exec: (c: string, a: string[]) => { calls.push([c, ...a]); return out(c, a); }, http: async () => ({}),
-  } as AdapterContext;
-  return { ctx, calls };
-};
-
-test('hg: topic start shares and names the topic; cut bookmarks', async () => {
-  const { ctx, calls } = fakeCtx('hg', { mode: 'topic' }, () => 'abc');
-  const v = createVcs(ctx);
-  const s = await v.start('t-1');
-  assert.equal(s.ref, 't-1');
-  assert.ok(calls.some((c) => c.slice(0, 2).join(' ') === 'hg share'));
-  assert.ok(calls.some((c) => c.join(' ') === 'hg topic t-1'));
-  assert.deepEqual(await v.cut('rev1', '1.0'), { ref: 'release/1.0' });
-  assert.ok(calls.some((c) => c.join(' ') === 'hg bookmark -f -r rev1 release/1.0'));
-  await v.push();
-  assert.ok(calls.some((c) => c.join(' ') === 'hg push -r .'));
-});
-
-test('hg: bookmark mode pushes the bookmark', async () => {
-  const { ctx, calls } = fakeCtx('hg', { mode: 'bookmark' }, () => 'bm');
-  await createVcs(ctx).push();
-  assert.ok(calls.some((c) => c.join(' ') === 'hg push -B bm'));
-});
-
-test('p4: stream start creates a task stream; push shelves; cut populates release stream', async () => {
-  const { ctx, calls } = fakeCtx('p4', { mainline: '//d/main', depot: 'd', mode: 'stream' }, (_c, a) =>
-    a.includes('pending') ? 'Change 42 on 2026/01/01 by u@c *pending* x' : a.includes('changes') ? 'Change 40 on x' : 'spec');
-  const v = createVcs(ctx);
-  const s = await v.start('t-1');
-  assert.equal(s.ref, '//d/t-1');
-  assert.ok(calls.some((c) => c.join(' ').includes('stream -o -t task -P //d/main //d/t-1')));
-  await v.push();
-  assert.ok(calls.some((c) => c.join(' ').includes('shelve -f -c 42')));
-  assert.deepEqual(await v.cut('40', '1.0'), { ref: '//d/release/1.0' });
-  assert.ok(calls.some((c) => c.join(' ').includes('populate')));
-  assert.equal((await v.base()).sha, '40');
-});
-
-test('p4: changelist mode start makes a pending changelist', async () => {
-  const { ctx } = fakeCtx('p4', { mode: 'changelist', depot: 'd' }, (_c, a) => (a.includes('-i') ? 'Change 77 created.' : 'spec'));
-  assert.equal((await createVcs(ctx).start('t-2')).ref, '77');
 });
 
 test('git: snapshot is a detached tree outside the root; changed sees edits, adds and deletes; drop removes it', async () => {

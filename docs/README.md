@@ -4,8 +4,9 @@
 |---|---|
 | [Components](architecture/components.md) | The parts and how they connect (diagrams). |
 | [Flows](architecture/flows.md) | The cycle, review, release and learning flows (diagrams). |
-| [Forges and VCS](forges.md) | What each forge enforces natively, by gate, or approximately. |
-| [The contract](../references/architecture.md) | Normative. Section 7 executors, section 10 runtimes and profiles. |
+| [Forges](forges.md) | Checks, approval and what each forge enforces natively, by gate, or approximately. |
+| [The contract](../references/architecture.md) | Normative. Section 3 ports and gates, section 7 executors, section 10 runtimes and profiles. |
+| [Audit record 2026-11-09](audits/2026-11-09-v2-audit.md) | Why v2 changed after the first audit. Superseded by the contract. |
 | [Binding template](../templates/binding.yml) | Every project value, documented. |
 
 ## Pick a profile

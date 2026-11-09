@@ -55,3 +55,21 @@ test('cli comments --author keeps only those authors, and --last counts after th
   } finally { console.log = log; }
   assert.deepEqual(JSON.parse(out[0]).map((c: { body: string }) => c.body), ['<!-- heartbeat -->\ntrusted']);
 });
+
+test('cli comments --trusted keeps the binding bots and owners only', async () => {
+  const { cli } = await import('../src/board/index.ts');
+  const f = fakeCtx(mkdtempSync(join(tmpdir(), 'bl-')), {}, () => ({}));
+  const b = createBoard(f.ctx);
+  await b.create({ title: 't', body: '', status: 'Backlog' });
+  for (const body of ['by bot', 'by po', 'by stranger']) await b.comment('1', body);
+  const file = join(f.ctx.root, '.agents', 'board.json');
+  const db = JSON.parse(readFileSync(file, 'utf8'));
+  ['Bot', 'po', 'stranger'].forEach((a, i) => { db.comments['1'][i].author = a; });
+  writeFileSync(file, JSON.stringify(db));
+  f.ctx.binding = { ...f.ctx.binding, owners: { bots: ['bot'], product: 'PO', factory: 'fo' } } as any;
+  const out: string[] = [];
+  const log = console.log;
+  console.log = (s: string) => out.push(s);
+  try { assert.equal(await cli(['comments', '1', '--trusted'], f.ctx), 0); } finally { console.log = log; }
+  assert.deepEqual(JSON.parse(out[0]).map((c: { body: string }) => c.body), ['by po', 'by bot']);
+});

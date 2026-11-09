@@ -1,7 +1,6 @@
 ---
 name: scope-creep
 applies_to: [implement-spec, review-pr]
-tier: fast
 scale: pass-fail
 ---
 

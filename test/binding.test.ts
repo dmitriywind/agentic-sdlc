@@ -13,7 +13,7 @@ const good = {
   forge: { adapter: 'github' }, vcs: { adapter: 'git', change_pattern: 'ticket/<ticket>' },
   models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: {}, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
   priorities: [], p0_setters: [], max_subissue_depth: 1, spec_marker: 'spec.md', stall_minutes: 60, parallel_agents: 1,
-  cycle: {}, heartbeat: {}, learning: {}, product: { kind: 'web', environments: ['staging', 'production'], proofs: ['test'] },
+  cycle: {}, heartbeat: {}, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
   executors: { default: { kind: 'harness' } },
 };
 
@@ -46,7 +46,7 @@ test('validateBinding rejects unknown option keys and missing required ones per 
 });
 
 test('shippedOptions derives from environments', () => {
-  assert.deepEqual(shippedOptions(good as unknown as Binding), ['Not shipped', 'On staging', 'In release', 'On production']);
+  assert.deepEqual(shippedOptions(good.product.environments), ['Not shipped', 'On staging', 'In release', 'On production']);
 });
 
 test('validateBinding checks executor stage fields, traces and computer-use', () => {
@@ -102,4 +102,26 @@ test('bindingWarnings flags profile mismatches without failing validation', () =
   for (const s of ['review_token_env', 'sandbox', 'traces is unset']) assert.match(e, new RegExp(s));
   ent.forge.options = { token_env: 'T', review_token_env: 'R' }; ent.executors.default.sandbox = 'container'; ent.traces = { uri: 'x/{run_id}' };
   assert.deepEqual(bindingWarnings(ent), []);
+});
+
+test('new keys validate; product.kind and board.milestone only warn as unused', () => {
+  const b = structuredClone(good) as any;
+  b.forge.human_approval = 'sometimes'; b.learning.bench_min_cases = 0; b.learning.bench_trials = 2.5; b.commands.proofs_on_base = 3;
+  const p = validateBinding(b).join('\n');
+  for (const s of ["forge.human_approval 'sometimes'", 'bench_min_cases must be', 'bench_trials must be', 'commands.proofs_on_base must be']) assert.match(p, new RegExp(s));
+  const ok = structuredClone(good) as any;
+  Object.assign(ok.forge, { human_approval: 'full-lane' });
+  Object.assign(ok.learning, { bench_min_cases: 20, bench_trials: 3 });
+  Object.assign(ok.commands, { preview: 'deploy {cr}', proofs_on_base: 'npx vitest run {files}' });
+  ok.product.kind = 'web'; ok.board.milestone = 'required';
+  assert.deepEqual(validateBinding(ok), []);
+  assert.deepEqual(bindingWarnings(ok).filter((w) => w.includes('unused')), ['product.kind is unused; remove it', 'board.milestone is unused; remove it']);
+});
+
+test('v2 is Git only: hg, p4 and swarm adapters are rejected', () => {
+  const b = structuredClone(good) as any;
+  b.vcs.adapter = 'hg'; b.forge.adapter = 'swarm';
+  const p = validateBinding(b).join('\n');
+  assert.match(p, /vcs.adapter 'hg' is not one of git/);
+  assert.match(p, /forge.adapter 'swarm' is not one of github\|gitlab\|azure\|bitbucket/);
 });

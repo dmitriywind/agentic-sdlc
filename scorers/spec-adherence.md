@@ -1,7 +1,6 @@
 ---
 name: spec-adherence
 applies_to: [implement-spec, shape]
-tier: fast
 scale: pass-fail
 ---
 

@@ -71,6 +71,14 @@ export function bitbucket(ctx: AdapterContext): Forge {
       }, 'review_token_env');
     },
     async approve(n) { await call('POST', `/pullrequests/${n}/approve`, undefined, 'review_token_env'); },
+    // ponytail: participants carry no commit; the head stands in, so the repo must reset approvals on push.
+    async approvals(n) {
+      const p = await call('GET', `/pullrequests/${n}`);
+      return (p.participants ?? []).filter((x: any) => x.role === 'REVIEWER' || x.approved || x.state).map((x: any) => ({
+        user: x.user?.nickname ?? x.user?.display_name ?? '', sha: p.source.commit.hash,
+        state: x.approved || x.state === 'approved' ? 'approved' : x.state === 'changes_requested' ? 'changes_requested' : 'pending',
+      }));
+    },
     async runs(q = {}) {
       const r = await call('GET', '/pipelines/?sort=-created_on&pagelen=50');
       return (r.values ?? [])

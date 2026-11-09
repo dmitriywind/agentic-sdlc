@@ -12,7 +12,7 @@
       "type": "pull_request",
       "parameters": {
         "required_approving_review_count": 1,
-        "require_code_owner_review": true,
+        "require_code_owner_review": false,
         "dismiss_stale_reviews_on_push": true,
         "require_last_push_approval": false,
         "required_review_thread_resolution": false,
@@ -23,7 +23,14 @@
       "type": "required_status_checks",
       "parameters": {
         "strict_required_status_checks_policy": true,
-        "required_status_checks": [{ "context": "ticket-linkage" }, { "context": "review" }, { "context": "Required" }, { "context": "factory-owner" }]
+        "required_status_checks": [
+          { "context": "ticket-linkage", "integration_id": 15368 },
+          { "context": "Required", "integration_id": 15368 },
+          { "context": "proofs-on-base", "integration_id": 15368 },
+          { "context": "review" },
+          { "context": "human-approval" },
+          { "context": "skill-regression", "integration_id": 15368 }
+        ]
       }
     }
   ]

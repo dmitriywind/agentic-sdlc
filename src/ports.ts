@@ -57,6 +57,9 @@ export interface CR {
   body: string;
 }
 
+/** One review of a CR, oldest first. state is lower case: approved, changes_requested, commented, dismissed, pending. sha: the commit reviewed. */
+export interface Review { user: string; state: string; sha: string }
+
 export interface Run { id: string; name: string; ref: string; sha: string; state: 'pending' | 'success' | 'failure'; url: string; at: string }
 
 export interface Forge {
@@ -72,6 +75,7 @@ export interface Forge {
   comment(n: string, body: string): Promise<{ id: string; url?: string }>;
   status(sha: string, s: { context: string; state: 'pending' | 'success' | 'failure'; description: string; url?: string }): Promise<void>;
   approve(n: string): Promise<void>;
+  approvals(n: string): Promise<Review[]>;
   runs(q?: { ref?: string; failed?: boolean }): Promise<Run[]>;
 }
 
@@ -89,9 +93,9 @@ export interface Vcs {
   drop(name: string): Promise<void>;
   /**
    * A detached tree at `rev` outside the repo root (bench only). `changed` lists every path the
-   * tree now differs from `rev` in (added, modified, deleted, untracked). Absent: bench refuses.
+   * tree now differs from `rev` in (added, modified, deleted, untracked).
    */
-  snapshot?(rev: string): Promise<{ workdir: string; changed(): Promise<string[]>; drop(): Promise<void> }>;
+  snapshot(rev: string): Promise<{ workdir: string; changed(): Promise<string[]>; drop(): Promise<void> }>;
 }
 
 /** What every adapter factory receives. */
@@ -162,22 +166,23 @@ export interface Binding {
     done_statuses: string[];
     later_milestone?: string;
     views?: string[];
-    milestone?: 'required' | 'optional';
     signal_streams: string[];
   };
   forge: {
-    adapter: 'github' | 'gitlab' | 'azure' | 'bitbucket' | 'swarm';
+    adapter: 'github' | 'gitlab' | 'azure' | 'bitbucket';
     options: Record<string, unknown>;
     review_identity: string;
     /** separate (default): review-pr runs in its own runtime, the only one holding the review token; same: the cycle reviews too. */
     review_runtime?: 'separate' | 'same';
+    /** Who must approve besides the agent review (status human-approval). Absent: full-lane. */
+    human_approval?: 'full-lane' | 'always' | 'never';
     review_check_name: string;
     verify_check_name: string;
     required_checks: string[];
     planned_checks: string[];
   };
   vcs: {
-    adapter: 'git' | 'hg' | 'p4';
+    adapter: 'git';
     options?: Record<string, unknown>;
     trunk: string;
     change_pattern: string;
@@ -191,7 +196,13 @@ export interface Binding {
   traces?: { uri: string };
   models: { fast: string; balanced: string; deep: string };
   agent_command?: string;
-  commands: { setup?: string; install: string; fast_check: string; verify: string; light_verify?: string; rollback?: string };
+  commands: {
+    setup?: string; install: string; fast_check: string; verify: string; light_verify?: string; rollback?: string;
+    /** Deploys a CR head for verify-ux (run by that skill, not by the CLI). */
+    preview?: string;
+    /** Runs proof files on the merge base; {files} is filled. Without it, gate proofs-on-base fails closed. */
+    proofs_on_base?: string;
+  };
   paths: Record<string, string | string[]>;
   sizes: string[];
   ready_size_limit: string;
@@ -204,7 +215,7 @@ export interface Binding {
   parallel_agents: number;
   cycle: { max_implementations: number; min_ready: number; time_budget_minutes: number; failure_limit: number };
   heartbeat: { ticket: string };
-  product: { kind: string; environments: string[]; proofs: string[] };
+  product: { environments: string[]; proofs: string[] };
   executors: { default: Executor; [skill: string]: Executor };
   learning: {
     every_cycles: number;
@@ -213,6 +224,10 @@ export interface Binding {
     auto_merge_classes: ('tuning' | 'guardrail')[];
     judge_tier: 'fast' | 'balanced' | 'deep';
     budget_usd_per_week: number;
+    /** bench compare needs this many shared cases (default 20). */
+    bench_min_cases?: number;
+    /** bench run trials per case, and the trials compare needs (default 3). */
+    bench_trials?: number;
     /** Runs per week judge-run offers to an owner for a human grade. */
     human_sample?: number;
   };

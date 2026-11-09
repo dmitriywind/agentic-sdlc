@@ -16,7 +16,7 @@ export interface BenchCase {
   mergedAt?: string; // the ticket's last update, as the merge time
 }
 /** scorerInput: the prompt and the agent's changed files, for judge-run to score later. */
-export interface CaseResult { id: string; pass: boolean; minutes: number; cost_usd?: number; error?: string; scorerInput?: string }
+export interface CaseResult { id: string; trial?: number; pass: boolean; minutes: number; cost_usd?: number; error?: string; scorerInput?: string }
 export interface BenchResult { model: string; executor: string; executorKind?: string; factory?: string; suite?: string; at: string; cases: CaseResult[]; passRate: number; cost_usd: number; minutes: number; stopped?: 'budget' }
 export interface Suite { name: string; cases: BenchCase[] }
 
@@ -76,7 +76,7 @@ export function parseCost(stdout: string): number | undefined {
 export const VERIFY_CONFIG =
   /(^|\/)(package\.json|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|pnpm-workspace\.yaml|bun\.lockb?|tsconfig[^/]*\.json|[^/]+\.config\.[^/]+|\.[^/]+rc(\.[^/]+)?|pytest\.ini|tox\.ini|setup\.cfg|pyproject\.toml|poetry\.lock|conftest\.py|Makefile|go\.mod|go\.sum|Cargo\.toml|Cargo\.lock|Gemfile(\.lock)?|composer\.(json|lock)|pom\.xml|[^/]+\.gradle(\.kts)?)$|^\.agents\//;
 
-const rule = (b: Binding, key: string, dflt: RegExp) => (b.paths?.[key] ? new RegExp(String(b.paths[key])) : dflt);
+export const rule = (b: Binding, key: string, dflt: RegExp) => (b.paths?.[key] ? new RegExp(String(b.paths[key])) : dflt);
 
 /** One value for a shell command line: POSIX single quotes, Windows double quotes. */
 export function quote(v: string, win = process.platform === 'win32'): string {
@@ -163,7 +163,7 @@ export interface BenchDeps {
   now?: () => number;
 }
 
-type Tree = Awaited<ReturnType<NonNullable<Vcs['snapshot']>>>;
+type Tree = Awaited<ReturnType<Vcs['snapshot']>>;
 
 export function prompt(c: BenchCase, skillPath: string, workdir: string, fastCheck: string): string {
   return [
@@ -196,7 +196,7 @@ function carry(from: string, to: string, p: string) {
  */
 export async function runBench(
   cases: BenchCase[],
-  o: { model: string; executor?: Executor; executorName?: string; factory?: string; suite?: string; root: string; binding: Binding; dryRun?: boolean; scorerDir?: string },
+  o: { model: string; executor?: Executor; executorName?: string; factory?: string; suite?: string; root: string; binding: Binding; dryRun?: boolean; scorerDir?: string; trials?: number },
   deps: BenchDeps,
 ): Promise<BenchResult | { dryRun: { id: string; command: string }[] }> {
   const executor = o.executor ?? { kind: 'harness' };
@@ -206,8 +206,7 @@ export async function runBench(
     agentCommand(executor, b, { model: o.model, ticket: c.ticket, prompt_file: promptFile(scratch, c), workdir });
   if (o.dryRun) return { dryRun: cases.map((c) => ({ id: c.id, command: command(o.binding, c, '<scratch>', '<workdir>') })) };
   const vcs = deps.vcs;
-  if (!vcs.snapshot) throw new Error(`bench run needs a VCS that can snapshot a revision outside the repo; ${o.binding.vcs?.adapter ?? 'this'} adapter cannot`);
-  const snap = (rev: string) => vcs.snapshot!(rev);
+  const snap = (rev: string) => vcs.snapshot(rev);
   // --factory: the candidate's skills AND binding, so binding-value tuning is exercised too.
   const factory = o.factory ? await snap(o.factory) : undefined;
   const results: CaseResult[] = [];
@@ -221,7 +220,8 @@ export async function runBench(
     const scratch = mkdtempSync(join(tmpdir(), 'agentic-bench-prompts-'));
     const budget = binding.learning.budget_usd_per_week;
     let spent = 0;
-    for (const c of cases) {
+    const trials = o.trials ?? 1;
+    for (const c of cases) for (let trial = 1; trial <= trials && !stopped; trial++) {
       if (spent > budget) { stopped = 'budget'; break; }
       const trees: Tree[] = [];
       try {
@@ -243,7 +243,7 @@ export async function runBench(
         const touched = await agent.changed();
         const verify = await snap(c.baseSha);
         trees.push(verify);
-        const scorerInput = o.scorerDir ? writeScorerInput(o.scorerDir, o.root, c, readFileSync(promptFile(scratch, c), 'utf8'), touched, verify.workdir, agent.workdir) : undefined;
+        const scorerInput = o.scorerDir ? writeScorerInput(o.scorerDir, o.root, c, trials > 1 ? trial : 0, readFileSync(promptFile(scratch, c), 'utf8'), touched, verify.workdir, agent.workdir) : undefined;
         const oracle = await snap(c.headSha);
         trees.push(oracle);
         for (const p of touched) {
@@ -256,7 +256,7 @@ export async function runBench(
           if (binding.commands.install) shell(deps.exec, binding.commands.install, verify.workdir);
           shell(deps.exec, binding.commands.verify, verify.workdir);
         } catch { pass = false; }
-        results.push({ id: c.id, pass, minutes, ...(cost_usd === undefined ? {} : { cost_usd }), ...(error ? { error } : {}), ...(scorerInput ? { scorerInput } : {}) });
+        results.push({ id: c.id, ...(trials > 1 ? { trial } : {}), pass, minutes, ...(cost_usd === undefined ? {} : { cost_usd }), ...(error ? { error } : {}), ...(scorerInput ? { scorerInput } : {}) });
       } finally {
         await dropAll(trees);
       }
@@ -284,7 +284,7 @@ export async function runBench(
 const MAX_FILE_CHARS = 20000; // ponytail: big files are cut; the judge sees the head only
 
 /** The prompt and each changed file before (base) and after (agent), for a scorer to read. Returns the path relative to root. */
-function writeScorerInput(dir: string, root: string, c: BenchCase, promptText: string, touched: string[], base: string, after: string): string {
+function writeScorerInput(dir: string, root: string, c: BenchCase, trial: number, promptText: string, touched: string[], base: string, after: string): string {
   const read = (d: string, p: string) => {
     if (!existsSync(join(d, p))) return '(absent)';
     const t = readFileSync(join(d, p), 'utf8');
@@ -292,7 +292,7 @@ function writeScorerInput(dir: string, root: string, c: BenchCase, promptText: s
   };
   const fence = '````';
   const parts = [promptText, '## Changed files', ...touched.flatMap((p) => [`### ${p}`, 'Before:', fence, read(base, p), fence, 'After:', fence, read(after, p), fence])];
-  const file = join(dir, `${c.id.replace(/[^\w.-]/g, '_')}.md`);
+  const file = join(dir, `${c.id.replace(/[^\w.-]/g, '_')}${trial ? `-t${trial}` : ''}.md`);
   mkdirSync(dir, { recursive: true });
   writeFileSync(file, parts.join('\n\n') + '\n');
   return relative(root, file).replaceAll('\\', '/');
@@ -323,31 +323,52 @@ export function report(results: BenchResult[]): ReportRow[] {
   return rows.sort((a, b) => b.passRate - a.passRate || cost(a) - cost(b));
 }
 
-/** Compares two results on the cases they share. b regresses when its pass rate is lower. */
-export function compare(a: BenchResult, b: BenchResult) {
+/** Wilson score interval lower bound (95%) of `pass` successes in `n` trials; 0 when n is 0. */
+export function wilsonLower(pass: number, n: number, z = 1.96): number {
+  if (!n) return 0;
+  const p = pass / n, z2 = z * z;
+  return (p + z2 / (2 * n) - z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / (1 + z2 / n);
+}
+
+/**
+ * Compares two results on the cases they share (every trial row counts). b regresses when the
+ * Wilson lower bound of its pass rate is below a's, when fewer than `minCases` cases are shared,
+ * when a shared case has fewer than `trials` trials on either side, or when b ran fewer cases.
+ */
+export function compare(a: BenchResult, b: BenchResult, o: { minCases?: number; trials?: number } = {}) {
+  const minCases = o.minCases ?? 20, trials = o.trials ?? 3;
   const ids = new Set(b.cases.map((c) => c.id));
-  const common = a.cases.map((c) => c.id).filter((id) => ids.has(id));
+  const common = [...new Set(a.cases.map((c) => c.id))].filter((id) => ids.has(id));
   const side = (r: BenchResult) => {
     const cs = r.cases.filter((c) => common.includes(c.id));
+    const pass = cs.filter((c) => c.pass).length;
     const sum = (k: 'cost_usd' | 'minutes') => Math.round(cs.reduce((t, c) => t + (c[k] ?? 0), 0) * 100) / 100;
-    return { model: r.model, executor: r.executor, factory: r.factory, passRate: cs.length ? cs.filter((c) => c.pass).length / cs.length : 0, cost_usd: sum('cost_usd'), minutes: sum('minutes') };
+    const minTrials = common.length ? Math.min(...common.map((id) => cs.filter((c) => c.id === id).length)) : 0;
+    const round = (x: number) => Math.round(x * 1000) / 1000;
+    return { model: r.model, executor: r.executor, factory: r.factory, passRate: cs.length ? pass / cs.length : 0, lower: round(wilsonLower(pass, cs.length)), trials: minTrials, cost_usd: sum('cost_usd'), minutes: sum('minutes') };
   };
   const [sa, sb] = [side(a), side(b)];
   const d = (x: number, y: number) => Math.round((y - x) * 1000) / 1000;
+  const short = [
+    ...(common.length < minCases ? [`${common.length} shared cases, need ${minCases}`] : []),
+    ...(Math.min(sa.trials, sb.trials) < trials ? [`${Math.min(sa.trials, sb.trials)} trials on a shared case, need ${trials}`] : []),
+    ...(new Set(b.cases.map((c) => c.id)).size < new Set(a.cases.map((c) => c.id)).size ? ['b ran fewer cases than a'] : []),
+  ];
   return {
     cases: common.length,
     a: sa,
     b: sb,
-    delta: { passRate: d(sa.passRate, sb.passRate), cost_usd: d(sa.cost_usd, sb.cost_usd), minutes: d(sa.minutes, sb.minutes) },
-    // No shared case, or fewer cases in b, proves nothing: fail closed.
-    regressed: common.length === 0 || b.cases.length < a.cases.length || sb.passRate < sa.passRate,
+    delta: { passRate: d(sa.passRate, sb.passRate), lower: d(sa.lower, sb.lower), cost_usd: d(sa.cost_usd, sb.cost_usd), minutes: d(sa.minutes, sb.minutes) },
+    // Too little evidence proves nothing: fail closed.
+    ...(short.length ? { insufficient: short } : {}),
+    regressed: short.length > 0 || sb.lower < sa.lower,
   };
 }
 
 const USAGE = [
   'usage: bench build [--suite <name>] [--paths <glob>]… [--per-size <n>] [--limit n]',
   '       bench propose --suite <name> [--n k]',
-  '       bench run [--suite <s>] --model <id> | --executor <name|json> [--model <id>] [--factory <rev>] [--cases <ids>] [--dry-run]',
+  '       bench run [--suite <s>] --model <id> | --executor <name|json> [--model <id>] [--factory <rev>] [--cases <ids>] [--trials <n>] [--dry-run]',
   '       bench report --suite <s> [results.json…]',
   '       bench compare <a.json> <b.json>',
 ].join('\n');
@@ -362,7 +383,7 @@ export const cli: PortCli = async (argv, ctx) => {
       args: rest,
       options: {
         limit: { type: 'string' }, model: { type: 'string' }, executor: { type: 'string' }, factory: { type: 'string' }, cases: { type: 'string' }, 'dry-run': { type: 'boolean' },
-        suite: { type: 'string' }, paths: { type: 'string', multiple: true }, 'per-size': { type: 'string' }, n: { type: 'string' },
+        suite: { type: 'string' }, paths: { type: 'string', multiple: true }, 'per-size': { type: 'string' }, n: { type: 'string' }, trials: { type: 'string' },
       },
       allowPositionals: true,
     });
@@ -376,7 +397,7 @@ export const cli: PortCli = async (argv, ctx) => {
     if (verb === 'compare') {
       const [pa, pb] = a.positionals;
       if (!pa || !pb) return (console.error(USAGE), 2);
-      const r = compare(readJson(resolve(root, pa)), readJson(resolve(root, pb)));
+      const r = compare(readJson(resolve(root, pa)), readJson(resolve(root, pb)), { minCases: binding?.learning?.bench_min_cases, trials: binding?.learning?.bench_trials });
       console.log(JSON.stringify(r, null, 2));
       return r.regressed ? 1 : 0;
     }
@@ -419,7 +440,8 @@ export const cli: PortCli = async (argv, ctx) => {
       return 0;
     }
     if (verb === 'run') {
-      if (!a.values.model && !a.values.executor) return (console.error(USAGE), 2);
+      const trials = a.values.trials ? Number(a.values.trials) : binding.learning?.bench_trials ?? 3;
+      if ((!a.values.model && !a.values.executor) || !(Number.isInteger(trials) && trials > 0)) return (console.error(USAGE), 2);
       const executor = a.values.executor ? resolveExecutor(a.values.executor, binding) : undefined;
       // An executor run without --model uses the implement-spec tier's model; it only fills {model}.
       const model = a.values.model ?? binding.models.balanced;
@@ -432,7 +454,7 @@ export const cli: PortCli = async (argv, ctx) => {
       const { createVcs } = await import('./vcs/index.ts');
       const r = await runBench(
         cases,
-        { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values['dry-run'], scorerDir: join(root, RESULTS_DIR, stem) },
+        { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values['dry-run'], scorerDir: join(root, RESULTS_DIR, stem), trials },
         { exec: ctx.exec, vcs: await createVcs(with_(binding.vcs.options)) },
       );
       if ('cases' in r) {

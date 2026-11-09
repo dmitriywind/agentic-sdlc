@@ -1,10 +1,8 @@
 import type { AdapterContext, PortCli, Vcs } from '../ports.ts';
 import { UsageError, guard, parseArgs } from '../forge/util.ts';
 import { git } from './git.ts';
-import { hg } from './hg.ts';
-import { p4 } from './p4.ts';
 
-const adapters = { git, hg, p4 };
+const adapters = { git };
 
 export function createVcs(ctx: AdapterContext): Vcs {
   const make = adapters[ctx.binding.vcs.adapter];

@@ -8,7 +8,9 @@ and wants traces and full benchmarks on its own storage.
 ```bash
 npx agentic-sdlc init --profile enterprise --harness <name> --board jira --forge gitlab --vcs git
 ```
-Init writes the defaults below (`sandbox: container` for the default executor).
+Init writes the template defaults plus `sandbox: container` for the default executor, a
+placeholder `traces.uri` and `learning.human_sample: 5`. The excerpt adds typical per-stage
+executors.
 
 ## Binding excerpt
 ```yaml
@@ -24,13 +26,18 @@ forge:
   options: { token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
   review_identity: factory-review-app            # a forge app or bot account with its own token
   review_runtime: separate                       # review-pr runs in its own runtime, the only one with the review token
+  human_approval: full-lane                      # full-lane | always | never
 traces:
-  uri: "s3://my-bucket/agentic/{run_id}.jsonl"   # must contain {run_id}
+  uri: ".agents/runtime/traces/{run_id}.jsonl"   # init's placeholder; point it at org storage, e.g. s3://my-bucket/agentic/{run_id}.jsonl
 learning:
   every_cycles: 20
   bench_size: 10
+  bench_min_cases: 20
+  bench_trials: 3
+  auto_merge_classes: []                         # add tuning once a bench baseline exists
   judge_tier: deep
-  budget_usd_per_week: 200                       # learning, scoring and bench spend cap
+  budget_usd_per_week: 50                        # template default; raise it for org-wide use
+  human_sample: 5                                # runs per week offered to an owner for a human grade
 ```
 All executor kinds are allowed: `managed`, `webhook`, `assign`, `command`, `harness`. See [architecture.md section 7](../../references/architecture.md).
 
@@ -48,7 +55,7 @@ Mix vendors per stage: the executor entries are per skill, and the bench compare
 
 ## Security checklist
 - [ ] A separate review identity: a forge app or bot with its own token in `review_token_env`, held only by the review runtime (`forge.review_runtime: separate`: a scheduled job or deployment running `review-prompt.md`), never by the cycle or an implementer.
-- [ ] `CODEOWNERS` maps `.agents/**`, `.github/**`, `.claude/**` to the factory owner ([forges.md](../forges.md)).
+- [ ] The trunk ruleset requires `human-approval`; the `approval` gate holds `guardrail` factory CRs for the factory owner and Full-lane CRs per `forge.human_approval` ([forges.md](../forges.md)).
 - [ ] Secrets only as env var names. Each stage lists `secrets:`; nothing else is passed.
 - [ ] Stage `mcps:` lists only the servers that stage needs.
 - [ ] Sandbox `cloud` or `container`; unattended cycles refuse `local`.

@@ -14,8 +14,8 @@ export function loadBinding(root: string): Binding {
 
 const ADAPTERS = {
   board: ['github', 'jira', 'linear', 'local'],
-  forge: ['github', 'gitlab', 'azure', 'bitbucket', 'swarm'],
-  vcs: ['git', 'hg', 'p4'],
+  forge: ['github', 'gitlab', 'azure', 'bitbucket'],
+  vcs: ['git'],
 };
 /** Option keys each adapter reads: [required, optional]. Anything else is a typo the adapter would ignore. */
 const OPTIONS: Record<string, Record<string, [string[], string[]]>> = {
@@ -30,9 +30,8 @@ const OPTIONS: Record<string, Record<string, [string[], string[]]>> = {
     gitlab: [['base_url', 'project', 'token_env'], ['review_token_env']],
     azure: [['org_url', 'project', 'repo', 'token_env'], ['review_token_env']],
     bitbucket: [['workspace', 'repo', 'token_env'], ['review_token_env']],
-    swarm: [['base_url', 'user_env', 'ticket_env'], ['review_user', 'review_token_env']],
   },
-  vcs: { git: [[], []], hg: [[], ['mode']], p4: [[], ['mainline', 'depot', 'mode']] },
+  vcs: { git: [[], []] },
 };
 const REQUIRED = [
   'owners', 'board', 'forge', 'vcs', 'models', 'commands', 'paths', 'sizes', 'ready_size_limit', 'fast_lane_max_size',
@@ -43,6 +42,7 @@ const EXECUTORS = ['harness', 'command', 'webhook', 'managed', 'assign'];
 const EXECUTOR_KEYS: Record<string, string[]> = { command: ['run'], webhook: ['url_env'], managed: ['token_env'], assign: ['user'] };
 const MANAGED_APIS = ['claude', 'cursor', 'antigravity', 'generic'];
 const REVIEW_RUNTIMES = ['separate', 'same'];
+export const HUMAN_APPROVAL = ['full-lane', 'always', 'never'];
 const SANDBOXES =['cloud', 'container', 'local'];
 const PROFILES = ['individual', 'enterprise'];
 const TIERS = ['fast', 'balanced', 'deep'];
@@ -96,6 +96,13 @@ export function validateBinding(b: Binding): string[] {
   }
   const rr = x.forge?.review_runtime;
   if (rr !== undefined && !REVIEW_RUNTIMES.includes(rr)) p.push(`forge.review_runtime '${rr}' is not one of ${REVIEW_RUNTIMES.join('|')}`);
+  const ha = x.forge?.human_approval;
+  if (ha !== undefined && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join('|')}`);
+  for (const k of ['bench_min_cases', 'bench_trials']) {
+    const v = x.learning?.[k];
+    if (v !== undefined && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
+  }
+  for (const k of ['preview', 'proofs_on_base']) if (x.commands?.[k] !== undefined && typeof x.commands[k] !== 'string') p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? '').includes('{run_id}')) p.push('traces.uri must contain {run_id}');
   if (x.executors && !x.executors.default) p.push('executors.default is missing');
   return p;
@@ -105,6 +112,8 @@ export function validateBinding(b: Binding): string[] {
 export function bindingWarnings(b: Binding): string[] {
   const w: string[] = [];
   const x = b as any;
+  if (x?.product?.kind !== undefined) w.push('product.kind is unused; remove it');
+  if (x?.board?.milestone !== undefined) w.push('board.milestone is unused; remove it');
   if (x?.forge?.review_runtime === 'same') w.push('forge.review_runtime is same: the cycle holds the review token, so an implementer can approve its own CR');
   if (x?.profile === 'individual') {
     for (const [k, e] of Object.entries<any>(x.executors ?? {}))
@@ -122,8 +131,7 @@ export function bindingWarnings(b: Binding): string[] {
   return w;
 }
 
-/** Shipped field options derived from product.environments. */
-export function shippedOptions(b: Binding): string[] {
-  const env = b.product.environments;
-  return ['Not shipped', ...env.slice(0, -1).map((e) => `On ${e}`), 'In release', `On ${env[env.length - 1]}`];
+/** Shipped field options derived from product.environments; one environment has no In release. */
+export function shippedOptions(envs: string[]): string[] {
+  return ['Not shipped', ...envs.slice(0, -1).map((e) => `On ${e}`), ...(envs.length > 1 ? ['In release'] : []), `On ${envs[envs.length - 1]}`];
 }

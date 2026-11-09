@@ -1,4 +1,4 @@
-// agentic-sdlc dispatch <skill> --ticket <id> [--cr <n>] [--workdir <d>] [--run-model <id>] [--unattended]: start the skill's executor.
+// agentic-sdlc dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>] [--run-model <id>] [--unattended]: start the skill's executor.
 import { spawn } from 'node:child_process';
 import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import { createBoard } from './board/index.ts';
 import { fill } from './bench.ts';
-import type { Binding, Executor, McpServer, PortCli } from './ports.ts';
+import type { Binding, Board, Executor, McpServer, PortCli } from './ports.ts';
 
 const envOf = (env: NodeJS.ProcessEnv, name: string) => {
   const v = env[name];
@@ -69,8 +69,17 @@ export function childEnv(env: NodeJS.ProcessEnv, secrets: string[]): NodeJS.Proc
 type Managed = Extract<Executor, { kind: 'managed' }>;
 type Task = { skill: string; ticket: string; cr: string };
 
-const taskText = (t: Task) =>
-  `Run skill ${t.skill} on ticket ${t.ticket}${t.cr ? ` (change request ${t.cr})` : ''}. Load .agents/skills/${t.skill}/SKILL.md first and follow it.`;
+const subject = (t: Task) => (t.ticket ? `ticket ${t.ticket}${t.cr ? ` (change request ${t.cr})` : ''}` : `change request ${t.cr}`);
+const taskText = (t: Task) => `Run skill ${t.skill} on ${subject(t)}. Load .agents/skills/${t.skill}/SKILL.md first and follow it.`;
+
+export const DISPATCH_MARKER = 'agentic-sdlc:dispatch';
+
+/** The skill's model tier: frontmatter metadata.tier, else the deprecated top-level tier. */
+export function skillTierOf(text: string): string | undefined {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+  if (!m) return undefined;
+  try { const fm = parse(m[1]); return fm?.metadata?.tier ?? fm?.tier; } catch { return undefined; }
+}
 
 /**
  * The one request that starts a managed run. Shapes follow each vendor's documented start-a-run call:
@@ -129,24 +138,50 @@ export const cli: PortCli = async (argv, ctx) => {
       else pos.push(argv[i]);
     }
     const [skill] = pos;
-    if (!skill || !f.ticket) { console.error('usage: agentic-sdlc dispatch <skill> --ticket <id> [--cr <n>] [--workdir <d>] [--run-model <id>] [--unattended]'); return 2; }
-    const ticket = f.ticket, cr = f.cr ?? '', workdir = f.workdir ?? ctx.root;
+    if (!skill || (!f.ticket && !f.cr)) { console.error('usage: agentic-sdlc dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>] [--run-model <id>] [--unattended]'); return 2; }
+    const ticket = f.ticket ?? '', cr = f.cr ?? '', workdir = f.workdir ?? ctx.root;
     const b = ctx.binding;
     const ex = Object.hasOwn(b.executors, skill) ? b.executors[skill] : b.executors.default;
     const startedAt = new Date().toISOString();
-    const done = (kind: string, ref: string | null, extra: object = {}) => {
-      console.log(JSON.stringify({ kind, ref, startedAt, ...extra }));
-      return 0;
-    };
 
     const judge = skill === 'judge-run' ? judgeTier(b, f['run-model']) : undefined;
     if (judge && 'skip' in judge) { console.log(JSON.stringify(judge)); return 0; }
 
+    // Idempotency: one marker comment per key on the ticket (a factory CR has no ticket: the heartbeat
+    // ticket holds it). A marker by owners.bots younger than stall_minutes means the run is already going.
+    let board: Board | undefined;
+    const boardOf = () => (board ??= createBoard({ ...ctx, options: b.board.options }));
+    const target = ticket || b.heartbeat?.ticket;
+    const stall = Number(b.stall_minutes) || 0; // unset or 0: no check
+    let key: string | undefined;
+    if (stall > 0 && target) {
+      let head = 'unknown';
+      try {
+        if (cr) {
+          const { createForge } = await import('./forge/index.ts');
+          head = (await createForge({ ...ctx, options: b.forge.options }).view(cr)).headSha || head;
+        } else head = ctx.exec('git', ['rev-parse', 'HEAD'], { cwd: workdir }).trim() || head;
+      } catch { /* no head: the key still separates ticket and skill */ }
+      key = `${ticket || cr}-${skill}-${head}`;
+      const trusted = (b.owners?.bots ?? []).map((a) => a.toLowerCase());
+      const since = Date.now() - stall * 60_000;
+      const seen = (await boardOf().comments(target, { marker: `${DISPATCH_MARKER} ${key} ` }))
+        .find((c) => trusted.includes(c.author?.toLowerCase()) && Date.parse(c.createdAt) >= since);
+      if (seen) { console.log(JSON.stringify({ skipped: true, key, since: seen.createdAt, comment: seen.id })); return 0; }
+    }
+    /** Posts the marker (also the assign executor's hand-off comment), then prints the start record. */
+    const done = async (kind: string, ref: string | null, extra: object = {}) => {
+      let marker: string | undefined;
+      if (key || kind === 'assign') {
+        marker = (await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->\nagentic-sdlc: run skill ${skill} (${kind})`)).id;
+      }
+      console.log(JSON.stringify({ kind, ref: ref ?? (kind === 'assign' ? marker ?? null : null), startedAt, ...(key ? { key } : {}), ...extra }));
+      return 0;
+    };
+
     let skillTier: string | undefined;
-    try {
-      const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(join(ctx.root, '.agents', 'skills', skill, 'SKILL.md'), 'utf8'));
-      skillTier = m ? parse(m[1])?.tier : undefined;
-    } catch { /* only a harness stage needs the skill file */ }
+    try { skillTier = skillTierOf(readFileSync(join(ctx.root, '.agents', 'skills', skill, 'SKILL.md'), 'utf8')); }
+    catch { /* only a harness stage needs the skill file */ }
     const stage = resolveStage(b, ex, judge?.tier ?? skillTier, judge?.model);
     const local = stage.sandbox === 'local' || (!stage.sandbox && (ex.kind === 'command' || ex.kind === 'harness'));
     if (local && (f.unattended || ctx.env.AGENTIC_SDLC_UNATTENDED === '1')) {
@@ -155,12 +190,12 @@ export const cli: PortCli = async (argv, ctx) => {
     const info = { ...(judge ?? {}), model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox };
 
     if (ex.kind === 'harness') {
-      return done('harness', null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
+      return await done('harness', null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
     }
     if (ex.kind === 'command') {
       const dir = mkdtempSync(join(tmpdir(), 'agentic-sdlc-'));
       const promptFile = join(dir, 'prompt.md');
-      writeFileSync(promptFile, `Run skill ${skill} on ticket ${ticket}${cr ? ` (change request ${cr})` : ''}. Load .agents/skills/${skill}/SKILL.md first.
+      writeFileSync(promptFile, `Run skill ${skill} on ${subject({ skill, ticket, cr })}. Load .agents/skills/${skill}/SKILL.md first.
 `);
       const mcpsFile = join(dir, 'mcps.json');
       writeFileSync(mcpsFile, JSON.stringify(stage.mcps, null, 2)); // env var names only
@@ -169,7 +204,7 @@ export const cli: PortCli = async (argv, ctx) => {
       const env = childEnv(ctx.env, stage.secrets);
       const logDir = join(tmpdir(), 'agentic-sdlc-runs');
       mkdirSync(logDir, { recursive: true });
-      const log = join(logDir, `${startedAt}-${skill}-${ticket}`.replace(/[^\w.-]/g, '_') + '.log');
+      const log = join(logDir, `${startedAt}-${skill}-${ticket || `cr${cr}`}`.replace(/[^\w.-]/g, '_') + '.log');
       const fd = openSync(log, 'a');
       try {
         const [cmd, args, childVars] = process.platform === 'win32'
@@ -179,7 +214,7 @@ export const cli: PortCli = async (argv, ctx) => {
         child.on('error', () => {}); // a late spawn failure shows as a missing pid below, not a crash
         child.unref();
         if (!child.pid) throw new Error(`could not start the command executor for ${skill}; see ${log}`);
-        return done('command', String(child.pid), { log, ...info });
+        return await done('command', String(child.pid), { log, ...info });
       } finally { closeSync(fd); }
     }
     const stageBody = { model: stage.model, mcps: Object.entries(stage.mcps).map(([name, m]) => ({ name, url: m.url })), sandbox: stage.sandbox };
@@ -187,17 +222,16 @@ export const cli: PortCli = async (argv, ctx) => {
       const headers: Record<string, string> = ex.token_env ? { authorization: `Bearer ${envOf(ctx.env, ex.token_env)}` } : {};
       const url = envOf(ctx.env, ex.url_env);
       const r = await ctx.http('POST', url, { headers, body: { skill, ticket, cr, callback: null, ...stageBody } });
-      return done('webhook', r?.id ?? null);
+      return await done('webhook', r?.id ?? null);
     }
     if (ex.kind === 'managed') {
       const r = await ctx.http(...managedRequest(ex, ctx.env, { skill, ticket, cr }, stage.model, stageBody));
-      return done('managed', r?.id ?? r?.name ?? null);
+      return await done('managed', r?.id ?? r?.name ?? null);
     }
     if (ex.kind !== 'assign') throw new Error(`unknown executor kind '${(ex as { kind: string }).kind}' for ${skill}`);
-    const board = createBoard({ ...ctx, options: b.board.options });
-    await board.assign(ticket, ex.user);
-    const c = await board.comment(ticket, `agentic-sdlc: run skill ${skill}`);
-    return done('assign', c.id);
+    if (!ticket) throw new Error('executor kind assign needs --ticket');
+    await boardOf().assign(ticket, ex.user);
+    return await done('assign', null);
   } catch (e) {
     console.error((e as Error).message);
     return 1;

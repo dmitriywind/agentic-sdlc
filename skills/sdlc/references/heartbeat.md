@@ -9,11 +9,16 @@ the rows back.
 - One comment on `heartbeat.ticket`: `agentic-sdlc board comment <heartbeat.ticket> --body-file <f>`.
   The body is the line `<!-- heartbeat -->`, then the JSON in a `json` code fence.
 - The read-state step reads the last heartbeats with
-  `agentic-sdlc board comments <heartbeat.ticket> --last <n> --marker "<!-- heartbeat -->" --author <bot>…`,
-  one `--author` per `owners.bots` entry. Only the factory's own accounts write heartbeats; one by
-  anyone else is ignored, never read as state, budget or evidence.
+  `agentic-sdlc board comments <heartbeat.ticket> --last <n> --marker "<!-- heartbeat -->" --trusted`.
+  Only the factory's own accounts write heartbeats; one by anyone else is never state, budget or
+  evidence.
 - Runs and measures over many heartbeats: `agentic-sdlc ledger runs [--since <days>] [--skill <s>]`
   and `agentic-sdlc ledger summary [--since <days>]`. Both read only heartbeats by `owners.bots`.
+  `ledger summary` also prints `learning: { due, cyclesSince, spentWeekUsd }`, computed from
+  heartbeats and run rows; no skill keeps a counter.
+- Scores are not written here. `judge-run` posts them with `ledger record`, as one
+  `<!-- scores -->` comment on `heartbeat.ticket`; owners post `agentic-sdlc:grade` comments.
+  `ledger` joins both to the run rows.
 
 ## Shape
 
@@ -35,11 +40,8 @@ the rows back.
   "signals": { "open": 0, "<env>": 0 },
   "openCRs": 0,
   "milestones": { "<title>": { "open": 0, "closed": 0 } },
-  "runs": [{ "id": "", "skill": "", "skillHash": "", "ticket": "", "cr": "", "tier": "", "model": "", "executor": "harness", "ref": "", "tokens": 0, "cost_usd": 0, "minutes": 0, "outcome": "done", "score": 0, "scores": { "<scorer>": "pass" }, "trace": "", "error": "" }],
-  "rescores": [{ "id": "", "scorer": "done-conditions", "score": 0, "cap": "", "by": "judge" }],
+  "runs": [{ "id": "", "skill": "", "skillHash": "", "ticket": "", "cr": "", "tier": "", "model": "", "executor": "harness", "ref": "", "tokens": 0, "cost_usd": 0, "minutes": 0, "outcome": "done", "trace": "", "error": "" }],
   "learning": {
-    "cyclesSince": 0,
-    "spentWeekUsd": 0,
     "lastProposal": { "at": "", "cr": "", "class": "tuning", "skill": "", "error": "", "evidence": [""], "state": "open" },
     "benchBaseline": { "file": "", "factory": "", "model": "", "executor": "", "cases": 0, "passRate": 0, "cost_usd": 0, "minutes": 0 }
   },
@@ -62,8 +64,7 @@ the rows back.
 | `openCRs` | Count of `crs`. |
 | `milestones` | Open and closed tickets per milestone. |
 | `runs` | One row per run that ended in this cycle; see Runs. A run appears in exactly one heartbeat. |
-| `rescores` | A later value for one scorer of a run from an earlier heartbeat: its `id`, the `scorer` (default `done-conditions`), the new `score` (0 to 4, or `pass`/`fail`), the fact that capped it, and `by`: `judge` (a later hard fact) or `human` (an `agentic-sdlc:grade` comment by an owner). Per run and scorer the ledger applies a human grade over any judge value, else the newest. |
-| `learning` | The loop's state; see Learning. Copied forward from the last heartbeat and changed only by `improve-factory` and `bench`. |
+| `learning` | `lastProposal` and `benchBaseline`; see Learning. Copied forward from the last heartbeat and changed only by `improve-factory`. |
 | `errors` | One per failed step: the step name, the ticket id when there is one, the cause. The escalation rule counts these. |
 
 ## Runs
@@ -79,17 +80,18 @@ One row per run the cycle started with `agentic-sdlc dispatch`, whatever its exe
 | `executor`, `ref` | The executor kind and the `ref` that `dispatch` printed (session id, bot run, assignment). |
 | `tokens`, `cost_usd`, `minutes` | What the run reported. A value the executor does not report is left out, never guessed. |
 | `outcome` | `done` (its Done-when conditions held), `sent_back`, `failed`, `escalated` or `timeout`. Anything but `done` counts as a failure. |
-| `score` | 0 to 4: the `done-conditions` scorer from [`judge-run`](../../judge-run/SKILL.md), hard-fact caps applied; left out when no judge could score it. |
-| `scores` | One entry per scorer in `.agents/scorers/` that applies to the skill: `0`–`4` or `pass`/`fail`. Left out when no judge could score it. |
+| `score`, `scores` | Left out by the cycle. `ledger` fills them from the run's `<!-- scores -->` comment ([`judge-run`](../../judge-run/SKILL.md)) and grade comments: `score` is `done-conditions` with hard-fact caps applied, `scores` one value per applicable scorer; a human grade wins. |
 | `trace` | The run id to fill `traces.uri` with, when the executor stored a full transcript there; left out otherwise. |
 | `error` | For a failure: the first line of the cause, as the run or the gate stated it. The ledger clusters on it. |
 
 ## Learning
 
+`ledger summary` computes the rest: `cyclesSince` (cycles since the last `improve-factory` run),
+`spentWeekUsd` (judge, improve and bench spend in the last 7 days) and `due` (`cyclesSince` has
+reached `learning.every_cycles` and the spend is under `learning.budget_usd_per_week`).
+
 | Key | Value |
 |---|---|
-| `cyclesSince` | Cycles since `improve-factory` last ran. It runs when this reaches `learning.every_cycles`. |
-| `spentWeekUsd` | Judge, improve and bench spend in the last 7 days. At `learning.budget_usd_per_week` the loop reports and stops. |
 | `lastProposal` | The last factory change proposed: when, its CR, its class, the failure cluster it targets, the run ids that were its evidence, and `open`, `merged`, `rejected` or `closed`. |
 | `benchBaseline` | The last bench result of the trunk's factory: the results file, factory revision, model, executor, case count, pass rate, cost and minutes. |
 

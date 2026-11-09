@@ -1,6 +1,7 @@
 // init / validate / doctor.
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, parseDocument } from 'yaml';
 import { BINDING_PATH, bindingWarnings, loadBinding, validateBinding } from './binding.ts';
@@ -12,9 +13,12 @@ import type { PortCli } from './ports.ts';
 const START = '<!-- agentic-sdlc:start -->';
 const END = '<!-- agentic-sdlc:end -->';
 const POINTER = `${START}
-Work lives on the board named in \`.agents/binding.yml\`. Load the \`sdlc\` skill (\`.agents/skills/sdlc/SKILL.md\`) first.
+Work lives on the board named in \`.agents/binding.yml\`. Before any work, invoke the sdlc skill (\`/agentic-sdlc:sdlc\` in Claude Code).
 Never duplicate the process here: the skills own it, the binding owns the project values.
 ${END}`;
+const SKILLS_LOCK = '.agents/skills.lock.json';
+const TIERS = ['fast', 'balanced', 'deep'];
+const FORGES = ['github', 'gitlab', 'azure', 'bitbucket'];
 
 /** The folder holding package.json, walking up from this file. AGENTIC_SDLC_PACKAGE overrides it (tests). */
 export function packageRoot(env: NodeJS.ProcessEnv = process.env): string {
@@ -33,7 +37,7 @@ const flagsOf = (argv: string[]) => {
   for (let i = 0; i < argv.length; i++) {
     if (!argv[i].startsWith('--')) throw new Error(`unexpected argument '${argv[i]}'`);
     const k = argv[i].slice(2);
-    if (k === 'force') f[k] = 'true';
+    if (k === 'force' || k === 'no-plugin') f[k] = 'true';
     else if (i + 1 < argv.length) f[k] = argv[++i];
     else throw new Error(`--${k} needs a value`);
   }
@@ -46,11 +50,51 @@ const need = (pkg: string, rel: string) => {
   return p;
 };
 
+const readJson = (p: string) => JSON.parse(readFileSync(p, 'utf8'));
+const sha = (p: string) => createHash('sha256').update(readFileSync(p)).digest('hex');
+
 function copyFile(from: string, to: string, force: boolean, log: string[]) {
   if (existsSync(to) && !force) { log.push(`kept ${to}`); return; }
   mkdirSync(dirname(to), { recursive: true });
   cpSync(from, to);
   log.push(`wrote ${to}`);
+}
+
+function writeKept(to: string, text: string, force: boolean, log: string[], rel: string) {
+  if (existsSync(to) && !force) { log.push(`kept ${rel}`); return; }
+  mkdirSync(dirname(to), { recursive: true });
+  writeFileSync(to, text);
+  log.push(`wrote ${rel}`);
+}
+
+const filesUnder = (dir: string): string[] =>
+  readdirSync(dir).flatMap((n) => statSync(join(dir, n)).isDirectory() ? filesUnder(join(dir, n)).map((f) => join(n, f)) : [n]);
+
+/**
+ * Copy the skill pack into `dest`, keeping local edits. The lock records the hash of each file as
+ * installed: a file still at that hash (or new) is updated; one edited since is kept unless --force.
+ */
+function syncSkills(src: string, root: string, dest: string, force: boolean, log: string[]) {
+  const lockFile = join(root, SKILLS_LOCK);
+  const lock: Record<string, string> = existsSync(lockFile) ? readJson(lockFile) : {};
+  let wrote = 0;
+  for (const f of filesUnder(src)) {
+    const from = join(src, f), to = join(root, dest, f);
+    const key = relative(root, to).replaceAll('\\', '/');
+    const want = sha(from);
+    if (existsSync(to)) {
+      const have = sha(to);
+      if (have === want) { lock[key] = want; continue; }
+      if (!force && have !== lock[key]) { log.push(`kept ${key} (local edits; --force overwrites)`); continue; }
+    }
+    mkdirSync(dirname(to), { recursive: true });
+    cpSync(from, to);
+    lock[key] = want;
+    wrote++;
+  }
+  mkdirSync(dirname(lockFile), { recursive: true });
+  writeFileSync(lockFile, JSON.stringify(lock, null, 2) + '\n');
+  log.push(`wrote ${dest} (${wrote} file${wrote === 1 ? '' : 's'} updated)`);
 }
 
 const MCP_FILES = new Map<string, string | null>([
@@ -59,8 +103,10 @@ const MCP_FILES = new Map<string, string | null>([
 ]);
 
 /** Register the agentic-sdlc stdio server in the harness's project MCP file, keeping other servers. */
-function registerMcp(pkg: string, root: string, harness: string, force: boolean, log: string[]) {
-  const snippet = readFileSync(need(pkg, `templates/mcp/${harness === 'codex' ? 'codex.toml' : harness + '.json'}`), 'utf8');
+function registerMcp(pkg: string, root: string, harness: string, args: string[], force: boolean, log: string[]) {
+  let snippet = readFileSync(need(pkg, `templates/mcp/${harness === 'codex' ? 'codex.toml' : harness + '.json'}`), 'utf8');
+  if (harness === 'codex') snippet = snippet.replace(/^args = .*$/m, `args = ${JSON.stringify(args)}`);
+  else { const j = JSON.parse(snippet); j.mcpServers['agentic-sdlc'].args = args; snippet = JSON.stringify(j, null, 2) + '\n'; }
   const rel = MCP_FILES.get(harness);
   if (!rel) { log.push(`add this MCP server to your harness config:\n${snippet.trim()}`); return; }
   const file = join(root, rel);
@@ -82,20 +128,74 @@ function registerMcp(pkg: string, root: string, harness: string, force: boolean,
   log.push(`wrote ${rel}`);
 }
 
+/** Pin this CLI as the project's devDependency, so CI, hooks and MCP run one known version. True when pinned. */
+function pinCli(root: string, version: string, force: boolean, log: string[]): boolean {
+  const file = join(root, 'package.json');
+  if (!existsSync(file)) {
+    log.push(`pin the CLI so CI and MCP run one version: npm pkg set devDependencies.agentic-sdlc=${version} && npm install`);
+    return false;
+  }
+  const text = readFileSync(file, 'utf8');
+  const doc = JSON.parse(text);
+  if (doc.devDependencies?.['agentic-sdlc'] && !force) { log.push('kept devDependencies.agentic-sdlc in package.json'); return true; }
+  doc.devDependencies = { ...doc.devDependencies, 'agentic-sdlc': version };
+  const indent = /^[ \t]+/m.exec(text)?.[0] ?? '  ';
+  writeFileSync(file, JSON.stringify(doc, null, indent) + '\n');
+  log.push(`set devDependencies.agentic-sdlc=${version} in package.json: run npm install`);
+  return true;
+}
+
+/** Claude Code: tier subagents from binding.models, and CLAUDE.md importing AGENTS.md. Skills come from the plugin. */
+function claudeSetup(root: string, force: boolean, log: string[]) {
+  let models: Record<string, string> = {};
+  try { models = parse(readFileSync(join(root, BINDING_PATH), 'utf8'))?.models ?? {}; } catch { /* reported by validate */ }
+  for (const tier of TIERS) {
+    const rel = `.claude/agents/sdlc-${tier}.md`;
+    const model = !models[tier] || /^your-/.test(models[tier]) ? 'inherit' : models[tier]; // template placeholder: the session's model
+    writeKept(join(root, rel), `---
+name: sdlc-${tier}
+description: Runs one agentic-sdlc skill step whose metadata.tier is ${tier}. The sdlc skill hands a step to this agent when the step's skill is at the ${tier} tier.
+model: ${model}
+---
+
+You run one step of the agentic-sdlc process at the ${tier} tier. Invoke the skill your task names
+(\`/agentic-sdlc:<skill>\`; without the plugin, read \`.agents/skills/<skill>/SKILL.md\`), follow it to
+its last Done when, and report the result and the evidence. Call the CLI as \`npx agentic-sdlc ...\`.
+Do not start subagents.
+`, force, log, rel);
+  }
+  const file = join(root, 'CLAUDE.md');
+  const cur = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  if (/^@AGENTS\.md\s*$/m.test(cur)) log.push('kept CLAUDE.md (imports @AGENTS.md)');
+  else {
+    writeFileSync(file, (cur ? cur.replace(/\n*$/, '\n\n') : '') + '@AGENTS.md\n');
+    log.push(cur ? 'appended @AGENTS.md to CLAUDE.md' : 'wrote CLAUDE.md (@AGENTS.md)');
+  }
+  log.push('install the Claude Code plugin (skills, guard hook, MCP server): /plugin marketplace add dmitriywind/agentic-sdlc, then /plugin install agentic-sdlc@agentic-sdlc');
+  log.push('headless runs load it from the pinned package: claude -p ... --plugin-dir node_modules/agentic-sdlc');
+}
+
 function init(root: string, argv: string[], log: string[]) {
   const f = flagsOf(argv);
   const board = f.board ?? 'github', forge = f.forge ?? 'github', vcs = f.vcs ?? 'git', harness = f.harness ?? 'generic';
   const force = f.force === 'true';
   const profile = f.profile ?? 'individual';
   if (profile !== 'individual' && profile !== 'enterprise') throw new Error(`--profile must be individual or enterprise, got '${profile}'`);
+  if (vcs !== 'git') throw new Error(`--vcs must be git (v2 supports git only), got '${vcs}'`);
+  if (!FORGES.includes(forge)) throw new Error(`--forge must be one of ${FORGES.join('|')}, got '${forge}'`);
+  if (!MCP_FILES.has(harness)) throw new Error(`--harness must be one of ${[...MCP_FILES.keys()].join('|')}, got '${harness}'`);
   const pkg = packageRoot();
+  const pkgJson = join(pkg, 'package.json');
+  const version: string = existsSync(pkgJson) ? readJson(pkgJson).version : 'next';
 
   const skills = need(pkg, 'skills');
-  cpSync(skills, join(root, '.agents', 'skills'), { recursive: true });
-  log.push('wrote .agents/skills');
-  if (!MCP_FILES.has(harness)) throw new Error(`--harness must be one of ${[...MCP_FILES.keys()].join('|')}, got '${harness}'`);
-  if (harness === 'claude' || harness === 'grok') { cpSync(skills, join(root, '.claude', 'skills'), { recursive: true }); log.push('wrote .claude/skills'); }
-  registerMcp(pkg, root, harness, force, log);
+  syncSkills(skills, root, '.agents/skills', force, log);
+  // Grok reads .claude/skills. Claude Code gets skills and the MCP server from the plugin, unless --no-plugin.
+  const noPlugin = harness === 'claude' && f['no-plugin'] === 'true';
+  if (harness === 'grok' || noPlugin) syncSkills(skills, root, '.claude/skills', force, log);
+  const pinned = pinCli(root, version, force, log);
+  if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, pinned ? ['--no-install', 'agentic-sdlc', 'mcp'] : ['-y', `agentic-sdlc@${version}`, 'mcp'], force, log);
+  else log.push('MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)');
   const scorers = join(pkg, 'scorers');
   if (existsSync(scorers)) {
     // Scorers are factory definition the project may tune: keep existing files unless --force.
@@ -114,8 +214,6 @@ function init(root: string, argv: string[], log: string[]) {
     if (profile === 'enterprise') {
       doc.set('traces', { uri: '.agents/runtime/traces/{run_id}.jsonl' }); // placeholder: point it at org storage
       doc.setIn(['learning', 'human_sample'], 5);
-    } else {
-      doc.setIn(['learning', 'auto_merge_classes'], ['tuning']);
     }
     mkdirSync(dirname(bindingFile), { recursive: true });
     writeFileSync(bindingFile, String(doc));
@@ -124,33 +222,26 @@ function init(root: string, argv: string[], log: string[]) {
 
   const gates = join(pkg, 'templates', 'gates');
   const first = (dir: string) => join(dir, readdirSync(dir).filter((n) => statSync(join(dir, n)).isFile()).sort()[0]);
-  if (forge !== 'swarm') {
-    const dir = need(pkg, `templates/gates/${forge}`);
-    if (forge === 'github') {
-      for (const n of readdirSync(dir).filter((n) => n.endsWith('.yml'))) copyFile(join(dir, n), join(root, '.github', 'workflows', n), force, log);
-      if (existsSync(join(dir, 'pull_request_template.md'))) copyFile(join(dir, 'pull_request_template.md'), join(root, '.github', 'pull_request_template.md'), force, log);
-      if (existsSync(join(dir, 'CODEOWNERS'))) {
-        copyFile(join(dir, 'CODEOWNERS'), join(root, '.github', 'CODEOWNERS'), force, log);
-        log.push('replace @<owners.factory> in .github/CODEOWNERS with the factory owner account');
-      }
-      if (existsSync(join(dir, 'ruleset.trunk.json'))) {
-        copyFile(join(dir, 'ruleset.trunk.json'), join(root, '.github', 'rulesets', 'trunk.json'), force, log);
-        log.push('import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk');
-      }
+  const dir = need(pkg, `templates/gates/${forge}`);
+  if (forge === 'github') {
+    for (const n of readdirSync(dir).filter((n) => n.endsWith('.yml'))) copyFile(join(dir, n), join(root, '.github', 'workflows', n), force, log);
+    if (existsSync(join(dir, 'pull_request_template.md'))) copyFile(join(dir, 'pull_request_template.md'), join(root, '.github', 'pull_request_template.md'), force, log);
+    if (existsSync(join(dir, 'ruleset.trunk.json'))) {
+      copyFile(join(dir, 'ruleset.trunk.json'), join(root, '.github', 'rulesets', 'trunk.json'), force, log);
+      log.push('import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk');
+      log.push('its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App\'s id if it is an App (a PAT cannot be pinned)');
     }
-    else if (forge === 'gitlab') copyFile(first(dir), join(root, '.gitlab', 'agentic-sdlc.yml'), force, log);
-    else if (forge === 'azure') copyFile(first(dir), join(root, 'azure-pipelines.agentic-sdlc.yml'), force, log);
-    else if (forge === 'bitbucket') {
-      const dest = join(root, 'bitbucket-pipelines.yml');
-      if (existsSync(dest)) log.push(`${dest} exists: merge ${first(dir)} into it by hand`);
-      else copyFile(first(dir), dest, false, log);
-    } else throw new Error(`unknown forge '${forge}'`);
   }
-  const hook = { git: 'pre-push', hg: 'hg-pretxnchangegroup.sh', p4: 'p4-change-submit.sh' }[vcs];
-  if (!hook) throw new Error(`unknown vcs '${vcs}'`);
-  if (existsSync(join(gates, 'hooks', hook))) {
-    copyFile(join(gates, 'hooks', hook), join(root, '.agents', 'hooks', hook), force, log);
-    log.push(vcs === 'git' ? 'enable the hook with: git config core.hooksPath .agents/hooks' : `install .agents/hooks/${hook} as its header comment says`);
+  else if (forge === 'gitlab') copyFile(first(dir), join(root, '.gitlab', 'agentic-sdlc.yml'), force, log);
+  else if (forge === 'azure') copyFile(first(dir), join(root, 'azure-pipelines.agentic-sdlc.yml'), force, log);
+  else {
+    const dest = join(root, 'bitbucket-pipelines.yml');
+    if (existsSync(dest)) log.push(`${dest} exists: merge ${first(dir)} into it by hand`);
+    else copyFile(first(dir), dest, false, log);
+  }
+  if (existsSync(join(gates, 'hooks', 'pre-push'))) {
+    copyFile(join(gates, 'hooks', 'pre-push'), join(root, '.agents', 'hooks', 'pre-push'), force, log);
+    log.push('enable the hook with: git config core.hooksPath .agents/hooks');
   }
   const setup = join(pkg, 'templates', 'runner', 'setup.sh');
   if (existsSync(setup)) copyFile(setup, join(root, '.agents', 'runner-setup.sh'), force, log);
@@ -166,10 +257,11 @@ function init(root: string, argv: string[], log: string[]) {
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, '\n\n') : '') + POINTER + '\n';
   if (next !== cur) writeFileSync(agents, next);
   log.push('updated AGENTS.md');
+  if (harness === 'claude') claudeSetup(root, force, log);
 }
 
-/** Binding problems plus skill frontmatter problems. */
-export function validate(root: string): string[] {
+/** Binding problems plus skill frontmatter problems; skill warnings go into `warnings`. */
+export function validate(root: string, warnings: string[] = []): string[] {
   const problems: string[] = [];
   try { problems.push(...validateBinding(loadBinding(root))); } catch (e) { problems.push((e as Error).message); }
   const dir = join(root, '.agents', 'skills');
@@ -180,7 +272,9 @@ export function validate(root: string): string[] {
     const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(file, 'utf8'));
     let fm: any = {};
     try { fm = m ? parse(m[1]) : {}; } catch { /* reported below */ }
-    for (const k of ['name', 'description', 'tier']) if (!fm?.[k]) problems.push(`skill ${name}: frontmatter lacks '${k}'`);
+    for (const k of ['name', 'description']) if (!fm?.[k]) problems.push(`skill ${name}: frontmatter lacks '${k}'`);
+    if (!fm?.metadata?.tier && !fm?.tier) problems.push(`skill ${name}: frontmatter lacks 'metadata.tier'`);
+    if (fm?.tier !== undefined) warnings.push(`skill ${name}: top-level 'tier' breaks claude.ai upload and the Skills API; move it to metadata: { tier: ${fm.tier} }`);
   }
   return problems;
 }
@@ -190,15 +284,19 @@ const redact = (msg: string, env: NodeJS.ProcessEnv) => {
   return msg;
 };
 
-function trunkProtection(b: any, ctx: any): string {
+/** Trunk rules: required checks exist and each is pinned to the app that posts it. */
+export function trunkProtection(b: any, ctx: any): string[] {
   const repo = b.forge.options?.repo;
-  if (b.forge.adapter === 'github' && repo) {
-    try {
-      const p = JSON.parse(ctx.exec('gh', ['api', `repos/${repo}/branches/${b.vcs.trunk}/protection`]));
-      return p.required_status_checks ? 'ok   trunk protection: required checks block merge' : 'fail trunk protection: no required status checks';
-    } catch { /* unreadable: fall through */ }
-  }
-  return 'trunk protection: check manually';
+  const reminder = 'warn: pin each required check to the CI integration that posts it, so no other token can post it';
+  if (b.forge.adapter !== 'github' || !repo) return ['trunk protection: check manually', reminder];
+  let rules: any[];
+  try { rules = JSON.parse(ctx.exec('gh', ['api', `repos/${repo}/rules/branches/${b.vcs.trunk}`])); }
+  catch { return ['trunk protection: check manually (cannot read the trunk rules)', reminder]; }
+  const checks = rules.filter((r) => r.type === 'required_status_checks').flatMap((r) => r.parameters?.required_status_checks ?? []);
+  if (!checks.length) return ['fail trunk protection: no required status checks'];
+  const loose = checks.filter((c: any) => !c.integration_id).map((c: any) => c.context);
+  return ['ok   trunk protection: required checks block merge',
+    ...(loose.length ? [`warn: required checks not pinned to an app (integration_id): ${loose.join(', ')}; any token with status access can post them`] : [])];
 }
 
 /** Called with the group name as the first element: init | validate | doctor. */
@@ -213,10 +311,10 @@ export const cli: PortCli = async (argv, ctx) => {
       return 0;
     }
     if (verb === 'validate' || verb === 'doctor') {
-      const problems = validate(ctx.root);
+      const warnings: string[] = [];
+      const problems = validate(ctx.root, warnings);
       problems.forEach((p) => console.error(`problem: ${p}`));
-      let warnings: string[] = [];
-      try { warnings = bindingWarnings(loadBinding(ctx.root)); } catch { /* reported as a problem */ }
+      try { warnings.push(...bindingWarnings(loadBinding(ctx.root))); } catch { /* reported as a problem */ }
       warnings.forEach((m) => console.error(`warn: ${m}`));
       if (problems.length) return 1;
       out('validate: ok');
@@ -229,14 +327,14 @@ export const cli: PortCli = async (argv, ctx) => {
         ['vcs.head', () => createVcs({ ...c, options: binding.vcs.options ?? {} }).head()],
       ];
       let bad = 0;
-      out(trunkProtection(binding, ctx));
+      trunkProtection(binding, ctx).forEach(out);
       for (const [name, run] of probes) {
         try { await run(); out(`ok   ${name}`); }
         catch (e) { bad++; out(`fail ${name}: ${redact((e as Error).message, ctx.env).split('\n')[0]}`); }
       }
       return bad ? 1 : 0;
     }
-    console.error('usage: agentic-sdlc init [--board ...] [--forge ...] [--vcs ...] [--harness ...] [--profile individual|enterprise] [--force] | validate | doctor');
+    console.error('usage: agentic-sdlc init [--board ...] [--forge github|gitlab|azure|bitbucket] [--vcs git] [--harness ...] [--profile individual|enterprise] [--force] | validate | doctor');
     return 2;
   } catch (e) {
     console.error(redact((e as Error).message, ctx.env));

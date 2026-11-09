@@ -7,23 +7,47 @@
 - A GitHub Action and a GitLab CI job that run the same prompt on your runners.
 
 ## Install
-```bash
-npx agentic-sdlc init --harness claude --profile individual --board github --forge github --vcs git
-```
-Files it writes:
-- `.agents/binding.yml`, the skills in `.agents/skills/` and `.claude/skills/` (the path Claude Code reads for project skills: [docs](https://code.claude.com/docs/en/skills)), the gate templates for your forge, and an `AGENTS.md` pointer.
-- An `agentic-sdlc mcp` entry in `.mcp.json` (project scope; `type` is required and `${VAR}` expands: [docs](https://code.claude.com/docs/en/mcp)).
+The skills, hooks and MCP server ship as a Claude Code plugin named `agentic-sdlc`, so skills are
+`/agentic-sdlc:sdlc`, `/agentic-sdlc:review-pr` and so on ([plugins](https://code.claude.com/docs/en/plugins)).
 
-The init log is the exact list; the `--harness` flag decides. Claude Code's own instructions file is `CLAUDE.md`.
-Reading `.agents/skills` or `AGENTS.md`: not documented at the time of writing.
+```bash
+npm i -D agentic-sdlc@next
+npx agentic-sdlc init --harness claude --profile individual --board github --forge github --vcs git
+claude --plugin-dir ./node_modules/agentic-sdlc
+```
+`--plugin-dir` loads the plugin from the installed package for that session. To install it for
+every session, the repo is also a plugin marketplace:
+
+```text
+/plugin marketplace add dmitriywind/agentic-sdlc
+/plugin install agentic-sdlc@agentic-sdlc
+```
+The plugin's hook refuses a push to the trunk and allows `forge approve` only in the review runtime.
+
+What `init --harness claude` writes:
+- `.agents/binding.yml`, `.agents/scorers/`, the gate templates for your forge, the runner prompts.
+- No skill copies: the plugin carries them.
+- One subagent per tier in `.claude/agents/`, with the model from `models`.
+- An `@AGENTS.md` import in `CLAUDE.md`. Claude Code reads `AGENTS.md` only when there is no
+  `CLAUDE.md`; with one, a plain "read AGENTS.md" line is not loaded, the `@` import is
+  ([memory](https://code.claude.com/docs/en/memory)).
+- With `--no-plugin` only: the skills in `.claude/skills/` and an `agentic-sdlc mcp` entry in `.mcp.json` (project
+  scope; `type` is required and `${VAR}` expands: [mcp](https://code.claude.com/docs/en/mcp)).
+
+The init log is the exact list.
 
 ## Run one cycle by hand
 ```bash
-claude -p "Load the sdlc skill and run one cycle." --allowedTools "Bash(npx agentic-sdlc:*)" "Bash(git:*)" --output-format json
+claude -p "/agentic-sdlc:sdlc run one cycle"   --permission-mode acceptEdits   --allowedTools "Bash(npx agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc"   --disallowedTools "Bash(npx agentic-sdlc forge approve *)"   --max-turns 200 --output-format json
 ```
-Flags: [headless docs](https://code.claude.com/docs/en/headless). Since v2.1.302 `-p` starts in Manual mode when nothing
-sets a mode, so unlisted tools that need approval are denied: list what the cycle needs. The JSON has `total_cost_usd`
-(a client-side estimate). Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run as a separate scheduled run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md); only that run gets `AGENTIC_REVIEW_TOKEN` (`forge.review_runtime: separate`).
+Since v2.1.302 `-p` starts in Manual mode when nothing sets a mode, so a tool call that needs
+approval is denied and the run can exit 0 having done nothing: set the mode and list what the
+cycle needs. Permission rules use the space form `Bash(npx agentic-sdlc *)`
+([permissions](https://code.claude.com/docs/en/permissions), [headless](https://code.claude.com/docs/en/headless)).
+The JSON has `total_cost_usd` (a client-side estimate). Prompt text:
+[`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run after the
+cycle, as a separate job with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md):
+only that job gets `AGENTIC_REVIEW_TOKEN` and allows `forge approve` (`forge.review_runtime: separate`).
 
 ## Run without your machine - Individual
 Subscription only.
@@ -31,7 +55,7 @@ Subscription only.
 | Option | How | Limits |
 |---|---|---|
 | Scheduled task (cloud) | Create at claude.ai/code/routines or with `/schedule`. Saved prompt, repo, connectors; schedule, API or GitHub-event trigger. Template: [`templates/runner/claude-routine.md`](../../templates/runner/claude-routine.md). | Research preview. 100 scheduled runs per hour per account; Run-now and API fires 30 per hour per task. Runs draw plan usage. It acts as your claude.ai user. Clone and push need GitHub (GitLab and Bitbucket cannot push back). `/schedule` needs a claude.ai login, not an API key. [docs](https://code.claude.com/docs/en/routines) |
-| CI cron with a subscription token | `claude setup-token` prints a one-year OAuth token; store it as `CLAUDE_CODE_OAUTH_TOKEN`. Template: [`templates/runner/github-actions-claude.yml`](../../templates/runner/github-actions-claude.yml) | The token only makes model requests: no claude.ai connectors. `ANTHROPIC_API_KEY`, if set, wins. `--bare` ignores the subscription login. Subscription tokens are tied to one person. [auth](https://code.claude.com/docs/en/authentication), [action](https://code.claude.com/docs/en/github-actions) |
+| CI cron with a subscription token | `claude setup-token` prints a one-year OAuth token; store it as `CLAUDE_CODE_OAUTH_TOKEN`. The template fails when `ANTHROPIC_API_KEY` is also set, since it would win and bill the API. Template: [`templates/runner/github-actions-claude.yml`](../../templates/runner/github-actions-claude.yml) | The token only makes model requests: no claude.ai connectors. `ANTHROPIC_API_KEY`, if set, wins. `--bare` ignores the subscription login. Subscription tokens are tied to one person. [auth](https://code.claude.com/docs/en/authentication), [action](https://code.claude.com/docs/en/github-actions) |
 
 Terms caveat: Anthropic does not allow third-party products to offer claude.ai login or rate limits, including agents
 built on the Agent SDK ([docs](https://code.claude.com/docs/en/agent-sdk/overview)). Your own repo on your own subscription is
@@ -64,7 +88,7 @@ executors:
   default: { kind: harness }
   implement-spec: { kind: managed, api: claude, agent_env: IMPL_AGENT_ID, environment_env: IMPL_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY, sandbox: cloud }
 ```
-The agent needs the skills, the CLI or MCP server, and the listed secrets. A session can override model, tools, MCP servers
+The agent needs the skills (attach the plugin's `skills/`), the CLI or MCP server, and the listed secrets. A session can override model, tools, MCP servers
 and skills per run (`agent_with_overrides`). The reviewer is never the implementer of the same CR.
 
 ## Limits and unknowns
@@ -72,4 +96,4 @@ and skills per run (`agent_with_overrides`). The reviewer is never the implement
 - The GitHub trigger does not cover forks; auto-fix does not react to merge conflicts.
 - Anthropic-hosted sessions fail if your org uses IP allowlisting without an exemption.
 - Managed Agents GitHub resource, skills attach format and webhook signing: not verified here.
-- `.agents/skills` and `AGENTS.md` support in Claude Code: not documented at the time of writing.
+- Claude Code does not read `.agents/skills`; the plugin is how it gets the skills.
