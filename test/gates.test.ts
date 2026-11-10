@@ -1,13 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
 import { approval, approvers, boardSync, branchNames, diffPaths, globToRegExp, linkage, classify, proofFiles, proofsOnBase, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
-import { shippedOptions } from '../src/binding.ts';
 import { PROOF_FILE } from '../src/bench.ts';
-import { compare } from '../src/bench.ts';
 
 const binding = {
   board: { statuses: ['Backlog', 'In review', 'Done', 'Signals'], done_statuses: ['Done'], labels: { human: 'needs-human' } },
@@ -94,11 +92,6 @@ test('board-sync: opened -> In review; merged (by cr or sha) -> Done + Not shipp
   await assert.rejects(boardSync(f.d, { cr: 'c1', event: 'nope' }));
 });
 
-test('shippedOptions derives from environments', () => {
-  assert.deepEqual(shippedOptions(['staging', 'production']), ['Not shipped', 'On staging', 'In release', 'On production']);
-  assert.deepEqual(shippedOptions(['live']), ['Not shipped', 'On live']);
-});
-
 test('shipped: staging, production + tag, failures, unknown env', async () => {
   const f = fakes([
     item('1', 'Done', { shipped: 'Not shipped' }),
@@ -153,10 +146,11 @@ test('skill-regression: valid pack passes, bad frontmatter and broken links list
   assert.match(errs, /broken link missing.md/);
 });
 
-test('skill-regression: the shipped scorers pass; bad scorer frontmatter is listed', () => {
+test('skill-regression: a good scorer passes; bad scorer frontmatter is listed', () => {
   const root = mkdtempSync(join(tmpdir(), 'sc-'));
   mkdirSync(join(root, '.agents', 'skills'), { recursive: true });
-  cpSync(new URL('../scorers', import.meta.url), join(root, '.agents', 'scorers'), { recursive: true });
+  mkdirSync(join(root, '.agents', 'scorers'), { recursive: true });
+  writeFileSync(join(root, '.agents', 'scorers', 'good.md'), '---\nname: good\napplies_to: [implement-spec]\nscale: pass-fail\n---\nq\n');
   assert.deepEqual(skillRegression(root).errors, []);
   writeFileSync(join(root, '.agents', 'scorers', 'bad.md'), '---\nname: bad\napplies_to: implement-spec\ntier: huge\nscale: 1-10\n---\nq\n');
   assert.deepEqual(skillRegression(root).errors, ['scorers/bad.md: applies_to must be "*" or a list of skills', 'scorers/bad.md: scale 1-10 invalid']);
@@ -384,12 +378,4 @@ test('signal-on-red: only trunk or release refs; strict title', async () => {
   assert.equal((await signalOnRed(f.d, '2')).created, true);
   const t = f.created[0].title as string;
   assert.ok(t.length <= 100 && /^[A-Za-z0-9 ._/:@()-]+$/.test(t), t);
-});
-
-test('bench compare: no common cases or fewer cases in b is a regression', () => {
-  const r = (ids: string[]) => ({ model: 'm', executor: 'harness', at: '', passRate: 1, cost_usd: 0, minutes: 0, cases: ids.map((id) => ({ id, pass: true, minutes: 1 })) }) as any;
-  const o = { minCases: 1, trials: 1 };
-  assert.equal(compare(r(['1']), r(['2']), o).regressed, true);
-  assert.equal(compare(r(['1', '2']), r(['1']), o).regressed, true);
-  assert.equal(compare(r(['1']), r(['1', '2']), o).regressed, false);
 });

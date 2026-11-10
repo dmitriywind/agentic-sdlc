@@ -290,3 +290,11 @@ test('runBench --trials: one row per trial, each in fresh trees', async () => {
   assert.deepEqual(r.cases.map((c) => [c.id, c.trial, c.pass]), [['1', 1, true], ['1', 2, false], ['1', 3, true]]);
   assert.equal(made.length, 9); // agent, verify and oracle trees per trial
 });
+
+test('compare: no common cases or fewer cases in b is a regression', () => {
+  const r = (ids: string[]) => ({ model: 'm', executor: 'harness', at: '', passRate: 1, cost_usd: 0, minutes: 0, cases: ids.map((id) => ({ id, pass: true, minutes: 1 })) }) as any;
+  const o = { minCases: 1, trials: 1 };
+  assert.equal(compare(r(['1']), r(['2']), o).regressed, true);
+  assert.equal(compare(r(['1', '2']), r(['1']), o).regressed, true);
+  assert.equal(compare(r(['1']), r(['1', '2']), o).regressed, false);
+});
