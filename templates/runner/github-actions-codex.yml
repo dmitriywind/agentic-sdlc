@@ -27,6 +27,8 @@ jobs:
     steps:
       # pin to a commit SHA (actions/checkout, actions/setup-node)
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AGENTIC_FORGE_TOKEN }}   # a GITHUB_TOKEN push starts no workflow run
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -51,6 +53,8 @@ jobs:
       AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AGENTIC_FORGE_TOKEN }}   # a GITHUB_TOKEN push starts no workflow run
       - uses: actions/setup-node@v4
         with:
           node-version: 22

@@ -5,6 +5,7 @@
 #   individual: CLAUDE_CODE_OAUTH_TOKEN  (create with `claude setup-token`)
 #   enterprise: ANTHROPIC_API_KEY
 # Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_REVIEW_TOKEN (the names your binding uses).
+# --allowedTools: set the npm entries to your binding's commands.fast_check and commands.verify.
 # Three jobs (forge.review_runtime: separate): `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
 # `review` starts when the cycle finishes, with the review token and the review prompt only;
 # `dead-man` fails (and notifies) when no heartbeat landed for --max-hours.
@@ -36,6 +37,8 @@ jobs:
     steps:
       # pin to a commit SHA (actions/checkout, actions/setup-node)
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AGENTIC_FORGE_TOKEN }}   # a GITHUB_TOKEN push starts no workflow run
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -48,7 +51,7 @@ jobs:
           --plugin-dir node_modules/agentic-sdlc
           --output-format json --max-budget-usd 5 --max-turns 200
           --permission-mode acceptEdits
-          --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
+          --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git add *)" "Bash(git commit *)" "Bash(git push *)" "Bash(npm run *)" "Bash(npm test *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
           --disallowedTools "Bash(npx --no agentic-sdlc forge approve *)"
   review:
     needs: cycle
@@ -62,6 +65,8 @@ jobs:
       AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AGENTIC_FORGE_TOKEN }}   # a GITHUB_TOKEN push starts no workflow run
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -73,7 +78,7 @@ jobs:
           --plugin-dir node_modules/agentic-sdlc
           --output-format json --max-budget-usd 5 --max-turns 200
           --permission-mode acceptEdits
-          --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
+          --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git add *)" "Bash(git commit *)" "Bash(git push *)" "Bash(npm run *)" "Bash(npm test *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
   dead-man:
     needs: [cycle, review]
     if: ${{ always() }}

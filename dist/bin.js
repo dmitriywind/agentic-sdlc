@@ -8316,7 +8316,8 @@ function azure(ctx) {
       behind: false,
       // ponytail: Azure DevOps exposes no "behind" flag; sync is unsupported anyway
       closes: parseCloses(p.description ?? ""),
-      checks: (st.value ?? []).map((s) => ({ name: s.context.name, state: cs(s.state) })),
+      // The newest status per context wins: an older iteration's success does not hide a new pending.
+      checks: [...new Map((st.value ?? []).sort((a, b) => a.id - b.id).map((s) => [s.context.name, { name: s.context.name, state: cs(s.state) }])).values()],
       body: p.description ?? ""
     };
   };
@@ -8364,13 +8365,20 @@ function azure(ctx) {
       const t = await call("POST", `${git2}/pullrequests/${n}/threads`, { comments: [{ content: body, commentType: 1 }], status: 1 });
       return { id: String(t.id) };
     },
-    async status(sha2, s) {
-      await call("POST", `${git2}/commits/${sha2}/statuses`, {
+    // Branch status policies read pull request statuses, so post on the PR iteration whose head is sha.
+    async status(sha2, s, opts) {
+      const key = opts?.as === "ci" ? "token_env" : "review_token_env";
+      const r = await call("GET", `${git2}/pullrequests?searchCriteria.status=active&$top=100`, void 0, key);
+      const p = r.value.find((x) => x.lastMergeSourceCommit?.commitId === sha2);
+      if (!p) throw new Error(`azure: no active pull request has head ${sha2}`);
+      const its = await call("GET", `${git2}/pullrequests/${p.pullRequestId}/iterations`, void 0, key);
+      await call("POST", `${git2}/pullrequests/${p.pullRequestId}/statuses`, {
         state: s.state === "success" ? "succeeded" : s.state === "failure" ? "failed" : "pending",
         description: s.description,
         context: { name: s.context, genre: "agentic-sdlc" },
-        targetUrl: s.url
-      }, "review_token_env");
+        targetUrl: s.url,
+        iterationId: its.value?.at(-1)?.id
+      }, key);
     },
     async approve(n) {
       const me = (await call("GET", `${org}/_apis/connectionData`, void 0, "review_token_env")).authenticatedUser.id;
@@ -8494,14 +8502,14 @@ Merge when required checks are green.`);
       return view(n);
     },
     comment,
-    async status(sha2, s) {
+    async status(sha2, s, opts) {
       await call("POST", `/commit/${sha2}/statuses/build`, {
         key: s.context,
         name: s.context,
         description: s.description,
         state: s.state === "success" ? "SUCCESSFUL" : s.state === "failure" ? "FAILED" : "INPROGRESS",
         url: s.url ?? `https://bitbucket.org/${o.workspace}/${o.repo}`
-      }, "review_token_env");
+      }, opts?.as === "ci" ? "token_env" : "review_token_env");
     },
     async approve(n) {
       await call("POST", `/pullrequests/${n}/approve`, void 0, "review_token_env");
@@ -8604,10 +8612,10 @@ function github(ctx) {
       const url = gh(["pr", "comment", n, "--body-file", "-"], body).trim();
       return { id: url.split("issuecomment-")[1] ?? url, url };
     },
-    async status(sha2, s) {
+    async status(sha2, s, opts) {
       const a = ["api", "-X", "POST", `${api}/statuses/${sha2}`, "-f", `state=${s.state}`, "-f", `context=${s.context}`, "-f", `description=${s.description}`];
       if (s.url) a.push("-f", `target_url=${s.url}`);
-      gh(a, void 0, withToken("review_token_env"));
+      gh(a, void 0, withToken(opts?.as === "ci" ? "token_env" : "review_token_env"));
     },
     async approve(n) {
       gh(["pr", "review", n, "--approve", "--body", "agentic-sdlc review: PASS"], void 0, withToken("review_token_env"));
@@ -8714,13 +8722,13 @@ ${c.diff}`).join("");
       const r = await call("POST", `/merge_requests/${n}/notes`, { body });
       return { id: String(r.id) };
     },
-    async status(sha2, s) {
+    async status(sha2, s, opts) {
       await call("POST", `/statuses/${sha2}`, {
         state: s.state === "failure" ? "failed" : s.state,
         name: s.context,
         description: s.description,
         target_url: s.url
-      }, "review_token_env");
+      }, opts?.as === "ci" ? "token_env" : "review_token_env");
     },
     async approve(n) {
       await call("POST", `/merge_requests/${n}/approve`, {}, "review_token_env");
@@ -8853,7 +8861,9 @@ function git(ctx) {
       return { sha: base() };
     },
     async push() {
-      g("push", "-u", "origin", g("rev-parse", "--abbrev-ref", "HEAD"));
+      const ref = g("rev-parse", "--abbrev-ref", "HEAD");
+      if (ref === trunk || ref === "HEAD") throw new Error(`vcs push: refusing to push ${ref === "HEAD" ? "a detached HEAD" : `the trunk '${trunk}'`}: start a change line`);
+      g("push", "-u", "origin", ref);
     },
     async cut(rev, release) {
       const ref = `refs/heads/${release_prefix}${release}`;
@@ -9427,7 +9437,10 @@ function benchedSkills(root) {
 }
 async function classify(d, cr, diff) {
   const paths = diffPaths(diff);
-  if (!paths?.length || !paths.every((p) => matchesAny(p, factoryGlobs(d.binding)))) return "product";
+  if (!paths) return "guardrail";
+  const inFactory = paths.filter((p) => matchesAny(p, factoryGlobs(d.binding)));
+  if (!inFactory.length) return "product";
+  if (inFactory.length < paths.length) return "guardrail";
   if (/^deleted file mode/m.test(diff)) return "guardrail";
   const at = (p, sha2) => d.fileAt?.(p, sha2);
   let benched;
@@ -9461,8 +9474,10 @@ function branchNames(b, names) {
 }
 async function linkage(d, n) {
   const cr = await d.forge.view(n);
-  const cls = await classify(d, cr, await d.forge.diff(n));
-  if (cls !== "product") return { ok: true, factory: true, class: cls, errors: [] };
+  const diff = await d.forge.diff(n);
+  const cls = await classify(d, cr, diff);
+  const paths = diffPaths(diff);
+  if (cls !== "product" && paths?.every((p) => matchesAny(p, factoryGlobs(d.binding)))) return { ok: true, factory: true, class: cls, errors: [] };
   const errors = [];
   if (cr.closes.length !== 1) errors.push(`CR ${n} must close exactly one ticket, found ${cr.closes.length}`);
   else {
@@ -9487,7 +9502,9 @@ async function approval(d, n) {
   if (cls !== "product") klass = cls;
   else {
     const item = cr.closes.length === 1 ? await d.board.get(cr.closes[0]).catch(() => void 0) : void 0;
-    klass = String(item?.fields?.lane ?? "").toLowerCase() === "fast" ? "product-fast" : "product-full";
+    const areas = [b.paths.lane_areas ?? []].flat();
+    const inArea = areas.length > 0 && (diffPaths(await d.forge.diff(n)) ?? []).some((p) => matchesAny(p, areas));
+    klass = !inArea && String(item?.fields?.lane ?? "").toLowerCase() === "fast" ? "product-fast" : "product-full";
   }
   const mode = b.forge.human_approval ?? "full-lane";
   const bots = [...b.owners?.bots ?? [], b.forge.review_identity].filter(Boolean).map((u) => u.toLowerCase());
@@ -9541,7 +9558,7 @@ async function proofsOnBase(d, n) {
   const description = cls !== "product" ? `${cls}: no product proof` : error ?? `${files.length} proof file(s) fail on the merge base`;
   let posted = true;
   try {
-    await d.forge.status(cr.headSha, { context: "proofs-on-base", state: error ? "failure" : "success", description: description.slice(0, 140) });
+    await d.forge.status(cr.headSha, { context: "proofs-on-base", state: error ? "failure" : "success", description: description.slice(0, 140) }, { as: "ci" });
   } catch {
     posted = false;
   }

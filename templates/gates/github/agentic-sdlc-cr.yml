@@ -68,12 +68,14 @@ jobs:
             npm i -g "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.0}"
           fi
 
+      # Also on pull_request_review: this job's newest run is the required check, so a review event must
+      # re-run linkage, not report a green job with the checks skipped.
       - name: Branch names
-        if: github.event_name == 'pull_request_target' && github.event.action != 'closed'
+        if: github.event_name != 'merge_group' && github.event.action != 'closed'
         run: agentic-sdlc gate branch-names --ref "$HEAD_REF"
 
       - name: Ticket linkage
-        if: github.event_name == 'pull_request_target' && github.event.action != 'closed' && github.event.pull_request.draft == false
+        if: github.event_name != 'merge_group' && github.event.action != 'closed' && github.event.pull_request.draft == false
         run: agentic-sdlc gate linkage --cr "$CR"
 
       - name: Human approval

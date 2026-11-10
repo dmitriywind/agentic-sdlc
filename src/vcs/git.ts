@@ -18,7 +18,12 @@ export function git(ctx: AdapterContext): Vcs {
     async head() { return { ref: g('rev-parse', '--abbrev-ref', 'HEAD'), sha: g('rev-parse', 'HEAD') }; },
     async changed(since) { return lines(g('diff', '--name-only', `${since ?? `origin/${trunk}`}...HEAD`)); },
     async base() { return { sha: base() }; },
-    async push() { g('push', '-u', 'origin', g('rev-parse', '--abbrev-ref', 'HEAD')); },
+    async push() {
+      const ref = g('rev-parse', '--abbrev-ref', 'HEAD');
+      // Delivery to the trunk goes through a CR; the ruleset is not on every forge or profile.
+      if (ref === trunk || ref === 'HEAD') throw new Error(`vcs push: refusing to push ${ref === 'HEAD' ? 'a detached HEAD' : `the trunk '${trunk}'`}: start a change line`);
+      g('push', '-u', 'origin', ref);
+    },
     async cut(rev, release) {
       const ref = `refs/heads/${release_prefix}${release}`;
       g('push', 'origin', `${rev}:${ref}`);

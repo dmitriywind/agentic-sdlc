@@ -39,7 +39,7 @@ Set `AGENTIC_SDLC_UNATTENDED=1` in both.
 ## Route 2: MCP only
 Stdio, inside the agent's session. Register the server in the tool's MCP config:
 ```json
-{ "mcpServers": { "agentic-sdlc": { "command": "npx", "args": ["agentic-sdlc", "mcp"] } } }
+{ "mcpServers": { "agentic-sdlc": { "command": "npx", "args": ["--no-install", "agentic-sdlc", "mcp"] } } }
 ```
 Hosted, for bots that cannot spawn a process:
 ```bash
