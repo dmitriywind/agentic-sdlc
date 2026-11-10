@@ -1,4 +1,4 @@
-import type { AdapterContext, CR, Forge, Run } from '../ports.ts';
+import type { AdapterContext, Check, CR, Forge, Run } from '../ports.ts';
 import { parseCloses } from '../ports.ts';
 import { basic, localDiff, secret } from './util.ts';
 
@@ -24,7 +24,9 @@ export function azure(ctx: AdapterContext): Forge {
       draft: !!p.isDraft, state: p.status === 'active' ? 'open' : p.status === 'completed' ? 'merged' : 'closed',
       mergeSha: p.lastMergeCommit?.commitId, behind: false, // ponytail: Azure DevOps exposes no "behind" flag; sync is unsupported anyway
       closes: parseCloses(p.description ?? ''),
-      checks: (st.value ?? []).map((s: any) => ({ name: s.context.name, state: cs(s.state) })), body: p.description ?? '',
+      // The newest status per context wins: an older iteration's success does not hide a new pending.
+      checks: [...new Map<string, Check>((st.value ?? []).sort((a: any, b: any) => a.id - b.id).map((s: any) => [s.context.name, { name: s.context.name, state: cs(s.state) }])).values()],
+      body: p.description ?? '',
     };
   };
   const patch = async (n: string, body: unknown) => { await call('PATCH', `${git}/pullrequests/${n}`, body); return view(n); };
@@ -61,11 +63,18 @@ export function azure(ctx: AdapterContext): Forge {
       const t = await call('POST', `${git}/pullrequests/${n}/threads`, { comments: [{ content: body, commentType: 1 }], status: 1 });
       return { id: String(t.id) };
     },
-    async status(sha, s) {
-      await call('POST', `${git}/commits/${sha}/statuses`, {
+    // Branch status policies read pull request statuses, so post on the PR iteration whose head is sha.
+    async status(sha, s, opts) {
+      const key = opts?.as === 'ci' ? 'token_env' : 'review_token_env';
+      const r = await call('GET', `${git}/pullrequests?searchCriteria.status=active&$top=100`, undefined, key);
+      const p = r.value.find((x: any) => x.lastMergeSourceCommit?.commitId === sha);
+      if (!p) throw new Error(`azure: no active pull request has head ${sha}`);
+      const its = await call('GET', `${git}/pullrequests/${p.pullRequestId}/iterations`, undefined, key);
+      await call('POST', `${git}/pullrequests/${p.pullRequestId}/statuses`, {
         state: s.state === 'success' ? 'succeeded' : s.state === 'failure' ? 'failed' : 'pending',
         description: s.description, context: { name: s.context, genre: 'agentic-sdlc' }, targetUrl: s.url,
-      }, 'review_token_env');
+        iterationId: its.value?.at(-1)?.id,
+      }, key);
     },
     async approve(n) {
       const me = (await call('GET', `${org}/_apis/connectionData`, undefined, 'review_token_env')).authenticatedUser.id;

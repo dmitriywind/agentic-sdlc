@@ -52,10 +52,10 @@ export function github(ctx: AdapterContext): Forge {
       const url = gh(['pr', 'comment', n, '--body-file', '-'], body).trim();
       return { id: url.split('issuecomment-')[1] ?? url, url };
     },
-    async status(sha, s) {
+    async status(sha, s, opts) {
       const a = ['api', '-X', 'POST', `${api}/statuses/${sha}`, '-f', `state=${s.state}`, '-f', `context=${s.context}`, '-f', `description=${s.description}`];
       if (s.url) a.push('-f', `target_url=${s.url}`);
-      gh(a, undefined, withToken('review_token_env'));
+      gh(a, undefined, withToken(opts?.as === 'ci' ? 'token_env' : 'review_token_env'));
     },
     async approve(n) { gh(['pr', 'review', n, '--approve', '--body', 'agentic-sdlc review: PASS'], undefined, withToken('review_token_env')); },
     async approvals(n) {

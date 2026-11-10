@@ -63,12 +63,12 @@ export function bitbucket(ctx: AdapterContext): Forge {
       return view(n);
     },
     comment,
-    async status(sha, s) {
+    async status(sha, s, opts) {
       await call('POST', `/commit/${sha}/statuses/build`, {
         key: s.context, name: s.context, description: s.description,
         state: s.state === 'success' ? 'SUCCESSFUL' : s.state === 'failure' ? 'FAILED' : 'INPROGRESS',
         url: s.url ?? `https://bitbucket.org/${o.workspace}/${o.repo}`,
-      }, 'review_token_env');
+      }, opts?.as === 'ci' ? 'token_env' : 'review_token_env');
     },
     async approve(n) { await call('POST', `/pullrequests/${n}/approve`, undefined, 'review_token_env'); },
     // ponytail: participants carry no commit; the head stands in, so the repo must reset approvals on push.

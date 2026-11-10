@@ -1,8 +1,9 @@
 name: agentic-sdlc verify
-# Runs the CR's own code, so: plain pull_request, no secrets, a read-only token (plus statuses for
-# proofs-on-base). The PR's copy of this file can do no harm. Job names are required checks in
+# Runs the CR's own code, so: plain pull_request, no secrets, a read-only token. No job here may hold
+# statuses: write: CR code (a proof, an install script) could then post review or human-approval itself.
+# The PR's copy of this file can do no harm. Job names are required checks in
 # ruleset.trunk.json: Required, proofs-on-base, skill-regression. No agent posts them.
-# Fork PRs get a read-only token: proofs-on-base then reports only as this job's check run.
+# proofs-on-base reports as this job's check run.
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
@@ -43,10 +44,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      statuses: write
     env:
       GH_TOKEN: ${{ github.token }}
-      AGENTIC_FORGE_TOKEN: ${{ github.token }}
       AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
       CR: ${{ github.event.pull_request.number }}
     steps:

@@ -49,7 +49,7 @@ export function diffPaths(diff: string): string[] | null {
   for (const raw of diff.split('\n')) {
     if (!raw.startsWith('diff --git ')) continue;
     const rest = raw.slice('diff --git '.length).replace(/\r$/, '');
-    // ponytail: git's C-quoted form ("a/...") is not decoded; such a CR fails closed to product.
+    // ponytail: git's C-quoted form ("a/...") is not decoded; such a CR fails closed to guardrail.
     if (rest.includes('"') || !rest.startsWith('a/')) return null;
     const cuts = [...rest.matchAll(/ b\//g)].map((m) => m.index!);
     const cut = cuts.length === 1 ? cuts[0] : cuts.find((i) => rest.slice(2, i) === rest.slice(i + 3));
@@ -97,7 +97,10 @@ const withoutTier = (fm: Record<string, any>) => ({ ...fm, metadata: { ...fm.met
 /** product | tuning | guardrail. Anything not provably tuning under paths.factory is guardrail. */
 export async function classify(d: Deps, cr: CR, diff: string): Promise<'product' | 'tuning' | 'guardrail'> {
   const paths = diffPaths(diff);
-  if (!paths?.length || !paths.every((p) => matchesAny(p, factoryGlobs(d.binding)))) return 'product';
+  if (!paths) return 'guardrail'; // an unparsed header may hide a factory path
+  const inFactory = paths.filter((p) => matchesAny(p, factoryGlobs(d.binding)));
+  if (!inFactory.length) return 'product';
+  if (inFactory.length < paths.length) return 'guardrail'; // a product CR that also changes the factory
   if (/^deleted file mode/m.test(diff)) return 'guardrail'; // deleting a skill deletes rules
   const at = (p: string, sha: string) => d.fileAt?.(p, sha);
   let benched: Set<string> | undefined;
@@ -138,8 +141,11 @@ export function branchNames(b: Binding, names: string[]): string[] {
 
 export async function linkage(d: Deps, n: string) {
   const cr = await d.forge.view(n);
-  const cls = await classify(d, cr, await d.forge.diff(n));
-  if (cls !== 'product') return { ok: true, factory: true, class: cls, errors: [] as string[] };
+  const diff = await d.forge.diff(n);
+  const cls = await classify(d, cr, diff);
+  // Only an all-factory CR skips linkage; a mixed or unparsed one still closes a ticket.
+  const paths = diffPaths(diff);
+  if (cls !== 'product' && paths?.every((p) => matchesAny(p, factoryGlobs(d.binding)))) return { ok: true, factory: true, class: cls, errors: [] as string[] };
   const errors: string[] = [];
   if (cr.closes.length !== 1) errors.push(`CR ${n} must close exactly one ticket, found ${cr.closes.length}`);
   else {
@@ -176,7 +182,10 @@ export async function approval(d: Deps, n: string) {
   if (cls !== 'product') klass = cls;
   else {
     const item = cr.closes.length === 1 ? await d.board.get(cr.closes[0]).catch(() => undefined) : undefined;
-    klass = String(item?.fields?.lane ?? '').toLowerCase() === 'fast' ? 'product-fast' : 'product-full';
+    // The Lane field is agent-written: a path in paths.lane_areas forces Full whatever it says.
+    const areas = [b.paths.lane_areas ?? []].flat();
+    const inArea = areas.length > 0 && (diffPaths(await d.forge.diff(n)) ?? []).some((p) => matchesAny(p, areas));
+    klass = !inArea && String(item?.fields?.lane ?? '').toLowerCase() === 'fast' ? 'product-fast' : 'product-full';
   }
   const mode = b.forge.human_approval ?? 'full-lane';
   const bots = [...(b.owners?.bots ?? []), b.forge.review_identity].filter(Boolean).map((u) => u.toLowerCase());
@@ -240,7 +249,7 @@ export async function proofsOnBase(d: Deps, n: string) {
   const description = cls !== 'product' ? `${cls}: no product proof` : error ?? `${files.length} proof file(s) fail on the merge base`;
   let posted = true;
   // The job holds no secrets by design; when it cannot post, its own check (exit code) carries the result.
-  try { await d.forge.status(cr.headSha, { context: 'proofs-on-base', state: error ? 'failure' : 'success', description: description.slice(0, 140) }); }
+  try { await d.forge.status(cr.headSha, { context: 'proofs-on-base', state: error ? 'failure' : 'success', description: description.slice(0, 140) }, { as: 'ci' }); }
   catch { posted = false; }
   return { ok: !error, cr: cr.n, class: cls, files, passedOnBase, posted, errors: error ? [error] : [] };
 }

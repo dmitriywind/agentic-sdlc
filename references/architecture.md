@@ -121,7 +121,7 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `sync <n>` | Bring the CR's source up to the trunk tip | `CR` |
 | `automerge <n>` | Merge when every required check is green | `CR` |
 | `comment <n> --body-file <f>` | CR comment | `{ id, url }` |
-| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted only with `options.review_token_env` | `{}` |
+| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted only with `options.review_token_env`. The `proofs-on-base` gate alone posts with `options.token_env` (the CI job's token); the CLI verb never does. Azure DevOps posts on the PR iteration whose head is `<sha>`, since branch policies read PR statuses | `{}` |
 | `approve <n>` | Approving review as `review_identity`, with `options.review_token_env` | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
 | `runs [--ref <r>] [--failed]` | CI runs | `Run[]` |
@@ -141,7 +141,7 @@ merge checks; auto-merge = the gate merges when green).
 | `head` → `{ ref, sha }` | `HEAD` |
 | `changed [--since <rev>]` → `string[]` | `diff --name-only` against the merge base |
 | `base` → `{ sha }` | merge base with the trunk |
-| `push` | push the branch |
+| `push` | push the current branch; refuses the trunk and a detached HEAD |
 | `cut <rev> <release>` | push `<rev>` to `refs/heads/<release_prefix><release>` |
 | `tag <name> <rev>` | annotated tag (gates only) |
 | `tags [--prefix <p>]` → `{ name, sha }[]`, newest first | `tag --sort=-creatordate` |

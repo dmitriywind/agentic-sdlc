@@ -4,7 +4,7 @@ import { cpSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
-import { approval, approvers, boardSync, branchNames, diffPaths, globToRegExp, linkage, proofFiles, proofsOnBase, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
+import { approval, approvers, boardSync, branchNames, diffPaths, globToRegExp, linkage, classify, proofFiles, proofsOnBase, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
 import { shippedOptions } from '../src/binding.ts';
 import { PROOF_FILE } from '../src/bench.ts';
 import { compare } from '../src/bench.ts';
@@ -197,8 +197,9 @@ function classFakes(benched: boolean) {
     crs[n] = { headSha: n, baseSha: 'base', source: `factory/${n}` };
     diffs[n] = d;
   }
-  Object.assign(crs, { ren: {}, q: {}, del: {}, gate: {} });
+  Object.assign(crs, { ren: {}, q: {}, del: {}, gate: {}, mix: {} });
   Object.assign(diffs, {
+    mix: 'diff --git a/src/app.ts b/src/app.ts\ndiff --git a/.agents/binding.yml b/.agents/binding.yml\n',
     ren: 'diff --git a/src/app.ts b/.agents/app.ts\n',
     q: 'diff --git "a/.agents/\\303\\251" "b/.agents/\\303\\251"\n',
     del: `${mdiff}deleted file mode 100644\n`,
@@ -212,9 +213,11 @@ function classFakes(benched: boolean) {
 
 test('classify: rename out of factory, quoted path, models-only binding, metadata.tier with a bench suite', async () => {
   const { d } = classFakes(true);
-  const cls = async (n: string) => (await linkage(d, n)).class;
-  assert.equal(await cls('ren'), 'product');
-  assert.equal(await cls('q'), 'product');
+  const cls = async (n: string) => (await classify(d, (await d.forge.view(n)) as CR, await d.forge.diff(n)));
+  // Mixed product and factory paths, or an unparsed header, fail closed to guardrail.
+  assert.equal(await cls('ren'), 'guardrail');
+  assert.equal(await cls('q'), 'guardrail');
+  assert.equal(await cls('mix'), 'guardrail');
   assert.equal(await cls('tune'), 'tuning');
   assert.equal(await cls('tier'), 'tuning');
   for (const n of ['del', 'gate', 'nohead', 'guard', 'text', 'both', 'desc', 'badtier']) assert.equal(await cls(n), 'guardrail', n);
@@ -258,7 +261,11 @@ test('approval: classes and the human-approval status per forge.human_approval',
   assert.equal(await st('tune'), 'tuning:success');
   assert.equal(await st('guard'), 'guardrail:pending'); // a human, but not owners.factory
   assert.equal(await st('guardok'), 'guardrail:success');
-  f.d.binding = { ...f.d.binding, forge: { human_approval: 'always' }, learning: { auto_merge_classes: [] } } as any;
+  // A path in paths.lane_areas forces Full, whatever the ticket's Lane says.
+  f.d.binding = { ...f.d.binding, paths: { ...f.d.binding.paths, lane_areas: ['src/**'] } } as any;
+  assert.equal(await st('fast'), 'product-full:pending');
+  f.d.binding = { ...f.d.binding, paths: { ...f.d.binding.paths, lane_areas: [] } } as any;
+  f.d.binding ={ ...f.d.binding, forge: { human_approval: 'always' }, learning: { auto_merge_classes: [] } } as any;
   assert.equal(await st('fast'), 'product-fast:pending');
   assert.equal(await st('tune'), 'tuning:pending');
   f.d.binding = { ...f.d.binding, forge: { human_approval: 'never' } } as any;

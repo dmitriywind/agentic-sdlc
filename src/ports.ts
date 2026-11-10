@@ -73,7 +73,8 @@ export interface Forge {
   sync(n: string): Promise<CR>;
   automerge(n: string): Promise<CR>;
   comment(n: string, body: string): Promise<{ id: string; url?: string }>;
-  status(sha: string, s: { context: string; state: 'pending' | 'success' | 'failure'; description: string; url?: string }): Promise<void>;
+  /** Posts with review_token_env; { as: 'ci' } (only the proofs-on-base gate) posts with token_env, the CI job's own token. */
+  status(sha: string, s: { context: string; state: 'pending' | 'success' | 'failure'; description: string; url?: string }, opts?: { as?: 'ci' }): Promise<void>;
   approve(n: string): Promise<void>;
   approvals(n: string): Promise<Review[]>;
   runs(q?: { ref?: string; failed?: boolean }): Promise<Run[]>;

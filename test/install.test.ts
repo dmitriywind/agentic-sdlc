@@ -245,4 +245,18 @@ test('plugin guard hook blocks trunk pushes and forge approve outside the review
   assert.equal(run('npx agentic-sdlc forge approve 12', { AGENTIC_SDLC_ROLE: 'review' }), 0);
   assert.equal(run('npx agentic-sdlc forge view 12'), 0);
   assert.equal(run('', {}, 'mcp__plugin_agentic-sdlc_agentic-sdlc__forge_approve'), 2);
+  // Bypasses found in review: global options, a background &, a nested shell, the bundled bin.
+  assert.equal(run('git -C . push origin trunk'), 2);
+  assert.equal(run('git push origin trunk&'), 2);
+  assert.equal(run("bash -c 'git push origin trunk'"), 2);
+  assert.equal(run('node node_modules/agentic-sdlc/dist/bin.js forge approve 3'), 2);
+  assert.equal(run('git -c core.x=1 push origin feature/T-1-x'), 0);
+});
+
+test('vcs push refuses the trunk and a detached HEAD', async () => {
+  const { git } = await import('../src/vcs/git.ts');
+  const mk = (ref: string) => git({ root: '.', binding: { vcs: { trunk: 'main', release_prefix: 'release/' } }, exec: (_c: string, a: string[]) => (a[0] === 'rev-parse' ? ref : '') } as any);
+  await assert.rejects(mk('main').push(), /trunk 'main'/);
+  await assert.rejects(mk('HEAD').push(), /detached HEAD/);
+  await mk('T-1-x').push();
 });

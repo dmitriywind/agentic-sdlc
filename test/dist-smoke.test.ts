@@ -35,7 +35,8 @@ test('package: plugin manifest matches package.json; every template YAML and JSO
   const all = (p: string): string[] => statSync(p).isDirectory() ? readdirSync(p).flatMap((n) => all(join(p, n))) : [p];
   for (const f of shipped.flatMap(all).filter((f) => !f.includes('audits'))) {
     const t = readFileSync(f, 'utf8');
-    assert.doesNotMatch(t, /npx (-y )?agentic-sdlc\b|agentic-sdlc@(?!agentic-sdlc|noreply|users\.noreply)/, f);
+    // npx without --no / --no-install falls back to the npm registry, where agentic-sdlc is another package.
+    assert.doesNotMatch(t, /npx (-y )?agentic-sdlc\b|"npx",\s*"args":\s*\["agentic-sdlc"|agentic-sdlc@(?!agentic-sdlc|noreply|users\.noreply)/, f);
     for (const [, v] of t.matchAll(/AGENTIC_SDLC_VERSION:-([^}]+)\}/g)) assert.equal(v, pkg.version, `${f}: default CLI version`);
   }
   JSON.parse(readFileSync(join(root, 'hooks', 'hooks.json'), 'utf8'));

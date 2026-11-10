@@ -165,6 +165,16 @@ test('status and approve need review_token_env and never use the implementer tok
   await createForge(az.ctx).approve('4');
   assert.ok(az.calls.at(-1)!.url.includes('/pullrequests/4/reviewers/rev'));
   assert.equal(az.calls.at(-1)!.body.vote, 10);
+
+  // Azure: the status goes on the PR iteration whose head is the sha; { as: 'ci' } uses token_env.
+  const az2 = mk('azure', { org_url: 'https://dev.azure.com/o', project: 'p', repo: 'r', token_env: 'TOK' }, (_m, url) =>
+    url.includes('/iterations') ? { value: [{ id: 1 }, { id: 2 }] }
+      : url.includes('searchCriteria') ? { value: [{ pullRequestId: 9, lastMergeSourceCommit: { commitId: 'abc' } }] } : {});
+  await assert.rejects(createForge(az2.ctx).status('abc', st), /review_token_env/);
+  await createForge(az2.ctx).status('abc', st, { as: 'ci' });
+  assert.ok(az2.calls.at(-1)!.url.includes('/pullrequests/9/statuses'));
+  assert.equal(az2.calls.at(-1)!.body.iterationId, 2);
+  await assert.rejects(createForge(az2.ctx).status('zzz', st, { as: 'ci' }), /no active pull request/);
 });
 
 test('gitlab: base_url is required, no default host', () => {
