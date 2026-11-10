@@ -8,12 +8,12 @@ if grep -Eq '^profile:[[:space:]]*individual' .agents/binding.yml 2>/dev/null &&
   echo "ANTHROPIC_API_KEY is set but the binding's profile is individual: remove it from this runner (it would bill the API)." >&2
   exit 1
 fi
-# The version the repo pins as a devDependency; else AGENTIC_SDLC_VERSION (set it to an exact version), else the next tag.
+# The version the repo pins as a devDependency; else AGENTIC_SDLC_VERSION (an exact version), else 2.0.0-alpha.0.
 if [ -f package-lock.json ] && grep -q '"node_modules/agentic-sdlc"' package-lock.json; then
   npm ci
 else
-  npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+  npm i -g "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.0}"
 fi
-npx agentic-sdlc validate   # binding and skill pack are well-formed
-npx agentic-sdlc doctor     # board, forge and vcs are reachable, tokens are present
+npx --no agentic-sdlc validate   # binding and skill pack are well-formed
+npx --no agentic-sdlc doctor     # board, forge and vcs are reachable, tokens are present
 # set: your dependency install and toolchain (the binding's commands.install)

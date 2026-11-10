@@ -72,6 +72,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm ci --ignore-scripts || npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+      - run: npm ci --ignore-scripts || npm i -g "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.0}"
       # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
-      - run: npx agentic-sdlc ledger stale --max-hours 3   # set: a few cadences
+      - run: npx --no agentic-sdlc ledger stale --max-hours 3   # set: a few cadences

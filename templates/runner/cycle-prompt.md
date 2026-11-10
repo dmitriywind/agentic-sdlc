@@ -14,6 +14,6 @@ Preamble (scheduler setup, not part of the prompt):
 
 ---
 /agentic-sdlc:sdlc Run exactly one cycle. Without the Claude Code plugin, load the `sdlc` skill from `.agents/skills/sdlc/SKILL.md` first.
-Call the CLI as `npx agentic-sdlc ...` and pass `--unattended` to every `npx agentic-sdlc dispatch` call, so no executor runs on this machine's local sandbox.
+Call the CLI as `npx --no agentic-sdlc ...` and pass `--unattended` to every `npx --no agentic-sdlc dispatch` call, so no executor runs on this machine's local sandbox.
 Never run `agentic-sdlc forge approve`: this run is not the review identity.
 When the cycle ends, write the heartbeat as the skill describes. Then, if `AGENTIC_REVIEW_FIRE_CMD` is set, run `sh -c "$AGENTIC_REVIEW_FIRE_CMD"` once. Then stop. Do not start a second cycle.

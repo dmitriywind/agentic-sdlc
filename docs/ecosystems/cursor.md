@@ -8,7 +8,7 @@
 
 ## Install
 ```bash
-npx agentic-sdlc init --harness cursor --profile individual --board github --forge github --vcs git
+npx --no agentic-sdlc init --harness cursor --profile individual --board github --forge github --vcs git
 ```
 Files it writes:
 - `.agents/binding.yml`, the skills in `.agents/skills/` (Cursor reads project `.agents/skills/` and `.cursor/skills/`: [docs](https://cursor.com/docs/skills)), gate templates, and an `AGENTS.md` pointer (Cursor supports root and nested `AGENTS.md`: [docs](https://cursor.com/docs/context/rules)).

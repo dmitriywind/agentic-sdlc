@@ -10,7 +10,7 @@ Preamble (scheduler setup, not part of the prompt):
 
 ---
 /agentic-sdlc:sdlc Review only. Without the Claude Code plugin, load the `sdlc` and `review-pr` skills from `.agents/skills/` first.
-Call the CLI as `npx agentic-sdlc ...` and pass `--unattended` to every dispatch.
-Run review-pr on every ticket at In review whose CR is draft, or ready and behind, red or stalled: `npx agentic-sdlc dispatch review-pr --ticket <id> --unattended`.
-Run it too on every open factory CR (a change only under `paths.factory`; it has no ticket): `npx agentic-sdlc dispatch review-pr --cr <n> --unattended`.
+Call the CLI as `npx --no agentic-sdlc ...` and pass `--unattended` to every dispatch.
+Run review-pr on every ticket at In review whose CR is draft, or ready and behind, red or stalled: `npx --no agentic-sdlc dispatch review-pr --ticket <id> --unattended`.
+Run it too on every open factory CR (a change only under `paths.factory`; it has no ticket): `npx --no agentic-sdlc dispatch review-pr --cr <n> --unattended`.
 Do nothing else.

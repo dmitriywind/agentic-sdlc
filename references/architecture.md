@@ -340,7 +340,7 @@ prompt in `templates/runner/cycle-prompt.md`.
 
 | Runtime | How it reaches the ports |
 |---|---|
-| Agent with a shell (Claude Code, Codex, Cursor, Antigravity, Grok, CI cron with a headless agent CLI) | `npx agentic-sdlc <group> <verb>` |
+| Agent with a shell (Claude Code, Codex, Cursor, Antigravity, Grok, CI cron with a headless agent CLI) | `npx --no agentic-sdlc <group> <verb>` |
 | Agent with MCP but no shell | `agentic-sdlc mcp` (stdio; `--http` for a hosted endpoint with a bearer token). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. |
 | Agent with only vendor MCP tools | the vendor tools that `board.mcp` maps to the board verbs; forge steps need a shell or the MCP server; gates still run in CI |
 

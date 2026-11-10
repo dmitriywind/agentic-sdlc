@@ -6,7 +6,7 @@ No API keys. Nothing stored outside the repo and the board.
 
 ## Set it up
 ```bash
-npx agentic-sdlc init --profile individual --harness <name> --board github --forge github --vcs git
+npx --no agentic-sdlc init --profile individual --harness <name> --board github --forge github --vcs git
 ```
 Init writes the template defaults; the excerpt shows the keys this profile cares about. `validate` warns when the binding names an executor kind that needs an API key.
 

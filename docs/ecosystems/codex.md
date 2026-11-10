@@ -9,11 +9,11 @@ OpenAI's `developers.openai.com/codex/*` pages redirect to `learn.chatgpt.com/do
 
 ## Install
 ```bash
-npx agentic-sdlc init --harness codex --profile individual --board github --forge github --vcs git
+npx --no agentic-sdlc init --harness codex --profile individual --board github --forge github --vcs git
 ```
 Files it writes:
 - `.agents/binding.yml`, the skills in `.agents/skills/` (the path Codex scans from the working directory up to the repo root: [docs](https://learn.chatgpt.com/docs/build-skills); `.codex/skills` is not listed), gate templates, and an `AGENTS.md` pointer (Codex reads `AGENTS.md`: [docs](https://learn.chatgpt.com/docs/agent-configuration/agents-md)).
-- An `agentic-sdlc mcp` entry under `[mcp_servers.agentic-sdlc]` in `.codex/config.toml` (project config loads for trusted projects only: [docs](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)). Or by hand: `codex mcp add agentic-sdlc -- npx agentic-sdlc mcp`.
+- An `agentic-sdlc mcp` entry under `[mcp_servers.agentic-sdlc]` in `.codex/config.toml` (project config loads for trusted projects only: [docs](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)). Or by hand: `codex mcp add agentic-sdlc -- npx --no agentic-sdlc mcp`.
 
 The init log is the exact list; the `--harness` flag decides.
 

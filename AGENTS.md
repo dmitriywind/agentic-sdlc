@@ -26,4 +26,5 @@ A portable software factory, published as an npm package that is also a Claude C
 - A skill calls `agentic-sdlc board|forge|vcs <verb>`, never a vendor CLI.
 - A change to a port, a binding key or a skill's interface changes `references/architecture.md` in the same change.
 - Keep `.claude-plugin/plugin.json` `version` equal to `package.json` `version` (a test checks it).
+- Git only, no npm: the npm name `agentic-sdlc` is another project. `dist/` is committed (the plugin and `github:` installs run it), so run `npm run build` and commit `dist/` with every `src/` change. A release is a `v<version>` tag.
 - Git only, trunk-based. No long-lived branch.

@@ -1,9 +1,6 @@
 # Dependencies
 node_modules/
 
-# Build Output
-dist/
-
 # Runtime Diagnostics & Local Tracker
 .agentic-sdlc/
 

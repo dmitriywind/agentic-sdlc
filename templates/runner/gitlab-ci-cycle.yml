@@ -32,8 +32,8 @@ factory-cycle:
       --plugin-dir node_modules/agentic-sdlc
       --output-format json --max-budget-usd 5 --max-turns 200
       --permission-mode acceptEdits
-      --allowedTools "Bash(npx agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
-      --disallowedTools "Bash(npx agentic-sdlc forge approve *)"
+      --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
+      --disallowedTools "Bash(npx --no agentic-sdlc forge approve *)"
 
 factory-review:
   extends: .factory
@@ -51,7 +51,7 @@ factory-review:
       --plugin-dir node_modules/agentic-sdlc
       --output-format json --max-budget-usd 5 --max-turns 200
       --permission-mode acceptEdits
-      --allowedTools "Bash(npx agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
+      --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
 
 factory-dead-man:
   image: node:22
@@ -60,6 +60,6 @@ factory-dead-man:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $SDLC_CYCLE == "1"'
       when: always
   script:
-    - npm ci --ignore-scripts || npm i -g "agentic-sdlc@${AGENTIC_SDLC_VERSION:-next}"
+    - npm ci --ignore-scripts || npm i -g "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.0}"
     # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
-    - npx agentic-sdlc ledger stale --max-hours 3   # set: a few cadences
+    - npx --no agentic-sdlc ledger stale --max-hours 3   # set: a few cadences
