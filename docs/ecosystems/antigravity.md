@@ -7,7 +7,7 @@
 
 ## Install
 ```bash
-npx agentic-sdlc init --harness antigravity --profile individual --board github --forge github --vcs git
+npx --no agentic-sdlc init --harness antigravity --profile individual --board github --forge github --vcs git
 ```
 Files it writes:
 - `.agents/binding.yml`, the skills in `.agents/skills/` (the workspace path Antigravity reads, parents up to the repo root: [docs](https://antigravity.google/docs/skills)), gate templates, and an `AGENTS.md` pointer (Antigravity reads `AGENTS.md` or `GEMINI.md`, 24,000 bytes per file: [docs](https://antigravity.google/docs/rules)).
@@ -32,7 +32,7 @@ Needs a prior interactive login; an unauthenticated non-TTY run exits "authentic
 
 Terms caveat: the FAQ says `agy -p` is for scripting and CI, but wrapping `agy` inside third-party coding agents or applications is "not supported under consumer plans", and third-party tools using your Antigravity login may violate the ToS and get the account suspended ([FAQ](https://antigravity.google/docs/faq)). Whether a plain cron around `agy -p` for your own repo is allowed: not documented at the time of writing. The FAQ recommends a Gemini Enterprise or Google AI Studio API key for third-party agents.
 
-Because remote sessions have no MCP and no local skills, the remote agent runs the CLI verbs from the repo checkout: `npx agentic-sdlc ...`.
+Because remote sessions have no MCP and no local skills, the remote agent runs the CLI verbs from the repo checkout: `npx --no agentic-sdlc ...`.
 
 ## Run without your machine - Enterprise
 Gemini API Antigravity agent (preview), through the Interactions API: `POST https://generativelanguage.googleapis.com/v1beta/interactions` with `agent: "antigravity-preview-09-2026"` and `environment: "remote"` (or an environment id). It can mount `AGENTS.md` and `.agents/skills/` into the sandbox, use remote MCP over Streamable HTTP, and run with `background: true` plus poll or cancel. Triggers are cron schedules (default 5 consecutive failures, 600 s timeout). `max_total_tokens` caps spend. Billing is pay-as-you-go tokens. No webhooks documented. [docs](https://aistudio.google.com/docs/antigravity-agent.md.txt)

@@ -153,7 +153,7 @@ test('init --harness claude: tier subagents from binding.models, @AGENTS.md impo
   assert.equal(readFileSync(join(fresh, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
 });
 
-test('init --harness claude writes no .mcp.json (the plugin serves MCP); --no-plugin merges it and pins npx -y', async () => {
+test('init --harness claude writes no .mcp.json (the plugin serves MCP); --no-plugin merges it and pins npx -y to the Git tag', async () => {
   const plain = fixture();
   await quiet(() => cli(['init', '--harness', 'claude'], fakeCtx(plain, {}, () => ({})).ctx));
   assert.ok(!existsSync(join(plain, '.mcp.json')));
@@ -164,7 +164,7 @@ test('init --harness claude writes no .mcp.json (the plugin serves MCP); --no-pl
   assert.ok(existsSync(join(root, '.claude/skills/sdlc/SKILL.md')));
   const m = JSON.parse(readFileSync(join(root, '.mcp.json'), 'utf8')).mcpServers;
   assert.equal(m.other.url, 'x');
-  assert.deepEqual(m['agentic-sdlc'].args, ['-y', 'agentic-sdlc@9.9.9', 'mcp']);
+  assert.deepEqual(m['agentic-sdlc'].args, ['-y', 'github:dmitriywind/agentic-sdlc#v9.9.9', 'mcp']);
   assert.equal(m['agentic-sdlc'].type, 'stdio');
 });
 
@@ -174,7 +174,7 @@ test('init pins the CLI as a devDependency when package.json exists, and the MCP
   const { ctx } = fakeCtx(root, {}, () => ({}));
   await quiet(() => cli(['init', '--harness', 'cursor'], ctx));
   const pj = readFileSync(join(root, 'package.json'), 'utf8');
-  assert.equal(JSON.parse(pj).devDependencies['agentic-sdlc'], '9.9.9');
+  assert.equal(JSON.parse(pj).devDependencies['agentic-sdlc'], 'github:dmitriywind/agentic-sdlc#v9.9.9');
   assert.match(pj, /^ {4}"name"/m, 'keeps the indent');
   assert.deepEqual(JSON.parse(readFileSync(join(root, '.cursor/mcp.json'), 'utf8')).mcpServers['agentic-sdlc'].args, ['--no-install', 'agentic-sdlc', 'mcp']);
 });
@@ -208,7 +208,7 @@ test('init --harness codex appends the TOML table once', async () => {
   const t = readFileSync(join(root, '.codex/config.toml'), 'utf8');
   assert.match(t, /^model = "x"/);
   assert.equal(t.split("[mcp_servers.agentic-sdlc]").length - 1, 1);
-  assert.match(t, /^args = \["-y","agentic-sdlc@9\.9\.9","mcp"\]$/m);
+  assert.ok(t.includes('args = ["-y","github:dmitriywind/agentic-sdlc#v9.9.9","mcp"]'), t);
   assert.ok(!existsSync(join(root, '.claude/skills')));
 });
 

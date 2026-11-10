@@ -6,7 +6,7 @@ and wants traces and full benchmarks on its own storage.
 
 ## Set it up
 ```bash
-npx agentic-sdlc init --profile enterprise --harness <name> --board jira --forge gitlab --vcs git
+npx --no agentic-sdlc init --profile enterprise --harness <name> --board jira --forge gitlab --vcs git
 ```
 Init writes the template defaults plus `sandbox: container` for the default executor, a
 placeholder `traces.uri` and `learning.human_sample: 5`. The excerpt adds typical per-stage

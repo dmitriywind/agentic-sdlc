@@ -67,12 +67,12 @@ factory owner.
 ## Install
 
 ```bash
-npm i -D agentic-sdlc@next
-npx agentic-sdlc init --profile individual --harness claude --board github --forge github --vcs git
-npx agentic-sdlc doctor
+npm i -D github:dmitriywind/agentic-sdlc#v2.0.0-alpha.0
+npx --no agentic-sdlc init --profile individual --harness claude --board github --forge github --vcs git
+npx --no agentic-sdlc doctor
 ```
 
-The `@next` tag is the alpha; a plain `npm i agentic-sdlc` installs the old v1.
+The CLI installs from Git only. Warning: the npm package `agentic-sdlc` is a different project; do not install it.
 
 `init` flags:
 
@@ -127,12 +127,12 @@ No board account and no forge needed for this part. The `local` board is `.agent
 
 ```bash
 mkdir try-agentic && cd try-agentic && git init -b main && npm init -y
-npm i -D agentic-sdlc@next
-npx agentic-sdlc init --board local --forge github --harness generic
+npm i -D github:dmitriywind/agentic-sdlc#v2.0.0-alpha.0
+npx --no agentic-sdlc init --board local --forge github --harness generic
 printf 'Show a greeting on the home page.\n' > body.md
-npx agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog
-npx agentic-sdlc board list
-npx agentic-sdlc dispatch shape --ticket 1
+npx --no agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog
+npx --no agentic-sdlc board list
+npx --no agentic-sdlc dispatch shape --ticket 1
 ```
 
 `dispatch` with the default `harness` executor prints the instruction your agent would follow; it
@@ -163,7 +163,7 @@ Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Security: [SECURITY.md](SECURI
 
 ## CLI
 
-`npx agentic-sdlc --help` lists every group and verb. Every verb prints JSON. Exit 0 is success,
+`npx --no agentic-sdlc --help` lists every group and verb. Every verb prints JSON. Exit 0 is success,
 1 is a refused or failed action, 2 is a usage error.
 
 ## License

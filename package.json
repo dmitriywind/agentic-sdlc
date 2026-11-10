@@ -1,6 +1,7 @@
 {
   "name": "agentic-sdlc",
   "version": "2.0.0-alpha.0",
+  "private": true,
   "description": "Software factory / agentic SDLC: any board, any forge, trunk-based Git; ships as a Claude Code plugin",
   "type": "module",
   "main": "./dist/index.js",
@@ -28,8 +29,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test test/*.test.ts",
-    "prepublishOnly": "npm run build && npm run typecheck && npm test"
+    "test": "npm run build && node --test test/*.test.ts"
   },
   "keywords": [
     "software-factory",
@@ -52,18 +52,13 @@
     "url": "https://github.com/dmitriywind/agentic-sdlc/issues"
   },
   "homepage": "https://github.com/dmitriywind/agentic-sdlc#readme",
-  "publishConfig": {
-    "tag": "next"
-  },
   "engines": {
     "node": ">=22.18"
-  },
-  "dependencies": {
-    "yaml": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "yaml": "^2.0.0"
   }
 }

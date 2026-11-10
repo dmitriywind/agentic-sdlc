@@ -7,7 +7,7 @@ Two tasks (`forge.review_runtime: separate`): the cycle task runs `cycle-prompt.
 
 Individual (remote agent):
 1. Needs a Google AI Pro or Ultra personal account (not Workspace or Cloud business). Connect GitHub via OAuth; the repo is cloned into the remote workspace.
-2. Start with `agy --remote-agent` (CLI 1.4.12 or later). Remote print mode has no MCP and no local plugins or skills, so use the shell route (`npx agentic-sdlc ...`) and read `.agents/skills/sdlc/SKILL.md` from the checkout.
+2. Start with `agy --remote-agent` (CLI 1.4.12 or later). Remote print mode has no MCP and no local plugins or skills, so use the shell route (`npx --no agentic-sdlc ...`) and read `.agents/skills/sdlc/SKILL.md` from the checkout.
 3. Scheduling: the `/schedule` slash command takes a cron expression and an instruction (one for the cycle, one for the review just after it; the review token only in the review's session). Unknown: where it executes and whether your machine must stay on. Do not rely on it until verified.
 4. Do not wrap `agy -p` in a CI job or third-party agent on a consumer plan: Google's FAQ says that is unsupported and may suspend the account.
 

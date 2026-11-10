@@ -28,6 +28,16 @@ test('package: plugin manifest matches package.json; every template YAML and JSO
   assert.equal(plugin.name, pkg.name);
   assert.equal(plugin.version, pkg.version);
   for (const f of ['.claude-plugin', 'hooks']) assert.ok(pkg.files.includes(f), f);
+  // Git only: the npm name agentic-sdlc is another package, and a plugin from Git has no node_modules.
+  assert.equal(pkg.private, true);
+  assert.equal(pkg.dependencies, undefined, 'bundle runtime dependencies into dist');
+  const shipped = ['README.md', 'hooks', 'templates', 'docs', 'references', 'skills', 'src'].map((p) => join(root, p));
+  const all = (p: string): string[] => statSync(p).isDirectory() ? readdirSync(p).flatMap((n) => all(join(p, n))) : [p];
+  for (const f of shipped.flatMap(all).filter((f) => !f.includes('audits'))) {
+    const t = readFileSync(f, 'utf8');
+    assert.doesNotMatch(t, /npx (-y )?agentic-sdlc\b|agentic-sdlc@(?!agentic-sdlc|noreply|users\.noreply)/, f);
+    for (const [, v] of t.matchAll(/AGENTIC_SDLC_VERSION:-([^}]+)\}/g)) assert.equal(v, pkg.version, `${f}: default CLI version`);
+  }
   JSON.parse(readFileSync(join(root, 'hooks', 'hooks.json'), 'utf8'));
   const walk = (d: string): string[] => readdirSync(d).flatMap((n) => statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]);
   for (const f of walk(join(root, 'templates'))) {

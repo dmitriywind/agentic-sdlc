@@ -11,8 +11,8 @@ The skills, hooks and MCP server ship as a Claude Code plugin named `agentic-sdl
 `/agentic-sdlc:sdlc`, `/agentic-sdlc:review-pr` and so on ([plugins](https://code.claude.com/docs/en/plugins)).
 
 ```bash
-npm i -D agentic-sdlc@next
-npx agentic-sdlc init --harness claude --profile individual --board github --forge github --vcs git
+npm i -D github:dmitriywind/agentic-sdlc#v2.0.0-alpha.0
+npx --no agentic-sdlc init --harness claude --profile individual --board github --forge github --vcs git
 claude --plugin-dir ./node_modules/agentic-sdlc
 ```
 `--plugin-dir` loads the plugin from the installed package for that session. To install it for
@@ -38,11 +38,11 @@ The init log is the exact list.
 
 ## Run one cycle by hand
 ```bash
-claude -p "/agentic-sdlc:sdlc run one cycle"   --permission-mode acceptEdits   --allowedTools "Bash(npx agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc"   --disallowedTools "Bash(npx agentic-sdlc forge approve *)"   --max-turns 200 --output-format json
+claude -p "/agentic-sdlc:sdlc run one cycle"   --permission-mode acceptEdits   --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git push *)" "mcp__agentic-sdlc"   --disallowedTools "Bash(npx --no agentic-sdlc forge approve *)"   --max-turns 200 --output-format json
 ```
 Since v2.1.302 `-p` starts in Manual mode when nothing sets a mode, so a tool call that needs
 approval is denied and the run can exit 0 having done nothing: set the mode and list what the
-cycle needs. Permission rules use the space form `Bash(npx agentic-sdlc *)`
+cycle needs. Permission rules use the space form `Bash(npx --no agentic-sdlc *)`
 ([permissions](https://code.claude.com/docs/en/permissions), [headless](https://code.claude.com/docs/en/headless)).
 The JSON has `total_cost_usd` (a client-side estimate). Prompt text:
 [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run after the

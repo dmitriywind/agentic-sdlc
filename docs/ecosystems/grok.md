@@ -9,12 +9,12 @@ This is the least documented ecosystem here. Treat the unknowns as real.
 
 ## Install
 ```bash
-npx agentic-sdlc init --harness grok --profile individual --board github --forge github --vcs git
+npx --no agentic-sdlc init --harness grok --profile individual --board github --forge github --vcs git
 ```
 Files it writes:
 - `.agents/binding.yml`, gate templates, and an `AGENTS.md` pointer (Grok walks `AGENTS.md` from the cwd to the repo root: [docs](https://docs.x.ai/build/features/skills-plugins-marketplaces)).
 - Skills: Grok reads project `./.grok/skills/`, user `~/.grok/skills/` and `~/.agents/skills/`, and reads Claude Code skills (`.claude/skills`) automatically. A project `.agents/skills` is not documented at the time of writing. Grok cannot load the Claude Code plugin; `init --harness grok` copies the skills to both `.agents/skills/` and `.claude/skills/`.
-- MCP: Grok's own MCP config path, format and transport: not documented at the time of writing (the page 404s). Grok reads Claude Code MCP config automatically, and `/mcps` manages servers. Run `grok inspect` to list the instructions, skills, hooks and MCP servers it found. If MCP is not picked up, use the CLI verbs: `npx agentic-sdlc ...`.
+- MCP: Grok's own MCP config path, format and transport: not documented at the time of writing (the page 404s). Grok reads Claude Code MCP config automatically, and `/mcps` manages servers. Run `grok inspect` to list the instructions, skills, hooks and MCP servers it found. If MCP is not picked up, use the CLI verbs: `npx --no agentic-sdlc ...`.
 
 ## Run one cycle by hand
 ```bash

@@ -128,20 +128,23 @@ function registerMcp(pkg: string, root: string, harness: string, args: string[],
   log.push(`wrote ${rel}`);
 }
 
+/** The CLI ships from Git only: the npm name agentic-sdlc belongs to another package. */
+const gitSpec = (version: string) => `github:dmitriywind/agentic-sdlc#v${version}`;
+
 /** Pin this CLI as the project's devDependency, so CI, hooks and MCP run one known version. True when pinned. */
 function pinCli(root: string, version: string, force: boolean, log: string[]): boolean {
   const file = join(root, 'package.json');
   if (!existsSync(file)) {
-    log.push(`pin the CLI so CI and MCP run one version: npm pkg set devDependencies.agentic-sdlc=${version} && npm install`);
+    log.push(`pin the CLI so CI and MCP run one version: npm i -D ${gitSpec(version)}`);
     return false;
   }
   const text = readFileSync(file, 'utf8');
   const doc = JSON.parse(text);
   if (doc.devDependencies?.['agentic-sdlc'] && !force) { log.push('kept devDependencies.agentic-sdlc in package.json'); return true; }
-  doc.devDependencies = { ...doc.devDependencies, 'agentic-sdlc': version };
+  doc.devDependencies = { ...doc.devDependencies, 'agentic-sdlc': gitSpec(version) };
   const indent = /^[ \t]+/m.exec(text)?.[0] ?? '  ';
   writeFileSync(file, JSON.stringify(doc, null, indent) + '\n');
-  log.push(`set devDependencies.agentic-sdlc=${version} in package.json: run npm install`);
+  log.push(`set devDependencies.agentic-sdlc=${gitSpec(version)} in package.json: run npm install`);
   return true;
 }
 
@@ -160,7 +163,7 @@ model: ${model}
 
 You run one step of the agentic-sdlc process at the ${tier} tier. Invoke the skill your task names
 (\`/agentic-sdlc:<skill>\`; without the plugin, read \`.agents/skills/<skill>/SKILL.md\`), follow it to
-its last Done when, and report the result and the evidence. Call the CLI as \`npx agentic-sdlc ...\`.
+its last Done when, and report the result and the evidence. Call the CLI as \`npx --no agentic-sdlc ...\`.
 Do not start subagents.
 `, force, log, rel);
   }
@@ -194,7 +197,7 @@ function init(root: string, argv: string[], log: string[]) {
   const noPlugin = harness === 'claude' && f['no-plugin'] === 'true';
   if (harness === 'grok' || noPlugin) syncSkills(skills, root, '.claude/skills', force, log);
   const pinned = pinCli(root, version, force, log);
-  if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, pinned ? ['--no-install', 'agentic-sdlc', 'mcp'] : ['-y', `agentic-sdlc@${version}`, 'mcp'], force, log);
+  if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, pinned ? ['--no-install', 'agentic-sdlc', 'mcp'] : ['-y', gitSpec(version), 'mcp'], force, log);
   else log.push('MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)');
   const scorers = join(pkg, 'scorers');
   if (existsSync(scorers)) {
