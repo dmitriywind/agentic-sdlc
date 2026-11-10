@@ -9,7 +9,7 @@ review identity).
 | Check | Posted by | Notes |
 |---|---|---|
 | `Required` | CI job on `pull_request`, no secrets | `commands.install` then `commands.verify` on the CR head. No agent posts it. |
-| `proofs-on-base` | gate, same no-secrets job | Each new or changed proof must fail on the merge base. |
+| `proofs-on-base` | gate, own no-secrets job | Each new or changed proof must fail on the merge base. |
 | `ticket-linkage` | gate `linkage` | One `Closes <id>` for one open ticket. |
 | `review` | `review-pr` as the review identity | From the review runtime only. |
 | `human-approval` | gate `approval` | By class; see below. |
@@ -29,9 +29,9 @@ The `approval` gate classifies each CR and posts `human-approval`:
 | Class | Passes when |
 |---|---|
 | `product-fast` | Always (unless `forge.human_approval: always`). |
-| `product-full` | `forge.human_approval: never`, or a human's approving review on the head (not a bot, not the review identity). |
+| `product-full` | (Also any product CR that touches `paths.lane_areas`.) `forge.human_approval: never`, or a human's approving review on the head (not a bot, not the review identity). |
 | `tuning` | `tuning` is in `learning.auto_merge_classes`. |
-| `guardrail` | `owners.factory` approved the head. |
+| `guardrail` | `owners.factory` approved the head. A CR that mixes product and factory paths is `guardrail`. |
 
 There is no CODEOWNERS file: the gate enforces owner approval, so `tuning` can auto-merge. The
 gate reruns when a review is submitted:
@@ -41,15 +41,16 @@ gate reruns when a review is submitted:
 | GitHub | `pull_request_review` (submitted, dismissed) in `agentic-sdlc-cr.yml` |
 | GitLab | approval webhook or the next MR pipeline; approx: re-run the pipeline after approving |
 | Azure DevOps | approx: a Service hook on "pull request updated" that queues the gate pipeline |
-| Bitbucket | approx: the scheduled `agentic-automerge` pipeline re-checks approvals |
+| Bitbucket | approx: a webhook relay runs the `agentic-approval` custom pipeline on the trunk |
 
 ## CR pipelines and the binding
 CR pipelines never let the CR choose the rules. GitHub runs the gates of `agentic-sdlc-cr.yml` on
 `pull_request_target` with the base branch checked out (the CR head is fetched as objects only,
-never run); the `Required` and `proofs-on-base` job runs on plain `pull_request` with no secrets.
+never run); the `Required` and `proofs-on-base` jobs run on plain `pull_request` with no secrets.
 GitLab, Azure and Bitbucket add a worktree of the target branch and run every gate with `--root`
 on it. `gate shipped` needs full history (fetch depth 0) and a git identity to tag. Actions and
-installs are pinned: the project's `agentic-sdlc` devDependency through `npm ci`, and each action
+installs are pinned: the project's `agentic-sdlc` devDependency (a `github:` spec; `init` sets
+`allow-git=root` in `.npmrc` for npm 12) through `npm ci`, and each action
 carries a `# pin to a commit SHA` note.
 
 Trunk-based is enforced by trunk protection (change request only, green required checks, linear
@@ -82,8 +83,8 @@ history, no direct push except the bot) and release branches cut with `vcs cut` 
 | Guarantee | How |
 |---|---|
 | Branch names | `pre-push` + gate in the PR build |
-| Linkage, approval | build validation policies named `ticket-linkage`, `human-approval` |
-| Verify | a PR build `Required` with no secret variables |
+| Linkage, approval | the PR build (`ticket-linkage` job); required status check `agentic-sdlc/human-approval` |
+| Verify | the PR build `Required`: its `Required` and `proofs-on-base` jobs hold no secret or token |
 | Board sync | opened/ready in the PR build; approx: merged and draft need a Service hook that queues a pipeline |
 | Auto-merge | native (auto-complete) |
 | Trunk | branch policy: required builds, squash/rebase only, bot-only push |

@@ -138,7 +138,7 @@ heartbeat:
 learning:                       # the self-improvement loop
   every_cycles: 20              # run improve-factory every N cycles
   min_evidence_runs: 5          # runs of evidence a failure needs before a change is proposed
-  bench_size: 10                # cases per bench run
+  bench_size: 20                # cases per bench run; at least bench_min_cases
   bench_min_cases: 20           # bench compare needs at least this many shared cases, else regressed
   bench_trials: 3               # trials per case; compare uses the Wilson lower bound of the pass rate
   auto_merge_classes: []        # classes that merge without the factory owner (only tuning may be listed; guardrail never).

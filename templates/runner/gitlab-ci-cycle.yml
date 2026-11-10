@@ -51,7 +51,7 @@ factory-review:
       --plugin-dir node_modules/agentic-sdlc
       --output-format json --max-budget-usd 5 --max-turns 200
       --permission-mode acceptEdits
-      --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git add *)" "Bash(git commit *)" "Bash(git push *)" "Bash(npm run *)" "Bash(npm test *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"
+      --allowedTools "Bash(npx --no agentic-sdlc *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"   # review: no git writes, no npm
 
 factory-dead-man:
   image: node:22

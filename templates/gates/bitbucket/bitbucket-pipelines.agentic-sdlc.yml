@@ -109,6 +109,8 @@ pipelines:
           clone:
             depth: full
           script:
+            # The relay runs this pipeline on the trunk ref: the binding comes from the trunk, never the PR.
+            - '[ "$BITBUCKET_BRANCH" = "${AGENTIC_TRUNK:-main}" ] || { echo "run agentic-approval on the trunk" >&2; exit 1; }'
             - *agentic-cli
             - agentic-sdlc gate approval --cr "$CR"
     agentic-automerge:

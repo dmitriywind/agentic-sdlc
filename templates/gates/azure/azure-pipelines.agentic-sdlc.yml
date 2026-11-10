@@ -2,8 +2,9 @@
 # A secret variable reaches a script only through its env mapping, so the Required and proofs_on_base
 # jobs, which run the PR's code, hold none.
 # Branch policy on the trunk (Repos > Branches > Branch policies), set once by hand:
-#   - Build validation: this pipeline, required, display name "Required" (its gates job is ticket-linkage)
-#   - Status checks, required: agentic-sdlc/proofs-on-base, agentic-sdlc/review, agentic-sdlc/human-approval
+#   - Build validation: this pipeline, required, display name "Required" (its jobs are Required,
+#     proofs-on-base and ticket-linkage; the build fails when any job fails)
+#   - Status checks, required: agentic-sdlc/review, agentic-sdlc/human-approval
 #   - Minimum reviewers 1 (the review identity's vote via forge approve); reset votes on new pushes
 #   - Merge types: squash or rebase only (linear history); no direct push except the bot
 #   - Auto-complete allowed
@@ -43,9 +44,7 @@ jobs:
           export PATH="$PWD/node_modules/.bin:$PATH"
           command -v agentic-sdlc >/dev/null || npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.1}"
           agentic-sdlc gate proofs-on-base --cr "$SYSTEM_PULLREQUEST_PULLREQUESTID"
-        displayName: proofs-on-base
-        env:
-          AGENTIC_FORGE_TOKEN: $(System.AccessToken)   # the build's own repo-scoped token, to post the status
+        displayName: proofs-on-base   # no token: this job runs PR code; its result is the check
 
   - job: gates
     displayName: ticket-linkage

@@ -1,6 +1,6 @@
 # agentic-sdlc
 
-A portable software factory, published as an npm package that is also a Claude Code plugin.
+A portable software factory: a Claude Code plugin and a CLI, shipped from Git (not npm).
 `references/architecture.md` is the contract; read it before you change any part.
 
 ## Layout

@@ -51,8 +51,7 @@ Required:
 
 # The MR's new or changed proofs against the merge base's product code; posts status proofs-on-base.
 # No environment, so no agentic secret: the job's own result is the check ("Pipelines must succeed").
-# CI_JOB_TOKEN cannot post commit statuses; for the named status, give this job only a minimal
-# project access token (Developer, api) as AGENTIC_FORGE_TOKEN.
+# Give this job no token: it runs MR code, which could post the review or human-approval status.
 proofs-on-base:
   image: node:22
   stage: test

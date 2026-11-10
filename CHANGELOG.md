@@ -3,6 +3,16 @@
 All notable changes to this package. Versions follow semver. A release is a `v<version>` Git tag; the package is
 not on npm.
 
+## Unreleased
+
+### Fixes (the reconciliation with the 2026-11-09 audit)
+
+- Review jobs allow only the CLI and the MCP server: no git writes, no npm. `setup.sh` runs
+  `npm ci --ignore-scripts` and installs an unpinned CLI into `node_modules`, so `--plugin-dir` resolves.
+- The Azure `proofs-on-base` job holds no token; the PR build result is the check. The Bitbucket
+  `agentic-approval` pipeline refuses to run off the trunk.
+- `learning.bench_size` defaults to 20, and `validate` warns when it is below `bench_min_cases`.
+
 ## 2.0.0-alpha.1 (2026-11-10)
 
 ### Fixes
@@ -55,7 +65,7 @@ Added:
   trials, and uses the Wilson lower bound.
 - `commands.preview`: `verify-ux` drives a preview of the CR head, never a trunk environment.
 - `mcp --allow approve,status`; by default the MCP server leaves those tools out.
-- HTTP retries with backoff on 429 and 5xx.
+- HTTP retries with backoff on 429 and 5xx (a POST retries only 429).
 - Runner templates: Claude headless permission flags, review after the cycle, pinned installs, a
   `merge_group` trigger, a dead-man job, and a guard against `ANTHROPIC_API_KEY` on the individual
   profile.

@@ -82,7 +82,7 @@ same.
 Every verb prints JSON on stdout and exits 0 on success, 1 on a refused or failed action (message
 on stderr), 2 on a usage error. Ids are strings everywhere (`"123"`, `"PROJ-45"`, `"LIN-9"`).
 Adapters that call an HTTP API retry 429 and 5xx responses with backoff (3 tries, honouring
-`Retry-After`).
+`Retry-After`). A POST retries only 429, since a 5xx may come after the write.
 
 ### 3.1 Board (`agentic-sdlc board <verb>`)
 
@@ -159,7 +159,7 @@ change line `start` creates.
 | `branch-names` | A change line outside the binding's patterns is refused. |
 | `linkage` | Posts check `ticket-linkage`: a product CR closes exactly one open ticket and names it in its source. |
 | `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base. |
-| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by `owners.factory`. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. |
+| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by `owners.factory`. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
 | `board-sync --cr <n> \| --sha <sha> --event opened\|ready\|draft\|merged` | CR events move its one ticket to In review; a merge into the trunk moves it to Done and sets Shipped Not shipped when empty. Held and done tickets are skipped. |
 | `board-sync --event in-release --release <v>` | A release-line push sets Shipped In release on the tickets of version `<v>`. |
 | `shipped <env> --sha <sha> --result success\|failure` | Only Done tickets whose CR merge is an ancestor of `<sha>` get `On <env>`; unknown ancestry ships nothing. A failure in the last environment returns In release tickets to the previous environment, clears the version and opens a held Signal. |
@@ -170,7 +170,7 @@ Checks:
 
 - **`Required`** is a CI job, not a gate and not an agent: on `pull_request`, with no secrets, it
   runs `commands.install` and `commands.verify` on the CR head. The `proofs-on-base` gate runs in
-  the same job. The GitHub CR workflow also triggers on `merge_group`, for merge queues.
+  its own job, also with no secrets: where it cannot post the status, its result is the check. The GitHub CR workflow also triggers on `merge_group`, for merge queues.
 - **`review`** is posted by `review-pr` as `forge.review_identity`.
 - **Required checks**: `ticket-linkage`, `Required`, `proofs-on-base`, `review`,
   `human-approval`, `skill-regression`. The trunk ruleset pins each to its source app
@@ -248,7 +248,8 @@ executors and factory versions.
 5. **Classes and merge.** The `approval` gate classifies. `tuning` is only the `models` map, and a
    skill's `metadata.tier` when that skill has a bench suite; it merges on the agent review when
    `tuning` is in `learning.auto_merge_classes`. Everything else under `paths.factory`, including
-   any change to skill text, is `guardrail` and waits for `owners.factory`.
+   any change to skill text, is `guardrail` and waits for `owners.factory`. A CR that mixes product
+   and factory paths is also `guardrail`.
 6. **Prove.** The change runs on the bench against the current factory. `bench compare` needs at
    least `learning.bench_min_cases` shared cases and `learning.bench_trials` trials per case and
    compares the Wilson lower bound of the pass rate; fewer is `regressed`. The change must not
@@ -294,7 +295,7 @@ only these), `secrets` (env var names the stage may receive; nothing else is pas
 (`cloud`, `container` or `local`) and `model` (`{ tier }` or `{ id }`). Secrets reach an executor
 only when listed, and never through a board or CR comment.
 
-`agentic-sdlc dispatch <skill> (--ticket <id> | --cr <n>) [--run-model <m>] [--workdir <d>]`
+`agentic-sdlc dispatch <skill> (--ticket <id> | --cr <n>) [--run-model <m>] [--workdir <d>] [--unattended]`
 starts the executor and prints `{ kind, ref, startedAt }`; for `harness` it prints the instruction
 for the orchestrator and starts nothing. The idempotency key is `<ticket or cr>-<skill>-<head
 sha>`: a second dispatch with the same key inside `stall_minutes` prints `{ skipped: true }`. With
@@ -349,9 +350,10 @@ Gates always run in the forge's CI, so trunk guarantees never depend on the runt
 **Packaging per harness.** For Claude Code the package is a plugin (`.claude-plugin/`: skills,
 hooks, the MCP server), so skills are named `/agentic-sdlc:<skill>`. `init --harness claude`
 copies no skills; it generates one subagent per tier and adds an `@AGENTS.md` import to
-`CLAUDE.md`. Codex, Cursor and Antigravity read `.agents/skills`, which `init` writes. Claude
-headless runs pass `--permission-mode acceptEdits`, `--allowedTools` for the CLI, `git push` and
-the MCP server, and `--max-turns`; the cycle job adds `--disallowedTools` for `forge approve`.
+`CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead, for a setup without the plugin. Codex, Cursor and Antigravity read `.agents/skills`, which `init` writes. Claude
+headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-turns`. The cycle
+allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm checks, and adds
+`--disallowedTools` for `forge approve`. The review allows only the CLI and the MCP server.
 
 `profile` in the binding picks the defaults:
 

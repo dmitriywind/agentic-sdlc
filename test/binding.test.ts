@@ -77,6 +77,11 @@ test('validateBinding requires each executor kind its keys; review_runtime is se
   assert.match(bindingWarnings(b)[0], /^forge\.review_runtime is same/);
 });
 
+test('bindingWarnings: bench_size below bench_min_cases can never pass bench compare', () => {
+  assert.match(bindingWarnings({ ...good, learning: { bench_size: 10 } } as any).join('\n'), /bench_size 10 is below bench_min_cases 20/);
+  assert.deepEqual(bindingWarnings({ ...good, learning: { bench_size: 5, bench_min_cases: 5 } } as any), []);
+});
+
 test('bindingWarnings accepts Windows trace paths with either slash', () => {
   for (const uri of ['C:\\traces\\{run_id}.jsonl', 'C:/traces/{run_id}.jsonl']) assert.deepEqual(bindingWarnings({ ...good, traces: { uri } } as any), []);
   assert.equal(bindingWarnings({ ...good, traces: { uri: 's3://b/{run_id}' } } as any).length, 1);

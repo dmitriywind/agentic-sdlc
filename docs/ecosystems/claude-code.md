@@ -38,7 +38,7 @@ The init log is the exact list.
 
 ## Run one cycle by hand
 ```bash
-claude -p "/agentic-sdlc:sdlc run one cycle"   --permission-mode acceptEdits   --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git add *)" "Bash(git commit *)" "Bash(git push *)" "Bash(npm run *)" "Bash(npm test *)" "mcp__agentic-sdlc"   --disallowedTools "Bash(npx --no agentic-sdlc forge approve *)"   --max-turns 200 --output-format json
+claude -p "/agentic-sdlc:sdlc run one cycle"   --plugin-dir node_modules/agentic-sdlc   --permission-mode acceptEdits   --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git add *)" "Bash(git commit *)" "Bash(git push *)" "Bash(npm run *)" "Bash(npm test *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"   --disallowedTools "Bash(npx --no agentic-sdlc forge approve *)"   --max-turns 200 --output-format json
 ```
 Since v2.1.302 `-p` starts in Manual mode when nothing sets a mode, so a tool call that needs
 approval is denied and the run can exit 0 having done nothing: set the mode and list what the

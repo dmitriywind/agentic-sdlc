@@ -35,7 +35,13 @@ home; elsewhere a pointer.
    [docs/forges.md](docs/forges.md) saying what is native, gated or approximated.
 5. Update the adapter lists in the contract (section 3) and the README.
 
-## Pull requests
+## Releases and `dist/`
 
-Small and focused, with tests. Describe the change and why. Security issues go through
+The package ships from Git only, never npm. `dist/` is committed: run `npm run build` and commit
+`dist/` with every `src/` change (CI fails on a stale `dist/`). A release bumps `package.json` and
+`.claude-plugin/plugin.json`, then tags `v<version>` on `main`.
+
+## Changes
+
+Trunk-based: commit small changes to `main`, or use a short-lived branch and a PR. Small and focused, with tests. Describe the change and why. Security issues go through
 [SECURITY.md](SECURITY.md), not a public issue.

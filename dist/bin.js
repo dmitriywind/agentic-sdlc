@@ -7445,6 +7445,8 @@ function bindingWarnings(b) {
   if (x?.product?.kind !== void 0) w.push("product.kind is unused; remove it");
   if (x?.board?.milestone !== void 0) w.push("board.milestone is unused; remove it");
   if (x?.forge?.review_runtime === "same") w.push("forge.review_runtime is same: the cycle holds the review token, so an implementer can approve its own CR");
+  const size = x?.learning?.bench_size, min = x?.learning?.bench_min_cases ?? 20;
+  if (size !== void 0 && Number(size) < min) w.push(`learning.bench_size ${size} is below bench_min_cases ${min}: bench compare reports regressed for every change`);
   if (x?.profile === "individual") {
     for (const [k, e] of Object.entries(x.executors ?? {}))
       if (["managed", "webhook", "assign"].includes(e?.kind)) w.push(`executors.${k}: kind ${e.kind} needs an API or hosted agent; individual profile expects harness or a subscription CLI command`);

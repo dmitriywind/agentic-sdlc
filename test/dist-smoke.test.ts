@@ -41,6 +41,12 @@ test('package: plugin manifest matches package.json; every template YAML and JSO
     assert.doesNotMatch(t, /npm i (-g|-D) "?github:/, `${f}: add --allow-git=root`);
     for (const [, v] of t.matchAll(/AGENTIC_SDLC_VERSION:-([^}]+)\}/g)) assert.equal(v, pkg.version, `${f}: default CLI version`);
   }
+  // The review runtime never runs CR code and never pushes: its job allows only the CLI and MCP.
+  for (const [f, job] of [['github-actions-claude.yml', /\n  review:\n[\s\S]*?(?=\n  [\w-]+:\n)/], ['gitlab-ci-cycle.yml', /\nfactory-review:\n[\s\S]*?(?=\n[\w-]+:\n)/]] as const) {
+    const m = job.exec(readFileSync(join(root, 'templates', 'runner', f), 'utf8'));
+    assert.ok(m, f);
+    assert.doesNotMatch(m[0], /Bash\((git (add|commit|push)|npm )/, `${f}: review job tools`);
+  }
   JSON.parse(readFileSync(join(root, 'hooks', 'hooks.json'), 'utf8'));
   const walk = (d: string): string[] => readdirSync(d).flatMap((n) => statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]);
   for (const f of walk(join(root, 'templates'))) {
