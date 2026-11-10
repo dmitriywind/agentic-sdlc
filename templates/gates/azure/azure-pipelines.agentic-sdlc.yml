@@ -41,7 +41,7 @@ jobs:
         displayName: install
       - script: |
           export PATH="$PWD/node_modules/.bin:$PATH"
-          command -v agentic-sdlc >/dev/null || npm i -g "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.0}"
+          command -v agentic-sdlc >/dev/null || npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.1}"
           agentic-sdlc gate proofs-on-base --cr "$SYSTEM_PULLREQUEST_PULLREQUESTID"
         displayName: proofs-on-base
         env:
@@ -68,7 +68,7 @@ jobs:
           if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
             npm ci --ignore-scripts && echo "##vso[task.prependpath]$AGENTIC_ROOT/node_modules/.bin"
           else
-            npm i -g "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.0}"   # set: AGENTIC_SDLC_VERSION to an exact version
+            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.1}"   # set: AGENTIC_SDLC_VERSION to an exact version
           fi
         displayName: Install agentic-sdlc
       - script: agentic-sdlc --root "$AGENTIC_ROOT" gate branch-names --ref "${SYSTEM_PULLREQUEST_SOURCEBRANCH#refs/heads/}"

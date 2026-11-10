@@ -130,16 +130,28 @@ function registerMcp(pkg: string, root: string, harness: string, args: string[],
 
 /** The CLI ships from Git only: the npm name agentic-sdlc belongs to another package. */
 const gitSpec = (version: string) => `github:dmitriywind/agentic-sdlc#v${version}`;
+/** npm 12 refuses git dependencies unless allow-git permits them; root allows this direct one, not transitive ones. */
+const ALLOW_GIT = '--allow-git=root';
+
+/** Write allow-git=root to the project's .npmrc, so npm install and npm ci fetch the pinned CLI. */
+function allowGit(root: string, log: string[]) {
+  const file = join(root, '.npmrc');
+  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  if (/^\s*allow-git\s*=/m.test(text)) return;
+  writeFileSync(file, text + (text && !text.endsWith('\n') ? '\n' : '') + 'allow-git=root\n');
+  log.push('set allow-git=root in .npmrc (npm 12 refuses git dependencies by default)');
+}
 
 /** Pin this CLI as the project's devDependency, so CI, hooks and MCP run one known version. True when pinned. */
 function pinCli(root: string, version: string, force: boolean, log: string[]): boolean {
   const file = join(root, 'package.json');
   if (!existsSync(file)) {
-    log.push(`pin the CLI so CI and MCP run one version: npm i -D ${gitSpec(version)}`);
+    log.push(`pin the CLI so CI and MCP run one version: npm i -D ${ALLOW_GIT} ${gitSpec(version)}`);
     return false;
   }
   const text = readFileSync(file, 'utf8');
   const doc = JSON.parse(text);
+  allowGit(root, log);
   if (doc.devDependencies?.['agentic-sdlc'] && !force) { log.push('kept devDependencies.agentic-sdlc in package.json'); return true; }
   doc.devDependencies = { ...doc.devDependencies, 'agentic-sdlc': gitSpec(version) };
   const indent = /^[ \t]+/m.exec(text)?.[0] ?? '  ';
@@ -197,7 +209,7 @@ function init(root: string, argv: string[], log: string[]) {
   const noPlugin = harness === 'claude' && f['no-plugin'] === 'true';
   if (harness === 'grok' || noPlugin) syncSkills(skills, root, '.claude/skills', force, log);
   const pinned = pinCli(root, version, force, log);
-  if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, pinned ? ['--no-install', 'agentic-sdlc', 'mcp'] : ['-y', gitSpec(version), 'mcp'], force, log);
+  if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, pinned ? ['--no-install', 'agentic-sdlc', 'mcp'] : ['-y', ALLOW_GIT, gitSpec(version), 'mcp'], force, log);
   else log.push('MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)');
   const scorers = join(pkg, 'scorers');
   if (existsSync(scorers)) {

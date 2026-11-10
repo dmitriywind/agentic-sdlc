@@ -9086,14 +9086,22 @@ ${snippet.trim()}`);
   writeFileSync2(file, next);
   log.push(`wrote ${rel}`);
 }
+function allowGit(root, log) {
+  const file = join4(root, ".npmrc");
+  const text = existsSync2(file) ? readFileSync5(file, "utf8") : "";
+  if (/^\s*allow-git\s*=/m.test(text)) return;
+  writeFileSync2(file, text + (text && !text.endsWith("\n") ? "\n" : "") + "allow-git=root\n");
+  log.push("set allow-git=root in .npmrc (npm 12 refuses git dependencies by default)");
+}
 function pinCli(root, version2, force, log) {
   const file = join4(root, "package.json");
   if (!existsSync2(file)) {
-    log.push(`pin the CLI so CI and MCP run one version: npm i -D ${gitSpec(version2)}`);
+    log.push(`pin the CLI so CI and MCP run one version: npm i -D ${ALLOW_GIT} ${gitSpec(version2)}`);
     return false;
   }
   const text = readFileSync5(file, "utf8");
   const doc = JSON.parse(text);
+  allowGit(root, log);
   if (doc.devDependencies?.["agentic-sdlc"] && !force) {
     log.push("kept devDependencies.agentic-sdlc in package.json");
     return true;
@@ -9152,7 +9160,7 @@ function init(root, argv, log) {
   const noPlugin = harness === "claude" && f["no-plugin"] === "true";
   if (harness === "grok" || noPlugin) syncSkills(skills, root, ".claude/skills", force, log);
   const pinned = pinCli(root, version2, force, log);
-  if (harness !== "claude" || noPlugin) registerMcp(pkg, root, harness, pinned ? ["--no-install", "agentic-sdlc", "mcp"] : ["-y", gitSpec(version2), "mcp"], force, log);
+  if (harness !== "claude" || noPlugin) registerMcp(pkg, root, harness, pinned ? ["--no-install", "agentic-sdlc", "mcp"] : ["-y", ALLOW_GIT, gitSpec(version2), "mcp"], force, log);
   else log.push("MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)");
   const scorers = join4(pkg, "scorers");
   if (existsSync2(scorers)) {
@@ -9256,7 +9264,7 @@ function trunkProtection(b, ctx) {
     ...loose.length ? [`warn: required checks not pinned to an app (integration_id): ${loose.join(", ")}; any token with status access can post them`] : []
   ];
 }
-var import_yaml2, START, END, POINTER, SKILLS_LOCK, TIERS2, FORGES, flagsOf, need, readJson, sha, filesUnder, MCP_FILES, gitSpec, redact, cli4;
+var import_yaml2, START, END, POINTER, SKILLS_LOCK, TIERS2, FORGES, flagsOf, need, readJson, sha, filesUnder, MCP_FILES, gitSpec, ALLOW_GIT, redact, cli4;
 var init_install = __esm({
   "src/install.ts"() {
     "use strict";
@@ -9302,6 +9310,7 @@ ${END}`;
       ["generic", null]
     ]);
     gitSpec = (version2) => `github:dmitriywind/agentic-sdlc#v${version2}`;
+    ALLOW_GIT = "--allow-git=root";
     redact = (msg, env) => {
       for (const [k, v] of Object.entries(env)) if (v && v.length >= 8 && /TOKEN|KEY|SECRET|PASS|AUTH/i.test(k)) msg = msg.replaceAll(v, "***");
       return msg;

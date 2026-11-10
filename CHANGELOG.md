@@ -1,9 +1,16 @@
 # Changelog
 
-All notable changes to this package. Versions follow semver; pre-releases are published under the
-npm tag `next`.
+All notable changes to this package. Versions follow semver. A release is a `v<version>` Git tag; the package is
+not on npm.
 
-## 2.0.0-alpha.0 (unreleased)
+## 2.0.0-alpha.1 (2026-11-10)
+
+### Fixes
+
+- npm 12 refuses git dependencies by default. `init` writes `allow-git=root` to the project's
+  `.npmrc`, and every documented or templated `github:` install passes `--allow-git=root`.
+
+## 2.0.0-alpha.0 (2026-11-10)
 
 A rewrite. v2 is a skill pack, a binding and a CLI of ports and gates; your harness runs the
 skills.

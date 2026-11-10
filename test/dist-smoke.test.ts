@@ -37,6 +37,8 @@ test('package: plugin manifest matches package.json; every template YAML and JSO
     const t = readFileSync(f, 'utf8');
     // npx without --no / --no-install falls back to the npm registry, where agentic-sdlc is another package.
     assert.doesNotMatch(t, /npx (-y )?agentic-sdlc\b|"npx",\s*"args":\s*\["agentic-sdlc"|agentic-sdlc@(?!agentic-sdlc|noreply|users\.noreply)/, f);
+    // npm 12 refuses git dependencies unless allow-git permits them.
+    assert.doesNotMatch(t, /npm i (-g|-D) "?github:/, `${f}: add --allow-git=root`);
     for (const [, v] of t.matchAll(/AGENTIC_SDLC_VERSION:-([^}]+)\}/g)) assert.equal(v, pkg.version, `${f}: default CLI version`);
   }
   JSON.parse(readFileSync(join(root, 'hooks', 'hooks.json'), 'utf8'));
