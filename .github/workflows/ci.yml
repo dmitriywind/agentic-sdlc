@@ -21,4 +21,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - name: dist/ matches src/
-        run: git diff --exit-code -- dist || { echo "::error::dist/ is stale: run npm run build and commit dist/"; exit 1; }
+        run: |
+          git diff --exit-code -- dist || { echo "::error::dist/ is stale. Run npm run build, then commit dist/."; exit 1; }
