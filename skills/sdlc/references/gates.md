@@ -15,7 +15,7 @@ worked around.
 | `approval --cr <n>` | status `human-approval` | Classifies the CR (`product-fast`, `product-full`, `tuning`, `guardrail`) and passes it only with the approvals the class needs; see Approval. |
 | `branch-names` | check | A change line outside `vcs.change_pattern`, `vcs.factory_change_pattern`, `vcs.release_prefix` and the trunk cannot be pushed or merged. |
 | `board-sync` | board moves | A CR opened, made ready or put back to draft moves its ticket to In review; a merge moves it to Done with Shipped Not shipped; `--event in-release` sets In release. |
-| `shipped <env>` | Shipped field | A green deploy to `<env>` writes On <env>; a failed deploy to the last environment returns the tickets to On <the environment before the last> and opens a held Signal. |
+| `shipped <env>` | Shipped field | A green deploy to `<env>` writes On <env>; a failed deploy to the last environment returns the tickets to On <the environment before the last> and opens a held Signal; a Done ticket with no merged CR found is listed as unmatched in the output. |
 | `signal-on-red` | a Signal | A red trunk or release-line run opens a Signal with a redacted evidence bundle. |
 | `skill-regression` | check | A change under `paths.factory` keeps the skill pack valid: frontmatter, links, scorers. |
 | dead-man job | a Signal | `agentic-sdlc ledger stale --max-hours <h>` fails when the newest heartbeat is older. |

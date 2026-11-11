@@ -29,7 +29,7 @@ board:
     lane: Lane                  # shape writes it; implement-spec or review-pr may promote, nothing demotes
     shipped: Shipped            # gates write it; release starts In release
     release_version: Release Version
-  labels: { human: needs-human, bug: bug, feature: feature } # plus signal:<stream> and env_labels; no others
+  labels: { human: needs-human, bug: bug, feature: feature, release: release } # plus signal:<stream> and env_labels; no others. release marks a release request the Product owner opens at Backlog
   env_labels: [env:staging, env:production] # on a signal from a deployed environment
   done_statuses: [Done, Cancelled] # left out of the heartbeat's items and oldestOpen
   views: [Board, Signals, Human, Release, Roadmap] # saved views the sdlc skill describes

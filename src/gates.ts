@@ -327,10 +327,12 @@ export async function shipped(d: Deps, env: string, sha: string, result: string)
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, tags: [], unknown: true };
     const merged = await d.forge.list({ state: 'merged' });
+    const unmatched: string[] = [];
+    const rel = d.binding.board.labels?.release;
     const items = [];
     for (const x of done.filter((x) => rank(x.fields.shipped) < rank(target))) {
       const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
-      if (!shas.length) continue;
+      if (!shas.length) { if (!(rel && x.labels.includes(rel))) unmatched.push(x.id); continue; }
       const anc = shas.map((s) => (s ? isAnc(s, sha) : undefined));
       if (anc.includes(undefined)) return { env, result, changed: [], tags: [], unknown: true };
       if (anc.every(Boolean)) items.push(x);
@@ -343,7 +345,7 @@ export async function shipped(d: Deps, env: string, sha: string, result: string)
         tags.push(`${d.binding.vcs.tag_prefix}${v}`);
       }
     }
-    return { env, result, changed, tags };
+    return { env, result, changed, tags, unmatched };
   }
   if (last) {
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];

@@ -315,6 +315,17 @@ export function trunkProtection(b: any, ctx: any): string[] {
     ...(loose.length ? [`warn: required checks not pinned to an app (integration_id): ${loose.join(', ')}; any token with status access can post them`] : [])];
 }
 
+/** The stock delivery workflow's push branches must name this project's trunk and release lines. */
+export function deliveryWorkflow(b: any, root: string): string | undefined {
+  const f = join(root, '.github', 'workflows', 'agentic-sdlc-delivery.yml');
+  if (b.forge.adapter !== 'github' || !existsSync(f)) return undefined;
+  const br: string[] = parse(readFileSync(f, 'utf8'))?.on?.push?.branches ?? [];
+  const rel = `${b.vcs.release_prefix}**`;
+  return br.includes(b.vcs.trunk) && br.includes(rel)
+    ? `ok   delivery workflow: names trunk ${b.vcs.trunk}`
+    : `fail delivery workflow: push branches ${br.join(', ')} do not name trunk ${b.vcs.trunk} and ${rel}; edit its 'set:' lines`;
+}
+
 /** Called with the group name as the first element: init | validate | doctor. */
 export const cli: PortCli = async (argv, ctx) => {
   const [verb, ...rest] = argv;
@@ -344,6 +355,8 @@ export const cli: PortCli = async (argv, ctx) => {
       ];
       let bad = 0;
       trunkProtection(binding, ctx).forEach(out);
+      const dw = deliveryWorkflow(binding, ctx.root);
+      if (dw) { out(dw); if (dw.startsWith('fail')) bad++; }
       for (const [name, run] of probes) {
         try { await run(); out(`ok   ${name}`); }
         catch (e) { bad++; out(`fail ${name}: ${redact((e as Error).message, ctx.env).split('\n')[0]}`); }

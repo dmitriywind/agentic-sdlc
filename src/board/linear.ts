@@ -78,8 +78,15 @@ export function createLinearBoard(ctx: AdapterContext): Board {
       if (q.label) filter.labels = { name: { eq: q.label } };
       const ws = (q.search ?? '').split(/\s+/).filter(Boolean);
       if (ws.length) filter.and = ws.map((w) => ({ or: [{ title: { containsIgnoreCase: w } }, { description: { containsIgnoreCase: w } }] }));
-      const r = await gql(`query($f:IssueFilter){ issues(filter:$f, first:250){ nodes { ${ISSUE} } } }`, { f: filter });
-      return r.issues.nodes.map(toItem);
+      const nodes: any[] = [];
+      let a: string | null = null;
+      for (;;) {
+        const r: any = await gql(`query($f:IssueFilter,$a:String){ issues(filter:$f, first:100, after:$a){ nodes { ${ISSUE} } pageInfo { hasNextPage endCursor } } }`, { f: filter, a });
+        nodes.push(...r.issues.nodes);
+        if (!r.issues.pageInfo.hasNextPage) break;
+        a = r.issues.pageInfo.endCursor;
+      }
+      return nodes.map(toItem);
     },
     get,
     async create(t) {
@@ -111,8 +118,15 @@ export function createLinearBoard(ctx: AdapterContext): Board {
       return r.commentCreate.comment;
     },
     async comments(id, q = {}) {
-      const r = await gql(`query($id:String!){ issue(id:$id){ comments { nodes { id body createdAt url user { id } } } } }`, { id });
-      let list: Comment[] = r.issue.comments.nodes
+      const nodes: any[] = [];
+      let a: string | null = null;
+      for (;;) {
+        const r: any = await gql(`query($id:String!,$a:String){ issue(id:$id){ comments(first:100, after:$a){ nodes { id body createdAt url user { id } } pageInfo { hasNextPage endCursor } } } }`, { id, a });
+        nodes.push(...r.issue.comments.nodes);
+        if (!r.issue.comments.pageInfo.hasNextPage) break;
+        a = r.issue.comments.pageInfo.endCursor;
+      }
+      let list: Comment[] = nodes
         .map((c: any) => ({ id: c.id, author: c.user?.id ?? '', createdAt: c.createdAt, body: c.body, url: c.url }))
         .sort((a: Comment, b: Comment) => b.createdAt.localeCompare(a.createdAt));
       if (q.marker) list = list.filter((c) => c.body.split('\n')[0].includes(q.marker!));

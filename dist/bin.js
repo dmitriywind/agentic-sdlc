@@ -7598,7 +7598,12 @@ function createGithubBoard(ctx) {
       updatedAt: ""
     };
   };
-  const items = () => json(["project", "item-list", num, "--owner", o.owner, "--limit", "1000", "--format", "json"]).items.filter((i) => i.content?.number !== void 0);
+  const ITEM_CAP = 1e3, SEARCH_CAP = 200;
+  const items = () => {
+    const all = json(["project", "item-list", num, "--owner", o.owner, "--limit", String(ITEM_CAP), "--format", "json"]).items;
+    if (all.length >= ITEM_CAP) throw new Error(`the board has ${ITEM_CAP} or more items: archive Done items (gh project item-archive) so every ticket is read`);
+    return all.filter((i) => i.content?.number !== void 0);
+  };
   const get = async (id) => {
     const it = items().find((i) => String(i.content.number) === id);
     if (!it) throw new Error(`#${id} is not on the board`);
@@ -7631,7 +7636,12 @@ function createGithubBoard(ctx) {
   };
   return {
     async list(q = {}) {
-      const hits = q.search ? new Set(json(["issue", "list", "--repo", o.repo, "--state", "all", "--search", q.search, "--limit", "200", "--json", "number"]).map((x) => String(x.number))) : void 0;
+      let hits;
+      if (q.search) {
+        const found = json(["issue", "list", "--repo", o.repo, "--state", "all", "--search", q.search, "--limit", String(SEARCH_CAP), "--json", "number"]);
+        if (found.length >= SEARCH_CAP) throw new Error(`the search matched ${SEARCH_CAP} or more issues: narrow it`);
+        hits = new Set(found.map((x) => String(x.number)));
+      }
       return items().map(toItem).filter((i) => (!hits || hits.has(i.id)) && (!q.status?.length || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label)));
     },
     get,
@@ -7766,8 +7776,15 @@ function createJiraBoard(ctx) {
       if (q.status?.length) jql.push(`status in (${q.status.map(quote2).join(",")})`);
       if (q.label) jql.push(`labels = ${quote2(q.label)}`);
       if (q.search) jql.push(`text ~ ${quote2(q.search)}`);
-      const r = await api("POST", "/search/jql", { jql: jql.join(" AND ") + " ORDER BY created ASC", maxResults: 100, fields: (await fetchFields()).split(",") });
-      return Promise.all(r.issues.map(toItem));
+      const fields = (await fetchFields()).split(",");
+      const issues = [];
+      let nextPageToken;
+      do {
+        const r = await api("POST", "/search/jql", { jql: jql.join(" AND ") + " ORDER BY created ASC", maxResults: 100, fields, ...nextPageToken ? { nextPageToken } : {} });
+        issues.push(...r.issues);
+        nextPageToken = r.isLast === true ? void 0 : r.nextPageToken;
+      } while (nextPageToken);
+      return Promise.all(issues.map(toItem));
     },
     get,
     async create(t) {
@@ -7801,8 +7818,13 @@ function createJiraBoard(ctx) {
       return { id: String(c.id), url: `${base}/browse/${id}?focusedCommentId=${c.id}` };
     },
     async comments(id, q = {}) {
-      const r = await api("GET", `/issue/${id}/comment?orderBy=-created&maxResults=100`);
-      let list = r.comments.map((c) => ({
+      const raw = [];
+      for (; ; ) {
+        const r = await api("GET", `/issue/${id}/comment?orderBy=-created&maxResults=100&startAt=${raw.length}`);
+        raw.push(...r.comments);
+        if (!r.comments.length || raw.length >= r.total) break;
+      }
+      let list = raw.map((c) => ({
         id: String(c.id),
         author: c.author?.accountId ?? "",
         createdAt: c.created,
@@ -7917,8 +7939,15 @@ function createLinearBoard(ctx) {
       if (q.label) filter.labels = { name: { eq: q.label } };
       const ws = (q.search ?? "").split(/\s+/).filter(Boolean);
       if (ws.length) filter.and = ws.map((w) => ({ or: [{ title: { containsIgnoreCase: w } }, { description: { containsIgnoreCase: w } }] }));
-      const r = await gql(`query($f:IssueFilter){ issues(filter:$f, first:250){ nodes { ${ISSUE} } } }`, { f: filter });
-      return r.issues.nodes.map(toItem);
+      const nodes = [];
+      let a = null;
+      for (; ; ) {
+        const r = await gql(`query($f:IssueFilter,$a:String){ issues(filter:$f, first:100, after:$a){ nodes { ${ISSUE} } pageInfo { hasNextPage endCursor } } }`, { f: filter, a });
+        nodes.push(...r.issues.nodes);
+        if (!r.issues.pageInfo.hasNextPage) break;
+        a = r.issues.pageInfo.endCursor;
+      }
+      return nodes.map(toItem);
     },
     get,
     async create(t) {
@@ -7955,8 +7984,15 @@ function createLinearBoard(ctx) {
       return r.commentCreate.comment;
     },
     async comments(id, q = {}) {
-      const r = await gql(`query($id:String!){ issue(id:$id){ comments { nodes { id body createdAt url user { id } } } } }`, { id });
-      let list = r.issue.comments.nodes.map((c) => ({ id: c.id, author: c.user?.id ?? "", createdAt: c.createdAt, body: c.body, url: c.url })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const nodes = [];
+      let a = null;
+      for (; ; ) {
+        const r = await gql(`query($id:String!,$a:String){ issue(id:$id){ comments(first:100, after:$a){ nodes { id body createdAt url user { id } } pageInfo { hasNextPage endCursor } } } }`, { id, a });
+        nodes.push(...r.issue.comments.nodes);
+        if (!r.issue.comments.pageInfo.hasNextPage) break;
+        a = r.issue.comments.pageInfo.endCursor;
+      }
+      let list = nodes.map((c) => ({ id: c.id, author: c.user?.id ?? "", createdAt: c.createdAt, body: c.body, url: c.url })).sort((a2, b) => b.createdAt.localeCompare(a2.createdAt));
       if (q.marker) list = list.filter((c) => c.body.split("\n")[0].includes(q.marker));
       return q.last ? list.slice(0, q.last) : list;
     },
@@ -9027,6 +9063,7 @@ var init_vcs = __esm({
 var install_exports = {};
 __export(install_exports, {
   cli: () => cli4,
+  deliveryWorkflow: () => deliveryWorkflow,
   packageRoot: () => packageRoot,
   trunkProtection: () => trunkProtection,
   validate: () => validate
@@ -9307,6 +9344,13 @@ function trunkProtection(b, ctx) {
     ...loose.length ? [`warn: required checks not pinned to an app (integration_id): ${loose.join(", ")}; any token with status access can post them`] : []
   ];
 }
+function deliveryWorkflow(b, root) {
+  const f = join4(root, ".github", "workflows", "agentic-sdlc-delivery.yml");
+  if (b.forge.adapter !== "github" || !existsSync3(f)) return void 0;
+  const br2 = (0, import_yaml2.parse)(readFileSync5(f, "utf8"))?.on?.push?.branches ?? [];
+  const rel = `${b.vcs.release_prefix}**`;
+  return br2.includes(b.vcs.trunk) && br2.includes(rel) ? `ok   delivery workflow: names trunk ${b.vcs.trunk}` : `fail delivery workflow: push branches ${br2.join(", ")} do not name trunk ${b.vcs.trunk} and ${rel}; edit its 'set:' lines`;
+}
 var import_yaml2, START, END, POINTER, SKILLS_LOCK, TIERS2, FORGES, flagsOf, need, readJson, sha, filesUnder, MCP_FILES, gitSpec, ALLOW_GIT, redact, cli4;
 var init_install = __esm({
   "src/install.ts"() {
@@ -9389,6 +9433,11 @@ ${END}`;
           ];
           let bad = 0;
           trunkProtection(binding, ctx).forEach(out);
+          const dw = deliveryWorkflow(binding, ctx.root);
+          if (dw) {
+            out(dw);
+            if (dw.startsWith("fail")) bad++;
+          }
           for (const [name, run] of probes) {
             try {
               await run();
@@ -9687,10 +9736,15 @@ environment: ${env}`,
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, tags: [], unknown: true };
     const merged = await d.forge.list({ state: "merged" });
+    const unmatched = [];
+    const rel = d.binding.board.labels?.release;
     const items = [];
     for (const x of done.filter((x2) => rank(x2.fields.shipped) < rank(target))) {
       const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
-      if (!shas.length) continue;
+      if (!shas.length) {
+        if (!(rel && x.labels.includes(rel))) unmatched.push(x.id);
+        continue;
+      }
       const anc = shas.map((s) => s ? isAnc(s, sha2) : void 0);
       if (anc.includes(void 0)) return { env, result, changed: [], tags: [], unknown: true };
       if (anc.every(Boolean)) items.push(x);
@@ -9706,7 +9760,7 @@ environment: ${env}`,
         tags.push(`${d.binding.vcs.tag_prefix}${v}`);
       }
     }
-    return { env, result, changed, tags };
+    return { env, result, changed, tags, unmatched };
   }
   if (last) {
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];

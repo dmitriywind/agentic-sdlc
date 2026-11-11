@@ -131,7 +131,7 @@ Purpose: show how a merge reaches the last environment.
 flowchart TD
   M["Merge to trunk"] --> D1["Deploy first env"]
   D1 --> SG["Gate shipped: On first env"]
-  SG --> RL["Product owner asks for release"]
+  SG --> RL["Release request (labelled Backlog ticket)<br/>or P0 fix On first env"]
   RL --> RS["release skill picks SHA<br/>and version"]
   RS --> CUT["vcs cut: release line"]
   CUT --> IR["Gate board-sync:<br/>Shipped In release"]

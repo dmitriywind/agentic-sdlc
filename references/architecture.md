@@ -22,7 +22,9 @@ loading the `sdlc` skill. The package ships **no supervisor and no agent runner*
 exception is `bench run`, which starts the binding's `agent_command` headless on a past task.
 
 Constraint: delivery is **trunk-based on Git**. One trunk, short-lived change branches in, release
-branches out. No long-lived develop branch. No hotfix path.
+branches out. No long-lived develop branch. A P0 fix starts release at once; there is no hotfix line.
+`board.labels` keys: `human`, `bug`, `feature`, and `release` (marks a release request the Product
+owner opens at Backlog).
 
 ## 2. Repository layout
 

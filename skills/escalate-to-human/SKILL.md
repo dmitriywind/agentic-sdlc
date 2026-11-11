@@ -18,6 +18,10 @@ calls another skill. Read the binding (`.agents/binding.yml`) and the hold rules
    `paths.sources_before_question`. Done when each source is named with what it says; a source that
    answers a Ruling question settles that trigger. For every other trigger a source may supply
    options but never settles it; classify in step 2.
+   On this ticket, a trusted owner reply (`board comments <id> --trusted`, by `owners.product` or
+   `owners.factory`) posted after its last `### Needs human` comment settles every trigger that
+   comment named, unless new facts appeared since (a changed scope, diff or evidence); name that
+   reply as the settling source.
 2. **Classify.** Return `escalate` when any trigger holds, naming it; otherwise `proceed`:
    - Architecture: a new component or boundary, a changed data model or public interface.
    - Scope: the change differs from the accepted ticket or touches unrelated areas.
@@ -31,13 +35,13 @@ calls another skill. Read the binding (`.agents/binding.yml`) and the hold rules
    - Ruling: the sources are silent or conflict on a product question.
    - Regression: delivered behaviour would be removed or weakened.
    - Repeat: the same step failed twice for the same reason.
-   - P0: a P0 is set.
+   - P0: a P0 is set and no owner reply has settled it (step 1).
    A feature counts as important only when the importance doc says so; carry no list of your own.
    A routine step (sync, retry, cosmetic choice) is never escalated. An item above the size
    limit is not escalated; it goes back to shape (see [Board](../sdlc/references/board.md#board)).
 3. **Record.** On `proceed`: one line in the calling skill's ticket comment,
-   `escalate-to-human: proceed`, naming the sources that settled it. On `escalate`: the comment
-   below. Done when the result is on the ticket.
+   `escalate-to-human: proceed`, naming the sources that settled it
+   (an owner reply is cited by its comment url). On `escalate`: the comment below. Done when the result is on the ticket.
 4. **Hold.** On `escalate`: if you are on a change line with unpushed commits, publish them (`vcs push`); then post the comment below once
    (`board comment`), `board label <id> add <board.labels.human>`, `board assign <id> --none`, and
    stop. The Status stays. The ask goes to `owners.product`, or `owners.factory` for a factory

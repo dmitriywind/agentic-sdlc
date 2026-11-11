@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, wri
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cli, trunkProtection, validate } from '../src/install.ts';
+import { cli, deliveryWorkflow, trunkProtection, validate } from '../src/install.ts';
 import { fakeCtx } from './helpers.ts';
 
 const w = (p: string, s: string) => { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, s); };
@@ -261,4 +261,12 @@ test('vcs push refuses the trunk and a detached HEAD', async () => {
   await assert.rejects(mk('main').push(), /trunk 'main'/);
   await assert.rejects(mk('HEAD').push(), /detached HEAD/);
   await mk('T-1-x').push();
+});
+
+test('doctor: the delivery workflow must name the trunk and release line', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dw-'));
+  w(join(root, '.github/workflows/agentic-sdlc-delivery.yml'), readFileSync(join(import.meta.dirname, '../templates/gates/github/agentic-sdlc-delivery.yml'), 'utf8'));
+  const b = (trunk: string) => ({ forge: { adapter: 'github' }, vcs: { trunk, release_prefix: 'release/' } });
+  assert.match(deliveryWorkflow(b('master'), root)!, /^fail delivery workflow:.*trunk master/);
+  assert.match(deliveryWorkflow(b('main'), root)!, /^ok   delivery workflow: names trunk main/);
 });

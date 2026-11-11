@@ -162,7 +162,7 @@ export interface Binding {
     mcp?: Record<string, unknown>;
     statuses: string[];
     fields: Partial<Record<LogicalField, string>>;
-    labels: { human: string; bug: string; feature: string };
+    labels: { human: string; bug: string; feature: string; release?: string };
     env_labels: string[];
     done_statuses: string[];
     later_milestone?: string;

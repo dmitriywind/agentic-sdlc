@@ -90,3 +90,48 @@ test('linear move sends the state id', async () => {
   await board.move('LIN-9', 'In progress', 'Ready');
   assert.ok(calls.some((c) => c.includes('issueUpdate') && c.includes('"stateId":"S2"')));
 });
+
+// paging
+const jIssue = (k: string) => ({ key: k, fields: { summary: k, status: { name: 'Ready' }, labels: [], subtasks: [] } });
+test('jira list follows nextPageToken until isLast', async () => {
+  const { board, calls } = mk('jira', jira, (c) => {
+    if (c.includes('/field')) return [{ id: 'cf1', name: 'Size' }, { id: 'cf2', name: 'Priority' }];
+    if (c.includes('"nextPageToken":"t2"')) return { issues: [jIssue('PROJ-2')], isLast: true };
+    if (c.includes('/search/jql')) return { issues: [jIssue('PROJ-1')], nextPageToken: 't2' };
+  }, { JE: 'a@b', JT: 's' });
+  assert.deepEqual((await board.list()).map((i) => i.id), ['PROJ-1', 'PROJ-2']);
+  assert.equal(calls.filter((c) => c.includes('/search/jql')).length, 2);
+});
+
+test('jira comments pages through the total, so a marker on page 2 is found', async () => {
+  const page = (from: number, n: number) => Array.from({ length: n }, (_, i) => ({
+    id: String(from + i), created: '', body: { type: 'doc', content: [{ type: 'text', text: from + i === 120 ? 'marker-x' : 'hi' }] },
+  }));
+  const answer = (c: string) => (c.includes('startAt=100') ? { total: 150, comments: page(100, 50) } : { total: 150, comments: page(0, 100) });
+  const { board } = mk('jira', jira, answer, { JE: 'a@b', JT: 's' });
+  assert.equal((await board.comments('PROJ-1')).length, 150);
+  assert.deepEqual((await board.comments('PROJ-1', { marker: 'marker-x' })).map((c) => c.id), ['120']);
+});
+
+test('linear list and comments follow endCursor', async () => {
+  const issue = (id: string) => ({ id, identifier: id, title: 't', url: 'u', createdAt: '', updatedAt: '', priority: 0, state: { name: 'Ready' }, labels: { nodes: [] }, parent: null, children: { nodes: [] } });
+  const comment = (id: string) => ({ id, body: 'b', createdAt: id, url: 'u', user: null });
+  const answer = (c: string) => {
+    const second = c.includes('"a":"c1"');
+    const info = { hasNextPage: !second, endCursor: 'c1' };
+    if (c.includes('comments(')) return { data: { issue: { comments: { nodes: [comment(second ? 'k2' : 'k1')], pageInfo: info } } } };
+    return { data: { issues: { nodes: [issue(second ? 'L2' : 'L1')], pageInfo: info } } };
+  };
+  const { board } = mk('linear', { team_key: 'LIN', token_env: 'LT' }, answer, { LT: 'k' });
+  assert.deepEqual((await board.list()).map((i) => i.id), ['L1', 'L2']);
+  assert.deepEqual((await board.comments('LIN-1')).map((c) => c.id).sort(), ['k1', 'k2']);
+});
+
+test('github refuses a board read at the 1000-item cap', async () => {
+  const items = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `I${i}`, status: 'Ready', content: { number: i + 1, title: 't', url: 'u' } }));
+  const answer = (n: number) => (c: string) => (c.includes('item-list') ? { items: items(n) } : ghAnswer('Ready')(c));
+  const full = mk('github', gh, answer(1000)).board;
+  await assert.rejects(full.list(), /archive/);
+  await assert.rejects(full.get('1'), /archive/);
+  assert.equal((await mk('github', gh, answer(999)).board.list()).length, 999);
+});

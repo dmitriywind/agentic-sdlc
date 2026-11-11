@@ -10,7 +10,8 @@ metadata:
 
 Follow the common contract in [`sdlc`](../sdlc/SKILL.md). Read the domain docs the agent card
 routes to for the touched area before shaping. One pass moves the ticket from Backlog to Ready;
-a step already done on the ticket is checked, not redone.
+a step already done on the ticket is checked, not redone. A ticket with children is an
+initiative (see [Sub-issues](../sdlc/references/board.md#sub-issues)): stop with no comment.
 
 ## Steps
 
@@ -43,9 +44,11 @@ a step already done on the ticket is checked, not redone.
 6. **Lane.** Write the Lane field (`board set <id> lane <Fast|Full>`). Fast when Size is at or below
    `fast_lane_max_size`, no escalation trigger of
    [`escalate-to-human`](../escalate-to-human/SKILL.md) fires, and no path in `paths.lane_areas` is
-   touched; otherwise Full. In the Fast lane the criteria and a proof list in the ticket are the
+   touched; otherwise Full. Call [`escalate-to-human`](../escalate-to-human/SKILL.md) for the
+   ticket and record its result as it says (a proceed line, or the hold, which stops this run).
+   In the Fast lane the criteria and a proof list in the ticket are the
    spec; each listed proof names its tier, file and rule as `paths.test_standard` defines them. Done
-   when Lane is set.
+   when Lane is set and the escalate-to-human result is on the ticket.
 7. **Spec (Full lane only).** Design from the project's existing seams and patterns first. Prefer
    deep modules: a small interface with much behaviour behind it. Put a seam only where behaviour
    must vary or be tested. A new abstraction needs a stated reason. Add or sharpen a glossary term

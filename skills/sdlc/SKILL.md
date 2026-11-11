@@ -79,8 +79,9 @@ Pick the first row that matches. A ticket labelled `needs-human` is held: skip i
 |---|---|
 | Status Ideas | none; humans only |
 | Status Signals | [`triage-signal`](../triage-signal/SKILL.md) |
+| Status Backlog with label `board.labels.release` (a release request) | [`release`](../release/SKILL.md), dispatched with `--ticket <request>` |
 | Status Backlog, no Priority; a plan or conversation that must become tickets | [`backlog-grooming`](../backlog-grooming/SKILL.md) |
-| Status Backlog with a Priority, no [open blocker](references/statuses.md#open-blocker), not in `board.later_milestone` | [`shape`](../shape/SKILL.md) |
+| Status Backlog with a Priority, no [open blocker](references/statuses.md#open-blocker), not in `board.later_milestone`, no children (an initiative is never routed) | [`shape`](../shape/SKILL.md) |
 | Status Ready | [`implement-spec`](../implement-spec/SKILL.md) |
 | Status In progress | [`implement-spec`](../implement-spec/SKILL.md) |
 | Status In review, draft CR | [`review-pr`](../review-pr/SKILL.md) (dispatches [`verify-ux`](../verify-ux/SKILL.md) for `computer-use` criteria) |
@@ -88,7 +89,7 @@ Pick the first row that matches. A ticket labelled `needs-human` is held: skip i
 | Status In review, ready CR whose required check is red, or missing for longer than `stall_minutes` | [`review-pr`](../review-pr/SKILL.md) |
 | Status In review, otherwise | none; approvals and auto-merge act |
 | Draft factory CR (only `paths.factory` changed, change line per `vcs.factory_change_pattern`) | [`review-pr`](../review-pr/SKILL.md), dispatched with `--cr` |
-| Status Done, and the Product owner asked for a release or the next version after a failed release | [`release`](../release/SKILL.md) |
+| Status Done, a P0 ticket with Shipped On <env before last> and no open release request | [`release`](../release/SKILL.md): it opens the request itself |
 | Status Done, otherwise | none; gates write Shipped |
 | `ledger summary` shows `learning.due` | [`improve-factory`](../improve-factory/SKILL.md) |
 | Any working status, authority unclear | [`escalate-to-human`](../escalate-to-human/SKILL.md) |
@@ -160,8 +161,9 @@ obeys the same skills and gates; a reviewer is never the implementer of the same
 ## Branches and releases
 
 - Trunk-based on Git: one trunk (`vcs.trunk`), short-lived change lines matching
-  `vcs.change_pattern` in, release lines `vcs.release_prefix` out. No long-lived develop line, no
-  hotfix path. One ticket, one change line, one CR.
+  `vcs.change_pattern` in, release lines `vcs.release_prefix` out. No long-lived develop line. A P0 fix
+  starts release as soon as it is Done with Shipped On <env before last>; the Product owner still
+  approves the cut. One ticket, one change line, one CR.
 - The change line names its ticket, and the CR closes exactly that ticket: one line `Closes <id>`.
   `implement-spec` writes it; every later reader takes the CR's `closes` and checks it against the
   change line.

@@ -32,15 +32,19 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    needed. A pending criterion
    stops the review as step 4 does: no status, no approval; review this head again on the next
    run. A departure from the spec in design is an escalation. Done when every criterion has a row.
-3. **Standards pass.** Apply `paths.review_checklist` and `paths.test_standard`, and the rules
-   matching the changed paths. Before calling a finding one defect or three, form an independent
+3. **Standards pass.** Apply [references/checklist.md](references/checklist.md), then
+   `paths.review_checklist` when that file exists (the project's rule wins on a conflict), and
+   `paths.test_standard`, and the rules matching the changed paths. Before calling a finding one defect or three, form an independent
    read from the raw facts first. Done when every rule was applied to the diff.
 4. **CI results.** From `forge view <n>` checks on the head: `Required` (install and verify) and
    `proofs-on-base` (each new proof fails on the merge base) must be green, and every other
    `forge.required_checks` entry except `review` and `human-approval` must not be red. A check
-   still pending: stop and review again on the next run; it is not a finding. For each
-   `forge.planned_checks` entry the repo does not yet supply, the report names it as absent; this
-   is no escalation. Done when each is green, pending (stopped), or named absent.
+   still pending: stop and review again on the next run; it is not a finding. One still pending,
+   or never reported, longer than `stall_minutes` after the head was pushed: call
+   [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access) once, naming the check, and stop.
+   For each `forge.planned_checks` entry the repo does not yet supply, the report names it as
+   absent; this is no escalation. Done when each is green, pending (stopped), escalated, or named
+   absent.
 5. **Over-engineering hunt.** One line per finding: `path:line`, tag, what to cut, what replaces
    it. Tags: `delete:` dead code or a speculative feature; `stdlib:` reinvented standard library;
    `native:` what the platform already does; `yagni:` an abstraction with one user; `dep:` an

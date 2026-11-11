@@ -72,8 +72,15 @@ export function createJiraBoard(ctx: AdapterContext): Board {
       if (q.status?.length) jql.push(`status in (${q.status.map(quote).join(',')})`);
       if (q.label) jql.push(`labels = ${quote(q.label)}`);
       if (q.search) jql.push(`text ~ ${quote(q.search)}`);
-      const r = await api('POST', '/search/jql', { jql: jql.join(' AND ') + ' ORDER BY created ASC', maxResults: 100, fields: (await fetchFields()).split(',') });
-      return Promise.all(r.issues.map(toItem));
+      const fields = (await fetchFields()).split(',');
+      const issues: any[] = [];
+      let nextPageToken: string | undefined;
+      do {
+        const r = await api('POST', '/search/jql', { jql: jql.join(' AND ') + ' ORDER BY created ASC', maxResults: 100, fields, ...(nextPageToken ? { nextPageToken } : {}) });
+        issues.push(...r.issues);
+        nextPageToken = r.isLast === true ? undefined : r.nextPageToken;
+      } while (nextPageToken);
+      return Promise.all(issues.map(toItem));
     },
     get,
     async create(t) {
@@ -104,8 +111,13 @@ export function createJiraBoard(ctx: AdapterContext): Board {
       return { id: String(c.id), url: `${base}/browse/${id}?focusedCommentId=${c.id}` };
     },
     async comments(id, q = {}) {
-      const r = await api('GET', `/issue/${id}/comment?orderBy=-created&maxResults=100`);
-      let list: Comment[] = r.comments.map((c: any) => ({
+      const raw: any[] = [];
+      for (;;) {
+        const r = await api('GET', `/issue/${id}/comment?orderBy=-created&maxResults=100&startAt=${raw.length}`);
+        raw.push(...r.comments);
+        if (!r.comments.length || raw.length >= r.total) break;
+      }
+      let list: Comment[] = raw.map((c: any) => ({
         id: String(c.id), author: c.author?.accountId ?? '', createdAt: c.created, body: adfText(c.body), url: `${base}/browse/${id}?focusedCommentId=${c.id}`,
       }));
       if (q.marker) list = list.filter((c) => c.body.split('\n')[0].includes(q.marker!));

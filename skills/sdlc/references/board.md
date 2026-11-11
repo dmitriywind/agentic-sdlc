@@ -21,7 +21,7 @@ Read from [`sdlc`](../SKILL.md).
   `p0_setters` set it, with proof, and triage also escalates. Ready queue: priority order, then a
   ticket that unblocks others, then oldest.
 - **Labels** are the binding's and no others: `bug` or `feature` on every open ticket, the hold
-  label, one `signal:<stream>` per signal, and one of `board.env_labels` on a signal from a
+  label, `release` on a release request, one `signal:<stream>` per signal, and one of `board.env_labels` on a signal from a
   deployed environment.
 - **Moves** are explicit: the tracker's built-in automations are off. Read one ticket at a time
   (`board get`); never list the whole board, except once per cycle to read state.

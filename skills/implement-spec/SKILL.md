@@ -32,7 +32,8 @@ to `shape`.
 4. **Smallest solution.** Ask whether the code needs to exist at all. Reuse the codebase, then the
    standard library, then the platform, then an installed dependency, before writing anything. Fix
    a root cause once, where every caller routes through. Done when no line of the diff can go.
-5. **Fast check.** Apply `paths.review_checklist` and `paths.test_standard` to your own diff, then
+5. **Fast check.** Apply the review-pr default checklist (`../review-pr/references/checklist.md`), then
+   `paths.review_checklist` when that file exists, and `paths.test_standard` to your own diff, then
    run `commands.fast_check`. Done when no line of the checklist is breached, the command exits 0
    and `vcs push` has published the change line. The full verify is CI's `Required`
    check.

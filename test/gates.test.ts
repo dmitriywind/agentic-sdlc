@@ -421,3 +421,12 @@ test('an unreadable forge diff fails closed to guardrail in approval, linkage an
   const p = await proofsOnBase(f.d, 'big');
   assert.deepEqual([p.class, p.ok, p.files], ['guardrail', true, []]);
 });
+
+test('shipped: a Done ticket with no merged CR is listed as unmatched, unless labelled release', async () => {
+  const f = fakes([item('1', 'Done', { shipped: 'Not shipped' }), item('2', 'Done', { shipped: 'Not shipped' }, { labels: ['rel'] })]);
+  f.d.isAncestor = () => true;
+  f.d.binding = { ...binding, board: { ...binding.board, labels: { release: 'rel' } } } as any;
+  const r: any = await shipped(f.d, 'staging', 'sha1', 'success');
+  assert.deepEqual(r.unmatched, ['1']);
+  assert.equal(f.items[0].fields.shipped, 'Not shipped');
+});

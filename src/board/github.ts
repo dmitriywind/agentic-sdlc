@@ -54,8 +54,12 @@ export function createGithubBoard(ctx: AdapterContext): Board {
       milestone: it.milestone?.title, children: [], assignees: it.assignees ?? [], createdAt: '', updatedAt: '',
     };
   };
-  const items = (): any[] =>
-    json(['project', 'item-list', num, '--owner', o.owner, '--limit', '1000', '--format', 'json']).items.filter((i: any) => i.content?.number !== undefined);
+  const ITEM_CAP = 1000, SEARCH_CAP = 200;
+  const items = (): any[] => {
+    const all: any[] = json(['project', 'item-list', num, '--owner', o.owner, '--limit', String(ITEM_CAP), '--format', 'json']).items;
+    if (all.length >= ITEM_CAP) throw new Error(`the board has ${ITEM_CAP} or more items: archive Done items (gh project item-archive) so every ticket is read`);
+    return all.filter((i: any) => i.content?.number !== undefined);
+  };
   const get = async (id: string): Promise<Item> => {
     const it = items().find((i) => String(i.content.number) === id);
     if (!it) throw new Error(`#${id} is not on the board`);
@@ -84,9 +88,12 @@ export function createGithubBoard(ctx: AdapterContext): Board {
 
   return {
     async list(q = {}) {
-      const hits = q.search
-        ? new Set((json(['issue', 'list', '--repo', o.repo, '--state', 'all', '--search', q.search, '--limit', '200', '--json', 'number']) as any[]).map((x) => String(x.number)))
-        : undefined;
+      let hits: Set<string> | undefined;
+      if (q.search) {
+        const found = json(['issue', 'list', '--repo', o.repo, '--state', 'all', '--search', q.search, '--limit', String(SEARCH_CAP), '--json', 'number']) as any[];
+        if (found.length >= SEARCH_CAP) throw new Error(`the search matched ${SEARCH_CAP} or more issues: narrow it`);
+        hits = new Set(found.map((x) => String(x.number)));
+      }
       return items().map(toItem).filter((i) => (!hits || hits.has(i.id)) && (!q.status?.length || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label)));
     },
     get,
