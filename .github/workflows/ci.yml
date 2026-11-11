@@ -2,7 +2,7 @@ name: ci
 # dist/ is committed: the plugin and github: installs run it. This job fails when it is stale.
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
 permissions:
   contents: read

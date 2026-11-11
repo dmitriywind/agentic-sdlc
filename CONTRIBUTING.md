@@ -39,9 +39,9 @@ home; elsewhere a pointer.
 
 The package ships from Git only, never npm. `dist/` is committed: run `npm run build` and commit
 `dist/` with every `src/` change (CI fails on a stale `dist/`). A release bumps `package.json` and
-`.claude-plugin/plugin.json`, then tags `v<version>` on `main`.
+`.claude-plugin/plugin.json`, then tags `v<version>` on `master`.
 
 ## Changes
 
-Trunk-based: commit small changes to `main`, or use a short-lived branch and a PR. Small and focused, with tests. Describe the change and why. Security issues go through
+Trunk-based: commit small changes to `master` (the trunk), or use a short-lived branch and a PR. Small and focused, with tests. Describe the change and why. Security issues go through
 [SECURITY.md](SECURITY.md), not a public issue.
