@@ -16,7 +16,8 @@ calls another skill. Read the binding (`.agents/binding.yml`) and the hold rules
 
 1. **Search first.** Read `paths.importance_doc` and follow its pointers, then every file in
    `paths.sources_before_question`. Done when each source is named with what it says; a source that
-   answers settles it: return `proceed`.
+   answers a Ruling question settles that trigger. For every other trigger a source may supply
+   options but never settles it; classify in step 2.
 2. **Classify.** Return `escalate` when any trigger holds, naming it; otherwise `proceed`:
    - Architecture: a new component or boundary, a changed data model or public interface.
    - Scope: the change differs from the accepted ticket or touches unrelated areas.

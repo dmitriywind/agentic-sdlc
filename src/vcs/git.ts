@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AdapterContext, Vcs } from '../ports.ts';
@@ -12,7 +12,16 @@ export function git(ctx: AdapterContext): Vcs {
     async start(name) {
       g('fetch', 'origin', trunk);
       const workdir = join(ctx.root, '.agents', 'work', name);
-      g('worktree', 'add', '-b', name, workdir, `origin/${trunk}`);
+      if (existsSync(workdir)) return { workdir, ref: name };
+      g('worktree', 'prune');
+      const has = (ref: string) => { try { g('rev-parse', '--verify', '--quiet', ref); return true; } catch { return false; } };
+      if (has(`refs/heads/${name}`)) g('worktree', 'add', workdir, name);
+      else {
+        let remote = true;
+        try { g('fetch', 'origin', name); } catch { remote = false; }
+        if (remote) g('worktree', 'add', '-b', name, workdir, `origin/${name}`);
+        else g('worktree', 'add', '-b', name, workdir, `origin/${trunk}`);
+      }
       return { workdir, ref: name };
     },
     async head() { return { ref: g('rev-parse', '--abbrev-ref', 'HEAD'), sha: g('rev-parse', 'HEAD') }; },

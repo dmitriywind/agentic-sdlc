@@ -30,8 +30,11 @@ The Product owner approves the last environment; this skill never does.
    month from 1; semver bumps from the last release. Never reuse a version, even a failed one. Done
    when the version is unused as a tag and a release line.
 5. **Propose.** One comment to the Product owner on the release request: contents, version,
-   revision, and the open signals per environment with each one's Status. Done when posted.
-6. **Mark.** `board set <id> release_version <version>` on each selected ticket. Done when every
+   revision, and the open signals per environment with each one's Status. Then stop. Done when posted and the run has stopped.
+6. **Mark.**
+   Go-ahead first: continue only after a trusted Product owner reply on the proposal approves it
+   (`board comments <id> --trusted` on the release request; a later run resumes here). A reply that
+   changes the contents restarts at step 3. Then `board set <id> release_version <version>` on each selected ticket. Done when every
    ticket shows it.
 7. **Cut.** `agentic-sdlc vcs cut <revision> <version>` from the chosen revision, never from a
    moving ref (`vcs.release_prefix` is applied by the verb). The cut starts release CI, and the

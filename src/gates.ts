@@ -333,10 +333,17 @@ export async function shipped(d: Deps, env: string, sha: string, result: string)
   }
   if (last) {
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
-    for (const x of done.filter((x) => x.fields.release_version && x.fields.shipped === 'In release')) {
-      await d.board.set(x.id, 'shipped', back);
-      await d.board.set(x.id, 'release_version', null);
-      changed.push(x.id);
+    // Reset only tickets whose every merged CR is in the failed deploy; a newer release line stays.
+    const isAnc = d.isAncestor;
+    if (isAnc) {
+      const merged = await d.forge.list({ state: 'merged' });
+      for (const x of done.filter((x) => x.fields.release_version && x.fields.shipped === 'In release')) {
+        const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+        if (!shas.length || shas.some((s) => !s || isAnc(s, sha) !== true)) continue;
+        await d.board.set(x.id, 'shipped', back);
+        await d.board.set(x.id, 'release_version', null);
+        changed.push(x.id);
+      }
     }
   }
   await signal(last);
@@ -350,7 +357,7 @@ const cleanUrl = (u: string) => redact(String(u ?? '').replace(/^(\w+:\/\/)[^/@]
 export async function signalOnRed(d: Deps, id: string) {
   const runs = [...(await d.forge.runs({ failed: true })), ...(await d.forge.runs({}))];
   const run = runs.find((r) => String(r.id) === id);
-  if (!run) throw new Error(`run ${id} not found`);
+  if (!run) return { created: false, reason: `run ${redact(id, 40)} not in the recent runs` };
   const v = d.binding.vcs;
   if (run.ref !== v.trunk && !run.ref.startsWith(v.release_prefix)) return { created: false, reason: `ref ${redact(run.ref, 100)} is not trunk or a release line` };
   const title = redact(`CI red: ${run.name} @ ${run.ref} (run ${run.id})`, 1000).replace(/[^A-Za-z0-9 ._/:@()-]/g, '').slice(0, 100);

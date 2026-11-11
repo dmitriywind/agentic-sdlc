@@ -69,6 +69,24 @@ history, no direct push except the bot) and release branches cut with `vcs cut` 
 | Auto-merge, merge queue | native; the CR workflow also triggers on `merge_group` |
 | Trunk | `ruleset.trunk.json`: one approving review, stale reviews dismissed, the six required checks pinned, linear history; a second ruleset for release branches |
 
+One-time setup (private repos need a plan with Environments: Pro, Team or Enterprise):
+
+1. Create Environment `agentic-review`. Deployment branches: selected branches, the trunk exactly,
+   `gh-readonly-queue/<trunk>/*` and the release line glob (`<release_prefix>*`; without it a CR to a release line never gets `human-approval`). Store `AGENTIC_REVIEW_TOKEN` there and nowhere else. Only the jobs
+   `human-approval` and `carry-statuses` declare it, so no PR-ref run can read it.
+2. Add `AGENTIC_FORGE_TOKEN` as a repo secret (`proofs-on-base` falls back to the read-only job token and
+   its status post fails by design; the job's exit code is the check).
+3. Add `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events:
+
+```yaml
+name: agentic-sdlc review event
+on:
+  pull_request_review: { types: [submitted, dismissed] }
+permissions: {}
+jobs:
+  relay: { runs-on: ubuntu-latest, steps: [{ run: "true" }] }
+```
+
 ## GitLab
 | Guarantee | How |
 |---|---|
@@ -78,6 +96,13 @@ history, no direct push except the bot) and release branches cut with `vcs cut` 
 | Board sync, shipped, signals | jobs in `agentic-sdlc.gitlab-ci.yml`; merged = trunk push job |
 | Auto-merge | native (merge when pipeline succeeds, merge trains) |
 | Trunk | protected branch, fast-forward merge, push by bot only; protected release branches |
+
+Variables: `AGENTIC_FORGE_TOKEN`, `AGENTIC_BOARD_TOKEN`, `AGENTIC_REVIEW_TOKEN` are Protected, Masked and
+hidden; "protected variables in MR pipelines" stays off. `AGENTIC_READ_TOKEN` is a project access token with
+Reporter role and `read_api` scope, masked and not protected: `proofs-on-base` runs MR code and gets only this.
+Limitation: environment scope is a name match an MR can declare, and protected variables do not reach MR
+pipelines. So the secret-holding gates must run from the trigger relay on the default branch; the template
+does not do this yet (tracked for the next release).
 
 ## Azure DevOps
 | Guarantee | How |

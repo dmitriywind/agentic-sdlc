@@ -1,7 +1,9 @@
 # Include from .gitlab-ci.yml:  include: { local: .gitlab/agentic-sdlc.yml }
-# Secrets (masked CI/CD variables): AGENTIC_FORGE_TOKEN, AGENTIC_BOARD_TOKEN, AGENTIC_REVIEW_TOKEN.
-# Scope them to the environment `agentic-gates` (variable environment scope): only jobs that declare it
-# read them, so `Required` and `proofs-on-base`, which run the MR's code, hold no secret.
+# Secrets: AGENTIC_FORGE_TOKEN, AGENTIC_BOARD_TOKEN, AGENTIC_REVIEW_TOKEN as CI/CD variables that are
+# Protected, Masked and hidden; keep "protected variables in MR pipelines" off. Environment scope is a name
+# match that an MR can declare in its own .gitlab-ci.yml, so it is no boundary on its own. Protected
+# variables do not reach MR pipelines, so the secret-holding gates (ticket-linkage, human-approval,
+# board-in-review) must run from the trigger relay on the default branch. Known limitation, tracked for the next release.
 # Project settings: "Pipelines must succeed", fast-forward merge, merge trains on the trunk. Required
 # checks: ticket-linkage, Required, proofs-on-base, review, human-approval, skill-regression.
 # Event -> gate wiring only.
@@ -51,12 +53,14 @@ Required:
 
 # The MR's new or changed proofs against the merge base's product code; posts status proofs-on-base.
 # No environment, so no agentic secret: the job's own result is the check ("Pipelines must succeed").
-# Give this job no token: it runs MR code, which could post the review or human-approval status.
+# AGENTIC_READ_TOKEN: a project access token with Reporter role and read_api scope only, masked and not
+# protected, because MR code can read it and it must be unable to post statuses.
 proofs-on-base:
   image: node:22
   stage: test
   variables:
     GIT_DEPTH: "0"
+    AGENTIC_FORGE_TOKEN: $AGENTIC_READ_TOKEN
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:

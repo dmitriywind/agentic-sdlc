@@ -46,6 +46,8 @@ jobs:
       pull-requests: read
     env:
       GH_TOKEN: ${{ github.token }}
+      # forge.options.token_env: the job token is read-only, so the status post fails by design; the job's exit code is the check.
+      AGENTIC_FORGE_TOKEN: ${{ github.token }}
       AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
       CR: ${{ github.event.pull_request.number }}
     steps:

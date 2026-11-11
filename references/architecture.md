@@ -137,7 +137,7 @@ merge checks; auto-merge = the gate merges when green).
 
 | Verb | Effect |
 |---|---|
-| `start <name>` → `{ workdir, ref }` | fetch; worktree and branch from the trunk tip |
+| `start <name>` → `{ workdir, ref }` | fetch; reuse the change line `<name>` (its worktree, local branch or origin branch) when it exists, else a worktree and branch from the trunk tip |
 | `head` → `{ ref, sha }` | `HEAD` |
 | `changed [--since <rev>]` → `string[]` | `diff --name-only` against the merge base |
 | `base` → `{ sha }` | merge base with the trunk |
@@ -150,7 +150,7 @@ merge checks; auto-merge = the gate merges when green).
 | (`snapshot(rev)`, API only) | detached worktree outside the root, for the bench |
 
 The trunk, release prefix and name pattern come from the binding. "Branch" in skills means the
-change line `start` creates.
+change line `start` opens.
 
 ### 3.4 Gates (`agentic-sdlc gate <name>`): run by CI, never by agents
 

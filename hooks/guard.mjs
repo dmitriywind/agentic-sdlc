@@ -6,7 +6,7 @@
 // ponytail: a token scan, not a shell parser; the ruleset and the token split are the real defence.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const block = (why) => { process.stderr.write(`agentic-sdlc guard: ${why}\n`); process.exit(2); };
 
@@ -23,23 +23,30 @@ if (/forge_approve$/.test(input.tool_name ?? '')) {
 const command = String(input.tool_input?.command ?? '');
 if (!command) process.exit(0);
 
-let trunk = 'main';
-try {
-  const m = /^\s*trunk:\s*["']?([^\s"'#]+)/m.exec(readFileSync(join(dir, '.agents', 'binding.yml'), 'utf8'));
-  if (m) trunk = m[1];
-} catch { /* no binding: default trunk */ }
-
-const headOf = (cwd) => {
-  try { return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+const gitOut = (cwd, ...args) => {
+  try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
   catch { return ''; }
 };
+const headOf = (cwd) => gitOut(cwd, 'rev-parse', '--abbrev-ref', 'HEAD');
+
+// The binding lives at the project root: the repo top, the main checkout of a linked worktree, the plugin's project dir, or cwd.
+const common = gitOut(dir, 'rev-parse', '--path-format=absolute', '--git-common-dir');
+const trunks = new Set(['main', 'master']);
+for (const c of [gitOut(dir, 'rev-parse', '--show-toplevel'), common && dirname(common), process.env.CLAUDE_PROJECT_DIR, dir]) {
+  if (!c) continue;
+  let text;
+  try { text = readFileSync(join(c, '.agents', 'binding.yml'), 'utf8'); } catch { continue; }
+  const m = /^\s*trunk:\s*["']?([^\s"'#]+)/m.exec(text);
+  if (m) { trunks.clear(); trunks.add(m[1]); }
+  break;
+}
 const CLI = /(^|[/\\])agentic-sdlc$|agentic-sdlc[/\\]dist[/\\]bin\.js$/;
 const GIT = /(^|[/\\])git(\.exe)?$/;
 const WITH_VALUE = ['-C', '-c', '--git-dir', '--work-tree', '--namespace'];
 
 for (const seg of command.split(/&&|\|\||[;|&\n]/)) {
-  // Quotes and parentheses dropped, so `bash -c 'git push ...'` and `(git push ...)` are scanned too.
-  const t = seg.trim().split(/\s+/).map((x) => x.replace(/^['"(]+|['")]+$/g, '')).filter(Boolean);
+  // Quotes, parentheses, `$(` and backticks dropped, so `bash -c 'git push ...'`, `(git push ...)`, `$(git push ...)` and `` `git push ...` `` are scanned too.
+  const t = seg.trim().split(/\s+/).map((x) => x.replace(/^['"(`$]+|['")`]+$/g, '')).filter(Boolean);
   const cli = t.findIndex((x) => CLI.test(x));
   if (cli >= 0) {
     const rest = t.slice(cli + 1).filter((x, i, a) => !(x === '--root' || a[i - 1] === '--root'));
@@ -63,7 +70,8 @@ for (const seg of command.split(/&&|\|\||[;|&\n]/)) {
     const d = r.replace(/^\+/, '').split(':').pop().replace(/^refs\/heads\//, '');
     return d === 'HEAD' || d === '@' ? head : d;
   };
-  if (refs.slice(1).some((r) => dst(r) === trunk)) block(`push to the trunk '${trunk}' is not allowed: open a CR.`);
-  if (refs.length <= 1 && head === trunk) block(`push from the trunk '${trunk}' is not allowed: start a change line and open a CR.`);
+  const hit = refs.slice(1).map(dst).find((d) => trunks.has(d));
+  if (hit) block(`push to the trunk '${hit}' is not allowed: open a CR.`);
+  if (refs.length <= 1 && trunks.has(head)) block(`push from the trunk '${head}' is not allowed: start a change line and open a CR.`);
 }
 process.exit(0);

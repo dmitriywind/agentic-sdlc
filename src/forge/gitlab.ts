@@ -14,7 +14,7 @@ export function gitlab(ctx: AdapterContext): Forge {
   const call = (m: string, p: string, body?: unknown, key = 'token_env') =>
     ctx.http(m, base + p, { headers: { 'PRIVATE-TOKEN': secret(ctx, key) }, body });
   const toCR = async (m: any): Promise<CR> => {
-    const st = await call('GET', `/repository/commits/${m.sha}/statuses`);
+    const st = await call('GET', `/repository/commits/${m.sha}/statuses?per_page=100&all=false`); // ponytail: first 100 statuses; follow x-next-page if a project exceeds it
     return {
       n: String(m.iid), url: m.web_url, title: m.title.replace(DRAFT, ''), source: m.source_branch, target: m.target_branch,
       headSha: m.sha, baseSha: m.diff_refs?.base_sha ?? '', draft: DRAFT.test(m.title) || !!m.draft,

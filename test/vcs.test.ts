@@ -98,3 +98,32 @@ test('git: snapshot is a detached tree outside the root; changed sees edits, add
   assert.ok(!existsSync(s.workdir));
   assert.doesNotMatch(git(root, 'worktree', 'list'), /agentic-bench-/);
 });
+
+test('git: start resumes an existing change line', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'vcs-'));
+  const origin = join(tmp, 'origin.git');
+  const root = join(tmp, 'work');
+  execFileSync('git', ['init', '--bare', '-b', 'main', origin]);
+  execFileSync('git', ['clone', origin, root], { stdio: 'pipe' });
+  git(root, 'config', 'user.email', 'a@b.c');
+  git(root, 'config', 'user.name', 'a');
+  git(root, 'checkout', '-b', 'main');
+  writeFileSync(join(root, 'a.txt'), '1');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'init');
+  git(root, 'push', '-u', 'origin', 'main');
+  const vcs = createVcs({ root, binding: binding('git'), options: {}, env: process.env, exec, http: async () => ({}) });
+  const first = await vcs.start('t-2-x');
+  assert.equal((await vcs.start('t-2-x')).workdir, first.workdir);
+  git(first.workdir, 'config', 'user.email', 'a@b.c');
+  git(first.workdir, 'config', 'user.name', 'a');
+  writeFileSync(join(first.workdir, 'b.txt'), '2');
+  git(first.workdir, 'add', '.');
+  git(first.workdir, 'commit', '-m', 'b');
+  const sha = git(first.workdir, 'rev-parse', 'HEAD');
+  git(first.workdir, 'push', '-u', 'origin', 't-2-x');
+  git(root, 'worktree', 'remove', '--force', first.workdir);
+  git(root, 'branch', '-D', 't-2-x');
+  const again = await vcs.start('t-2-x');
+  assert.equal(git(again.workdir, 'rev-parse', 'HEAD'), sha);
+});

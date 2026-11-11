@@ -5,6 +5,10 @@ not on npm.
 
 ## Unreleased
 
+- Skills: review-pr blocks PASS only on an Important finding and stops while a criterion is pending; implement-spec has a rework path that reopens the change line; escalate-to-human returns early only for Ruling; shape stops on a failure that does not reproduce; release waits for a trusted go-ahead between proposal and cut.
+- Fix: gate templates. `proofs-on-base` gets a forge token so it can pass; the review token moves to the trunk-only Environment `agentic-review` (jobs `human-approval`, `carry-statuses`; review events relay through `workflow_run`); signal-on-red is filtered to trunk and release lines; the GitLab trust note no longer claims environment scope protects secrets.
+- Fix: the push guard finds the binding from a subdirectory or linked worktree (trunk defaults to main and master when none), and sees through `$(...)` and backticks.
+- Fix: GitLab reads up to 100 commit statuses; a failed last-env deploy resets only tickets whose CRs are in the failed sha; signal-on-red no longer fails on a run outside the recent window; `vcs start` reuses an existing change line.
 - Fix: skills no longer call operations no verb provides (escalate-to-human pushes only from a change line; grooming drops Done archiving); dispatch usage allows --ticket and --cr together.
 - Fix: validate requires owners.factory and paths.factory; GitLab diffs carry new/deleted/rename lines; parseCloses stays on its line; init makes the pre-push hook executable.
 - Operate: triage-signal gets mitigation-first and postmortem-plus-regression exit for P0 and a rule for `signal:maintenance`; shape asks for the exposure shape; the template binding adds the `maintenance` stream.

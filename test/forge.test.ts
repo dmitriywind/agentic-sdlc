@@ -27,13 +27,14 @@ const glMr = (o = {}) => ({ iid: 7, web_url: 'u', title: 'Draft: T', source_bran
 
 test('gitlab: view maps fields, ready strips Draft, automerge uses merge_when_pipeline_succeeds', async () => {
   const { ctx, calls } = mk('gitlab', { project: 'g/p', base_url: 'https://gl', token_env: 'TOK' }, (_m, url) =>
-    url.endsWith('/statuses') ? [{ name: 'ci', status: 'success' }] : url.includes('/merge_requests/7') ? glMr() : []);
+    url.includes('/statuses') ? [{ name: 'ci', status: 'success' }] : url.includes('/merge_requests/7') ? glMr() : []);
   const f = createForge(ctx);
   const cr = await f.view('7');
   assert.equal(cr.draft, true);
   assert.equal(cr.title, 'T');
   assert.deepEqual(cr.closes, ['12']);
   assert.deepEqual(cr.checks, [{ name: 'ci', state: 'success' }]);
+  assert.ok(calls.some((c) => c.url.includes('/statuses?per_page=100')));
   await f.ready('7');
   assert.equal(calls.find((c) => c.m === 'PUT')!.body.title, 'T');
   await f.automerge('7');
@@ -113,7 +114,7 @@ test('github: uses gh with body on stdin, draft = ready --undo, status via api',
 });
 
 test('cli: JSON on stdout, usage error is 2, failure is 1', async () => {
-  const { ctx } = mk('gitlab', { project: 'p', base_url: 'https://gl', token_env: 'TOK' }, (_m, url) => (url.endsWith('/statuses') ? [] : url.includes('/merge_requests/7') ? glMr() : {}));
+  const { ctx } = mk('gitlab', { project: 'p', base_url: 'https://gl', token_env: 'TOK' }, (_m, url) => (url.includes('/statuses') ? [] : url.includes('/merge_requests/7') ? glMr() : {}));
   const base = { root: ctx.root, binding: ctx.binding, env: ctx.env, exec: ctx.exec, http: ctx.http };
   const out: string[] = [];
   const w = process.stdout.write;

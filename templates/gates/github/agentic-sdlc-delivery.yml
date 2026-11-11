@@ -66,9 +66,11 @@ jobs:
 
       - name: Signal on red
         # Trunk and release pushes only: a red PR run is the CR's business, not a signal.
+        # set: vcs.trunk and vcs.release_prefix (the head_branch test below)
         if: >-
           github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
-          (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out')
+          (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out') &&
+          (github.event.workflow_run.head_branch == 'main' || startsWith(github.event.workflow_run.head_branch, 'release/'))
         run: agentic-sdlc gate signal-on-red --run "$RUN_ID"
 
       - name: Merged

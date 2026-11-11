@@ -8268,7 +8268,7 @@ function gitlab(ctx) {
   const base = `${root}/api/v4/projects/${encodeURIComponent(String(ctx.options.project))}`;
   const call = (m, p, body, key = "token_env") => ctx.http(m, base + p, { headers: { "PRIVATE-TOKEN": secret(ctx, key) }, body });
   const toCR = async (m) => {
-    const st = await call("GET", `/repository/commits/${m.sha}/statuses`);
+    const st = await call("GET", `/repository/commits/${m.sha}/statuses?per_page=100&all=false`);
     return {
       n: String(m.iid),
       url: m.web_url,
@@ -8376,7 +8376,7 @@ function createForge(ctx) {
 }
 
 // src/vcs/git.ts
-import { mkdtempSync, rmSync } from "fs";
+import { existsSync as existsSync2, mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join as join2 } from "path";
 function git(ctx) {
@@ -8388,7 +8388,27 @@ function git(ctx) {
     async start(name) {
       g("fetch", "origin", trunk);
       const workdir = join2(ctx.root, ".agents", "work", name);
-      g("worktree", "add", "-b", name, workdir, `origin/${trunk}`);
+      if (existsSync2(workdir)) return { workdir, ref: name };
+      g("worktree", "prune");
+      const has = (ref) => {
+        try {
+          g("rev-parse", "--verify", "--quiet", ref);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      if (has(`refs/heads/${name}`)) g("worktree", "add", workdir, name);
+      else {
+        let remote = true;
+        try {
+          g("fetch", "origin", name);
+        } catch {
+          remote = false;
+        }
+        if (remote) g("worktree", "add", "-b", name, workdir, `origin/${name}`);
+        else g("worktree", "add", "-b", name, workdir, `origin/${trunk}`);
+      }
       return { workdir, ref: name };
     },
     async head() {

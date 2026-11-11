@@ -17,11 +17,14 @@ to `shape`.
 
 1. **Claim.** Take the dispatched ticket; with none, the top Ready ticket in queue order that is neither held nor assigned to anyone but this run's executor. Move it
    to In progress (`board move <id> "In progress" --only-from Ready`); the move guard keeps two
-   runs off one ticket. A ticket already at In progress with no open CR is worked the same way.
+   runs off one ticket. A ticket already at In progress with no open CR is worked the same way. A ticket
+   at In progress whose open CR closes it is rework: read the newest review-pr report on that CR
+   (`forge view <n>`) and fix each Important finding first.
    Done when the board shows In progress.
-2. **Branch.** `agentic-sdlc vcs start <name>`, named by `vcs.change_pattern`, from the trunk tip.
-   Work in the `workdir` it returns, one per ticket, at most `parallel_agents` at once. Done when
-   `vcs head` shows the new change line.
+2. **Branch.** `agentic-sdlc vcs start <name>`, named by `vcs.change_pattern`: it reopens the existing change
+   line when one exists (rework uses the CR's source branch name) and otherwise starts from the
+   trunk tip. Work in the `workdir` it returns, one per ticket, at most `parallel_agents` at once. Done when
+   `vcs head` shows the change line.
 3. **Test first.** For each step of the spec's plan (in the Fast lane, the ticket's proof list), in
    order: write one failing proof (test, eval case or check) through the public interface, see it red and keep the red output
    for the CR body, make it green, then refactor. Never test private internals. A fix CR commits its

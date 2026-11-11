@@ -6,39 +6,41 @@ name: agentic-sdlc CR gate
 # pull_request_target: this file and the binding come from the base branch, so a PR cannot change
 # what runs with these secrets. The PR's code is never checked out or run here; its number, head ref
 # and head sha reach the gates only as data (env).
-# pull_request_review: GitHub runs this file from the PR's merge ref and gives fork PRs no secrets. A
-# same-repo branch can already run any workflow with repo secrets, so this adds no exposure; to close
-# that, keep AGENTIC_REVIEW_TOKEN in an environment limited to the trunk (deferred: App tokens). On a
-# fork PR the approval status updates on the next pull_request_target event or a re-run.
+# AGENTIC_REVIEW_TOKEN lives only in Environment `agentic-review`, whose deployment-branch rule names the
+# trunk exactly, `gh-readonly-queue/<trunk>/*` (the merge queue ref) and the release line glob. No job that a PR-ref event runs can
+# read it: a review event reaches `human-approval` through the no-secret `agentic-sdlc review event` workflow
+# (docs/forges.md) and workflow_run, which runs from the default branch. A fork PR's approval status updates
+# on the next pull_request_target event or a re-run.
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, edited, closed]
-  pull_request_review:
-    types: [submitted, dismissed]
+  workflow_run:
+    workflows: ["agentic-sdlc review event"]
+    types: [completed]
   merge_group:   # merge queue: carries the PR head's review statuses to the queue commit
 
-permissions:
-  contents: read
-  pull-requests: read
+permissions: {}
 
 concurrency:
   # closed has its own group so a late push can never cancel the merged move.
-  group: agentic-cr-${{ github.event.pull_request.number || github.event.merge_group.head_sha }}-${{ github.event.action == 'closed' && 'closed' || github.event_name }}
+  group: agentic-cr-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.merge_group.head_sha }}-${{ github.event.action == 'closed' && 'closed' || github.event_name }}
   cancel-in-progress: ${{ github.event.action != 'closed' }}
 
 jobs:
   ticket-linkage:
     name: ticket-linkage
+    if: github.event_name != 'workflow_run'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
     env:
-      # Secret names the binding's options point at: forge token_env, board token_env, forge review_token_env.
+      # Secret names the binding's options point at: forge token_env, board token_env. No review token here.
       GH_TOKEN: ${{ github.token }}
       AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
       AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
-      AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
       AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
-      EVENT: ${{ github.event_name }}
       CR: ${{ github.event.pull_request.number }}
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
       ACTION: ${{ github.event.action }}
@@ -52,10 +54,6 @@ jobs:
           ref: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref }}
           fetch-depth: 0
           persist-credentials: false
-      # The PR head as data only: its objects let `gate approval` read the head's files; it is never checked out or run.
-      - name: Fetch PR head objects
-        if: github.event_name != 'merge_group' && github.event.action != 'closed'
-        run: git fetch --no-tags origin "+refs/pull/$CR/head:refs/remotes/pr/head"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -68,8 +66,6 @@ jobs:
             npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.2}"
           fi
 
-      # Also on pull_request_review: this job's newest run is the required check, so a review event must
-      # re-run linkage, not report a green job with the checks skipped.
       - name: Branch names
         if: github.event_name != 'merge_group' && github.event.action != 'closed'
         run: agentic-sdlc gate branch-names --ref "$HEAD_REF"
@@ -77,12 +73,6 @@ jobs:
       - name: Ticket linkage
         if: github.event_name != 'merge_group' && github.event.action != 'closed' && github.event.pull_request.draft == false
         run: agentic-sdlc gate linkage --cr "$CR"
-
-      - name: Human approval
-        # Posts status human-approval on the head (with the review identity's token): computes the class
-        # and checks the approving reviews the class needs. Re-runs when a review is submitted or dismissed.
-        if: github.event_name != 'merge_group' && github.event.action != 'closed'
-        run: agentic-sdlc gate approval --cr "$CR"
 
       - name: Board sync
         if: github.event_name == 'pull_request_target'
@@ -99,11 +89,66 @@ jobs:
           fi
           agentic-sdlc gate board-sync --cr "$CR" --event "$event"
 
+  human-approval:
+    # Posts status human-approval on the head (with the review identity's token): computes the class and
+    # checks the approving reviews the class needs. Runs on a PR event and, via workflow_run, on a review event.
+    name: human-approval
+    if: (github.event_name == 'pull_request_target' && github.event.action != 'closed') || github.event_name == 'workflow_run'
+    environment: agentic-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
+      AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
+      AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
+      # Empty on a fork PR's review event: every step after checkout is then skipped.
+      CR: ${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number }}
+    steps:
+      # Base branch only: the binding in force is the trunk's, not the PR's.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      # The PR head as data only: its objects let `gate approval` read the head's files; it is never checked out or run.
+      - name: Fetch PR head objects
+        if: env.CR != ''
+        run: git fetch --no-tags origin "+refs/pull/$CR/head:refs/remotes/pr/head"
+      - uses: actions/setup-node@v4
+        if: env.CR != ''
+        with:
+          node-version: 22
+      - name: Install agentic-sdlc (the trunk's pinned devDependency)
+        if: env.CR != ''
+        run: |
+          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
+            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+          else
+            # set: repo variable AGENTIC_SDLC_VERSION to an exact version, or add agentic-sdlc as a devDependency
+            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.2}"
+          fi
+      - name: Human approval
+        if: env.CR != ''
+        run: agentic-sdlc gate approval --cr "$CR"
+
+  carry-statuses:
+    # A merge queue needs every required check on its own commit. Required, proofs-on-base and
+    # skill-regression run there (agentic-sdlc-verify.yml); review and human-approval were earned on
+    # the PR head, so copy their state with the same token that posted them.
+    name: carry-statuses
+    if: github.event_name == 'merge_group'
+    environment: agentic-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
       - name: Carry PR statuses to the queue commit
-        # A merge queue needs every required check on its own commit. Required, proofs-on-base and
-        # skill-regression run there (agentic-sdlc-verify.yml); review and human-approval were earned on
-        # the PR head, so copy their state with the same token that posted them.
-        if: github.event_name == 'merge_group'
         env:
           GH_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
           QUEUE_REF: ${{ github.event.merge_group.head_ref }}

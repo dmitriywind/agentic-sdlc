@@ -26,8 +26,9 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    criterion without proof is a finding. For a criterion with proof `computer-use`, run
    `agentic-sdlc dispatch verify-ux --ticket <id> --cr <n>` once per head, then grade its
    `<!-- verify-ux -->` comment for this head (`--trusted`). Until that comment appears it is
-   pending, not a finding; still missing after `stall_minutes`, it is a finding. A departure from
-   the spec in design is an escalation. Done when every criterion has a row.
+   pending, not a finding; still missing after `stall_minutes`, it is a finding. A pending criterion
+   stops the review as step 4 does: no status, no approval; review this head again on the next
+   run. A departure from the spec in design is an escalation. Done when every criterion has a row.
 3. **Standards pass.** Apply `paths.review_checklist` and `paths.test_standard`, and the rules
    matching the changed paths. Before calling a finding one defect or three, form an independent
    read from the raw facts first. Done when every rule was applied to the diff.
@@ -45,9 +46,10 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
 6. **Report.** One CR comment (`forge comment <n> --body-file <f>`): the criterion table, findings
    smallest fix first, each tagged with a pass (bugs, security or compliance) and a severity
    (Important or Nit), with at most a few Nits, the hunt, the CI results read and the head, and
-   the verdict PASS or REMEDIATION REQUIRED. Done when posted.
+   the verdict PASS or REMEDIATION REQUIRED. Nits are posted in the report; they never block PASS
+   or cause a send-back. Done when posted.
 7. **Decide.**
-   - PASS (every criterion proven, no finding open, `Required` and `proofs-on-base` green on this
+   - PASS (every criterion proven, no Important finding open, `Required` and `proofs-on-base` green on this
      head), from the review runtime only, as `forge.review_identity`: `forge status <head>
      --context <forge.review_check_name> --state success --description <verdict> --url <report
      link>`, then `forge approve <n>`. Both use `forge.options.review_token_env`, never the

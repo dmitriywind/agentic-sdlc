@@ -127,7 +127,7 @@ test('signal-on-red: redacted summary, deduplicated, string ids', async () => {
   assert.ok(!body.includes('SECRET') && !body.includes('u:p@'));
   assert.deepEqual(f.created[0].labels, ['signal:ci']);
   assert.equal((await signalOnRed(f.d, '987')).created, false);
-  await assert.rejects(signalOnRed(f.d, '1'), /not found/);
+  assert.equal((await signalOnRed(f.d, '1')).created, false);
 });
 
 test('skill-regression: valid pack passes, bad frontmatter and broken links listed', () => {
@@ -336,7 +336,8 @@ test('shipped: only Done tickets whose merge sha is an ancestor; unknown ancestr
     item('5', 'Done', { shipped: 'In release', release_version: '1' }),
     item('6', 'Done', { shipped: 'On staging', release_version: '1' }),
     item('7', 'Done', { shipped: 'On production', release_version: '0' }),
-  ]);
+  ], { m5: { state: 'merged', closes: ['5'], mergeSha: 'm5' } });
+  h.d.isAncestor = () => true;
   assert.deepEqual((await shipped(h.d, 'production', 'x', 'failure')).changed, ['5']);
 });
 
@@ -378,4 +379,22 @@ test('signal-on-red: only trunk or release refs; strict title', async () => {
   assert.equal((await signalOnRed(f.d, '2')).created, true);
   const t = f.created[0].title as string;
   assert.ok(t.length <= 100 && /^[A-Za-z0-9 ._/:@()-]+$/.test(t), t);
+});
+
+test('shipped: a last-env failure resets only tickets whose CRs are in the failed sha', async () => {
+  const f = fakes([
+    item('1', 'Done', { shipped: 'In release', release_version: '2026.11.1' }),
+    item('2', 'Done', { shipped: 'In release', release_version: '2026.11.2' }),
+  ], { a: { state: 'merged', closes: ['1'], mergeSha: 'A' }, b: { state: 'merged', closes: ['2'], mergeSha: 'B' } });
+  f.d.isAncestor = (s) => s === 'A';
+  const r = await shipped(f.d, 'production', 'failed', 'failure');
+  assert.deepEqual(r.changed, ['1']);
+  assert.equal(f.items[0].fields.shipped, 'On staging');
+  assert.equal(f.items[1].fields.shipped, 'In release');
+  assert.equal(f.items[1].fields.release_version, '2026.11.2');
+});
+
+test('signal-on-red: a run outside the recent runs is reported, not thrown', async () => {
+  const f = fakes([], {}, {}, []);
+  assert.equal((await signalOnRed(f.d, 'nope')).created, false);
 });

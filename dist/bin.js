@@ -8662,7 +8662,7 @@ function gitlab(ctx) {
   const base = `${root}/api/v4/projects/${encodeURIComponent(String(ctx.options.project))}`;
   const call = (m, p, body, key = "token_env") => ctx.http(m, base + p, { headers: { "PRIVATE-TOKEN": secret(ctx, key) }, body });
   const toCR = async (m) => {
-    const st = await call("GET", `/repository/commits/${m.sha}/statuses`);
+    const st = await call("GET", `/repository/commits/${m.sha}/statuses?per_page=100&all=false`);
     return {
       n: String(m.iid),
       url: m.web_url,
@@ -8842,7 +8842,7 @@ var init_forge = __esm({
 });
 
 // src/vcs/git.ts
-import { mkdtempSync, rmSync } from "fs";
+import { existsSync as existsSync2, mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join as join3 } from "path";
 function git(ctx) {
@@ -8854,7 +8854,27 @@ function git(ctx) {
     async start(name) {
       g("fetch", "origin", trunk);
       const workdir = join3(ctx.root, ".agents", "work", name);
-      g("worktree", "add", "-b", name, workdir, `origin/${trunk}`);
+      if (existsSync2(workdir)) return { workdir, ref: name };
+      g("worktree", "prune");
+      const has = (ref) => {
+        try {
+          g("rev-parse", "--verify", "--quiet", ref);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      if (has(`refs/heads/${name}`)) g("worktree", "add", workdir, name);
+      else {
+        let remote = true;
+        try {
+          g("fetch", "origin", name);
+        } catch {
+          remote = false;
+        }
+        if (remote) g("worktree", "add", "-b", name, workdir, `origin/${name}`);
+        else g("worktree", "add", "-b", name, workdir, `origin/${trunk}`);
+      }
       return { workdir, ref: name };
     },
     async head() {
@@ -8996,13 +9016,13 @@ __export(install_exports, {
   validate: () => validate
 });
 import { createHash } from "crypto";
-import { chmodSync, cpSync, existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync5, readdirSync, statSync, writeFileSync as writeFileSync2 } from "fs";
+import { chmodSync, cpSync, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync5, readdirSync, statSync, writeFileSync as writeFileSync2 } from "fs";
 import { dirname as dirname2, join as join4, relative, resolve } from "path";
 import { fileURLToPath } from "url";
 function packageRoot(env = process.env) {
   if (env.AGENTIC_SDLC_PACKAGE) return resolve(env.AGENTIC_SDLC_PACKAGE);
   let d = dirname2(fileURLToPath(import.meta.url));
-  while (!existsSync2(join4(d, "package.json"))) {
+  while (!existsSync3(join4(d, "package.json"))) {
     const up = dirname2(d);
     if (up === d) throw new Error("cannot find the agentic-sdlc package root");
     d = up;
@@ -9010,7 +9030,7 @@ function packageRoot(env = process.env) {
   return d;
 }
 function copyFile(from, to, force, log) {
-  if (existsSync2(to) && !force) {
+  if (existsSync3(to) && !force) {
     log.push(`kept ${to}`);
     return;
   }
@@ -9019,7 +9039,7 @@ function copyFile(from, to, force, log) {
   log.push(`wrote ${to}`);
 }
 function writeKept(to, text, force, log, rel) {
-  if (existsSync2(to) && !force) {
+  if (existsSync3(to) && !force) {
     log.push(`kept ${rel}`);
     return;
   }
@@ -9029,13 +9049,13 @@ function writeKept(to, text, force, log, rel) {
 }
 function syncSkills(src, root, dest, force, log) {
   const lockFile = join4(root, SKILLS_LOCK);
-  const lock = existsSync2(lockFile) ? readJson(lockFile) : {};
+  const lock = existsSync3(lockFile) ? readJson(lockFile) : {};
   let wrote = 0;
   for (const f of filesUnder(src)) {
     const from = join4(src, f), to = join4(root, dest, f);
     const key = relative(root, to).replaceAll("\\", "/");
     const want = sha(from);
-    if (existsSync2(to)) {
+    if (existsSync3(to)) {
       const have = sha(to);
       if (have === want) {
         lock[key] = want;
@@ -9070,7 +9090,7 @@ ${snippet.trim()}`);
     return;
   }
   const file = join4(root, rel);
-  const cur = existsSync2(file) ? readFileSync5(file, "utf8") : "";
+  const cur = existsSync3(file) ? readFileSync5(file, "utf8") : "";
   let next;
   if (harness === "codex") {
     if (/^\[mcp_servers\.("?)agentic-sdlc\1\]/m.test(cur)) {
@@ -9094,14 +9114,14 @@ ${snippet.trim()}`);
 }
 function allowGit(root, log) {
   const file = join4(root, ".npmrc");
-  const text = existsSync2(file) ? readFileSync5(file, "utf8") : "";
+  const text = existsSync3(file) ? readFileSync5(file, "utf8") : "";
   if (/^\s*allow-git\s*=/m.test(text)) return;
   writeFileSync2(file, text + (text && !text.endsWith("\n") ? "\n" : "") + "allow-git=root\n");
   log.push("set allow-git=root in .npmrc (npm 12 refuses git dependencies by default)");
 }
 function pinCli(root, version2, force, log) {
   const file = join4(root, "package.json");
-  if (!existsSync2(file)) {
+  if (!existsSync3(file)) {
     log.push(`pin the CLI so CI and MCP run one version: npm i -D ${ALLOW_GIT} ${gitSpec(version2)}`);
     return false;
   }
@@ -9140,7 +9160,7 @@ Do not start subagents.
 `, force, log, rel);
   }
   const file = join4(root, "CLAUDE.md");
-  const cur = existsSync2(file) ? readFileSync5(file, "utf8") : "";
+  const cur = existsSync3(file) ? readFileSync5(file, "utf8") : "";
   if (/^@AGENTS\.md\s*$/m.test(cur)) log.push("kept CLAUDE.md (imports @AGENTS.md)");
   else {
     writeFileSync2(file, (cur ? cur.replace(/\n*$/, "\n\n") : "") + "@AGENTS.md\n");
@@ -9160,7 +9180,7 @@ function init(root, argv, log) {
   if (!MCP_FILES.has(harness)) throw new Error(`--harness must be one of ${[...MCP_FILES.keys()].join("|")}, got '${harness}'`);
   const pkg = packageRoot();
   const pkgJson = join4(pkg, "package.json");
-  const version2 = existsSync2(pkgJson) ? readJson(pkgJson).version : "next";
+  const version2 = existsSync3(pkgJson) ? readJson(pkgJson).version : "next";
   const skills = need(pkg, "skills");
   syncSkills(skills, root, ".agents/skills", force, log);
   const noPlugin = harness === "claude" && f["no-plugin"] === "true";
@@ -9169,11 +9189,11 @@ function init(root, argv, log) {
   if (harness !== "claude" || noPlugin) registerMcp(pkg, root, harness, pinned ? ["--no-install", "agentic-sdlc", "mcp"] : ["-y", ALLOW_GIT, gitSpec(version2), "mcp"], force, log);
   else log.push("MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)");
   const scorers = join4(pkg, "scorers");
-  if (existsSync2(scorers)) {
+  if (existsSync3(scorers)) {
     for (const n of readdirSync(scorers)) copyFile(join4(scorers, n), join4(root, ".agents", "scorers", n), force, log);
   }
   const bindingFile = join4(root, BINDING_PATH);
-  if (existsSync2(bindingFile) && !force) log.push(`kept ${BINDING_PATH}`);
+  if (existsSync3(bindingFile) && !force) log.push(`kept ${BINDING_PATH}`);
   else {
     const doc = (0, import_yaml2.parseDocument)(readFileSync5(need(pkg, "templates/binding.yml"), "utf8"));
     doc.setIn(["board", "adapter"], board);
@@ -9194,8 +9214,8 @@ function init(root, argv, log) {
   const dir = need(pkg, `templates/gates/${forge}`);
   if (forge === "github") {
     for (const n of readdirSync(dir).filter((n2) => n2.endsWith(".yml"))) copyFile(join4(dir, n), join4(root, ".github", "workflows", n), force, log);
-    if (existsSync2(join4(dir, "pull_request_template.md"))) copyFile(join4(dir, "pull_request_template.md"), join4(root, ".github", "pull_request_template.md"), force, log);
-    if (existsSync2(join4(dir, "ruleset.trunk.json"))) {
+    if (existsSync3(join4(dir, "pull_request_template.md"))) copyFile(join4(dir, "pull_request_template.md"), join4(root, ".github", "pull_request_template.md"), force, log);
+    if (existsSync3(join4(dir, "ruleset.trunk.json"))) {
       copyFile(join4(dir, "ruleset.trunk.json"), join4(root, ".github", "rulesets", "trunk.json"), force, log);
       log.push("import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk");
       log.push("its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
@@ -9204,22 +9224,22 @@ function init(root, argv, log) {
   else if (forge === "azure") copyFile(first(dir), join4(root, "azure-pipelines.agentic-sdlc.yml"), force, log);
   else {
     const dest = join4(root, "bitbucket-pipelines.yml");
-    if (existsSync2(dest)) log.push(`${dest} exists: merge ${first(dir)} into it by hand`);
+    if (existsSync3(dest)) log.push(`${dest} exists: merge ${first(dir)} into it by hand`);
     else copyFile(first(dir), dest, false, log);
   }
-  if (existsSync2(join4(gates, "hooks", "pre-push"))) {
+  if (existsSync3(join4(gates, "hooks", "pre-push"))) {
     copyFile(join4(gates, "hooks", "pre-push"), join4(root, ".agents", "hooks", "pre-push"), force, log);
     chmodSync(join4(root, ".agents", "hooks", "pre-push"), 493);
     log.push("enable the hook with: git config core.hooksPath .agents/hooks");
   }
   const setup = join4(pkg, "templates", "runner", "setup.sh");
-  if (existsSync2(setup)) copyFile(setup, join4(root, ".agents", "runner-setup.sh"), force, log);
+  if (existsSync3(setup)) copyFile(setup, join4(root, ".agents", "runner-setup.sh"), force, log);
   for (const n of ["cycle-prompt.md", "review-prompt.md"]) {
     const prompt2 = join4(pkg, "templates", "runner", n);
-    if (existsSync2(prompt2)) copyFile(prompt2, join4(root, ".agents", n), force, log);
+    if (existsSync3(prompt2)) copyFile(prompt2, join4(root, ".agents", n), force, log);
   }
   const agents = join4(root, "AGENTS.md");
-  const cur = existsSync2(agents) ? readFileSync5(agents, "utf8") : "";
+  const cur = existsSync3(agents) ? readFileSync5(agents, "utf8") : "";
   const s = cur.indexOf(START), e = cur.indexOf(END);
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, "\n\n") : "") + POINTER + "\n";
   if (next !== cur) writeFileSync2(agents, next);
@@ -9234,10 +9254,10 @@ function validate(root, warnings = []) {
     problems.push(e.message);
   }
   const dir = join4(root, ".agents", "skills");
-  if (!existsSync2(dir)) return [...problems, ".agents/skills is missing"];
+  if (!existsSync3(dir)) return [...problems, ".agents/skills is missing"];
   for (const name of readdirSync(dir).filter((n) => statSync(join4(dir, n)).isDirectory())) {
     const file = join4(dir, name, "SKILL.md");
-    if (!existsSync2(file)) {
+    if (!existsSync3(file)) {
       problems.push(`skill ${name}: SKILL.md is missing`);
       continue;
     }
@@ -9302,7 +9322,7 @@ ${END}`;
     };
     need = (pkg, rel) => {
       const p = join4(pkg, rel);
-      if (!existsSync2(p)) throw new Error(`package is missing ${rel} (looked in ${pkg})`);
+      if (!existsSync3(p)) throw new Error(`package is missing ${rel} (looked in ${pkg})`);
       return p;
     };
     readJson = (p) => JSON.parse(readFileSync5(p, "utf8"));
@@ -9395,7 +9415,7 @@ __export(gates_exports, {
   signalOnRed: () => signalOnRed,
   skillRegression: () => skillRegression
 });
-import { existsSync as existsSync3, readFileSync as readFileSync6, readdirSync as readdirSync2 } from "fs";
+import { existsSync as existsSync4, readFileSync as readFileSync6, readdirSync as readdirSync2 } from "fs";
 import { dirname as dirname3, join as join5, resolve as resolve2 } from "path";
 import { isDeepStrictEqual } from "util";
 function globToRegExp(glob) {
@@ -9441,7 +9461,7 @@ function frontmatter(text) {
 function benchedSkills(root) {
   const dir = join5(root, ".agents", "bench", "suites");
   const out = /* @__PURE__ */ new Set();
-  if (!existsSync3(dir)) return out;
+  if (!existsSync4(dir)) return out;
   for (const f of readdirSync2(dir).filter((n) => n.endsWith(".json"))) {
     try {
       const suite = JSON.parse(readFileSync6(join5(dir, f), "utf8"));
@@ -9660,10 +9680,16 @@ environment: ${env}`,
   }
   if (last) {
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
-    for (const x of done.filter((x2) => x2.fields.release_version && x2.fields.shipped === "In release")) {
-      await d.board.set(x.id, "shipped", back);
-      await d.board.set(x.id, "release_version", null);
-      changed.push(x.id);
+    const isAnc = d.isAncestor;
+    if (isAnc) {
+      const merged = await d.forge.list({ state: "merged" });
+      for (const x of done.filter((x2) => x2.fields.release_version && x2.fields.shipped === "In release")) {
+        const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+        if (!shas.length || shas.some((s) => !s || isAnc(s, sha2) !== true)) continue;
+        await d.board.set(x.id, "shipped", back);
+        await d.board.set(x.id, "release_version", null);
+        changed.push(x.id);
+      }
     }
   }
   await signal(last);
@@ -9672,7 +9698,7 @@ environment: ${env}`,
 async function signalOnRed(d, id) {
   const runs = [...await d.forge.runs({ failed: true }), ...await d.forge.runs({})];
   const run = runs.find((r) => String(r.id) === id);
-  if (!run) throw new Error(`run ${id} not found`);
+  if (!run) return { created: false, reason: `run ${redact2(id, 40)} not in the recent runs` };
   const v = d.binding.vcs;
   if (run.ref !== v.trunk && !run.ref.startsWith(v.release_prefix)) return { created: false, reason: `ref ${redact2(run.ref, 100)} is not trunk or a release line` };
   const title = redact2(`CI red: ${run.name} @ ${run.ref} (run ${run.id})`, 1e3).replace(/[^A-Za-z0-9 ._/:@()-]/g, "").slice(0, 100);
@@ -9691,12 +9717,12 @@ url: ${cleanUrl(run.url)}`,
 }
 function skillRegression(root) {
   const dir = join5(root, ".agents", "skills");
-  if (!existsSync3(dir)) return { errors: [`${dir} does not exist`], warnings: [] };
+  if (!existsSync4(dir)) return { errors: [`${dir} does not exist`], warnings: [] };
   const errors = [], warnings = [];
   for (const e of readdirSync2(dir, { withFileTypes: true })) {
     if (!e.isDirectory()) continue;
     const file = join5(dir, e.name, "SKILL.md");
-    if (!existsSync3(file)) {
+    if (!existsSync4(file)) {
       errors.push(`${e.name}: SKILL.md missing`);
       continue;
     }
@@ -9717,11 +9743,11 @@ function skillRegression(root) {
     for (const m of text.matchAll(/\]\(([^)\s]+)\)/g)) {
       const link = m[1].split("#")[0];
       if (!link || /^[a-z][a-z0-9+.-]*:/i.test(link)) continue;
-      if (!existsSync3(resolve2(dirname3(file), link))) errors.push(`${e.name}: broken link ${m[1]}`);
+      if (!existsSync4(resolve2(dirname3(file), link))) errors.push(`${e.name}: broken link ${m[1]}`);
     }
   }
   const sdir = join5(root, ".agents", "scorers");
-  if (existsSync3(sdir)) for (const f of readdirSync2(sdir).filter((n) => n.endsWith(".md"))) errors.push(...scorerErrors(f, readFileSync6(join5(sdir, f), "utf8")));
+  if (existsSync4(sdir)) for (const f of readdirSync2(sdir).filter((n) => n.endsWith(".md"))) errors.push(...scorerErrors(f, readFileSync6(join5(sdir, f), "utf8")));
   return { errors, warnings };
 }
 function scorerErrors(f, text) {
@@ -9879,7 +9905,7 @@ __export(ledger_exports, {
   summarise: () => summarise
 });
 import { createHash as createHash2 } from "crypto";
-import { existsSync as existsSync4, readdirSync as readdirSync3, readFileSync as readFileSync7 } from "fs";
+import { existsSync as existsSync5, readdirSync as readdirSync3, readFileSync as readFileSync7 } from "fs";
 import { join as join6, relative as relative2, resolve as resolve3 } from "path";
 import { parseArgs as parseArgs2 } from "util";
 function parseHeartbeat(body) {
@@ -10015,7 +10041,7 @@ function learningState(comments, everyCycles, now = Date.now()) {
 function scorersFor(root, skill) {
   const dir = join6(root, ".agents", "scorers");
   const out = [];
-  for (const f of existsSync4(dir) ? readdirSync3(dir).filter((n) => n.endsWith(".md")) : []) {
+  for (const f of existsSync5(dir) ? readdirSync3(dir).filter((n) => n.endsWith(".md")) : []) {
     let fm;
     try {
       fm = (0, import_yaml4.parse)(/^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync7(join6(dir, f), "utf8"))?.[1] ?? "");
@@ -10210,7 +10236,7 @@ __export(bench_exports, {
   suiteFile: () => suiteFile,
   wilsonLower: () => wilsonLower
 });
-import { cpSync as cpSync2, existsSync as existsSync5, mkdirSync as mkdirSync3, mkdtempSync as mkdtempSync2, readdirSync as readdirSync4, readFileSync as readFileSync8, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "fs";
+import { cpSync as cpSync2, existsSync as existsSync6, mkdirSync as mkdirSync3, mkdtempSync as mkdtempSync2, readdirSync as readdirSync4, readFileSync as readFileSync8, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "fs";
 import { tmpdir as tmpdir2 } from "os";
 import { dirname as dirname4, join as join7, relative as relative3, resolve as resolve4 } from "path";
 import { parseArgs as parseArgs3 } from "util";
@@ -10311,7 +10337,7 @@ function prompt(c, skillPath, workdir, fastCheck) {
 }
 function carry(from, to, p) {
   const src = join7(from, p), dst = join7(to, p);
-  if (!existsSync5(src)) return rmSync2(dst, { recursive: true, force: true });
+  if (!existsSync6(src)) return rmSync2(dst, { recursive: true, force: true });
   mkdirSync3(dirname4(dst), { recursive: true });
   cpSync2(src, dst, { recursive: true });
 }
@@ -10402,7 +10428,7 @@ async function runBench(cases, o, deps) {
 }
 function writeScorerInput(dir, root, c, trial, promptText, touched, base, after) {
   const read = (d, p) => {
-    if (!existsSync5(join7(d, p))) return "(absent)";
+    if (!existsSync6(join7(d, p))) return "(absent)";
     const t = readFileSync8(join7(d, p), "utf8");
     return t.length > MAX_FILE_CHARS ? `${t.slice(0, MAX_FILE_CHARS)}
 \u2026 cut` : t;
@@ -10550,7 +10576,7 @@ var init_bench = __esm({
         if (verb === "report") {
           if (!suite) return console.error(USAGE3), 2;
           const dir = join7(root, RESULTS_DIR);
-          const files = a.positionals.length ? a.positionals.map((p) => resolve4(root, p)) : existsSync5(dir) ? readdirSync4(dir).filter((f) => f.endsWith(".json")).map((f) => join7(dir, f)) : [];
+          const files = a.positionals.length ? a.positionals.map((p) => resolve4(root, p)) : existsSync6(dir) ? readdirSync4(dir).filter((f) => f.endsWith(".json")).map((f) => join7(dir, f)) : [];
           const results = files.map((f) => readJson2(f)).filter((r) => r.suite === suite);
           console.log(JSON.stringify({ suite, results: results.length, rows: report(results) }, null, 2));
           return 0;
@@ -10560,7 +10586,7 @@ var init_bench = __esm({
           const n = a.values.n ? Number(a.values.n) : binding.learning.bench_size;
           if (!(n > 0)) return console.error(USAGE3), 2;
           const sdir = join7(root, SUITES_DIR);
-          const used = new Set((existsSync5(sdir) ? readdirSync4(sdir).filter((f) => f.endsWith(".json")) : []).flatMap((f) => readJson2(join7(sdir, f)).cases.map((c) => c.id)));
+          const used = new Set((existsSync6(sdir) ? readdirSync4(sdir).filter((f) => f.endsWith(".json")) : []).flatMap((f) => readJson2(join7(sdir, f)).cases.map((c) => c.id)));
           const fresh = (await allCases(Infinity, { perSize: Infinity })).filter((c) => !used.has(c.id));
           console.log(JSON.stringify({ suite, cases: diverse(fresh, n) }, null, 2));
           return 0;

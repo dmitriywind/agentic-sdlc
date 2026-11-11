@@ -16,7 +16,11 @@ a step already done on the ticket is checked, not redone.
 
 1. **Diagnose (failure-born tickets only).** For a ticket made from a failure Signal: reproduce
    the failure, minimise it, list hypotheses, and confirm the root cause with a run. Done when the
-   cause is shown by a command and its output, not inferred.
+   cause is shown by a command and its output, not inferred. If the failure does not reproduce at
+   the trunk tip, or no run confirms a cause, stop. Comment the attempts on the ticket and either
+   close it as not planned with that evidence (already fixed, or noise), or call
+   [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access) when a device or environment is
+   missing. Never write a spec from an inferred cause.
 2. **Orient.** Open every file and line the ticket cites at the trunk tip and read the code and
    docs it touches. External facts come from primary sources only, cited where used. Done when each
    citation is marked resolved, moved or gone, the files read are listed in the ticket, and the
