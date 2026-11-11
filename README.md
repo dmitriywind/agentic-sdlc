@@ -67,7 +67,7 @@ factory owner.
 ## Install
 
 ```bash
-npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.2
+npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.3
 npx --no agentic-sdlc init --profile individual --harness claude --board github --forge github --vcs git
 npx --no agentic-sdlc doctor
 ```
@@ -127,7 +127,7 @@ No board account and no forge needed for this part. The `local` board is `.agent
 
 ```bash
 mkdir try-agentic && cd try-agentic && git init -b main && npm init -y
-npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.2
+npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.3
 npx --no agentic-sdlc init --board local --forge github --harness generic
 printf 'Show a greeting on the home page.\n' > body.md
 npx --no agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog

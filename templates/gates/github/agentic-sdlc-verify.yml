@@ -63,7 +63,7 @@ jobs:
       - name: Proofs on base
         run: |
           export PATH="$PWD/node_modules/.bin:$PATH"
-          command -v agentic-sdlc >/dev/null || npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.2}"
+          command -v agentic-sdlc >/dev/null || npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.3}"
           agentic-sdlc gate proofs-on-base --cr "$CR"
 
   skill-regression:
@@ -91,5 +91,5 @@ jobs:
           if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
             npm ci --ignore-scripts && npx --no-install agentic-sdlc gate skill-regression
           else
-            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.2}" && agentic-sdlc gate skill-regression
+            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.3}" && agentic-sdlc gate skill-regression
           fi

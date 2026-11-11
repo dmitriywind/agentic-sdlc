@@ -3,7 +3,7 @@
 All notable changes to this package. Versions follow semver. A release is a `v<version>` Git tag; the package is
 not on npm.
 
-## Unreleased
+## 2.0.0-alpha.3 (2026-11-11)
 
 - Skills: backlog-grooming discovers an Idea the Product owner moved to Backlog (outcome, user, metric, one plain question when missing), tickets tech debt only with a cost, and files a removal ticket for each flag. New docs/operating-baseline.md (recommendations by team shape, repo and board baseline, 2026-27 operate).
 - Skills: release resumes without re-posting while a proposal awaits a reply and never cherry-picks (a cut takes one trunk revision); routing skips release for one environment; a `manual` criterion gets one ask and a PENDING grade; escalate treats a new diff as no new fact; rework and factory-CR owner replies read `forge comments`.

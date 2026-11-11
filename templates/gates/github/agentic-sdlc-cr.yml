@@ -63,7 +63,7 @@ jobs:
             npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           else
             # set: repo variable AGENTIC_SDLC_VERSION to an exact version, or add agentic-sdlc as a devDependency
-            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.2}"
+            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.3}"
           fi
 
       - name: Branch names
@@ -129,7 +129,7 @@ jobs:
             npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           else
             # set: repo variable AGENTIC_SDLC_VERSION to an exact version, or add agentic-sdlc as a devDependency
-            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.2}"
+            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.3}"
           fi
       - name: Human approval
         if: env.CR != ''
