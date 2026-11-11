@@ -42,7 +42,11 @@ calls another skill. Read the binding (`.agents/binding.yml`) and the hold rules
    (`board comment`), `board label <id> add <board.labels.human>`, `board assign <id> --none`, and
    stop. The Status stays. The ask goes to `owners.product`, or `owners.factory` for a factory
    change or an Access gap. Done when the label is on and the comment is posted. If the label was
-   already on, comment only when new facts appeared.
+   already on, comment only when new facts appeared. A run with no ticket (dispatched with only
+   `--cr`, e.g. a factory CR): post the comment on the CR (`forge comment <n> --body-file <f>`) and
+   the same comment on `heartbeat.ticket` (`board comment`), set no label and no assignee, and
+   stop. The CR stays draft; review-pr reviews it again only when its head changes or a trusted
+   owner reply appears on the CR. Done when both comments are posted.
 
 ### Needs human
 

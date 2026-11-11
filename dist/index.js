@@ -8388,7 +8388,26 @@ function git(ctx) {
     async start(name) {
       g("fetch", "origin", trunk);
       const workdir = join2(ctx.root, ".agents", "work", name);
-      if (existsSync2(workdir)) return { workdir, ref: name };
+      const fetchBranch = () => {
+        try {
+          g("fetch", "origin", name);
+          return true;
+        } catch (e) {
+          if (/couldn't find remote ref|could not find remote ref/i.test(String(e.message) + String(e.stderr ?? ""))) return false;
+          throw e;
+        }
+      };
+      const catchUp = () => {
+        if (!fetchBranch()) return;
+        try {
+          ctx.exec("git", ["merge", "--ff-only", `origin/${name}`], { cwd: workdir });
+        } catch {
+        }
+      };
+      if (existsSync2(workdir)) {
+        catchUp();
+        return { workdir, ref: name };
+      }
       g("worktree", "prune");
       const has = (ref) => {
         try {
@@ -8398,14 +8417,11 @@ function git(ctx) {
           return false;
         }
       };
-      if (has(`refs/heads/${name}`)) g("worktree", "add", workdir, name);
-      else {
-        let remote = true;
-        try {
-          g("fetch", "origin", name);
-        } catch {
-          remote = false;
-        }
+      if (has(`refs/heads/${name}`)) {
+        g("worktree", "add", workdir, name);
+        catchUp();
+      } else {
+        const remote = fetchBranch();
         if (remote) g("worktree", "add", "-b", name, workdir, `origin/${name}`);
         else g("worktree", "add", "-b", name, workdir, `origin/${trunk}`);
       }

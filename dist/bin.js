@@ -8854,7 +8854,26 @@ function git(ctx) {
     async start(name) {
       g("fetch", "origin", trunk);
       const workdir = join3(ctx.root, ".agents", "work", name);
-      if (existsSync2(workdir)) return { workdir, ref: name };
+      const fetchBranch = () => {
+        try {
+          g("fetch", "origin", name);
+          return true;
+        } catch (e) {
+          if (/couldn't find remote ref|could not find remote ref/i.test(String(e.message) + String(e.stderr ?? ""))) return false;
+          throw e;
+        }
+      };
+      const catchUp = () => {
+        if (!fetchBranch()) return;
+        try {
+          ctx.exec("git", ["merge", "--ff-only", `origin/${name}`], { cwd: workdir });
+        } catch {
+        }
+      };
+      if (existsSync2(workdir)) {
+        catchUp();
+        return { workdir, ref: name };
+      }
       g("worktree", "prune");
       const has = (ref) => {
         try {
@@ -8864,14 +8883,11 @@ function git(ctx) {
           return false;
         }
       };
-      if (has(`refs/heads/${name}`)) g("worktree", "add", workdir, name);
-      else {
-        let remote = true;
-        try {
-          g("fetch", "origin", name);
-        } catch {
-          remote = false;
-        }
+      if (has(`refs/heads/${name}`)) {
+        g("worktree", "add", workdir, name);
+        catchUp();
+      } else {
+        const remote = fetchBranch();
         if (remote) g("worktree", "add", "-b", name, workdir, `origin/${name}`);
         else g("worktree", "add", "-b", name, workdir, `origin/${trunk}`);
       }
@@ -9410,6 +9426,7 @@ __export(gates_exports, {
   linkage: () => linkage,
   matchesAny: () => matchesAny,
   proofFiles: () => proofFiles,
+  proofRunner: () => proofRunner,
   proofsOnBase: () => proofsOnBase,
   shipped: () => shipped,
   signalOnRed: () => signalOnRed,
@@ -9472,6 +9489,7 @@ function benchedSkills(root) {
   return out;
 }
 async function classify(d, cr, diff) {
+  if (diff === void 0) return "guardrail";
   const paths = diffPaths(diff);
   if (!paths) return "guardrail";
   const inFactory = paths.filter((p) => matchesAny(p, factoryGlobs(d.binding)));
@@ -9508,11 +9526,22 @@ function branchNames(b, names) {
   const ok = (n) => n === v.trunk || n.startsWith(v.release_prefix) || n.startsWith("dependabot/") || n.startsWith("renovate/") || patternRe(v.change_pattern).test(n) || patternRe(v.factory_change_pattern).test(n);
   return names.filter((n) => !ok(n));
 }
+function proofRunner(run) {
+  return (cmd) => {
+    try {
+      run(cmd);
+      return true;
+    } catch (e) {
+      if (typeof e.status === "number") return false;
+      throw new Error(`proof runner failed (not a test result): ${e.message}`);
+    }
+  };
+}
 async function linkage(d, n) {
   const cr = await d.forge.view(n);
-  const diff = await d.forge.diff(n);
+  const diff = await readDiff(d, n);
   const cls = await classify(d, cr, diff);
-  const paths = diffPaths(diff);
+  const paths = diff === void 0 ? null : diffPaths(diff);
   if (cls !== "product" && paths?.every((p) => matchesAny(p, factoryGlobs(d.binding)))) return { ok: true, factory: true, class: cls, errors: [] };
   const errors = [];
   if (cr.closes.length !== 1) errors.push(`CR ${n} must close exactly one ticket, found ${cr.closes.length}`);
@@ -9533,13 +9562,14 @@ function approvers(reviews, sha2) {
 async function approval(d, n) {
   const b = d.binding;
   const cr = await d.forge.view(n);
-  const cls = await classify(d, cr, await d.forge.diff(n));
+  const diff = await readDiff(d, n);
+  const cls = await classify(d, cr, diff);
   let klass;
   if (cls !== "product") klass = cls;
   else {
     const item = cr.closes.length === 1 ? await d.board.get(cr.closes[0]).catch(() => void 0) : void 0;
     const areas = [b.paths.lane_areas ?? []].flat();
-    const inArea = areas.length > 0 && (diffPaths(await d.forge.diff(n)) ?? []).some((p) => matchesAny(p, areas));
+    const inArea = areas.length > 0 && (diff === void 0 ? [] : diffPaths(diff) ?? []).some((p) => matchesAny(p, areas));
     klass = !inArea && String(item?.fields?.lane ?? "").toLowerCase() === "fast" ? "product-fast" : "product-full";
   }
   const mode = b.forge.human_approval ?? "full-lane";
@@ -9570,10 +9600,10 @@ function proofFiles(diff, isProof) {
 }
 async function proofsOnBase(d, n) {
   const cr = await d.forge.view(n);
-  const diff = await d.forge.diff(n);
+  const diff = await readDiff(d, n);
   const cls = await classify(d, cr, diff);
   const tpl = d.binding.commands?.proofs_on_base;
-  const files = cls === "product" ? proofFiles(diff, rule(d.binding, "proof_pattern", PROOF_FILE)) : [];
+  const files = cls === "product" && diff !== void 0 ? proofFiles(diff, rule(d.binding, "proof_pattern", PROOF_FILE)) : [];
   const passedOnBase = [];
   let error;
   if (cls !== "product") error = void 0;
@@ -9765,7 +9795,7 @@ function scorerErrors(f, text) {
   if (!["pass-fail", "0-4"].includes(fm.scale)) errors.push(`scorers/${f}: scale ${fm.scale} invalid`);
   return errors;
 }
-var import_yaml3, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tierOf, withoutTier, nameHas, esc, patternRe, OPEN_EVENTS, redact2, cleanUrl, cli5;
+var import_yaml3, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tierOf, withoutTier, nameHas, esc, patternRe, readDiff, OPEN_EVENTS, redact2, cleanUrl, cli5;
 var init_gates = __esm({
   "src/gates.ts"() {
     "use strict";
@@ -9786,6 +9816,7 @@ var init_gates = __esm({
     nameHas = (s, id) => new RegExp(`(^|[^A-Za-z0-9])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^A-Za-z0-9])`, "i").test(s);
     esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     patternRe = (p) => new RegExp("^" + p.split(/(<ticket>|<name>)/).map((x) => x === "<ticket>" ? "[A-Za-z0-9_-]+" : x === "<name>" ? "[a-z0-9]+(?:-[a-z0-9]+)*" : esc(x)).join("") + "$");
+    readDiff = (d, n) => d.forge.diff(n).catch(() => void 0);
     OPEN_EVENTS = ["opened", "ready", "draft"];
     redact2 = (s, max = 120) => String(s ?? "").replace(/[\x00-\x1f]/g, " ").replace(/\b[A-Za-z0-9_+/=-]{32,}\b/g, "[redacted]").slice(0, max);
     cleanUrl = (u) => redact2(String(u ?? "").replace(/^(\w+:\/\/)[^/@]*@/, "$1").replace(/[?#].*$/, ""), 200);
@@ -9803,14 +9834,7 @@ var init_gates = __esm({
           vcs: createVcs(ctxOf(b.vcs.options ?? {}))
         };
         const git2 = (args) => base.exec("git", args, { cwd: base.root });
-        d.run = (cmd) => {
-          try {
-            shell(base.exec, cmd, base.root);
-            return true;
-          } catch {
-            return false;
-          }
-        };
+        d.run = proofRunner((cmd) => shell(base.exec, cmd, base.root));
         d.fileAt = (path, sha2) => {
           try {
             return git2(["show", `${sha2}:${path}`]);
@@ -11123,8 +11147,9 @@ init_binding();
 
 // src/exec.ts
 import { execFileSync } from "child_process";
-var exec = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: "utf8", cwd: opts.cwd, input: opts.input, env: opts.env ?? process.env, stdio: ["pipe", "pipe", "pipe"] });
+var exec = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: "utf8", cwd: opts.cwd, input: opts.input, env: opts.env ?? process.env, stdio: ["pipe", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024 });
 var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+var HTTP_TIMEOUT_MS = 3e4;
 var TRIES = 3;
 var MAX_WAIT_MS = 3e4;
 function retryWait(retryAfter, attempt, now = Date.now()) {
@@ -11142,7 +11167,8 @@ var http = async (method, url, opts = {}) => {
     const res = await fetch(url, {
       method,
       headers: { "content-type": "application/json", accept: "application/json", ...opts.headers },
-      body: opts.body === void 0 ? void 0 : JSON.stringify(opts.body)
+      body: opts.body === void 0 ? void 0 : JSON.stringify(opts.body),
+      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS)
     });
     const text = await res.text();
     if (res.ok) return text ? JSON.parse(text) : {};

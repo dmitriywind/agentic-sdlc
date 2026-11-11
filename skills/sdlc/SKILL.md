@@ -80,7 +80,7 @@ Pick the first row that matches. A ticket labelled `needs-human` is held: skip i
 | Status Ideas | none; humans only |
 | Status Signals | [`triage-signal`](../triage-signal/SKILL.md) |
 | Status Backlog, no Priority; a plan or conversation that must become tickets | [`backlog-grooming`](../backlog-grooming/SKILL.md) |
-| Status Backlog, not shaped (no Size, criteria, Lane or required spec), no open blocker, not in `board.later_milestone` | [`shape`](../shape/SKILL.md) |
+| Status Backlog with a Priority, no [open blocker](references/statuses.md#open-blocker), not in `board.later_milestone` | [`shape`](../shape/SKILL.md) |
 | Status Ready | [`implement-spec`](../implement-spec/SKILL.md) |
 | Status In progress | [`implement-spec`](../implement-spec/SKILL.md) |
 | Status In review, draft CR | [`review-pr`](../review-pr/SKILL.md) (dispatches [`verify-ux`](../verify-ux/SKILL.md) for `computer-use` criteria) |
@@ -136,8 +136,8 @@ Rules for every step:
 
 ## Executors
 
-The executor kinds, their fields and what `dispatch` prints are defined once, in the contract's
-executors section (`references/architecture.md` §7 in the agentic-sdlc package). Every executor
+The executor kinds, their fields and what `dispatch` prints are defined once, in
+[`references/executors.md`](references/executors.md). Every executor
 obeys the same skills and gates; a reviewer is never the implementer of the same CR.
 
 ## The needs-human hold

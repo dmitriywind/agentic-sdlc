@@ -127,3 +127,46 @@ test('git: start resumes an existing change line', async () => {
   const again = await vcs.start('t-2-x');
   assert.equal(git(again.workdir, 'rev-parse', 'HEAD'), sha);
 });
+
+test('git start: no remote branch starts from trunk; a reused branch or workdir fast-forwards to the remote', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'vcs-ff-'));
+  const origin = join(tmp, 'origin.git');
+  const clone = (dir: string) => {
+    execFileSync('git', ['clone', origin, dir], { stdio: 'pipe' });
+    git(dir, 'config', 'user.email', 'a@b.c');
+    git(dir, 'config', 'user.name', 'a');
+  };
+  execFileSync('git', ['init', '--bare', '-b', 'main', origin]);
+  const root = join(tmp, 'work'), other = join(tmp, 'other');
+  clone(root);
+  git(root, 'checkout', '-b', 'main');
+  writeFileSync(join(root, 'a.txt'), '1');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'init');
+  git(root, 'push', '-u', 'origin', 'main');
+  const vcs = createVcs({ root, binding: binding('git'), options: {}, env: process.env, exec, http: async () => ({}) });
+  const first = await vcs.start('t-2-x');
+  assert.equal(git(first.workdir, 'rev-parse', 'HEAD'), git(root, 'rev-parse', 'main'));
+  git(first.workdir, 'push', '-u', 'origin', 't-2-x');
+
+  clone(other);
+  git(other, 'checkout', 't-2-x');
+  writeFileSync(join(other, 'r.txt'), 'rework');
+  git(other, 'add', '.');
+  git(other, 'commit', '-m', 'remote work');
+  git(other, 'push', 'origin', 't-2-x');
+  const remoteSha = git(other, 'rev-parse', 'HEAD');
+
+  await vcs.start('t-2-x'); // workdir exists
+  assert.equal(git(first.workdir, 'rev-parse', 'HEAD'), remoteSha);
+
+  git(other, 'commit', '--allow-empty', '-m', 'more');
+  git(other, 'push', 'origin', 't-2-x');
+  git(root, 'worktree', 'remove', '--force', first.workdir); // branch stays, workdir gone
+  const again = await vcs.start('t-2-x');
+  assert.equal(git(again.workdir, 'rev-parse', 'HEAD'), git(other, 'rev-parse', 'HEAD'));
+
+  // a fetch error that is not a missing ref is not 'start from trunk'
+  git(root, 'remote', 'set-url', 'origin', join(tmp, 'gone.git'));
+  await assert.rejects(vcs.start('t-3-y'));
+});

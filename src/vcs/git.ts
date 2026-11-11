@@ -12,13 +12,24 @@ export function git(ctx: AdapterContext): Vcs {
     async start(name) {
       g('fetch', 'origin', trunk);
       const workdir = join(ctx.root, '.agents', 'work', name);
-      if (existsSync(workdir)) return { workdir, ref: name };
+      // Only a missing remote branch means 'start from trunk'; a network or auth error is not.
+      const fetchBranch = () => {
+        try { g('fetch', 'origin', name); return true; } catch (e) {
+          if (/couldn't find remote ref|could not find remote ref/i.test(String((e as Error).message) + String((e as { stderr?: unknown }).stderr ?? ''))) return false;
+          throw e;
+        }
+      };
+      // Reuse: take remote commits; a non-fast-forward keeps local work and the later push reports it.
+      const catchUp = () => {
+        if (!fetchBranch()) return;
+        try { ctx.exec('git', ['merge', '--ff-only', `origin/${name}`], { cwd: workdir }); } catch { /* diverged */ }
+      };
+      if (existsSync(workdir)) { catchUp(); return { workdir, ref: name }; }
       g('worktree', 'prune');
       const has = (ref: string) => { try { g('rev-parse', '--verify', '--quiet', ref); return true; } catch { return false; } };
-      if (has(`refs/heads/${name}`)) g('worktree', 'add', workdir, name);
+      if (has(`refs/heads/${name}`)) { g('worktree', 'add', workdir, name); catchUp(); }
       else {
-        let remote = true;
-        try { g('fetch', 'origin', name); } catch { remote = false; }
+        const remote = fetchBranch();
         if (remote) g('worktree', 'add', '-b', name, workdir, `origin/${name}`);
         else g('worktree', 'add', '-b', name, workdir, `origin/${trunk}`);
       }

@@ -39,7 +39,7 @@ learning:
   budget_usd_per_week: 50                        # template default; raise it for org-wide use
   human_sample: 5                                # runs per week offered to an owner for a human grade
 ```
-All executor kinds are allowed: `managed`, `webhook`, `assign`, `command`, `harness`. See [architecture.md section 7](../../references/architecture.md).
+All executor kinds are allowed: `managed`, `webhook`, `assign`, `command`, `harness`. See [executors.md](../../skills/sdlc/references/executors.md).
 
 ## Recommended runtime per ecosystem
 | Ecosystem | Runtime | Guide |

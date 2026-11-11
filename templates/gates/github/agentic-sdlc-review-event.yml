@@ -1,0 +1,13 @@
+# Holds no secret and checks out nothing. It exists only so that agentic-sdlc-cr.yml's `workflow_run`
+# runs `human-approval` from the default branch after a review.
+# Its `name:` must match `workflows:` there.
+name: agentic-sdlc review event
+on:
+  pull_request_review: { types: [submitted, dismissed] }
+permissions: {}
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: "true"

@@ -5,7 +5,11 @@ not on npm.
 
 ## Unreleased
 
+- Skills: the executors contract moves to `skills/sdlc/references/executors.md` so init installs it; `open blocker` is defined in statuses.md; the shape routing row matches any Backlog ticket with a Priority and shape step 8 resolves each failing checklist item instead of stranding the ticket; shape may cancel a failure that does not reproduce.
+- Fix: gates fail closed. A proof runner error (output over the buffer, spawn failure, signal) fails `proofs-on-base` instead of counting as a failing proof; an unreadable forge diff (GitHub 406 on huge CRs) classes as guardrail instead of throwing; `vcs start` rethrows a fetch error that is not a missing ref and fast-forwards a reused change line to the remote; HTTP calls time out after 30s.
+- Fix: GitHub gate templates ship `agentic-sdlc-review-event.yml` (init installs it) so approvals re-run `human-approval`; board-moving PR actions get their own non-cancelled concurrency group so a later push cannot drop the In review move.
 - Skills: review-pr blocks PASS only on an Important finding and stops while a criterion is pending; implement-spec has a rework path that reopens the change line; escalate-to-human returns early only for Ruling; shape stops on a failure that does not reproduce; release waits for a trusted go-ahead between proposal and cut.
+- Skills: review-pr defines Important and Nit (cap 5 Nits) and grades `manual` proofs by a trusted owner comment; escalate-to-human holds a ticket-less CR with comments on the CR and `heartbeat.ticket`.
 - Fix: gate templates. `proofs-on-base` gets a forge token so it can pass; the review token moves to the trunk-only Environment `agentic-review` (jobs `human-approval`, `carry-statuses`; review events relay through `workflow_run`); signal-on-red is filtered to trunk and release lines; the GitLab trust note no longer claims environment scope protects secrets.
 - Fix: the push guard finds the binding from a subdirectory or linked worktree (trunk defaults to main and master when none), and sees through `$(...)` and backticks.
 - Fix: GitLab reads up to 100 commit statuses; a failed last-env deploy resets only tickets whose CRs are in the failed sha; signal-on-red no longer fails on a run outside the recent window; `vcs start` reuses an existing change line.

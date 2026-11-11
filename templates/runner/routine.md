@@ -21,7 +21,7 @@ Setup step everywhere: `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_
 
 Secrets: the agent's own credential plus `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN` (or the names the binding gives); `AGENTIC_REVIEW_TOKEN` in the review run only.
 Every `learning.every_cycles` cycles the sdlc skill runs `improve-factory`; the schedule does nothing extra.
-Executors, intake and unattended rules: `references/architecture.md`. Scheduled runs pass `--unattended`.
+Executors: `.agents/skills/sdlc/references/executors.md`. Scheduled runs pass `--unattended`.
 
 ## Review after the cycle
 

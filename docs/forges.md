@@ -76,16 +76,7 @@ One-time setup (private repos need a plan with Environments: Pro, Team or Enterp
    `human-approval` and `carry-statuses` declare it, so no PR-ref run can read it.
 2. Add `AGENTIC_FORGE_TOKEN` as a repo secret (`proofs-on-base` falls back to the read-only job token and
    its status post fails by design; the job's exit code is the check).
-3. Add `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events:
-
-```yaml
-name: agentic-sdlc review event
-on:
-  pull_request_review: { types: [submitted, dismissed] }
-permissions: {}
-jobs:
-  relay: { runs-on: ubuntu-latest, steps: [{ run: "true" }] }
-```
+3. `init` installs `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events to `human-approval`; it must stay in place or approvals do not update. A fork PR's review event carries no PR number, so its approval updates on the next PR event.
 
 ## GitLab
 | Guarantee | How |

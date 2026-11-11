@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
-import { approval, approvers, boardSync, branchNames, diffPaths, globToRegExp, linkage, classify, proofFiles, proofsOnBase, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
+import { approval, approvers, boardSync, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
 import { PROOF_FILE } from '../src/bench.ts';
 
 const binding = {
@@ -397,4 +397,27 @@ test('shipped: a last-env failure resets only tickets whose CRs are in the faile
 test('signal-on-red: a run outside the recent runs is reported, not thrown', async () => {
   const f = fakes([], {}, {}, []);
   assert.equal((await signalOnRed(f.d, 'nope')).created, false);
+});
+
+test('proofRunner: only a real non-zero exit is a failing proof; anything else is not a test result', () => {
+  assert.equal(proofRunner(() => 'ok')('c'), true);
+  assert.equal(proofRunner(() => { throw Object.assign(new Error('x'), { status: 1 }); })('c'), false);
+  assert.throws(() => proofRunner(() => { throw Object.assign(new Error('big'), { code: 'ENOBUFS' }); })('c'), /proof runner failed/);
+  assert.throws(() => proofRunner(() => { throw Object.assign(new Error('kill'), { status: null }); })('c'), /proof runner failed/);
+});
+
+test('an unreadable forge diff fails closed to guardrail in approval, linkage and proofs-on-base', async () => {
+  const f = fakes([item('12', 'Backlog')], { big: { closes: ['12'], source: '12/x', headSha: 'hbig' } });
+  f.d.forge.diff = async () => { throw new Error('HTTP 406: diff too large'); };
+  f.d.forge.approvals = async () => [{ user: 'dana', state: 'approved', sha: 'hbig' }];
+  f.d.binding = { ...binding, owners: { factory: 'fo' }, forge: {} } as any;
+  const a = await approval(f.d, 'big');
+  assert.equal(a.class, 'guardrail');
+  assert.notEqual(a.state, 'success'); // dana is not owners.factory
+  const l = await linkage(f.d, 'big');
+  assert.deepEqual([l.class, l.ok, l.factory], ['guardrail', true, false]);
+  f.d.forge.view = async () => ({ n: 'bad', closes: [], source: 'x', headSha: '', baseSha: '' }) as any;
+  assert.equal((await linkage(f.d, 'bad')).ok, false); // ticket rules still apply
+  const p = await proofsOnBase(f.d, 'big');
+  assert.deepEqual([p.class, p.ok, p.files], ['guardrail', true, []]);
 });

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { http, retryWait, setSleep } from '../src/exec.ts';
+import { http, retryWait, setHttpTimeout, setSleep } from '../src/exec.ts';
 
 /** Stubs fetch with the given responses in turn; returns the calls and the sleeps. */
 async function withFetch(responses: [number, Record<string, string>?, string?][], fn: () => Promise<unknown>) {
@@ -40,4 +40,14 @@ test('retryWait: seconds, HTTP date, backoff, 30s cap', () => {
   assert.equal(retryWait(null, 1, now), 1000);
   assert.equal(retryWait(null, 2, now), 2000);
   assert.equal(retryWait('3600', 1, now), 30000);
+});
+
+test('http aborts a request that never gets a response', async () => {
+  const { createServer } = await import('node:http');
+  const srv = createServer(() => {}).listen(0);
+  await new Promise((r) => srv.once('listening', r));
+  const prev = setHttpTimeout(100);
+  try {
+    await assert.rejects(http('GET', `http://127.0.0.1:${(srv.address() as any).port}/x`));
+  } finally { setHttpTimeout(prev); srv.closeAllConnections(); srv.close(); }
 });

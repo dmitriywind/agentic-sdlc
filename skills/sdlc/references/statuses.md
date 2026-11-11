@@ -14,7 +14,14 @@ stays off the board and outside these rules.
 | In progress | Implementing on one short-lived change line. | Claimed, change line started from the trunk. | Draft CR open and closing its ticket, fast check green. | implement-spec; review-pr when it sends a CR back |
 | In review | A CR is open, draft or ready. A draft is checked against the requirements; a ready CR waits on CI, approvals and auto-merge. | CR opened, linked to the ticket. | Merged to the trunk. | gate `board-sync` on every CR open, ready or back-to-draft event; implement-spec when the CR is already open |
 | Done | Merged to the trunk. Where the code runs is the Shipped field. | Merge on the trunk. | End. A later failure never moves it. | gate `board-sync` on merge |
-| Cancelled | Rejected, superseded, will not fix. | A reason comment. | End; closed as not planned. | triage-signal, backlog-grooming, Product owner |
+| Cancelled | Rejected, superseded, will not fix. | A reason comment. | End; closed as not planned. | triage-signal, backlog-grooming, shape (failure that does not reproduce, with evidence), Product owner |
+
+## Open blocker
+
+A ticket body line `Blocked by <id>` (one per line, ids as the board prints them) names a
+blocker. It is open while that ticket's Status is not in `board.done_statuses`. No board verb
+edits a body: humans or `backlog-grooming` write and remove the line when creating or regrooming
+a ticket; other agents only read it.
 
 A failure never moves a Done ticket. A deploy or release failure opens a new Signal on the merge
 or release revision; the fix is a new ticket through the normal path. Bounces back: Ready, In

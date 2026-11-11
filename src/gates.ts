@@ -95,7 +95,8 @@ const tierOf = (fm: Record<string, any>) => fm.metadata?.tier;
 const withoutTier = (fm: Record<string, any>) => ({ ...fm, metadata: { ...fm.metadata, tier: undefined } });
 
 /** product | tuning | guardrail. Anything not provably tuning under paths.factory is guardrail. */
-export async function classify(d: Deps, cr: CR, diff: string): Promise<'product' | 'tuning' | 'guardrail'> {
+export async function classify(d: Deps, cr: CR, diff: string | undefined): Promise<'product' | 'tuning' | 'guardrail'> {
+  if (diff === undefined) return 'guardrail'; // an unreadable diff, e.g. too large for the forge, fails closed to owner approval
   const paths = diffPaths(diff);
   if (!paths) return 'guardrail'; // an unparsed header may hide a factory path
   const inFactory = paths.filter((p) => matchesAny(p, factoryGlobs(d.binding)));
@@ -139,12 +140,24 @@ export function branchNames(b: Binding, names: string[]): string[] {
   return names.filter((n) => !ok(n));
 }
 
+const readDiff = (d: Deps, n: string) => d.forge.diff(n).catch(() => undefined);
+
+/** Wraps a command runner: a real non-zero exit is false; a spawn error, overflow or signal kill is not a test result and throws. */
+export function proofRunner(run: (cmd: string) => unknown): (cmd: string) => boolean {
+  return (cmd) => {
+    try { run(cmd); return true; } catch (e) {
+      if (typeof (e as { status?: unknown }).status === 'number') return false;
+      throw new Error(`proof runner failed (not a test result): ${(e as Error).message}`);
+    }
+  };
+}
+
 export async function linkage(d: Deps, n: string) {
   const cr = await d.forge.view(n);
-  const diff = await d.forge.diff(n);
+  const diff = await readDiff(d, n);
   const cls = await classify(d, cr, diff);
   // Only an all-factory CR skips linkage; a mixed or unparsed one still closes a ticket.
-  const paths = diffPaths(diff);
+  const paths = diff === undefined ? null : diffPaths(diff);
   if (cls !== 'product' && paths?.every((p) => matchesAny(p, factoryGlobs(d.binding)))) return { ok: true, factory: true, class: cls, errors: [] as string[] };
   const errors: string[] = [];
   if (cr.closes.length !== 1) errors.push(`CR ${n} must close exactly one ticket, found ${cr.closes.length}`);
@@ -177,14 +190,15 @@ export function approvers(reviews: Review[], sha: string): string[] {
 export async function approval(d: Deps, n: string) {
   const b = d.binding;
   const cr = await d.forge.view(n);
-  const cls = await classify(d, cr, await d.forge.diff(n));
+  const diff = await readDiff(d, n);
+  const cls = await classify(d, cr, diff);
   let klass: ApprovalClass;
   if (cls !== 'product') klass = cls;
   else {
     const item = cr.closes.length === 1 ? await d.board.get(cr.closes[0]).catch(() => undefined) : undefined;
     // The Lane field is agent-written: a path in paths.lane_areas forces Full whatever it says.
     const areas = [b.paths.lane_areas ?? []].flat();
-    const inArea = areas.length > 0 && (diffPaths(await d.forge.diff(n)) ?? []).some((p) => matchesAny(p, areas));
+    const inArea = areas.length > 0 && (diff === undefined ? [] : diffPaths(diff) ?? []).some((p) => matchesAny(p, areas));
     klass = !inArea && String(item?.fields?.lane ?? '').toLowerCase() === 'fast' ? 'product-fast' : 'product-full';
   }
   const mode = b.forge.human_approval ?? 'full-lane';
@@ -225,10 +239,10 @@ export function proofFiles(diff: string, isProof: RegExp): string[] {
  */
 export async function proofsOnBase(d: Deps, n: string) {
   const cr = await d.forge.view(n);
-  const diff = await d.forge.diff(n);
+  const diff = await readDiff(d, n);
   const cls = await classify(d, cr, diff);
   const tpl = d.binding.commands?.proofs_on_base;
-  const files = cls === 'product' ? proofFiles(diff, rule(d.binding, 'proof_pattern', PROOF_FILE)) : [];
+  const files = cls === 'product' && diff !== undefined ? proofFiles(diff, rule(d.binding, 'proof_pattern', PROOF_FILE)) : [];
   const passedOnBase: string[] = [];
   let error: string | undefined;
   if (cls !== 'product') error = undefined;
@@ -425,7 +439,7 @@ export const cli: PortCli = (argv, base) =>
         board: createBoard(ctxOf(b.board.options)), forge: createForge(ctxOf(b.forge.options)), vcs: createVcs(ctxOf(b.vcs.options ?? {})),
       };
       const git = (args: string[]) => base.exec('git', args, { cwd: base.root });
-      d.run = (cmd) => { try { shell(base.exec, cmd, base.root); return true; } catch { return false; } };
+      d.run = proofRunner((cmd) => shell(base.exec, cmd, base.root));
       d.fileAt = (path, sha) => { try { return git(['show', `${sha}:${path}`]); } catch { return undefined; } };
       d.isAncestor = (x, y) => {
         try { git(['merge-base', '--is-ancestor', x, y]); return true; } catch (e) { return (e as { status?: number }).status === 1 ? false : undefined; }

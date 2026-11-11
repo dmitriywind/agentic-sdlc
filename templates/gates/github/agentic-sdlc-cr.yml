@@ -9,7 +9,7 @@ name: agentic-sdlc CR gate
 # AGENTIC_REVIEW_TOKEN lives only in Environment `agentic-review`, whose deployment-branch rule names the
 # trunk exactly, `gh-readonly-queue/<trunk>/*` (the merge queue ref) and the release line glob. No job that a PR-ref event runs can
 # read it: a review event reaches `human-approval` through the no-secret `agentic-sdlc review event` workflow
-# (docs/forges.md) and workflow_run, which runs from the default branch. A fork PR's approval status updates
+# (agentic-sdlc-review-event.yml, installed by init) and workflow_run, which runs from the default branch. A fork PR's approval status updates
 # on the next pull_request_target event or a re-run.
 on:
   pull_request_target:
@@ -22,9 +22,9 @@ on:
 permissions: {}
 
 concurrency:
-  # closed has its own group so a late push can never cancel the merged move.
-  group: agentic-cr-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.merge_group.head_sha }}-${{ github.event.action == 'closed' && 'closed' || github.event_name }}
-  cancel-in-progress: ${{ github.event.action != 'closed' }}
+  # Board-moving actions (closed, opened, reopened, ready_for_review, converted_to_draft) each have their own group and are never cancelled, so a later push cannot drop the board move.
+  group: agentic-cr-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.merge_group.head_sha }}-${{ contains(fromJSON('["closed","opened","reopened","ready_for_review","converted_to_draft"]'), github.event.action) && github.event.action || github.event_name }}
+  cancel-in-progress: ${{ !contains(fromJSON('["closed","opened","reopened","ready_for_review","converted_to_draft"]'), github.event.action) }}
 
 jobs:
   ticket-linkage:

@@ -26,7 +26,10 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    criterion without proof is a finding. For a criterion with proof `computer-use`, run
    `agentic-sdlc dispatch verify-ux --ticket <id> --cr <n>` once per head, then grade its
    `<!-- verify-ux -->` comment for this head (`--trusted`). Until that comment appears it is
-   pending, not a finding; still missing after `stall_minutes`, it is a finding. A pending criterion
+   pending, not a finding; still missing after `stall_minutes`, it is a finding. A criterion with
+   proof `manual` is DONE only when a trusted comment by an owner (`board comments <id>
+   --trusted`) confirms it for this head, otherwise PARTIAL, and the report names the owner check
+   needed. A pending criterion
    stops the review as step 4 does: no status, no approval; review this head again on the next
    run. A departure from the spec in design is an escalation. Done when every criterion has a row.
 3. **Standards pass.** Apply `paths.review_checklist` and `paths.test_standard`, and the rules
@@ -45,9 +48,12 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    or "Lean already." is written.
 6. **Report.** One CR comment (`forge comment <n> --body-file <f>`): the criterion table, findings
    smallest fix first, each tagged with a pass (bugs, security or compliance) and a severity
-   (Important or Nit), with at most a few Nits, the hunt, the CI results read and the head, and
-   the verdict PASS or REMEDIATION REQUIRED. Nits are posted in the report; they never block PASS
-   or cause a send-back. Done when posted.
+   (Important or Nit), with at most 5 Nits, the hunt, the CI results read and the head, and
+   the verdict PASS or REMEDIATION REQUIRED. Important is any criterion graded NOT DONE or
+   PARTIAL; DEVIATED unless the CR also updates the spec comment to match; any bug, security,
+   privacy or compliance finding; and any risk the spec's "Risks and rollback" does not list. Nit
+   is everything else, and every hunt line (step 5) is a Nit unless it is also a bug. Nits are
+   posted in the report; they never block PASS or cause a send-back. Done when posted.
 7. **Decide.**
    - PASS (every criterion proven, no Important finding open, `Required` and `proofs-on-base` green on this
      head), from the review runtime only, as `forge.review_identity`: `forge status <head>

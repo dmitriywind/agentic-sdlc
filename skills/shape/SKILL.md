@@ -1,6 +1,6 @@
 ---
 name: shape
-description: Take one Backlog ticket to Ready in one pass - diagnose a failure-born ticket, size and split it, write criteria with a named proof each, choose the lane, write the spec in the Full lane, pass the checklist. Use on a Backlog ticket with no Size, no criteria, no Lane or no spec where its lane needs one, and no open blocker.
+description: Take one Backlog ticket to Ready in one pass - diagnose a failure-born ticket, size and split it, write criteria with a named proof each, choose the lane, write the spec in the Full lane, pass the checklist. Use on a Backlog ticket with a Priority that is not Ready, and no open blocker.
 user-invocable: false
 metadata:
   tier: deep
@@ -71,8 +71,13 @@ a step already done on the ticket is checked, not redone.
 8. **Pass the checklist.** Every acceptance criterion has a named proof (and, in the Full lane, is
    covered by the test plan); open questions is empty; no open blocker; Size within
    `ready_size_limit`; Lane set; `escalate-to-human` returned `proceed`, recorded on the ticket.
-   Done when Status is Ready (`board move <id> Ready --only-from Backlog`), or the failing item is
-   named and the ticket stays in Backlog.
+   Done when Status is Ready (`board move <id> Ready --only-from Backlog`), or, for a failing item:
+   - Open questions not empty: call [`escalate-to-human`](../escalate-to-human/SKILL.md) (Ruling)
+     with the questions as the Ask.
+   - [Open blocker](../sdlc/references/statuses.md#open-blocker): name it in the ticket comment and
+     stop; the routing skips the ticket until the blocker is done.
+   - Any other failing item: fix it in this run (split over the size limit, write the missing
+     proof or lane).
 
 ## Rules
 

@@ -144,7 +144,7 @@ flowchart LR
 
 - Results come back only through board and forge writes. There is no direct reply channel.
 - A second dispatch of the same ticket or CR, skill and head inside `stall_minutes` is skipped.
-- The rules for executors live in the contract, section 7.
+- The rules for executors live in `skills/sdlc/references/executors.md`, part of the contract.
 
 ## 4. Trust boundaries
 
