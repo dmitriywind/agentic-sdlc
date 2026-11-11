@@ -1,6 +1,6 @@
 {
   "name": "agentic-sdlc",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0-alpha.2",
   "private": true,
   "description": "Software factory / agentic SDLC: any board, any forge, trunk-based Git; ships as a Claude Code plugin",
   "type": "module",

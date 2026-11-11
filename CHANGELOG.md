@@ -3,7 +3,7 @@
 All notable changes to this package. Versions follow semver. A release is a `v<version>` Git tag; the package is
 not on npm.
 
-## Unreleased
+## 2.0.0-alpha.2 (2026-11-11)
 
 ### Fixes (the reconciliation with the 2026-11-09 audit)
 
