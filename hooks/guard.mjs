@@ -54,7 +54,10 @@ for (const seg of command.split(/&&|\|\||[;|&\n]/)) {
     i += WITH_VALUE.includes(t[i]) ? 2 : 1;
   }
   if (t[i] !== 'push') continue;
-  const refs = t.slice(i + 1).filter((x) => !x.startsWith('-'));
+  const args = t.slice(i + 1);
+  if (args.some((x) => x === '--all' || x === '--mirror' || x === '--branches')) block('push of all branches is not allowed: push your change line by name.');
+  const refs = args.filter((x) => !x.startsWith('-'));
+  if (refs.some((r) => r.includes('*'))) block('glob refspecs are not allowed: push your change line by name.');
   const head = headOf(cwd);
   const dst = (r) => {
     const d = r.replace(/^\+/, '').split(':').pop().replace(/^refs\/heads\//, '');

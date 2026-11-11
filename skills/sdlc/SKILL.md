@@ -79,7 +79,7 @@ Pick the first row that matches. A ticket labelled `needs-human` is held: skip i
 |---|---|
 | Status Ideas | none; humans only |
 | Status Signals | [`triage-signal`](../triage-signal/SKILL.md) |
-| Status Backlog, no Priority; a plan or conversation that must become tickets; or Done items closed more than 14 days ago still on the board | [`backlog-grooming`](../backlog-grooming/SKILL.md) |
+| Status Backlog, no Priority; a plan or conversation that must become tickets | [`backlog-grooming`](../backlog-grooming/SKILL.md) |
 | Status Backlog, not shaped (no Size, criteria, Lane or required spec), no open blocker, not in `board.later_milestone` | [`shape`](../shape/SKILL.md) |
 | Status Ready | [`implement-spec`](../implement-spec/SKILL.md) |
 | Status In progress | [`implement-spec`](../implement-spec/SKILL.md) |

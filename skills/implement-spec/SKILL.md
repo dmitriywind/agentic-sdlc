@@ -15,7 +15,7 @@ to `shape`.
 
 ## Steps
 
-1. **Claim.** Take the top Ready ticket in queue order that is neither held nor assigned to anyone but this run's executor. Move it
+1. **Claim.** Take the dispatched ticket; with none, the top Ready ticket in queue order that is neither held nor assigned to anyone but this run's executor. Move it
    to In progress (`board move <id> "In progress" --only-from Ready`); the move guard keeps two
    runs off one ticket. A ticket already at In progress with no open CR is worked the same way.
    Done when the board shows In progress.

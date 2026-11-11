@@ -1,4 +1,4 @@
-// agentic-sdlc dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>] [--run-model <id>] [--unattended]: start the skill's executor.
+// agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one) [--workdir <d>] [--run-model <id>] [--unattended]: start the skill's executor.
 import { spawn } from 'node:child_process';
 import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -138,7 +138,7 @@ export const cli: PortCli = async (argv, ctx) => {
       else pos.push(argv[i]);
     }
     const [skill] = pos;
-    if (!skill || (!f.ticket && !f.cr)) { console.error('usage: agentic-sdlc dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>] [--run-model <id>] [--unattended]'); return 2; }
+    if (!skill || (!f.ticket && !f.cr)) { console.error('usage: agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one) [--workdir <d>] [--run-model <id>] [--unattended]'); return 2; }
     const ticket = f.ticket ?? '', cr = f.cr ?? '', workdir = f.workdir ?? ctx.root;
     const b = ctx.binding;
     const ex = Object.hasOwn(b.executors, skill) ? b.executors[skill] : b.executors.default;

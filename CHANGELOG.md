@@ -3,6 +3,13 @@
 All notable changes to this package. Versions follow semver. A release is a `v<version>` Git tag; the package is
 not on npm.
 
+## Unreleased
+
+- Fix: skills no longer call operations no verb provides (escalate-to-human pushes only from a change line; grooming drops Done archiving); dispatch usage allows --ticket and --cr together.
+- Fix: validate requires owners.factory and paths.factory; GitLab diffs carry new/deleted/rename lines; parseCloses stays on its line; init makes the pre-push hook executable.
+- Operate: triage-signal gets mitigation-first and postmortem-plus-regression exit for P0 and a rule for `signal:maintenance`; shape asks for the exposure shape; the template binding adds the `maintenance` stream.
+- Fix: the guard hook blocks `git push --all`, `--mirror`, `--branches` and glob refspecs; the guard now has behaviour tests.
+
 ## 2.0.0-alpha.2 (2026-11-11)
 
 ### Fixes (the reconciliation with the 2026-11-09 audit)

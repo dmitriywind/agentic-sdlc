@@ -37,7 +37,7 @@ calls another skill. Read the binding (`.agents/binding.yml`) and the hold rules
 3. **Record.** On `proceed`: one line in the calling skill's ticket comment,
    `escalate-to-human: proceed`, naming the sources that settled it. On `escalate`: the comment
    below. Done when the result is on the ticket.
-4. **Hold.** On `escalate`: publish work in progress (`vcs push`), post the comment below once
+4. **Hold.** On `escalate`: if you are on a change line with unpushed commits, publish them (`vcs push`); then post the comment below once
    (`board comment`), `board label <id> add <board.labels.human>`, `board assign <id> --none`, and
    stop. The Status stays. The ask goes to `owners.product`, or `owners.factory` for a factory
    change or an Access gap. Done when the label is on and the comment is posted. If the label was

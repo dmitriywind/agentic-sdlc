@@ -295,7 +295,7 @@ only these), `secrets` (env var names the stage may receive; nothing else is pas
 (`cloud`, `container` or `local`) and `model` (`{ tier }` or `{ id }`). Secrets reach an executor
 only when listed, and never through a board or CR comment.
 
-`agentic-sdlc dispatch <skill> (--ticket <id> | --cr <n>) [--run-model <m>] [--workdir <d>] [--unattended]`
+`agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one) [--run-model <m>] [--workdir <d>] [--unattended]`
 starts the executor and prints `{ kind, ref, startedAt }`; for `harness` it prints the instruction
 for the orchestrator and starts nothing. The idempotency key is `<ticket or cr>-<skill>-<head
 sha>`: a second dispatch with the same key inside `stall_minutes` prints `{ skipped: true }`. With

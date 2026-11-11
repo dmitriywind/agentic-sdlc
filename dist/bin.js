@@ -7387,6 +7387,8 @@ function validateBinding(b) {
   if (!x || typeof x !== "object") return ["binding is empty"];
   if (x.version !== 2) p.push("version must be 2");
   if (!PROFILES.includes(x.profile)) p.push(`profile '${x.profile}' must be one of ${PROFILES.join("|")}`);
+  if (typeof x.owners?.factory !== "string" || !x.owners.factory) p.push("owners.factory must name the factory owner");
+  if (!Array.isArray(x.paths?.factory) || !x.paths.factory.length || x.paths.factory.some((g) => typeof g !== "string")) p.push("paths.factory must list the factory path globs");
   if (!Array.isArray(x.owners?.bots) || !x.owners.bots.length) p.push("owners.bots must list the accounts the factory runs as");
   for (const k of REQUIRED) if (x[k] === void 0 || x[k] === null) p.push(`missing key: ${k}`);
   for (const port of ["board", "forge", "vcs"]) {
@@ -7537,7 +7539,7 @@ var init_ports = __esm({
         super(`${id} is at ${actual}, not ${expected}; not moved`);
       }
     };
-    parseCloses = (body) => [...body.matchAll(/^\s*Closes\s+#?([A-Za-z0-9_-]+)\s*$/gim)].map((m) => m[1]);
+    parseCloses = (body) => [...new Set([...body.matchAll(/^[ \t]*Closes[ \t]+#?([A-Za-z0-9_-]+)[ \t]*$/gim)].map((m) => m[1]))];
   }
 });
 
@@ -8701,7 +8703,9 @@ function gitlab(ctx) {
     async diff(n) {
       const r = await call("GET", `/merge_requests/${n}/changes`);
       return r.changes.map((c) => `diff --git a/${c.old_path} b/${c.new_path}
---- a/${c.old_path}
+${c.new_file ? "new file mode 100644\n" : ""}${c.deleted_file ? "deleted file mode 100644\n" : ""}${c.renamed_file ? `rename from ${c.old_path}
+rename to ${c.new_path}
+` : ""}--- a/${c.old_path}
 +++ b/${c.new_path}
 ${c.diff}`).join("");
     },
@@ -8992,7 +8996,7 @@ __export(install_exports, {
   validate: () => validate
 });
 import { createHash } from "crypto";
-import { cpSync, existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync5, readdirSync, statSync, writeFileSync as writeFileSync2 } from "fs";
+import { chmodSync, cpSync, existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync5, readdirSync, statSync, writeFileSync as writeFileSync2 } from "fs";
 import { dirname as dirname2, join as join4, relative, resolve } from "path";
 import { fileURLToPath } from "url";
 function packageRoot(env = process.env) {
@@ -9205,6 +9209,7 @@ function init(root, argv, log) {
   }
   if (existsSync2(join4(gates, "hooks", "pre-push"))) {
     copyFile(join4(gates, "hooks", "pre-push"), join4(root, ".agents", "hooks", "pre-push"), force, log);
+    chmodSync(join4(root, ".agents", "hooks", "pre-push"), 493);
     log.push("enable the hook with: git config core.hooksPath .agents/hooks");
   }
   const setup = join4(pkg, "templates", "runner", "setup.sh");
@@ -10732,7 +10737,7 @@ var init_dispatch = __esm({
         }
         const [skill] = pos;
         if (!skill || !f.ticket && !f.cr) {
-          console.error("usage: agentic-sdlc dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>] [--run-model <id>] [--unattended]");
+          console.error("usage: agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one) [--workdir <d>] [--run-model <id>] [--unattended]");
           return 2;
         }
         const ticket = f.ticket ?? "", cr = f.cr ?? "", workdir = f.workdir ?? ctx.root;

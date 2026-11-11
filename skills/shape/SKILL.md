@@ -54,7 +54,7 @@ a step already done on the ticket is checked, not redone.
      and rule as `paths.test_standard` defines them
    - Implementation plan: numbered steps, each starting with its first failing test
    - Fix loop (failure-born only): the confirmed cause and how the fix removes it
-   - Risks and rollback
+   - Risks and rollback: how the change is exposed (all at once, behind a flag, or staged by audience) and how it is undone
    - The riskiest step
    - Options not chosen, with the reason
    - Flagged concerns

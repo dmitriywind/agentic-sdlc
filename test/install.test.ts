@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -39,6 +39,7 @@ test('init writes skills, binding, gates, pointer; second run is idempotent and 
   assert.ok(existsSync(join(root, '.github/workflows/gate.yml')));
   assert.ok(existsSync(join(root, '.agents/cycle-prompt.md')) && existsSync(join(root, '.agents/review-prompt.md')));
   assert.ok(existsSync(join(root, '.agents/hooks/pre-push')));
+  if (process.platform !== 'win32') assert.ok(statSync(join(root, '.agents/hooks/pre-push')).mode & 0o100, 'hook is executable');
   const binding = readFileSync(join(root, '.agents/binding.yml'), 'utf8');
   assert.match(binding, /adapter: jira/);
   writeFileSync(join(root, '.agents/binding.yml'), binding + '# edited\n');
@@ -119,7 +120,7 @@ test('validate prints warn: lines and exits 0 when only warnings exist', async (
     version: 2, profile: 'individual', owners: { product: 'a', factory: 'b', bots: ['bot'] },
     board: { adapter: 'local', options: {}, statuses: ['Ideas', 'Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done', 'Cancelled'] },
     forge: { adapter: 'github' }, vcs: { adapter: 'git', change_pattern: 'ticket/<ticket>' },
-    models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: {}, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
+    models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: { factory: ['.agents/**'] }, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
     priorities: [], p0_setters: [], max_subissue_depth: 1, spec_marker: 'spec.md', stall_minutes: 60, parallel_agents: 1,
     cycle: {}, heartbeat: {}, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
     executors: { default: { kind: 'harness' }, bot: { kind: 'assign', user: 'coding-bot' } },

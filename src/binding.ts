@@ -55,6 +55,8 @@ export function validateBinding(b: Binding): string[] {
   if (!x || typeof x !== 'object') return ['binding is empty'];
   if (x.version !== 2) p.push('version must be 2');
   if (!PROFILES.includes(x.profile)) p.push(`profile '${x.profile}' must be one of ${PROFILES.join('|')}`);
+  if (typeof x.owners?.factory !== 'string' || !x.owners.factory) p.push('owners.factory must name the factory owner');
+  if (!Array.isArray(x.paths?.factory) || !x.paths.factory.length || x.paths.factory.some((g: unknown) => typeof g !== 'string')) p.push('paths.factory must list the factory path globs');
   if (!Array.isArray(x.owners?.bots) || !x.owners.bots.length) p.push('owners.bots must list the accounts the factory runs as');
   for (const k of REQUIRED) if (x[k] === undefined || x[k] === null) p.push(`missing key: ${k}`);
   for (const port of ['board', 'forge', 'vcs'] as const) {

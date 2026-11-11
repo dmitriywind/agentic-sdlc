@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AdapterContext } from '../src/ports.ts';
+import { parseCloses, type AdapterContext } from '../src/ports.ts';
+import { proofFiles } from '../src/gates.ts';
 import { createForge, cli } from '../src/forge/index.ts';
 
 type Call = { m: string; url: string; body?: any };
@@ -39,6 +40,17 @@ test('gitlab: view maps fields, ready strips Draft, automerge uses merge_when_pi
   assert.equal(calls.filter((c) => c.m === 'PUT').at(-1)!.body.merge_when_pipeline_succeeds, true);
   await f.viewBySha('abc').catch(() => {});
   assert.ok(calls.some((c) => c.url.endsWith('/repository/commits/abc/merge_requests')));
+});
+
+test('gitlab: a deleted file diffs as deleted, so it is not a proof file', async () => {
+  const { ctx } = mk('gitlab', { project: 'p', base_url: 'https://gl', token_env: 'TOK' }, (_m, url) =>
+    url.includes('/changes') ? { changes: [{ old_path: 't/a.test.ts', new_path: 't/a.test.ts', deleted_file: true, diff: '@@ -1 +0,0 @@\n-x\n' }] } : {});
+  assert.deepEqual(proofFiles(await createForge(ctx).diff('7'), /\.test\.ts$/), []);
+});
+
+test('parseCloses never reads an id from the next line and dedupes', () => {
+  assert.deepEqual(parseCloses('Closes \nRefactor\n'), []);
+  assert.deepEqual(parseCloses('Closes #12\nCloses #12'), ['12']);
 });
 
 test('gitlab: missing token env fails without leaking', async () => {

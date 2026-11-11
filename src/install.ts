@@ -1,6 +1,6 @@
 // init / validate / doctor.
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, parseDocument } from 'yaml';
@@ -256,6 +256,7 @@ function init(root: string, argv: string[], log: string[]) {
   }
   if (existsSync(join(gates, 'hooks', 'pre-push'))) {
     copyFile(join(gates, 'hooks', 'pre-push'), join(root, '.agents', 'hooks', 'pre-push'), force, log);
+    chmodSync(join(root, '.agents', 'hooks', 'pre-push'), 0o755);
     log.push('enable the hook with: git config core.hooksPath .agents/hooks');
   }
   const setup = join(pkg, 'templates', 'runner', 'setup.sh');

@@ -43,7 +43,7 @@ export function gitlab(ctx: AdapterContext): Forge {
     },
     async diff(n) {
       const r = await call('GET', `/merge_requests/${n}/changes`);
-      return r.changes.map((c: any) => `diff --git a/${c.old_path} b/${c.new_path}\n--- a/${c.old_path}\n+++ b/${c.new_path}\n${c.diff}`).join('');
+      return r.changes.map((c: any) => `diff --git a/${c.old_path} b/${c.new_path}\n${c.new_file ? 'new file mode 100644\n' : ''}${c.deleted_file ? 'deleted file mode 100644\n' : ''}${c.renamed_file ? `rename from ${c.old_path}\nrename to ${c.new_path}\n` : ''}--- a/${c.old_path}\n+++ b/${c.new_path}\n${c.diff}`).join('');
     },
     async list(q = {}) {
       const st = { open: 'opened', merged: 'merged', all: 'all' }[q.state ?? 'open'];

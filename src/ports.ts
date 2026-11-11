@@ -117,7 +117,7 @@ export class MovedError extends Error {
 
 /** The shared rule for CR linkage: exactly the lines `Closes <id>`. */
 export const parseCloses = (body: string): string[] =>
-  [...body.matchAll(/^\s*Closes\s+#?([A-Za-z0-9_-]+)\s*$/gim)].map((m) => m[1]);
+  [...new Set([...body.matchAll(/^[ \t]*Closes[ \t]+#?([A-Za-z0-9_-]+)[ \t]*$/gim)].map((m) => m[1]))];
 
 /** The stage's agent definition, shared by every executor kind (references/architecture.md section 7). */
 export interface StageDef {

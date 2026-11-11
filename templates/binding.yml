@@ -33,7 +33,7 @@ board:
   env_labels: [env:staging, env:production] # on a signal from a deployed environment
   done_statuses: [Done, Cancelled] # left out of the heartbeat's items and oldestOpen
   views: [Board, Signals, Human, Release, Roadmap] # saved views the sdlc skill describes
-  signal_streams: [alert, feedback, owner, security, ci, deploy] # label signal:<stream>
+  signal_streams: [alert, feedback, owner, security, ci, deploy, maintenance] # label signal:<stream>; maintenance: dependency, advisory, end-of-life and expiry scanners
 
 forge:
   adapter: github               # github | gitlab | azure | bitbucket

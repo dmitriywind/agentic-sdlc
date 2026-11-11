@@ -11,7 +11,7 @@ const good = {
   version: 2, profile: 'individual', owners: { product: 'a', factory: 'b', bots: ['bot'] },
   board: { adapter: 'local', options: {}, statuses: ['Ideas', 'Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done', 'Cancelled'] },
   forge: { adapter: 'github' }, vcs: { adapter: 'git', change_pattern: 'ticket/<ticket>' },
-  models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: {}, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
+  models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: { factory: ['.agents/**'] }, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
   priorities: [], p0_setters: [], max_subissue_depth: 1, spec_marker: 'spec.md', stall_minutes: 60, parallel_agents: 1,
   cycle: {}, heartbeat: {}, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
   executors: { default: { kind: 'harness' } },
@@ -30,6 +30,15 @@ test('validateBinding reports each broken rule', () => {
   bad.models.deep = ''; bad.vcs.change_pattern = 'nope'; bad.product.environments = []; bad.product.proofs = ['vibes']; bad.executors.default.kind = 'magic';
   const p = validateBinding(bad as Binding).join('\n');
   for (const s of ['version must be 2', "board.adapter 'x'", "lacks 'Ready'", 'not in sizes', 'models.deep', '<ticket>', 'environments', 'vibes', 'magic']) assert.match(p, new RegExp(s));
+});
+
+test('validateBinding requires the factory owner and factory path globs', () => {
+  const a = structuredClone(good) as any;
+  a.paths.factory = [];
+  assert.match(validateBinding(a as Binding).join('\n'), /paths\.factory must list/);
+  const b = structuredClone(good) as any;
+  delete b.owners.factory;
+  assert.match(validateBinding(b as Binding).join('\n'), /owners\.factory must name/);
 });
 
 test('validateBinding rejects unknown option keys and missing required ones per adapter', () => {

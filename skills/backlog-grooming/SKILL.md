@@ -1,6 +1,6 @@
 ---
 name: backlog-grooming
-description: Keep the Backlog ordered and coherent - set Priority, merge duplicates, group items under initiatives, cancel superseded work, declutter old Done items. Use on Status Backlog with no Priority, when a plan or conversation must become tickets, or when Done items closed more than 14 days ago are still on the board.
+description: Keep the Backlog ordered and coherent - set Priority, merge duplicates, group items under initiatives, cancel superseded work. Use on Status Backlog with no Priority, or when a plan or conversation must become tickets.
 metadata:
   tier: balanced
 ---
@@ -27,10 +27,6 @@ Follow the common contract in [`sdlc`](../sdlc/SKILL.md). What matters most come
 4. **New work from a plan.** Turn a plan or conversation into tickets: one each
    (`board create … --status Backlog`), shaped by the project's ticket template, label `bug` or
    `feature`. Done when each is on the board.
-5. **Declutter Done.** Archive from the board every Done or Cancelled item closed more than 14 days
-   ago, except a held one. Small tickets of one theme with no parent first become sub-issues of one
-   closed rollup at Done, whose Shipped is the lowest of its children. Archive only; never delete or
-   rewrite a ticket. Done when no unheld item closed more than 14 days ago is visible.
 
 ## Rules
 

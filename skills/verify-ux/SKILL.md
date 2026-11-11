@@ -9,7 +9,7 @@ metadata:
 # Verify the product as a user
 
 Follow the common contract in [`sdlc`](../sdlc/SKILL.md). You observe; you never change code,
-the ticket or the board. [`review-pr`](../review-pr/SKILL.md) grades what you post. Scripted UI
+the ticket or the board, except through `escalate-to-human`. [`review-pr`](../review-pr/SKILL.md) grades what you post. Scripted UI
 checks are proof `visual` or `test` and run in CI; this skill covers only agent-driven paths.
 
 ## Steps
