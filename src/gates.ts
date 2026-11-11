@@ -337,14 +337,17 @@ export async function shipped(d: Deps, env: string, sha: string, result: string)
       if (anc.includes(undefined)) return { env, result, changed: [], tags: [], unknown: true };
       if (anc.every(Boolean)) items.push(x);
     }
-    for (const x of items) { await d.board.set(x.id, 'shipped', target); changed.push(x.id); }
+    // Tags first: a tag failure throws before the board changes, so a re-run retries; an existing tag is kept.
     const tags: string[] = [];
     if (last) {
+      const prefix = d.binding.vcs.tag_prefix;
+      const have = new Set((await d.vcs.tags(prefix)).map((t) => t.name));
       for (const v of new Set(items.map((x) => x.fields.release_version).filter((v): v is string => !!v))) {
-        await d.vcs.tag(`${d.binding.vcs.tag_prefix}${v}`, sha);
-        tags.push(`${d.binding.vcs.tag_prefix}${v}`);
+        if (!have.has(`${prefix}${v}`)) await d.vcs.tag(`${prefix}${v}`, sha);
+        tags.push(`${prefix}${v}`);
       }
     }
+    for (const x of items) { await d.board.set(x.id, 'shipped', target); changed.push(x.id); }
     return { env, result, changed, tags, unmatched };
   }
   if (last) {

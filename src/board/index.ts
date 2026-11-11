@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import type { AdapterContext, Board, LogicalField, PortCli } from '../ports.ts';
+import type { AdapterContext, Binding, Board, Comment, LogicalField, PortCli } from '../ports.ts';
+import { selectComments } from '../comments.ts';
 import { createGithubBoard } from './github.ts';
 import { createJiraBoard } from './jira.ts';
 import { createLinearBoard } from './linear.ts';
@@ -70,14 +71,11 @@ export const cli: PortCli = async (argv, base) => {
       case 'comment': need(1); out = await board.comment(id, body()); break;
       case 'comments': {
         need(1);
-        const last = a.one('last') ? Number(a.one('last')) : undefined;
         // --trusted: the binding's bots and owners, added to any --author.
-        const o = base.binding.owners;
-        const authors = [...(a.flags.author ?? []), ...(a.has('trusted') ? [...(o?.bots ?? []), o?.product, o?.factory] : [])].filter((x): x is string => !!x);
-        const by = a.flags.author || a.has('trusted') ? authors.map((s) => s.toLowerCase()) : undefined;
-        // --last applies after --author, so a forged comment never pushes a trusted one out.
-        const list = await board.comments(id, { last: by ? undefined : last, marker: a.one('marker') });
-        out = by ? list.filter((c) => by.includes(c.author?.toLowerCase())).slice(0, last) : list;
+        out = selectComments(await board.comments(id, { marker: a.one('marker') }), {
+          owners: base.binding.owners, authors: a.flags.author, trusted: a.has('trusted'),
+          last: a.one('last') ? Number(a.one('last')) : undefined, marker: a.one('marker'),
+        });
         break;
       }
       case 'close': {

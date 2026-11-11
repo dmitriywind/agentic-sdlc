@@ -119,7 +119,7 @@ test('validate prints warn: lines and exits 0 when only warnings exist', async (
   const good = {
     version: 2, profile: 'individual', owners: { product: 'a', factory: 'b', bots: ['bot'] },
     board: { adapter: 'local', options: {}, statuses: ['Ideas', 'Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done', 'Cancelled'] },
-    forge: { adapter: 'github' }, vcs: { adapter: 'git', change_pattern: 'ticket/<ticket>' },
+    forge: { adapter: 'github' }, vcs: { adapter: 'git', change_pattern: 'ticket/<ticket>', trunk: 'main', release_prefix: 'release/', factory_change_pattern: 'factory/<name>', tag_prefix: 'v' },
     models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: { factory: ['.agents/**'] }, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
     priorities: [], p0_setters: [], max_subissue_depth: 1, spec_marker: 'spec.md', stall_minutes: 60, parallel_agents: 1,
     cycle: {}, heartbeat: {}, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
@@ -265,8 +265,32 @@ test('vcs push refuses the trunk and a detached HEAD', async () => {
 
 test('doctor: the delivery workflow must name the trunk and release line', () => {
   const root = mkdtempSync(join(tmpdir(), 'dw-'));
-  w(join(root, '.github/workflows/agentic-sdlc-delivery.yml'), readFileSync(join(import.meta.dirname, '../templates/gates/github/agentic-sdlc-delivery.yml'), 'utf8'));
+  w(join(root, '.github/workflows/agentic-sdlc-delivery.yml'), `on:
+  push:
+    branches: [main, "release/**"]
+env:
+  TRUNK: main
+  RELEASE_PREFIX: release/
+`);
   const b = (trunk: string) => ({ forge: { adapter: 'github' }, vcs: { trunk, release_prefix: 'release/' } });
   assert.match(deliveryWorkflow(b('master'), root)!, /^fail delivery workflow:.*trunk master/);
   assert.match(deliveryWorkflow(b('main'), root)!, /^ok   delivery workflow: names trunk main/);
+});
+
+test('doctor: delivery workflow env.TRUNK and env.RELEASE_PREFIX must match the binding', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dwe-'));
+  const wf = (trunk: string) => `on:\n  push:\n    branches: [main, "release/**"]\nenv:\n  TRUNK: ${trunk}\n  RELEASE_PREFIX: release/\n`;
+  w(join(root, '.github/workflows/agentic-sdlc-delivery.yml'), wf('trunk'));
+  const b = { forge: { adapter: 'github' }, vcs: { trunk: 'main', release_prefix: 'release/' } };
+  assert.match(deliveryWorkflow(b, root)!, /^fail delivery workflow: env\.TRUNK/);
+  w(join(root, '.github/workflows/agentic-sdlc-delivery.yml'), wf('main'));
+  assert.match(deliveryWorkflow(b, root)!, /^ok   delivery workflow/);
+});
+
+test('init on github installs the release-lines ruleset', async () => {
+  const root = fixture();
+  w(join(process.env.AGENTIC_SDLC_PACKAGE!, 'templates/gates/github/ruleset.release.json'), '{}');
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  assert.equal(await quiet(() => cli(['init', '--forge', 'github'], ctx)), 0);
+  assert.ok(existsSync(join(root, '.github/rulesets/release.json')));
 });

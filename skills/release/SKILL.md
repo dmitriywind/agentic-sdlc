@@ -16,7 +16,11 @@ The Product owner approves the last environment; this skill never does.
 
 ## Steps
 
-0. **P0 entry.** Dispatched for a Done P0 ticket instead of a request: `board list --label
+0. **Resume.** `board comments <request> --trusted`. When the newest comment carrying
+   `<!-- release-proposal` has no trusted Product owner reply after it, stop: no comment, no
+   further reads. A reply that approves goes to step 6; one that changes contents, to step 3; one
+   asking to refresh, to step 1. Done when the run stopped or knows its entry step.
+0a. **P0 entry.** Dispatched for a Done P0 ticket instead of a request: `board list --label
    <board.labels.release> --search "Release for P0 #<id>"`. When none is open, `board create` it
    at Backlog with that label and title. Continue on that request. The title is the dedupe key.
 1. **Gather.** The last release (`vcs tags --prefix <vcs.tag_prefix>`, first row), the tickets at Done with
@@ -35,7 +39,8 @@ The Product owner approves the last environment; this skill never does.
 4. **Version.** Per `vcs.version_scheme`. CalVer is `YYYY.MM.N`, `N` counting releases in that
    month from 1; semver bumps from the last release. Never reuse a version, even a failed one. Done
    when the version is unused as a tag and a release line.
-5. **Propose.** One comment on the release request, to the Product owner: contents, version,
+5. **Propose.** One comment on the release request, to the Product owner, its first line
+   `<!-- release-proposal <revision> -->`: contents, version,
    revision, and the open signals per environment with each one's Status. For a P0, the first line names the P0
    and says only the commits needed for it are in the proposal. Then stop. Done when posted and the run has stopped.
 6. **Mark.**
@@ -52,15 +57,14 @@ The Product owner approves the last environment; this skill never does.
 
 ## Rules
 
-- Never commit to a release line. Only this skill cherry-picks, and only to build a corrected
-  release from an earlier release revision when the trunk carries changes that must not ship yet;
-  record the choice in the proposal.
+- Never commit to a release line or build one from picked commits: a cut takes one trunk
+  revision. For a P0, the newest revision holding the fix; when the trunk before it carries
+  changes not ready to ship, the proposal names them and the Product owner decides (escalate),
+  and a revert on the trunk is the way to drop one.
 - After a failed release, leave the failed line untouched. When the fix is Done with Shipped = On
   <env before last>, cut the next version.
 - A P0 fix is Done and On <env before last> before it is cut. The expedited part: release starts
-  at once and chooses the newest revision holding the fix, cherry-picking onto the last release
-  revision (pre-authorised for a P0) when the trunk carries changes not ready to ship. No check is
-  skipped.
+  at once and chooses the newest revision holding the fix. No check is skipped.
 - With one environment there is no release line: release does not run.
-- Escalate when the ready check fails and a person must decide, it would cherry-pick other than for a P0 fix, or the
+- Escalate when the ready check fails and a person must decide, or the
   proposal changes what the Product owner expects to ship.

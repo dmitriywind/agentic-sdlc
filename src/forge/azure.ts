@@ -1,4 +1,4 @@
-import type { AdapterContext, Check, CR, Forge, Run } from '../ports.ts';
+import type { AdapterContext, Check, Comment, CR, Forge, Run } from '../ports.ts';
 import { parseCloses } from '../ports.ts';
 import { basic, localDiff, secret } from './util.ts';
 
@@ -62,6 +62,13 @@ export function azure(ctx: AdapterContext): Forge {
     async comment(n, body) {
       const t = await call('POST', `${git}/pullrequests/${n}/threads`, { comments: [{ content: body, commentType: 1 }], status: 1 });
       return { id: String(t.id) };
+    },
+    async comments(n) {
+      const r = await call('GET', `${git}/pullrequests/${n}/threads`);
+      return (r.value ?? []).flatMap((t: any) => t.comments ?? [])
+        .filter((c: any) => c.commentType !== 'system' && !c.isDeleted)
+        .map((c: any): Comment => ({ id: String(c.id), author: c.author?.uniqueName ?? c.author?.displayName ?? '', createdAt: c.publishedDate, body: c.content ?? '' }))
+        .sort((a: Comment, b: Comment) => a.createdAt.localeCompare(b.createdAt));
     },
     // Branch status policies read pull request statuses, so post on the PR iteration whose head is sha.
     async status(sha, s, opts) {

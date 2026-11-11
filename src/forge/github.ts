@@ -52,6 +52,10 @@ export function github(ctx: AdapterContext): Forge {
       const url = gh(['pr', 'comment', n, '--body-file', '-'], body).trim();
       return { id: url.split('issuecomment-')[1] ?? url, url };
     },
+    async comments(n) {
+      const out = gh(['api', '--paginate', `${api}/issues/${n}/comments`, '--jq', '.[] | {id: (.id | tostring), author: .user.login, createdAt: .created_at, body: .body, url: .html_url}']);
+      return out.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
+    },
     async status(sha, s, opts) {
       const a = ['api', '-X', 'POST', `${api}/statuses/${sha}`, '-f', `state=${s.state}`, '-f', `context=${s.context}`, '-f', `description=${s.description}`];
       if (s.url) a.push('-f', `target_url=${s.url}`);

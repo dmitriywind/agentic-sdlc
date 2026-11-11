@@ -67,7 +67,7 @@ history, no direct push except the bot) and release branches cut with `vcs cut` 
 | Verify | job `Required` on `pull_request`, no secrets, plus `proofs-on-base` |
 | Board sync, shipped, signals | `agentic-sdlc-cr.yml`, `agentic-sdlc-delivery.yml` |
 | Auto-merge, merge queue | native; the CR workflow also triggers on `merge_group` |
-| Trunk | `ruleset.trunk.json`: one approving review, stale reviews dismissed, the six required checks pinned, linear history; a second ruleset for release branches |
+| Trunk | `ruleset.trunk.json`: one approving review, stale reviews dismissed, the six required checks pinned, linear history; a second ruleset for release branches, `.github/rulesets/release.json` |
 
 One-time setup (private repos need a plan with Environments: Pro, Team or Enterprise):
 
@@ -114,6 +114,16 @@ does not do this yet (tracked for the next release).
 | Board sync | PR pipeline (ready), trunk pipeline (merged); approx: no draft event |
 | Auto-merge | approx: scheduled custom pipeline `agentic-automerge` merges CRs with `<!-- agentic-sdlc:automerge -->` when green |
 | Trunk | branch restrictions: successful build, no direct push, squash/fast-forward |
+
+## Secret exposure
+| Forge | Who can read the gate tokens | What holds |
+|---|---|---|
+| github | Review token: only the trunk-only Environment `agentic-review`. Delivery tokens: workflows on the trunk and release lines | The trunk and release rulesets (`.github/rulesets/release.json`) |
+| gitlab | A contributor with push access, via MR-editable YAML | Advisory against them: restrict branch push to bots and owners, or wait for the relay |
+| azure | A contributor with push access, via PR-editable YAML | Advisory against them: restrict branch push to bots and owners, or wait for the relay |
+| bitbucket | A contributor with push access, via PR-editable YAML | Advisory against them: restrict branch push to bots and owners, or wait for the relay |
+
+GitLab: never enable protected variables in MR pipelines. The sound routes are Ultimate external status checks or a pipeline execution policy; a default-branch relay posting with the MR head `pipeline_id` is unverified.
 
 ## Gaps
 No native guarantee: Bitbucket auto-merge and draft event, Azure draft/merged events and review

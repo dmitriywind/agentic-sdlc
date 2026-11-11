@@ -5,6 +5,7 @@
 | [Components](architecture/components.md) | The parts and how they connect (diagrams). |
 | [Flows](architecture/flows.md) | The cycle, review, release and learning flows (diagrams). |
 | [Forges](forges.md) | Checks, approval and what each forge enforces natively, by gate, or approximately. |
+| [Operating baseline](operating-baseline.md) | Team shapes, repo and board baseline, and how a product should operate in 2026-27 (recommendations). |
 | [The contract](../references/architecture.md) | Normative. Section 3 ports and gates, executors in `skills/sdlc/references/executors.md`, section 10 runtimes and profiles. |
 | [Audit record 2026-11-09](audits/2026-11-09-v2-audit.md) | Why v2 changed after the first audit. Superseded by the contract. |
 | [Binding template](../templates/binding.yml) | Every project value, documented. |

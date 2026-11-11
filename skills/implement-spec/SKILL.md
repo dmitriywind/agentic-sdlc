@@ -19,7 +19,7 @@ to `shape`.
    to In progress (`board move <id> "In progress" --only-from Ready`); the move guard keeps two
    runs off one ticket. A ticket already at In progress with no open CR is worked the same way. A ticket
    at In progress whose open CR closes it is rework: read the newest review-pr report on that CR
-   (`forge view <n>`) and fix each Important finding first.
+   (`forge comments <n> --last 1 --marker "<!-- review-pr" --trusted`) and fix each Important finding first.
    Done when the board shows In progress.
 2. **Branch.** `agentic-sdlc vcs start <name>`, named by `vcs.change_pattern`: it reopens the existing change
    line when one exists (rework uses the CR's source branch name) and otherwise starts from the
@@ -54,5 +54,7 @@ to `shape`.
 - When a fix fails twice for the same reason, stop and escalate; diagnosis belongs to
   [`shape`](../shape/SKILL.md).
 - A diff that outgrows the size limit goes back to Backlog with the reason, for shape to split.
+- Call escalate-to-human again only when Size, Lane, criteria or a trigger class changed since
+  its last line on the ticket; an owner ruling already on the ticket stands.
 - Escalate when the spec contradicts the code or a failure outside the ticket blocks it, plus the
   triggers of [`escalate-to-human`](../escalate-to-human/SKILL.md).

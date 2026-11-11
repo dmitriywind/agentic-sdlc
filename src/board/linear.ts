@@ -80,10 +80,11 @@ export function createLinearBoard(ctx: AdapterContext): Board {
       if (ws.length) filter.and = ws.map((w) => ({ or: [{ title: { containsIgnoreCase: w } }, { description: { containsIgnoreCase: w } }] }));
       const nodes: any[] = [];
       let a: string | null = null;
-      for (;;) {
+      for (let page = 1; ; page++) {
         const r: any = await gql(`query($f:IssueFilter,$a:String){ issues(filter:$f, first:100, after:$a){ nodes { ${ISSUE} } pageInfo { hasNextPage endCursor } } }`, { f: filter, a });
         nodes.push(...r.issues.nodes);
         if (!r.issues.pageInfo.hasNextPage) break;
+        if (!r.issues.nodes.length || r.issues.pageInfo.endCursor === a || page >= 500) throw new Error('linear: list does not advance (empty page, repeated cursor or over 500 pages); stopping');
         a = r.issues.pageInfo.endCursor;
       }
       return nodes.map(toItem);
@@ -120,11 +121,13 @@ export function createLinearBoard(ctx: AdapterContext): Board {
     async comments(id, q = {}) {
       const nodes: any[] = [];
       let a: string | null = null;
-      for (;;) {
+      for (let page = 1; ; page++) {
         const r: any = await gql(`query($id:String!,$a:String){ issue(id:$id){ comments(first:100, after:$a){ nodes { id body createdAt url user { id } } pageInfo { hasNextPage endCursor } } } }`, { id, a });
-        nodes.push(...r.issue.comments.nodes);
-        if (!r.issue.comments.pageInfo.hasNextPage) break;
-        a = r.issue.comments.pageInfo.endCursor;
+        const c = r.issue.comments;
+        nodes.push(...c.nodes);
+        if (!c.pageInfo.hasNextPage) break;
+        if (!c.nodes.length || c.pageInfo.endCursor === a || page >= 500) throw new Error('linear: comments does not advance (empty page, repeated cursor or over 500 pages); stopping');
+        a = c.pageInfo.endCursor;
       }
       let list: Comment[] = nodes
         .map((c: any) => ({ id: c.id, author: c.user?.id ?? '', createdAt: c.createdAt, body: c.body, url: c.url }))

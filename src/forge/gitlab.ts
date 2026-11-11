@@ -1,4 +1,4 @@
-import type { AdapterContext, CR, Forge, Run } from '../ports.ts';
+import type { AdapterContext, Comment, CR, Forge, Run } from '../ports.ts';
 import { parseCloses } from '../ports.ts';
 import { secret } from './util.ts';
 
@@ -57,6 +57,14 @@ export function gitlab(ctx: AdapterContext): Forge {
     async comment(n, body) {
       const r = await call('POST', `/merge_requests/${n}/notes`, { body });
       return { id: String(r.id) };
+    },
+    async comments(n) {
+      const out: Comment[] = [];
+      for (let page = 1; ; page++) {
+        const r = await call('GET', `/merge_requests/${n}/notes?sort=asc&order_by=created_at&per_page=100&page=${page}`);
+        for (const c of r) if (!c.system) out.push({ id: String(c.id), author: c.author?.username ?? '', createdAt: c.created_at, body: c.body ?? '' });
+        if (r.length < 100) return out;
+      }
     },
     async status(sha, s, opts) {
       await call('POST', `/statuses/${sha}`, {

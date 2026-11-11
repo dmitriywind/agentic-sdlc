@@ -1,7 +1,9 @@
 # Merge into your bitbucket-pipelines.yml. Secrets: AGENTIC_FORGE_TOKEN, AGENTIC_BOARD_TOKEN,
 # AGENTIC_REVIEW_TOKEN as secured variables of the deployment environment `agentic-gates`
-# (Repository settings > Deployments), so only steps with `deployment: agentic-gates` read them.
-# The Required and proofs-on-base steps run the PR's code and have no deployment, so no secret.
+# (Repository settings > Deployments). The pull-requests ticket-linkage step itself uses `deployment: agentic-gates`,
+# so that environment cannot be restricted to the trunk: any PR branch's copy of this file can add the deployment to
+# another step and read the secrets. The gates hold against forks and agents, not against people with push access.
+# The custom agentic-approval pipeline (runs from the trunk) is the model for a trunk-only relay, not shipped yet.
 # Branch restrictions on the trunk: merge check "successful build", 1 approval (the review identity's
 # forge approve), reset approvals on change, squash/fast-forward only, no direct push except the bot.
 # Bitbucket has no native auto-merge: the custom pipeline below is it.

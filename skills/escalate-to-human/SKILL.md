@@ -20,8 +20,10 @@ calls another skill. Read the binding (`.agents/binding.yml`) and the hold rules
    options but never settles it; classify in step 2.
    On this ticket, a trusted owner reply (`board comments <id> --trusted`, by `owners.product` or
    `owners.factory`) posted after its last `### Needs human` comment settles every trigger that
-   comment named, unless new facts appeared since (a changed scope, diff or evidence); name that
-   reply as the settling source.
+   comment named, unless new facts appeared since (a changed Size, Lane or acceptance criteria, or a trigger class the hold comment did not
+   name; a new diff or a later run alone is never new); name that
+   reply as the settling source. On a factory CR without a ticket, read the owner reply with
+   `agentic-sdlc forge comments <n> --trusted` after the CR's last `### Needs human` comment.
 2. **Classify.** Return `escalate` when any trigger holds, naming it; otherwise `proceed`:
    - Architecture: a new component or boundary, a changed data model or public interface.
    - Scope: the change differs from the accepted ticket or touches unrelated areas.

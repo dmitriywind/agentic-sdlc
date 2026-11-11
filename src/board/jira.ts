@@ -75,11 +75,14 @@ export function createJiraBoard(ctx: AdapterContext): Board {
       const fields = (await fetchFields()).split(',');
       const issues: any[] = [];
       let nextPageToken: string | undefined;
-      do {
+      for (let page = 1; ; page++) {
         const r = await api('POST', '/search/jql', { jql: jql.join(' AND ') + ' ORDER BY created ASC', maxResults: 100, fields, ...(nextPageToken ? { nextPageToken } : {}) });
         issues.push(...r.issues);
-        nextPageToken = r.isLast === true ? undefined : r.nextPageToken;
-      } while (nextPageToken);
+        const next: string | undefined = r.isLast === true ? undefined : r.nextPageToken;
+        if (!next) break;
+        if (!r.issues.length || next === nextPageToken || page >= 500) throw new Error('jira: list does not advance (empty page, repeated token or over 500 pages); stopping');
+        nextPageToken = next;
+      }
       return Promise.all(issues.map(toItem));
     },
     get,
@@ -112,10 +115,11 @@ export function createJiraBoard(ctx: AdapterContext): Board {
     },
     async comments(id, q = {}) {
       const raw: any[] = [];
-      for (;;) {
+      for (let page = 1; ; page++) {
         const r = await api('GET', `/issue/${id}/comment?orderBy=-created&maxResults=100&startAt=${raw.length}`);
         raw.push(...r.comments);
-        if (!r.comments.length || raw.length >= r.total) break;
+        if (raw.length >= r.total) break;
+        if (!r.comments.length || page >= 500) throw new Error('jira: comments does not advance (empty page or over 500 pages); stopping');
       }
       let list: Comment[] = raw.map((c: any) => ({
         id: String(c.id), author: c.author?.accountId ?? '', createdAt: c.created, body: adfText(c.body), url: `${base}/browse/${id}?focusedCommentId=${c.id}`,

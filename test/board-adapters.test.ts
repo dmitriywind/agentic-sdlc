@@ -135,3 +135,13 @@ test('github refuses a board read at the 1000-item cap', async () => {
   await assert.rejects(full.get('1'), /archive/);
   assert.equal((await mk('github', gh, answer(999)).board.list()).length, 999);
 });
+
+test('jira list throws on a repeated token; linear list throws on an unchanged cursor', async () => {
+  const { board } = mk('jira', jira, (c) => {
+    if (c.includes('/field')) return [{ id: 'cf1', name: 'Size' }, { id: 'cf2', name: 'Priority' }];
+    if (c.includes('/search/jql')) return { issues: [jIssue('PROJ-1')], nextPageToken: 't1' };
+  }, { JE: 'a@b', JT: 's' });
+  await assert.rejects(board.list(), /jira: list does not advance/);
+  const lin = mk('linear', { team_key: 'LIN', token_env: 'LT' }, () => ({ data: { issues: { nodes: [{ id: 'x' }], pageInfo: { hasNextPage: true, endCursor: 'c1' } } } }), { LT: 'k' });
+  await assert.rejects(lin.board.list(), /linear: list does not advance/);
+});

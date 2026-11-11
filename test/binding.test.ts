@@ -10,7 +10,7 @@ import type { Binding } from '../src/ports.ts';
 const good = {
   version: 2, profile: 'individual', owners: { product: 'a', factory: 'b', bots: ['bot'] },
   board: { adapter: 'local', options: {}, statuses: ['Ideas', 'Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done', 'Cancelled'] },
-  forge: { adapter: 'github' }, vcs: { adapter: 'git', change_pattern: 'ticket/<ticket>' },
+  forge: { adapter: 'github' }, vcs: { adapter: 'git', change_pattern: 'ticket/<ticket>', trunk: 'main', release_prefix: 'release/', factory_change_pattern: 'factory/<name>', tag_prefix: 'v' },
   models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: { factory: ['.agents/**'] }, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
   priorities: [], p0_setters: [], max_subissue_depth: 1, spec_marker: 'spec.md', stall_minutes: 60, parallel_agents: 1,
   cycle: {}, heartbeat: {}, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
@@ -138,4 +138,16 @@ test('v2 is Git only: hg, p4 and swarm adapters are rejected', () => {
   const p = validateBinding(b).join('\n');
   assert.match(p, /vcs.adapter 'hg' is not one of git/);
   assert.match(p, /forge.adapter 'swarm' is not one of github\|gitlab\|azure\|bitbucket/);
+});
+
+test('validateBinding requires the vcs keys the gates and hook dereference', () => {
+  const v = { trunk: 'main', release_prefix: 'release/', factory_change_pattern: 'factory/<name>', tag_prefix: 'v' };
+  const run = (o: any) => validateBinding({ ...structuredClone(good), vcs: { ...good.vcs, ...v, ...o } } as any as Binding).join('|');
+  assert.equal(run({}), '');
+  assert.equal(run({ tag_prefix: '' }), '');
+  assert.match(run({ trunk: undefined }), /vcs.trunk must name the trunk branch/);
+  assert.match(run({ release_prefix: undefined }), /vcs.release_prefix/);
+  assert.match(run({ factory_change_pattern: undefined }), /vcs.factory_change_pattern/);
+  assert.match(run({ tag_prefix: undefined }), /vcs.tag_prefix/);
+  assert.match(run({ release_prefix: 'release' }), /must end in/);
 });

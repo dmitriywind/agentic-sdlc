@@ -123,6 +123,7 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `sync <n>` | Bring the CR's source up to the trunk tip | `CR` |
 | `automerge <n>` | Merge when every required check is green | `CR` |
 | `comment <n> --body-file <f>` | CR comment | `{ id, url }` |
+| `comments <n> [--last <k>] [--marker <text>] [--author <a>]… [--trusted]` | CR comments (review report, owner reply on a factory CR), newest first, system notes dropped; same filters as `board comments` (`--last` counts after them) | `Comment[]` |
 | `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted only with `options.review_token_env`. The `proofs-on-base` gate alone posts with `options.token_env` (the CI job's token); the CLI verb never does. Azure DevOps posts on the PR iteration whose head is `<sha>`, since branch policies read PR statuses | `{}` |
 | `approve <n>` | Approving review as `review_identity`, with `options.review_token_env` | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
@@ -186,7 +187,7 @@ secrets. The trunk needs the review identity's approving review and every requir
 ## 4. The binding (`.agents/binding.yml`)
 
 [`templates/binding.yml`](../templates/binding.yml) is the one reference: it lists every key with
-its meaning and default, and `validate` checks the adapter options per adapter. Its top-level
+its meaning and default, and `validate` checks the adapter options per adapter. It also requires `vcs.trunk`, `vcs.release_prefix` (ending in `/`) and `vcs.factory_change_pattern` to be non-empty and `vcs.tag_prefix` to be a string. Its top-level
 groups are `version`, `profile`, `owners`, `board`, `forge`, `vcs`, `product`, `executors`, `mcps`,
 `traces`, `models`, `agent_command`, `commands`, `paths`, the sizing and flow keys, `cycle`,
 `heartbeat` and `learning`.

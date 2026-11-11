@@ -7409,6 +7409,12 @@ function validateBinding(b) {
   }
   for (const t of ["fast", "balanced", "deep"]) if (x.models && !x.models[t]) p.push(`models.${t} missing`);
   if (x.vcs && !String(x.vcs.change_pattern ?? "").includes("<ticket>")) p.push("vcs.change_pattern must contain <ticket>");
+  if (x.vcs) {
+    for (const [k, what] of [["trunk", "name the trunk branch"], ["release_prefix", "name the release line prefix"], ["factory_change_pattern", "be a branch pattern for factory changes"]])
+      if (typeof x.vcs[k] !== "string" || !x.vcs[k]) p.push(`vcs.${k} must ${what}`);
+    if (typeof x.vcs.tag_prefix !== "string") p.push("vcs.tag_prefix must be a string (empty for none)");
+    if (typeof x.vcs.release_prefix === "string" && x.vcs.release_prefix && !x.vcs.release_prefix.endsWith("/")) p.push("vcs.release_prefix must end in '/'");
+  }
   const pr = x.product;
   if (pr) {
     if (!Array.isArray(pr.environments) || !pr.environments.length) p.push("product.environments must be a non-empty list");
@@ -7526,6 +7532,22 @@ var init_binding = __esm({
     PROFILES = ["individual", "enterprise"];
     TIERS = ["fast", "balanced", "deep"];
     STATUSES = ["Ideas", "Signals", "Backlog", "Ready", "In progress", "In review", "Done", "Cancelled"];
+  }
+});
+
+// src/comments.ts
+function selectComments(list, o) {
+  const w = o.owners;
+  let out = o.marker ? list.filter((c) => c.body.includes(o.marker)) : list;
+  if (o.authors?.length || o.trusted) {
+    const by = [...o.authors ?? [], ...o.trusted ? [...w?.bots ?? [], w?.product, w?.factory] : []].filter((x) => !!x).map((s) => s.toLowerCase());
+    out = out.filter((c) => by.includes(c.author?.toLowerCase()));
+  }
+  return o.last ? out.slice(0, o.last) : out;
+}
+var init_comments = __esm({
+  "src/comments.ts"() {
+    "use strict";
   }
 });
 
@@ -7779,11 +7801,14 @@ function createJiraBoard(ctx) {
       const fields = (await fetchFields()).split(",");
       const issues = [];
       let nextPageToken;
-      do {
+      for (let page = 1; ; page++) {
         const r = await api("POST", "/search/jql", { jql: jql.join(" AND ") + " ORDER BY created ASC", maxResults: 100, fields, ...nextPageToken ? { nextPageToken } : {} });
         issues.push(...r.issues);
-        nextPageToken = r.isLast === true ? void 0 : r.nextPageToken;
-      } while (nextPageToken);
+        const next = r.isLast === true ? void 0 : r.nextPageToken;
+        if (!next) break;
+        if (!r.issues.length || next === nextPageToken || page >= 500) throw new Error("jira: list does not advance (empty page, repeated token or over 500 pages); stopping");
+        nextPageToken = next;
+      }
       return Promise.all(issues.map(toItem));
     },
     get,
@@ -7819,10 +7844,11 @@ function createJiraBoard(ctx) {
     },
     async comments(id, q = {}) {
       const raw = [];
-      for (; ; ) {
+      for (let page = 1; ; page++) {
         const r = await api("GET", `/issue/${id}/comment?orderBy=-created&maxResults=100&startAt=${raw.length}`);
         raw.push(...r.comments);
-        if (!r.comments.length || raw.length >= r.total) break;
+        if (raw.length >= r.total) break;
+        if (!r.comments.length || page >= 500) throw new Error("jira: comments does not advance (empty page or over 500 pages); stopping");
       }
       let list = raw.map((c) => ({
         id: String(c.id),
@@ -7941,10 +7967,11 @@ function createLinearBoard(ctx) {
       if (ws.length) filter.and = ws.map((w) => ({ or: [{ title: { containsIgnoreCase: w } }, { description: { containsIgnoreCase: w } }] }));
       const nodes = [];
       let a = null;
-      for (; ; ) {
+      for (let page = 1; ; page++) {
         const r = await gql(`query($f:IssueFilter,$a:String){ issues(filter:$f, first:100, after:$a){ nodes { ${ISSUE} } pageInfo { hasNextPage endCursor } } }`, { f: filter, a });
         nodes.push(...r.issues.nodes);
         if (!r.issues.pageInfo.hasNextPage) break;
+        if (!r.issues.nodes.length || r.issues.pageInfo.endCursor === a || page >= 500) throw new Error("linear: list does not advance (empty page, repeated cursor or over 500 pages); stopping");
         a = r.issues.pageInfo.endCursor;
       }
       return nodes.map(toItem);
@@ -7986,11 +8013,13 @@ function createLinearBoard(ctx) {
     async comments(id, q = {}) {
       const nodes = [];
       let a = null;
-      for (; ; ) {
+      for (let page = 1; ; page++) {
         const r = await gql(`query($id:String!,$a:String){ issue(id:$id){ comments(first:100, after:$a){ nodes { id body createdAt url user { id } } pageInfo { hasNextPage endCursor } } } }`, { id, a });
-        nodes.push(...r.issue.comments.nodes);
-        if (!r.issue.comments.pageInfo.hasNextPage) break;
-        a = r.issue.comments.pageInfo.endCursor;
+        const c = r.issue.comments;
+        nodes.push(...c.nodes);
+        if (!c.pageInfo.hasNextPage) break;
+        if (!c.nodes.length || c.pageInfo.endCursor === a || page >= 500) throw new Error("linear: comments does not advance (empty page, repeated cursor or over 500 pages); stopping");
+        a = c.pageInfo.endCursor;
       }
       let list = nodes.map((c) => ({ id: c.id, author: c.user?.id ?? "", createdAt: c.createdAt, body: c.body, url: c.url })).sort((a2, b) => b.createdAt.localeCompare(a2.createdAt));
       if (q.marker) list = list.filter((c) => c.body.split("\n")[0].includes(q.marker));
@@ -8167,6 +8196,7 @@ var Usage, USAGE, cli;
 var init_board = __esm({
   "src/board/index.ts"() {
     "use strict";
+    init_comments();
     init_github();
     init_jira();
     init_linear();
@@ -8239,12 +8269,13 @@ var init_board = __esm({
             break;
           case "comments": {
             need3(1);
-            const last = a.one("last") ? Number(a.one("last")) : void 0;
-            const o = base.binding.owners;
-            const authors = [...a.flags.author ?? [], ...a.has("trusted") ? [...o?.bots ?? [], o?.product, o?.factory] : []].filter((x) => !!x);
-            const by = a.flags.author || a.has("trusted") ? authors.map((s) => s.toLowerCase()) : void 0;
-            const list = await board.comments(id, { last: by ? void 0 : last, marker: a.one("marker") });
-            out = by ? list.filter((c) => by.includes(c.author?.toLowerCase())).slice(0, last) : list;
+            out = selectComments(await board.comments(id, { marker: a.one("marker") }), {
+              owners: base.binding.owners,
+              authors: a.flags.author,
+              trusted: a.has("trusted"),
+              last: a.one("last") ? Number(a.one("last")) : void 0,
+              marker: a.one("marker")
+            });
             break;
           }
           case "close": {
@@ -8405,6 +8436,10 @@ function azure(ctx) {
       const t = await call("POST", `${git2}/pullrequests/${n}/threads`, { comments: [{ content: body, commentType: 1 }], status: 1 });
       return { id: String(t.id) };
     },
+    async comments(n) {
+      const r = await call("GET", `${git2}/pullrequests/${n}/threads`);
+      return (r.value ?? []).flatMap((t) => t.comments ?? []).filter((c) => c.commentType !== "system" && !c.isDeleted).map((c) => ({ id: String(c.id), author: c.author?.uniqueName ?? c.author?.displayName ?? "", createdAt: c.publishedDate, body: c.content ?? "" })).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
     // Branch status policies read pull request statuses, so post on the PR iteration whose head is sha.
     async status(sha2, s, opts) {
       const key = opts?.as === "ci" ? "token_env" : "review_token_env";
@@ -8542,6 +8577,16 @@ Merge when required checks are green.`);
       return view(n);
     },
     comment,
+    async comments(n) {
+      const out = [];
+      let url = `/pullrequests/${n}/comments?pagelen=100`;
+      while (url) {
+        const r = await call("GET", url);
+        for (const c of r.values ?? []) if (!c.deleted) out.push({ id: String(c.id), author: c.user?.nickname ?? c.user?.display_name ?? "", createdAt: c.created_on, body: c.content?.raw ?? "", url: c.links?.html?.href });
+        url = r.next ? String(r.next).replace(base, "") : void 0;
+      }
+      return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
     async status(sha2, s, opts) {
       await call("POST", `/commit/${sha2}/statuses/build`, {
         key: s.context,
@@ -8651,6 +8696,10 @@ function github(ctx) {
     async comment(n, body) {
       const url = gh(["pr", "comment", n, "--body-file", "-"], body).trim();
       return { id: url.split("issuecomment-")[1] ?? url, url };
+    },
+    async comments(n) {
+      const out = gh(["api", "--paginate", `${api}/issues/${n}/comments`, "--jq", ".[] | {id: (.id | tostring), author: .user.login, createdAt: .created_at, body: .body, url: .html_url}"]);
+      return out.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     },
     async status(sha2, s, opts) {
       const a = ["api", "-X", "POST", `${api}/statuses/${sha2}`, "-f", `state=${s.state}`, "-f", `context=${s.context}`, "-f", `description=${s.description}`];
@@ -8764,6 +8813,14 @@ ${c.diff}`).join("");
       const r = await call("POST", `/merge_requests/${n}/notes`, { body });
       return { id: String(r.id) };
     },
+    async comments(n) {
+      const out = [];
+      for (let page = 1; ; page++) {
+        const r = await call("GET", `/merge_requests/${n}/notes?sort=asc&order_by=created_at&per_page=100&page=${page}`);
+        for (const c of r) if (!c.system) out.push({ id: String(c.id), author: c.author?.username ?? "", createdAt: c.created_at, body: c.body ?? "" });
+        if (r.length < 100) return out;
+      }
+    },
     async status(sha2, s, opts) {
       await call("POST", `/statuses/${sha2}`, {
         state: s.state === "failure" ? "failed" : s.state,
@@ -8823,6 +8880,7 @@ var adapters, cli2;
 var init_forge = __esm({
   "src/forge/index.ts"() {
     "use strict";
+    init_comments();
     init_util();
     init_azure();
     init_bitbucket();
@@ -8831,7 +8889,7 @@ var init_forge = __esm({
     adapters = { github, gitlab, azure, bitbucket };
     cli2 = (argv, ctx) => guard(async () => {
       const [verb, ...rest] = argv;
-      const a = parseArgs(rest, ["draft", "failed"]);
+      const a = parseArgs(rest, ["draft", "failed", "trusted"]);
       const f = createForge({ ...ctx, options: ctx.binding.forge.options });
       const n = () => {
         if (!a.pos[0]) throw new UsageError(`forge ${verb}: argument is required`);
@@ -8857,6 +8915,14 @@ var init_forge = __esm({
           return f.automerge(n());
         case "comment":
           return f.comment(n(), body());
+        case "comments":
+          return selectComments((await f.comments(n())).reverse(), {
+            owners: ctx.binding.owners,
+            authors: a.all("author"),
+            trusted: a.has("trusted"),
+            last: a.get("last") ? Number(a.get("last")) : void 0,
+            marker: a.get("marker")
+          });
         case "status": {
           const state = a.need("state");
           if (!["pending", "success", "failure"].includes(state)) throw new UsageError("--state must be pending|success|failure");
@@ -9273,6 +9339,10 @@ function init(root, argv, log) {
       log.push("import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk");
       log.push("its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
     }
+    if (existsSync3(join4(dir, "ruleset.release.json"))) {
+      copyFile(join4(dir, "ruleset.release.json"), join4(root, ".github", "rulesets", "release.json"), force, log);
+      log.push("import .github/rulesets/release.json (Rules > Rulesets) and add the release bot (app or role) as a bypass actor; set its include to your vcs.release_prefix");
+    }
   } else if (forge === "gitlab") copyFile(first(dir), join4(root, ".gitlab", "agentic-sdlc.yml"), force, log);
   else if (forge === "azure") copyFile(first(dir), join4(root, "azure-pipelines.agentic-sdlc.yml"), force, log);
   else {
@@ -9347,9 +9417,14 @@ function trunkProtection(b, ctx) {
 function deliveryWorkflow(b, root) {
   const f = join4(root, ".github", "workflows", "agentic-sdlc-delivery.yml");
   if (b.forge.adapter !== "github" || !existsSync3(f)) return void 0;
-  const br2 = (0, import_yaml2.parse)(readFileSync5(f, "utf8"))?.on?.push?.branches ?? [];
+  const wf = (0, import_yaml2.parse)(readFileSync5(f, "utf8"));
+  const br2 = wf?.on?.push?.branches ?? [];
   const rel = `${b.vcs.release_prefix}**`;
-  return br2.includes(b.vcs.trunk) && br2.includes(rel) ? `ok   delivery workflow: names trunk ${b.vcs.trunk}` : `fail delivery workflow: push branches ${br2.join(", ")} do not name trunk ${b.vcs.trunk} and ${rel}; edit its 'set:' lines`;
+  if (!br2.includes(b.vcs.trunk) || !br2.includes(rel))
+    return `fail delivery workflow: push branches ${br2.join(", ")} do not name trunk ${b.vcs.trunk} and ${rel}; edit its 'set:' lines`;
+  for (const [k, key, v] of [["TRUNK", "vcs.trunk", b.vcs.trunk], ["RELEASE_PREFIX", "vcs.release_prefix", b.vcs.release_prefix]])
+    if (wf?.env?.[k] !== v) return `fail delivery workflow: env.${k} is '${wf?.env?.[k] ?? ""}', not ${key} '${v}'; edit its 'set:' lines`;
+  return `ok   delivery workflow: names trunk ${b.vcs.trunk}`;
 }
 var import_yaml2, START, END, POINTER, SKILLS_LOCK, TIERS2, FORGES, flagsOf, need, readJson, sha, filesUnder, MCP_FILES, gitSpec, ALLOW_GIT, redact, cli4;
 var init_install = __esm({
@@ -9433,6 +9508,8 @@ ${END}`;
           ];
           let bad = 0;
           trunkProtection(binding, ctx).forEach(out);
+          if (["gitlab", "azure", "bitbucket"].includes(binding.forge.adapter))
+            out(`warn: ${binding.forge.adapter} gates run from pipeline YAML a contributor with push access can edit, so review and human-approval statuses can be forged by them; see docs/forges.md (Secret exposure)`);
           const dw = deliveryWorkflow(binding, ctx.root);
           if (dw) {
             out(dw);
@@ -9749,16 +9826,18 @@ environment: ${env}`,
       if (anc.includes(void 0)) return { env, result, changed: [], tags: [], unknown: true };
       if (anc.every(Boolean)) items.push(x);
     }
+    const tags = [];
+    if (last) {
+      const prefix = d.binding.vcs.tag_prefix;
+      const have = new Set((await d.vcs.tags(prefix)).map((t) => t.name));
+      for (const v of new Set(items.map((x) => x.fields.release_version).filter((v2) => !!v2))) {
+        if (!have.has(`${prefix}${v}`)) await d.vcs.tag(`${prefix}${v}`, sha2);
+        tags.push(`${prefix}${v}`);
+      }
+    }
     for (const x of items) {
       await d.board.set(x.id, "shipped", target);
       changed.push(x.id);
-    }
-    const tags = [];
-    if (last) {
-      for (const v of new Set(items.map((x) => x.fields.release_version).filter((v2) => !!v2))) {
-        await d.vcs.tag(`${d.binding.vcs.tag_prefix}${v}`, sha2);
-        tags.push(`${d.binding.vcs.tag_prefix}${v}`);
-      }
     }
     return { env, result, changed, tags, unmatched };
   }
@@ -11238,7 +11317,7 @@ var GROUPS = {
   validate: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "check the binding and skills"],
   doctor: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "validate, then probe board, forge and vcs"],
   board: [() => Promise.resolve().then(() => (init_board(), board_exports)), true, "list get create move set label assign comment comments close child"],
-  forge: [() => Promise.resolve().then(() => (init_forge(), forge_exports)), true, "open view diff list ready draft sync automerge approve approvals comment status runs"],
+  forge: [() => Promise.resolve().then(() => (init_forge(), forge_exports)), true, "open view diff list ready draft sync automerge approve approvals comment comments status runs"],
   vcs: [() => Promise.resolve().then(() => (init_vcs(), vcs_exports)), true, "start head changed base push cut tag tags drop checkout-tests"],
   dispatch: [() => Promise.resolve().then(() => (init_dispatch(), dispatch_exports)), true, "dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>]"],
   gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base board-sync shipped signal-on-red skill-regression"],

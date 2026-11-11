@@ -1,6 +1,6 @@
 ---
 name: backlog-grooming
-description: Keep the Backlog ordered and coherent - set Priority, merge duplicates, group items under initiatives, cancel superseded work. Use on Status Backlog with no Priority, or when a plan or conversation must become tickets.
+description: Keep the Backlog ordered and coherent - set Priority, merge duplicates, group items under initiatives, cancel superseded work. Use on Status Backlog with no Priority, or when a plan or conversation must become tickets, or when the Product owner moves an Idea to Backlog.
 metadata:
   tier: balanced
 ---
@@ -24,15 +24,23 @@ Follow the common contract in [`sdlc`](../sdlc/SKILL.md). What matters most come
    Priority field from `priorities` and the milestone, per `paths.roadmap_doc`. Nice-to-have work
    goes to `board.later_milestone` (see [Board](../sdlc/references/board.md#board)). Done when every unheld
    Backlog item has both.
-4. **New work from a plan.** Turn a plan or conversation into tickets: one each
+4. **New work from a plan or an Idea.** Turn a plan or conversation into tickets: one each
    (`board create … --status Backlog`), shaped by the project's ticket template, label `bug` or
-   `feature`. Done when each is on the board.
+   `feature`. For an item a human moved out of Ideas, rewrite the body (keep the owner's words
+   quoted) with outcome, who it is for, success metric, constraints and open questions. When the
+   outcome or metric cannot be derived from the item and `paths.importance_doc`, post one comment
+   asking the Product owner in plain words, with no jargon, and stop on that item. Done when each
+   item has outcome and metric, or one pending question.
 
 ## Rules
 
 - Never set the first priority (P0).
 - A cause that repeats across failure Signals may be filed as one new Signal for the underlying
   defect. A change to a rule is `improve-factory`'s, never this skill's.
+- Tech debt is ticketed only with a stated cost (time lost, incidents, or a blocked outcome) and the
+  evidence; without one it stays a comment.
+- A change shipped behind a flag or toggle gets a child removal ticket naming the flag and a due
+  milestone.
 - A decided duplicate or superseded item is Cancelled with a reason comment and closed as not
   planned.
 - Escalate when a priority cannot be derived from the docs or two items conflict, plus the triggers

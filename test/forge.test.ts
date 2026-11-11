@@ -213,3 +213,51 @@ test('approvals: { user, state, sha } from every forge', async () => {
     ({ source: { commit: { hash: 'h' } }, participants: [{ role: 'REVIEWER', approved: true, user: { nickname: 'ann' } }, { role: 'PARTICIPANT', approved: false, user: { nickname: 'x' } }] }));
   assert.deepEqual(await createForge(bb.ctx).approvals('3'), [{ user: 'ann', state: 'approved', sha: 'h' }]);
 });
+
+const stdout = async (fn: () => Promise<unknown>) => {
+  const out: string[] = [];
+  const w = process.stdout.write;
+  process.stdout.write = ((s: string) => (out.push(s), true)) as any;
+  try { await fn(); } finally { process.stdout.write = w; }
+  return JSON.parse(out.join(''));
+};
+
+test('comments: github follows pages from gh api', async () => {
+  const row = (id: number, author: string) => JSON.stringify({ id: String(id), author, createdAt: String(id), body: `b${id}`, url: 'u' });
+  const { ctx, execs } = mk('github', { repo: 'o/r' }, () => '', () => `${row(1, 'a')}\n${row(2, 'b')}\n${row(3, 'c')}\n`);
+  assert.deepEqual((await createForge(ctx).comments('4')).map((c) => c.author), ['a', 'b', 'c']);
+  assert.ok(execs[0].includes('--paginate') && execs[0].includes('repos/o/r/issues/4/comments'));
+});
+
+test('comments: gitlab pages and drops system notes', async () => {
+  const note = (id: number, system = false) => ({ id, system, body: `b${id}`, created_at: String(id), author: { username: `u${id}` } });
+  const { ctx } = mk('gitlab', { project: 'p', base_url: 'https://gl', token_env: 'TOK' }, (_m, url) =>
+    url.endsWith('&page=1') ? Array.from({ length: 100 }, (_, i) => note(i + 1, i === 0)) : [note(101)]);
+  const out = await createForge(ctx).comments('7');
+  assert.equal(out.length, 100);
+  assert.deepEqual([out[0].id, out.at(-1)!.id], ['2', '101']);
+});
+
+test('comments: azure flattens threads and drops system comments', async () => {
+  const c = (id: number, type: string, at: string) => ({ id, commentType: type, content: `b${id}`, publishedDate: at, author: { uniqueName: `u${id}` } });
+  const { ctx } = mk('azure', { org_url: 'https://dev.azure.com/o', project: 'p', repo: 'r', token_env: 'TOK' }, () => ({
+    value: [{ comments: [c(2, 'text', '2')] }, { comments: [c(1, 'system', '1'), c(3, 'text', '3')] }, { comments: [c(0, 'text', '0')] }],
+  }));
+  assert.deepEqual((await createForge(ctx).comments('5')).map((x) => x.id), ['0', '2', '3']);
+});
+
+test('comments: bitbucket follows next and drops deleted comments', async () => {
+  const cm = (id: number, deleted = false) => ({ id, deleted, content: { raw: `b${id}` }, created_on: String(id), user: { nickname: `u${id}` } });
+  const { ctx } = mk('bitbucket', { workspace: 'w', repo: 'r', token_env: 'TOK' }, (_m, url) =>
+    url.endsWith('&page=2') ? { values: [cm(3)] } : { values: [cm(1), cm(2, true)], next: 'https://api.bitbucket.org/2.0/repositories/w/r/pullrequests/3/comments?pagelen=100&page=2' });
+  assert.deepEqual((await createForge(ctx).comments('3')).map((x) => x.id), ['1', '3']);
+});
+
+test('cli: comments --trusted --last 1 returns the newest trusted comment past a newer untrusted one', async () => {
+  const note = (id: number, user: string) => ({ id, system: false, body: `b${id}`, created_at: String(id), author: { username: user } });
+  const { ctx } = mk('gitlab', { project: 'p', base_url: 'https://gl', token_env: 'TOK' }, () => [note(1, 'owner'), note(2, 'Bot'), note(3, 'mallory')]);
+  (ctx.binding as any).owners = { product: 'owner', factory: 'fac', bots: ['bot'] };
+  const base = { root: ctx.root, binding: ctx.binding, env: ctx.env, exec: ctx.exec, http: ctx.http };
+  const out = await stdout(() => cli(['comments', '7', '--trusted', '--last', '1'], base));
+  assert.deepEqual(out.map((c: any) => c.id), ['2']);
+});

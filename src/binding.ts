@@ -77,6 +77,12 @@ export function validateBinding(b: Binding): string[] {
   }
   for (const t of ['fast', 'balanced', 'deep']) if (x.models && !x.models[t]) p.push(`models.${t} missing`);
   if (x.vcs && !String(x.vcs.change_pattern ?? '').includes('<ticket>')) p.push('vcs.change_pattern must contain <ticket>');
+  if (x.vcs) {
+    for (const [k, what] of [['trunk', 'name the trunk branch'], ['release_prefix', 'name the release line prefix'], ['factory_change_pattern', 'be a branch pattern for factory changes']])
+      if (typeof x.vcs[k] !== 'string' || !x.vcs[k]) p.push(`vcs.${k} must ${what}`);
+    if (typeof x.vcs.tag_prefix !== 'string') p.push('vcs.tag_prefix must be a string (empty for none)');
+    if (typeof x.vcs.release_prefix === 'string' && x.vcs.release_prefix && !x.vcs.release_prefix.endsWith('/')) p.push("vcs.release_prefix must end in '/'");
+  }
   const pr = x.product;
   if (pr) {
     if (!Array.isArray(pr.environments) || !pr.environments.length) p.push('product.environments must be a non-empty list');

@@ -1,4 +1,4 @@
-import type { AdapterContext, CR, Forge, Run } from '../ports.ts';
+import type { AdapterContext, Comment, CR, Forge, Run } from '../ports.ts';
 import { parseCloses } from '../ports.ts';
 import { MARKER, allGreen, localDiff, secret } from './util.ts';
 
@@ -63,6 +63,16 @@ export function bitbucket(ctx: AdapterContext): Forge {
       return view(n);
     },
     comment,
+    async comments(n) {
+      const out: Comment[] = [];
+      let url: string | undefined = `/pullrequests/${n}/comments?pagelen=100`;
+      while (url) {
+        const r: any = await call('GET', url);
+        for (const c of r.values ?? []) if (!c.deleted) out.push({ id: String(c.id), author: c.user?.nickname ?? c.user?.display_name ?? '', createdAt: c.created_on, body: c.content?.raw ?? '', url: c.links?.html?.href });
+        url = r.next ? String(r.next).replace(base, '') : undefined;
+      }
+      return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
     async status(sha, s, opts) {
       await call('POST', `/commit/${sha}/statuses/build`, {
         key: s.context, name: s.context, description: s.description,

@@ -40,7 +40,7 @@ function fakes(items: Item[], crs: Record<string, Partial<CR>> = {}, diffs: Reco
     list: async () => Object.keys(crs).map(cr).filter((c) => c.state === 'merged'),
     status: async (sha: string, s: any) => { statuses.push({ sha, ...s }); },
   };
-  const vcs: any = { tag: async (n: string) => { tags.push(n); }, head: async () => ({ ref: 'main', sha: 's' }) };
+  const vcs: any = { tag: async (n: string) => { tags.push(n); }, tags: async () => tags.map((name) => ({ name, sha: 's' })), head: async () => ({ ref: 'main', sha: 's' }) };
   const d: Deps = { binding, root: '.', board, forge, vcs };
   return { d, items, created, tags, statuses };
 }
@@ -429,4 +429,22 @@ test('shipped: a Done ticket with no merged CR is listed as unmatched, unless la
   const r: any = await shipped(f.d, 'staging', 'sha1', 'success');
   assert.deepEqual(r.unmatched, ['1']);
   assert.equal(f.items[0].fields.shipped, 'Not shipped');
+});
+
+test('shipped: an existing tag is kept and the board still moves; a tag failure leaves the board untouched', async () => {
+  const mkf = () => {
+    const f = fakes([item('1', 'Done', { shipped: 'On staging', release_version: '2026.1' })], { m1: { state: 'merged', closes: ['1'], mergeSha: 'm1' } });
+    f.d.isAncestor = () => true;
+    return f;
+  };
+  const f = mkf();
+  f.tags.push('v2026.1');
+  const r: any = await shipped(f.d, 'production', 'sha1', 'success');
+  assert.deepEqual(f.tags, ['v2026.1']);
+  assert.deepEqual(r.tags, ['v2026.1']);
+  assert.equal(f.items[0].fields.shipped, 'On production');
+  const g = mkf();
+  g.d.vcs.tag = async () => { throw new Error('push rejected'); };
+  await assert.rejects(shipped(g.d, 'production', 'sha1', 'success'), /push rejected/);
+  assert.equal(g.items[0].fields.shipped, 'On staging');
 });

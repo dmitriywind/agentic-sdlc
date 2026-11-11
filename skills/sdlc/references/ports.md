@@ -36,6 +36,7 @@ meaning of each verb is unchanged. Write bodies to a file and pass `--body-file`
 | CR comment (review report) | `forge comment <n> --body-file <f>` |
 | Post the review status (review runtime only) | `forge status <sha> --context <c> --state success\|failure\|pending --description <d> [--url <u>]` |
 | Approve as the review identity (review runtime only) | `forge approve <n>` |
+| Read CR comments (review report, owner reply on a factory CR) by a trusted author | `forge comments <n> [--last <k>] [--marker <text>] --trusted` |
 | Read the CR's reviews | `forge approvals <n>` |
 | Read CI runs | `forge runs [--ref <r>] [--failed]` |
 | Start a stage | `dispatch <skill> --ticket <id>` or `--cr <n>`, `[--run-model <m>]` |

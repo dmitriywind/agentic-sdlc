@@ -7608,11 +7608,14 @@ function createJiraBoard(ctx) {
       const fields = (await fetchFields()).split(",");
       const issues = [];
       let nextPageToken;
-      do {
+      for (let page = 1; ; page++) {
         const r = await api("POST", "/search/jql", { jql: jql.join(" AND ") + " ORDER BY created ASC", maxResults: 100, fields, ...nextPageToken ? { nextPageToken } : {} });
         issues.push(...r.issues);
-        nextPageToken = r.isLast === true ? void 0 : r.nextPageToken;
-      } while (nextPageToken);
+        const next = r.isLast === true ? void 0 : r.nextPageToken;
+        if (!next) break;
+        if (!r.issues.length || next === nextPageToken || page >= 500) throw new Error("jira: list does not advance (empty page, repeated token or over 500 pages); stopping");
+        nextPageToken = next;
+      }
       return Promise.all(issues.map(toItem));
     },
     get,
@@ -7648,10 +7651,11 @@ function createJiraBoard(ctx) {
     },
     async comments(id, q = {}) {
       const raw = [];
-      for (; ; ) {
+      for (let page = 1; ; page++) {
         const r = await api("GET", `/issue/${id}/comment?orderBy=-created&maxResults=100&startAt=${raw.length}`);
         raw.push(...r.comments);
-        if (!r.comments.length || raw.length >= r.total) break;
+        if (raw.length >= r.total) break;
+        if (!r.comments.length || page >= 500) throw new Error("jira: comments does not advance (empty page or over 500 pages); stopping");
       }
       let list = raw.map((c) => ({
         id: String(c.id),
@@ -7759,10 +7763,11 @@ function createLinearBoard(ctx) {
       if (ws.length) filter.and = ws.map((w) => ({ or: [{ title: { containsIgnoreCase: w } }, { description: { containsIgnoreCase: w } }] }));
       const nodes = [];
       let a = null;
-      for (; ; ) {
+      for (let page = 1; ; page++) {
         const r = await gql(`query($f:IssueFilter,$a:String){ issues(filter:$f, first:100, after:$a){ nodes { ${ISSUE} } pageInfo { hasNextPage endCursor } } }`, { f: filter, a });
         nodes.push(...r.issues.nodes);
         if (!r.issues.pageInfo.hasNextPage) break;
+        if (!r.issues.nodes.length || r.issues.pageInfo.endCursor === a || page >= 500) throw new Error("linear: list does not advance (empty page, repeated cursor or over 500 pages); stopping");
         a = r.issues.pageInfo.endCursor;
       }
       return nodes.map(toItem);
@@ -7804,11 +7809,13 @@ function createLinearBoard(ctx) {
     async comments(id, q = {}) {
       const nodes = [];
       let a = null;
-      for (; ; ) {
+      for (let page = 1; ; page++) {
         const r = await gql(`query($id:String!,$a:String){ issue(id:$id){ comments(first:100, after:$a){ nodes { id body createdAt url user { id } } pageInfo { hasNextPage endCursor } } } }`, { id, a });
-        nodes.push(...r.issue.comments.nodes);
-        if (!r.issue.comments.pageInfo.hasNextPage) break;
-        a = r.issue.comments.pageInfo.endCursor;
+        const c = r.issue.comments;
+        nodes.push(...c.nodes);
+        if (!c.pageInfo.hasNextPage) break;
+        if (!c.nodes.length || c.pageInfo.endCursor === a || page >= 500) throw new Error("linear: comments does not advance (empty page, repeated cursor or over 500 pages); stopping");
+        a = c.pageInfo.endCursor;
       }
       let list = nodes.map((c) => ({ id: c.id, author: c.user?.id ?? "", createdAt: c.createdAt, body: c.body, url: c.url })).sort((a2, b) => b.createdAt.localeCompare(a2.createdAt));
       if (q.marker) list = list.filter((c) => c.body.split("\n")[0].includes(q.marker));
@@ -8036,6 +8043,10 @@ function azure(ctx) {
       const t = await call("POST", `${git2}/pullrequests/${n}/threads`, { comments: [{ content: body, commentType: 1 }], status: 1 });
       return { id: String(t.id) };
     },
+    async comments(n) {
+      const r = await call("GET", `${git2}/pullrequests/${n}/threads`);
+      return (r.value ?? []).flatMap((t) => t.comments ?? []).filter((c) => c.commentType !== "system" && !c.isDeleted).map((c) => ({ id: String(c.id), author: c.author?.uniqueName ?? c.author?.displayName ?? "", createdAt: c.publishedDate, body: c.content ?? "" })).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
     // Branch status policies read pull request statuses, so post on the PR iteration whose head is sha.
     async status(sha, s, opts) {
       const key = opts?.as === "ci" ? "token_env" : "review_token_env";
@@ -8163,6 +8174,16 @@ Merge when required checks are green.`);
       return view(n);
     },
     comment,
+    async comments(n) {
+      const out = [];
+      let url = `/pullrequests/${n}/comments?pagelen=100`;
+      while (url) {
+        const r = await call("GET", url);
+        for (const c of r.values ?? []) if (!c.deleted) out.push({ id: String(c.id), author: c.user?.nickname ?? c.user?.display_name ?? "", createdAt: c.created_on, body: c.content?.raw ?? "", url: c.links?.html?.href });
+        url = r.next ? String(r.next).replace(base, "") : void 0;
+      }
+      return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
     async status(sha, s, opts) {
       await call("POST", `/commit/${sha}/statuses/build`, {
         key: s.context,
@@ -8265,6 +8286,10 @@ function github(ctx) {
     async comment(n, body) {
       const url = gh(["pr", "comment", n, "--body-file", "-"], body).trim();
       return { id: url.split("issuecomment-")[1] ?? url, url };
+    },
+    async comments(n) {
+      const out = gh(["api", "--paginate", `${api}/issues/${n}/comments`, "--jq", ".[] | {id: (.id | tostring), author: .user.login, createdAt: .created_at, body: .body, url: .html_url}"]);
+      return out.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     },
     async status(sha, s, opts) {
       const a = ["api", "-X", "POST", `${api}/statuses/${sha}`, "-f", `state=${s.state}`, "-f", `context=${s.context}`, "-f", `description=${s.description}`];
@@ -8369,6 +8394,14 @@ ${c.diff}`).join("");
     async comment(n, body) {
       const r = await call("POST", `/merge_requests/${n}/notes`, { body });
       return { id: String(r.id) };
+    },
+    async comments(n) {
+      const out = [];
+      for (let page = 1; ; page++) {
+        const r = await call("GET", `/merge_requests/${n}/notes?sort=asc&order_by=created_at&per_page=100&page=${page}`);
+        for (const c of r) if (!c.system) out.push({ id: String(c.id), author: c.author?.username ?? "", createdAt: c.created_at, body: c.body ?? "" });
+        if (r.length < 100) return out;
+      }
     },
     async status(sha, s, opts) {
       await call("POST", `/statuses/${sha}`, {
@@ -8633,6 +8666,12 @@ function validateBinding(b) {
   }
   for (const t of ["fast", "balanced", "deep"]) if (x.models && !x.models[t]) p.push(`models.${t} missing`);
   if (x.vcs && !String(x.vcs.change_pattern ?? "").includes("<ticket>")) p.push("vcs.change_pattern must contain <ticket>");
+  if (x.vcs) {
+    for (const [k, what] of [["trunk", "name the trunk branch"], ["release_prefix", "name the release line prefix"], ["factory_change_pattern", "be a branch pattern for factory changes"]])
+      if (typeof x.vcs[k] !== "string" || !x.vcs[k]) p.push(`vcs.${k} must ${what}`);
+    if (typeof x.vcs.tag_prefix !== "string") p.push("vcs.tag_prefix must be a string (empty for none)");
+    if (typeof x.vcs.release_prefix === "string" && x.vcs.release_prefix && !x.vcs.release_prefix.endsWith("/")) p.push("vcs.release_prefix must end in '/'");
+  }
   const pr = x.product;
   if (pr) {
     if (!Array.isArray(pr.environments) || !pr.environments.length) p.push("product.environments must be a non-empty list");

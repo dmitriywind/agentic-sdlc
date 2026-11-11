@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { AdapterContext, Forge, PortCli } from '../ports.ts';
+import { selectComments } from '../comments.ts';
 import { UsageError, guard, parseArgs } from './util.ts';
 import { azure } from './azure.ts';
 import { bitbucket } from './bitbucket.ts';
@@ -17,7 +18,7 @@ export function createForge(ctx: AdapterContext): Forge {
 export const cli: PortCli = (argv, ctx) =>
   guard(async () => {
     const [verb, ...rest] = argv;
-    const a = parseArgs(rest, ['draft', 'failed']);
+    const a = parseArgs(rest, ['draft', 'failed', 'trusted']);
     const f = createForge({ ...ctx, options: ctx.binding.forge.options });
     const n = () => {
       if (!a.pos[0]) throw new UsageError(`forge ${verb}: argument is required`);
@@ -34,6 +35,12 @@ export const cli: PortCli = (argv, ctx) =>
       case 'sync': return f.sync(n());
       case 'automerge': return f.automerge(n());
       case 'comment': return f.comment(n(), body());
+      case 'comments':
+        // Adapters return oldest first; the CLI answers newest first, as `board comments` does.
+        return selectComments((await f.comments(n())).reverse(), {
+          owners: ctx.binding.owners, authors: a.all('author'), trusted: a.has('trusted'),
+          last: a.get('last') ? Number(a.get('last')) : undefined, marker: a.get('marker'),
+        });
       case 'status': {
         const state = a.need('state');
         if (!['pending', 'success', 'failure'].includes(state)) throw new UsageError('--state must be pending|success|failure');

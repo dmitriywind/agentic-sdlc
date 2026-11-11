@@ -1,6 +1,8 @@
 # PR validation build. Secrets (secret pipeline variables): AGENTIC_FORGE_TOKEN, AGENTIC_BOARD_TOKEN, AGENTIC_REVIEW_TOKEN.
-# A secret variable reaches a script only through its env mapping, so the Required and proofs_on_base
-# jobs, which run the PR's code, hold none.
+# The gates job maps them into env. This YAML is read from the PR's source branch, so a contributor who can push a
+# branch can add the same env mapping to any job and read AGENTIC_REVIEW_TOKEN or post review and human-approval.
+# The gates hold against PRs from forks (secrets withheld) and against agents, not against people with push access.
+# A trunk-defined relay (a service-hook-triggered pipeline from the default branch) is not shipped yet; see docs/forges.md Secret exposure.
 # Branch policy on the trunk (Repos > Branches > Branch policies), set once by hand:
 #   - Build validation: this pipeline, required, display name "Required" (its jobs are Required,
 #     proofs-on-base and ticket-linkage; the build fails when any job fails)

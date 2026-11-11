@@ -246,6 +246,10 @@ function init(root: string, argv: string[], log: string[]) {
       log.push('import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk');
       log.push('its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App\'s id if it is an App (a PAT cannot be pinned)');
     }
+    if (existsSync(join(dir, 'ruleset.release.json'))) {
+      copyFile(join(dir, 'ruleset.release.json'), join(root, '.github', 'rulesets', 'release.json'), force, log);
+      log.push('import .github/rulesets/release.json (Rules > Rulesets) and add the release bot (app or role) as a bypass actor; set its include to your vcs.release_prefix');
+    }
   }
   else if (forge === 'gitlab') copyFile(first(dir), join(root, '.gitlab', 'agentic-sdlc.yml'), force, log);
   else if (forge === 'azure') copyFile(first(dir), join(root, 'azure-pipelines.agentic-sdlc.yml'), force, log);
@@ -319,11 +323,14 @@ export function trunkProtection(b: any, ctx: any): string[] {
 export function deliveryWorkflow(b: any, root: string): string | undefined {
   const f = join(root, '.github', 'workflows', 'agentic-sdlc-delivery.yml');
   if (b.forge.adapter !== 'github' || !existsSync(f)) return undefined;
-  const br: string[] = parse(readFileSync(f, 'utf8'))?.on?.push?.branches ?? [];
+  const wf = parse(readFileSync(f, 'utf8'));
+  const br: string[] = wf?.on?.push?.branches ?? [];
   const rel = `${b.vcs.release_prefix}**`;
-  return br.includes(b.vcs.trunk) && br.includes(rel)
-    ? `ok   delivery workflow: names trunk ${b.vcs.trunk}`
-    : `fail delivery workflow: push branches ${br.join(', ')} do not name trunk ${b.vcs.trunk} and ${rel}; edit its 'set:' lines`;
+  if (!br.includes(b.vcs.trunk) || !br.includes(rel))
+    return `fail delivery workflow: push branches ${br.join(', ')} do not name trunk ${b.vcs.trunk} and ${rel}; edit its 'set:' lines`;
+  for (const [k, key, v] of [['TRUNK', 'vcs.trunk', b.vcs.trunk], ['RELEASE_PREFIX', 'vcs.release_prefix', b.vcs.release_prefix]])
+    if (wf?.env?.[k] !== v) return `fail delivery workflow: env.${k} is '${wf?.env?.[k] ?? ''}', not ${key} '${v}'; edit its 'set:' lines`;
+  return `ok   delivery workflow: names trunk ${b.vcs.trunk}`;
 }
 
 /** Called with the group name as the first element: init | validate | doctor. */
@@ -355,6 +362,8 @@ export const cli: PortCli = async (argv, ctx) => {
       ];
       let bad = 0;
       trunkProtection(binding, ctx).forEach(out);
+      if (['gitlab', 'azure', 'bitbucket'].includes(binding.forge.adapter))
+        out(`warn: ${binding.forge.adapter} gates run from pipeline YAML a contributor with push access can edit, so review and human-approval statuses can be forged by them; see docs/forges.md (Secret exposure)`);
       const dw = deliveryWorkflow(binding, ctx.root);
       if (dw) { out(dw); if (dw.startsWith('fail')) bad++; }
       for (const [name, run] of probes) {

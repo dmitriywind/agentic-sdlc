@@ -28,8 +28,11 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    `<!-- verify-ux -->` comment for this head (`--trusted`). Until that comment appears it is
    pending, not a finding; still missing after `stall_minutes`, it is a finding. A criterion with
    proof `manual` is DONE only when a trusted comment by an owner (`board comments <id>
-   --trusted`) confirms it for this head, otherwise PARTIAL, and the report names the owner check
-   needed. A pending criterion
+   --trusted`) confirms it for this head. Otherwise post one ask on the ticket naming the
+   criterion and the head sha, only when `board comments <id> --marker "<!-- manual-check
+   <criterion> -->"` finds none, and grade it PENDING. PENDING is not a finding and keeps the CR
+   draft; after `stall_minutes` with no reply call
+   [`escalate-to-human`](../escalate-to-human/SKILL.md) (Sign-off). A pending criterion
    stops the review as step 4 does: no status, no approval; review this head again on the next
    run. A departure from the spec in design is an escalation. Done when every criterion has a row.
 3. **Standards pass.** Apply [references/checklist.md](references/checklist.md), then
@@ -50,7 +53,8 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    `native:` what the platform already does; `yagni:` an abstraction with one user; `dep:` an
    unneeded dependency; `shrink:` the same logic in fewer lines. Done when each finding is listed
    or "Lean already." is written.
-6. **Report.** One CR comment (`forge comment <n> --body-file <f>`): the criterion table, findings
+6. **Report.** One CR comment (`forge comment <n> --body-file <f>`), its first line
+   `<!-- review-pr <head sha> -->`: the criterion table, findings
    smallest fix first, each tagged with a pass (bugs, security or compliance) and a severity
    (Important or Nit), with at most 5 Nits, the hunt, the CI results read and the head, and
    the verdict PASS or REMEDIATION REQUIRED. Important is any criterion graded NOT DONE or
