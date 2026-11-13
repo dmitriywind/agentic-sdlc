@@ -143,7 +143,8 @@ flowchart LR
 ```
 
 - Results come back only through board and forge writes. There is no direct reply channel.
-- A second dispatch of the same ticket or CR, skill and head inside `stall_minutes` is skipped.
+- A second dispatch of the same ticket or CR, skill and head inside `cycle.dedupe_minutes` is a double fire. It is skipped.
+- A dispatch is also skipped while the previous run of the same key has not finished, until `stall_minutes` pass.
 - The rules for executors live in `skills/sdlc/references/executors.md`, part of the contract.
 
 ## 4. Trust boundaries
@@ -163,7 +164,7 @@ flowchart LR
   end
   subgraph CI["Forge CI: trusted rules"]
     T["Binding read from<br/>TARGET branch"]
-    GT["Gates: linkage, approval,<br/>merged, shipped"]
+    GT["Gates: branch-names, linkage,<br/>proofs-on-base, approval,<br/>merged, shipped, signal-on-red,<br/>skill-regression"]
     BT["Board token"]
   end
   subgraph IS["Implementer sandbox"]

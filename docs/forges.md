@@ -16,13 +16,22 @@ review identity).
 | `skill-regression` | gate | Factory changes keep the skill pack valid. |
 
 Pin each required check to the app that posts it (on GitHub the ruleset's `integration_id`), so a
-token that can write statuses cannot fake it. `agentic-sdlc doctor` warns when one is not pinned.
+token that can write statuses cannot fake it. The trunk ruleset pins the four CI checks (`ticket-linkage`,
+`Required`, `proofs-on-base`, `skill-regression`) to the Actions app. `review` and `human-approval` post with
+the review token: pin them to the review app when it is an App. `agentic-sdlc doctor` warns when one is
+not pinned.
+
+The gate jobs on GitHub are named `linkage-gate` and `approval-gate`. `ticket-linkage` is a commit status
+that the linkage job posts with its own `GITHUB_TOKEN`.
 
 ## Review identity and approval
 `forge status` and `forge approve` use only `forge.options.review_token_env` (the
 `forge.review_identity` account); without it they fail. The implementer's `token_env` cannot post
 `review` or approve. Give the implementer's account no admin or bypass right, and keep
 `AGENTIC_REVIEW_TOKEN` out of the implementer's runtime. The review runtime never runs CR code.
+`forge status` refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`).
+GitLab, Azure DevOps and Bitbucket run `gate approval --fail-pending`: the job fails while approval waits,
+so the job result is the merge gate.
 
 The `approval` gate classifies each CR and posts `human-approval`:
 
@@ -41,7 +50,7 @@ gate reruns when a review is submitted:
 | GitHub | `pull_request_review` (submitted, dismissed) in `agentic-sdlc-cr.yml` |
 | GitLab | approval webhook or the next MR pipeline; approx: re-run the pipeline after approving |
 | Azure DevOps | approx: a Service hook on "pull request updated" that queues the gate pipeline |
-| Bitbucket | approx: a webhook relay runs the `agentic-approval` custom pipeline on the trunk |
+| Bitbucket | The PR pipeline step `human-approval` runs on PR events. approx: a webhook relay runs the `agentic-approval` custom pipeline on the trunk after a review |
 
 ## CR pipelines and the binding
 CR pipelines never let the CR choose the rules. GitHub runs the gates of `agentic-sdlc-cr.yml` on
@@ -53,6 +62,9 @@ installs are pinned: the project's `agentic-sdlc` devDependency (a `github:` spe
 `allow-git=root` in `.npmrc` for npm 12) through `npm ci`, and each action
 carries a `# pin to a commit SHA` note.
 
+Delivery workflows serialise board writes: GitHub uses `concurrency: agentic-board` and GitLab uses
+`resource_group: agentic-board`. One run at a time writes the tickets.
+
 Trunk-based is enforced by trunk protection (change request only, green required checks, linear
 history, no direct push except the bot) and release branches cut with `vcs cut` under
 `release_prefix`. No develop branch.
@@ -63,20 +75,22 @@ history, no direct push except the bot) and release branches cut with `vcs cut` 
 | Guarantee | How |
 |---|---|
 | Branch names | `pre-push` hook (early) + gate `branch-names` in `agentic-sdlc-cr.yml` |
-| Linkage, approval | gates; required checks `ticket-linkage`, `human-approval` |
+| Linkage, approval | jobs `linkage-gate` and `approval-gate`; required checks `ticket-linkage`, `human-approval` |
 | Verify | job `Required` on `pull_request`, no secrets, plus `proofs-on-base` |
-| Board sync, shipped, signals | `agentic-sdlc-cr.yml`, `agentic-sdlc-delivery.yml` |
+| Merged, shipped, signals | `agentic-sdlc-delivery.yml`: a trunk push runs `gate merged`, deploy runs run `gate shipped`, red CI runs run `signal-on-red`. A failed deploy opens one Signal with its env label |
+| Release cut | `agentic-sdlc-release.yml` (release-line delivery only) |
 | Auto-merge, merge queue | native; the CR workflow also triggers on `merge_group` |
-| Trunk | `ruleset.trunk.json`: one approving review, stale reviews dismissed, the six required checks pinned, linear history; a second ruleset for release branches, `.github/rulesets/release.json` |
+| Trunk | `ruleset.trunk.json`: one approving review, stale reviews dismissed, the four CI checks pinned to the Actions app (`review` and `human-approval` are not pinned: pin them to the review app when it is an App), linear history; a second ruleset for release branches, `.github/rulesets/release.json` |
 
 One-time setup (private repos need a plan with Environments: Pro, Team or Enterprise):
 
 1. Create Environment `agentic-review`. Deployment branches: selected branches, the trunk exactly,
    `gh-readonly-queue/<trunk>/*` and the release line glob (`<release_prefix>*`; without it a CR to a release line never gets `human-approval`). Store `AGENTIC_REVIEW_TOKEN` there and nowhere else. Only the jobs
-   `human-approval` and `carry-statuses` declare it, so no PR-ref run can read it.
+   `approval-gate`, `carry-statuses` and the review job of the runner workflow (`github-actions-claude.yml`, `github-actions-codex.yml`) declare it, so no PR-ref run can read it.
 2. Add `AGENTIC_FORGE_TOKEN` as a repo secret (`proofs-on-base` falls back to the read-only job token and
    its status post fails by design; the job's exit code is the check).
-3. `init` installs `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events to `human-approval`; it must stay in place or approvals do not update. A fork PR's review event carries no PR number, so its approval updates on the next PR event.
+3. Release line only: create Environment `agentic-release` with the Product owner as required reviewer and deployment branches limited to the trunk. Store `AGENTIC_RELEASE_TOKEN` there: the release bot, the only bypass actor of `.github/rulesets/release.json`. The release skill starts `forge cut <revision> <version>`, which runs `agentic-sdlc-release.yml`; the Product owner's approval of that run is the go-ahead. The cycle never holds this token.
+4. `init` installs `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events to `human-approval`; it must stay in place or approvals do not update. A fork PR's review event carries no PR number, so its approval updates on the next PR event.
 
 ## GitLab
 | Guarantee | How |
@@ -84,7 +98,7 @@ One-time setup (private repos need a plan with Environments: Pro, Team or Enterp
 | Branch names | `pre-push` + gate in the MR pipeline |
 | Linkage, approval | jobs `ticket-linkage`, `human-approval`; enable "Pipelines must succeed" |
 | Verify | job `Required` in the MR pipeline with no protected variables |
-| Board sync, shipped, signals | jobs in `agentic-sdlc.gitlab-ci.yml`; merged = trunk push job |
+| Merged, shipped, signals | jobs in `agentic-sdlc.gitlab-ci.yml`; `gate merged` runs in the trunk push job; one Signal per failed deploy |
 | Auto-merge | native (merge when pipeline succeeds, merge trains) |
 | Trunk | protected branch, fast-forward merge, push by bot only; protected release branches |
 
@@ -101,7 +115,7 @@ does not do this yet (tracked for the next release).
 | Branch names | `pre-push` + gate in the PR build |
 | Linkage, approval | the PR build (`ticket-linkage` job); required status check `agentic-sdlc/human-approval` |
 | Verify | the PR build `Required`: its `Required` and `proofs-on-base` jobs hold no secret or token |
-| Board sync | opened/ready in the PR build; approx: merged and draft need a Service hook that queues a pipeline |
+| Merged, shipped | wire `gate merged` into your trunk CI pipeline and `gate shipped` into each deploy pipeline yourself |
 | Auto-merge | native (auto-complete) |
 | Trunk | branch policy: required builds, squash/rebase only, bot-only push |
 
@@ -111,7 +125,7 @@ does not do this yet (tracked for the next release).
 | Branch names | `pre-push` + gate in the PR pipeline |
 | Linkage, approval | PR pipeline steps `ticket-linkage`, `human-approval` as merge checks |
 | Verify | PR pipeline step `Required` with no secured variables |
-| Board sync | PR pipeline (ready), trunk pipeline (merged); approx: no draft event |
+| Merged, shipped | trunk pipeline (`gate merged`), deploy steps (`gate shipped`) |
 | Auto-merge | approx: scheduled custom pipeline `agentic-automerge` merges CRs with `<!-- agentic-sdlc:automerge -->` when green |
 | Trunk | branch restrictions: successful build, no direct push, squash/fast-forward |
 
@@ -126,8 +140,17 @@ does not do this yet (tracked for the next release).
 GitLab: never enable protected variables in MR pipelines. The sound routes are Ultimate external status checks or a pipeline execution policy; a default-branch relay posting with the MR head `pipeline_id` is unverified.
 
 ## Gaps
-No native guarantee: Bitbucket auto-merge and draft event, Azure draft/merged events and review
-events (service hook needed), GitLab approval events outside a pipeline.
+No native guarantee: Bitbucket auto-merge, Azure review events (service hook needed), GitLab approval
+events outside a pipeline.
+
+On GitLab, Azure DevOps and Bitbucket the author of an MR or PR can edit its pipeline file. A person with
+push access can change the gates there. So these gates are advisory until a trunk-defined pipeline holds
+them: a GitLab pipeline execution policy or an Azure DevOps required template. Bitbucket has no such control.
+
+## Continuous delivery
+With `product.delivery: continuous`, every environment deploys from the trunk. There is no release line, no
+`release` skill and no release workflow. Wire each deploy to `gate shipped <env> --sha <sha> --result
+success|failure|rolled-back --version <v>`, so the board records the artifact version.
 
 ## Non-code products
 `product.environments` names the stages and `gate shipped <env>` takes any of them. Wire it to the

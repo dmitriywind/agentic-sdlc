@@ -133,3 +133,34 @@ writes the board. Then the CR pipeline needs no board secret on any forge.
 5. **Scale.** Repo filter and paging on the GitHub board; per-ticket CR lookup.
 
 Each step changes the contract, the skills, the feature files and the flows in the same commit.
+
+## Round 2 (after the five fix steps)
+
+Four fresh tracers re-ran the journeys on the fixed code, plus one consistency audit of docs against
+code. Round 2 found 5 new P1 breaks, three of them races between the remaining board writers. Their
+fixes are in the commit "round 2 fixes".
+
+| Round 1 P1 | Status |
+|---|---|
+| 1 draft event undoes a send-back | Fixed: no CR-pipeline gate writes the board. |
+| 2 a review agent can post `human-approval` | Fixed for agents: `forge status` refuses gate contexts. Code the cycle runs could still post one with raw HTTP: give the implementer token no commit-status write, and pin the context to the review app. |
+| 3 cycle starves releases and rework | Fixed: the cycle walks every routing row. |
+| 4 `proofs-on-base` blocks docs-only CRs | Fixed: `paths.no_proof`. |
+| 5 a merge moves a held or Cancelled ticket | Changed: Done records the merge and keeps the label; Cancelled stays. |
+| 6 continuous delivery never ships | Fixed: `product.delivery`. |
+| 7 GitLab, Azure, Bitbucket gate secrets | Open: the pipeline file is the CR author's. Gates there are advisory until a trunk-defined pipeline holds them. |
+| 8 dispatch key skips re-runs | Fixed: a double-fire window, plus a block while a run is unfinished. |
+| 9 judge and learn rows lost | Fixed: heartbeat kinds; judge first; improve-factory writes its own heartbeat. |
+| 10 `dispatch improve-factory` exits 2 | Fixed. |
+| 11 `learning.due` ignores the budget | Fixed; a budget of 0 turns learning off. |
+| 12 two repos on one GitHub Project | Fixed: the adapter reads only its repo. |
+
+| Round 2 P1 | Status |
+|---|---|
+| `merged` and `shipped` race on GitLab | Fixed: one resource group; `merged` tolerates the move; writes read again first. |
+| Concurrent `shipped` runs lower Shipped | Fixed: one queue on GitHub; `shipped` never lowers a newer value. |
+| Release cut needs an admin implementer | Fixed on GitHub: `forge cut` and the release workflow behind an Environment the Product owner approves, with its own release bot. Elsewhere: `vcs cut` under a release credential. |
+| `learning` runs inside the cycle timeout | Fixed: improve-factory writes its own heartbeat; give it its own executor for long benches. |
+| Bench spend outside the budget | Fixed: `bench run --budget` with the week's remainder; the improve-factory row carries bench cost. A harness that reports no cost still leaves the budget blind. |
+
+The open items moved to the [roadmap](../roadmap.md).

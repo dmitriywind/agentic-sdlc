@@ -10294,7 +10294,7 @@ function learningState(comments, everyCycles, now = Date.now(), budgetUsd) {
   const cyclesSince = learnAt < 0 ? beats.length : all.slice(0, learnAt).filter((hb) => (hb.kind ?? "cycle") === "cycle").length;
   const week = flattenRuns(comments, { sinceDays: 7, now }).filter((r) => LEARNING_SKILLS.includes(r.skill));
   const spentWeekUsd = Math.round(week.reduce((t, r) => t + (r.cost_usd ?? 0), 0) * 100) / 100;
-  const underBudget = !(Number(budgetUsd) > 0) || spentWeekUsd < Number(budgetUsd);
+  const underBudget = budgetUsd === void 0 || budgetUsd === null ? true : Number(budgetUsd) > 0 && spentWeekUsd < Number(budgetUsd);
   return { due: Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles) && underBudget, cyclesSince, spentWeekUsd };
 }
 function scorersFor(root, skill) {

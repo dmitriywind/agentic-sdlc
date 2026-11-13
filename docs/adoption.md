@@ -31,7 +31,10 @@ Warning: on GitLab, Azure and Bitbucket the CR's own pipeline file can read the 
 1. Install the CLI as a devDependency, pinned to a tag. The repo then owns its version.
 2. Run `init` with the flags from the chart above.
 3. Fill in `.agents/binding.yml`: owners, statuses, `commands.*`, `product.environments`,
-   `product.proofs`, `models`. The template documents every key.
+   `product.delivery` (`release-line` or `continuous`), `product.evidence` (`sbom`, `provenance`,
+   `signature`; set `commands.evidence_check` with it), `product.proofs`, `models`. The template
+   documents every key. On GitHub with `release-line` delivery, also set up Environment `agentic-release`
+   and the release workflow (see [forges.md](forges.md#github)).
 4. Write `paths.importance_doc` and `paths.guiding_narrative`. The skills judge every ticket
    against them; without them every product question becomes a hold.
 5. Run `doctor` until every port is ok.

@@ -42,7 +42,7 @@ stateDiagram-v2
 
 - Done is final. A later failure opens a new Signal, never reopens the ticket.
 - Humans own Ideas. Skills never pick one up.
-- Removing the `needs-human` label is the only release from a hold.
+- Removing the `needs-human` label releases a hold. A trusted owner reply releases it too: the cycle removes the label.
 
 ## 2. One cycle
 
@@ -56,26 +56,27 @@ sequenceDiagram
   participant B as Board
   participant R as Review runtime
   S->>O: /agentic-sdlc:sdlc run one cycle
-  O->>B: board list, forge list, trusted heartbeats, ledger summary
-  O->>W: Triage each Signal
-  W->>B: Move to Ideas, Backlog or Cancelled
-  O->>W: Implement top of Ready
-  W->>B: Draft CR, ticket In review
-  O->>W: Shape Backlog until min_ready is met
-  W->>B: Ticket moves to Ready
-  O->>B: Write heartbeat with ledger rows
-  O->>W: judge-run per run (ledger plan, grade, ledger record)
+  O->>O: 1. Claim: dispatch sdlc (skipped means another cycle runs: stop)
+  O->>B: 1. board list, forge list, trusted heartbeats, ledger summary
+  O->>W: 2. Judge: judge-run per unscored run
   W->>B: One scores comment per run
-  opt ledger summary shows learning.due
+  opt 3. Learn: ledger summary shows learning.due
     O->>W: improve-factory
-    W->>B: One draft factory CR
+    W->>B: One draft factory CR and its own learn heartbeat
   end
+  O->>W: 4. Triage each Signal
+  W->>B: Move to Ideas, Backlog or Cancelled
+  O->>W: 5. Route: releases, hand-offs, rework, Ready, Backlog
+  W->>B: Draft CR, ticket In review, shaped ticket Ready
+  O->>B: 6. Report: write the cycle heartbeat with ledger rows
   S->>R: After the cycle finishes: review-pr
-  R->>B: Review drafts and factory CRs
+  R->>B: Review drafts and factory CRs, write a review heartbeat
 ```
 
 - The orchestrator routes, waits and reports. Subagents do the work.
+- A second dispatch of the same skill and subject inside `cycle.dedupe_minutes` is a double fire. It is skipped.
 - After `time_budget_minutes` nothing new starts.
+- The heartbeat has a `kind`: `cycle`, `review` or `learn`. Only `cycle` heartbeats count cycles.
 - A failed step goes in the heartbeat `errors`. The cycle goes on.
 
 ## 3. Change request hand-off
@@ -129,20 +130,30 @@ Purpose: show how a merge reaches the last environment.
 
 ```mermaid
 flowchart TD
-  M["Merge to trunk"] --> D1["Deploy first env"]
+  M["Merge to trunk"] --> MG["Gate merged:<br/>ticket Done, Not shipped"]
+  M --> D1["Deploy first env"]
   D1 --> SG["Gate shipped: On first env"]
-  SG --> RL["Release request (labelled Backlog ticket)<br/>or P0 fix On first env"]
+  SG --> MODE{"product.delivery"}
+  MODE -->|"continuous"| DC["Deploy each later env<br/>from the trunk"]
+  DC --> OKC["Gate shipped: On each env<br/>with --version"]
+  MODE -->|"release-line"| RL["Release request (labelled Backlog ticket)<br/>or P0 fix On first env"]
   RL --> RS["release skill picks SHA<br/>and version"]
-  RS --> CUT["vcs cut: release line"]
-  CUT --> IR["release skill:<br/>Shipped In release"]
-  IR --> D2["Deploy last env<br/>(owner approves)"]
+  RS --> IR["release skill:<br/>Shipped In release"]
+  IR --> WF["Release workflow:<br/>Product owner approves the<br/>agentic-release Environment"]
+  WF --> CUT["forge cut: release line"]
+  CUT --> D2["Deploy last env"]
   D2 -->|"success"| OK["Gate shipped: On last env,<br/>tag created"]
   D2 -->|"failure"| FAIL["Tickets back to previous env,<br/>version cleared"]
   FAIL --> SIG["Held Signal opened<br/>(needs-human)"]
   SIG --> TR["triage-signal makes<br/>a new ticket"]
+  OKC -->|"a bad deploy is rolled back"| RB["Gate shipped --result rolled-back:<br/>tickets not in the running revision<br/>step back one env"]
+  OK -->|"a bad deploy is rolled back"| RB
 ```
 
 - Agents never approve the last environment. The Product owner does.
+- The release skill sets In release before the cut. On GitHub the Product owner approves the release workflow run. The release bot token cuts the line; the cycle never holds it.
+- Continuous delivery has no release line and no In release.
+- Each failed deploy opens one Signal with its environment label.
 - A failed release line is left untouched. The fix ships under the next version.
 - The tag is created at success in the last environment.
 
@@ -182,7 +193,7 @@ Purpose: show how a failure becomes a new ticket without reopening Done work.
 
 ```mermaid
 flowchart TD
-  RED["Red trunk,<br/>release line or deploy"] --> SOR["Gate signal-on-red"]
+  RED["Red CI run on the trunk<br/>or a release line"] --> SOR["Gate signal-on-red"]
   SOR -->|"redacted evidence"| SIG["New Signal on board"]
   SIG --> TRI["triage-signal"]
   TRI -->|"accept"| NT["New ticket with<br/>regression case"]
@@ -193,7 +204,8 @@ flowchart TD
   RED -.->|"never reopens"| DONE
 ```
 
-- Only trunk and release-line runs open a Signal. Other refs are ignored.
+- Only CI runs on the trunk and release lines open a Signal. Other refs are ignored.
+- A failed deploy opens its own Signal through `gate shipped`, one per failure, with its environment label.
 - The fix is always a new ticket with a regression case in its criteria.
 - A failure in the last environment adds the `needs-human` hold to the Signal.
 
@@ -210,7 +222,7 @@ flowchart LR
   ID -->|"Product owner moves it"| BL["Backlog"]
   BL -->|"backlog-grooming<br/>(no Priority)"| BL
   BL -->|"shape<br/>(Priority, no blocker,<br/>no children)"| RD["Ready"]
-  BL -->|"release<br/>(release request label)"| REL["Release line"]
+  BL -->|"release<br/>(release request label,<br/>release-line only)"| REL["Release line"]
   RD -->|"implement-spec"| IP["In progress"]
   IP -->|"implement-spec<br/>(draft CR)"| IR["In review"]
   IR -->|"review-pr<br/>(+ verify-ux)"| IR
@@ -223,7 +235,7 @@ flowchart LR
 ```
 
 - `escalate-to-human` can act at any working status. It adds a hold, never a status.
-- `judge-run` grades every run after the heartbeat.
+- `judge-run` grades unscored runs in step 2 of the cycle, before triage and routing.
 
 ## 8. Intake: from a thought to a Ready ticket
 
@@ -265,7 +277,7 @@ sequenceDiagram
     E->>B: Add the needs-human label, clear the assignee
     Note over B: Status stays. Every skill skips the ticket.
     O->>B: Trusted reply in a comment
-    O->>B: Remove the needs-human label
+    Note over B: The cycle removes the needs-human label after the reply.
     Note over K: The next cycle resumes at the same Status.
   end
 ```

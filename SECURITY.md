@@ -9,7 +9,7 @@ within five working days. Only the latest alpha receives fixes while v2 is in al
 
 ## Trust model
 
-The package hands real tokens to agents that read untrusted text. Its design rests on four rules;
+The package hands real tokens to agents that read untrusted text. Its design rests on six rules;
 the contract (`references/architecture.md`, sections 3.4 and 10) is the full statement.
 
 - **A separate review identity.** `forge status` and `forge approve` use only
@@ -18,12 +18,16 @@ the contract (`references/architecture.md`, sections 3.4 and 10) is the full sta
   accounts no admin or bypass right on the trunk.
 - **Gate statuses only from gates.** `forge status` refuses the contexts `human-approval`,
   `ticket-linkage` and `proofs-on-base`, so an agent with the review token cannot forge a gate.
-  Where the forge allows it, pin those contexts to the CI app in the trunk ruleset.
+  Where the forge allows it, pin `ticket-linkage` and `proofs-on-base` to the Actions app in the trunk
+  ruleset. `human-approval` and `review` post with the review token: pin them to the review app when it is an App.
 - **CI never runs CR code with secrets.** The `Required` check and the `proofs-on-base` gate run
   on `pull_request` with no secrets. Gates that need tokens run against the target branch's
   binding and never check out or execute the CR. The review runtime runs no install or test
   command. Pin each required check to the app that posts it; `doctor` warns when one is not
   pinned.
+- **A release bot cuts the release line.** On GitHub the release workflow runs in Environment `agentic-release`.
+  The Product owner is its required reviewer. `AGENTIC_RELEASE_TOKEN` is the release bot, the only bypass actor
+  of the release ruleset. The cycle never holds it.
 - **Humans approve what agents must not.** A Full-lane CR needs a human approval per
   `forge.human_approval`; a `guardrail` factory change needs the factory owner; agents never
   approve the last environment.

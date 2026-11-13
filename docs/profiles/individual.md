@@ -26,7 +26,7 @@ forge:
 # traces: omitted (none), or files in the runner's scratch dir
 learning:
   every_cycles: 20
-  bench_size: 10
+  bench_size: 20                                 # at least bench_min_cases
   bench_min_cases: 20                            # bench compare needs this many shared cases
   bench_trials: 3                                # and this many trials per case
   auto_merge_classes: []                         # add tuning once a bench baseline exists

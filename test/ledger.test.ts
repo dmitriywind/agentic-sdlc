@@ -157,6 +157,7 @@ test('learningState: cycles since the last improve-factory heartbeat, due at eve
   assert.equal(learningState(comments, 3, now).due, false);
   assert.equal(learningState(comments, 2, now, 2.5).due, false); // the week's learning spend reached the budget
   assert.equal(learningState(comments, 2, now, 10).due, true);
+  assert.equal(learningState(comments, 2, now, 0).due, false); // a budget of 0 turns learning off
   assert.equal(learningState(comments.slice(0, 2), 3, now).cyclesSince, 2); // no improve-factory yet: every heartbeat
 });
 

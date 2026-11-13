@@ -15,10 +15,11 @@ flowchart LR
 
 | Item | Why | Done when |
 |---|---|---|
-| Stress-test fixes, in the report's order | The [stress test](audits/2026-11-13-stress-test.md) found 12 P1 breaks; most come from several writers on one board field. | Every P1 break is fixed or rejected with a reason, and the feature files match. |
-| Pilot on a real product repo | v2 has 158 passing tests but has never run against a real product. | Three scheduled cycles in a row write a heartbeat with no `errors`, and a ticket goes from Backlog to Shipped. |
-| Default binding passes `validate` with no warning | A fresh `init` warns: `learning.budget_usd_per_week > 0 but agent_command is unset`. | `init` then `validate` prints no warning. |
-| Trunk-defined gates on GitLab, Azure and Bitbucket | The CR's own pipeline file can read the gate secrets. `doctor` only warns. | The secret-holding gates run from a pipeline the CR cannot change, or `doctor` fails for that forge. |
+| Trunk-defined gates on GitLab, Azure and Bitbucket | The CR's own pipeline file runs the gates there, so its author can change or skip them. | A pipeline the CR cannot change (GitLab pipeline execution policy, Azure required template) holds every gate, or doctor fails for that forge. |
+| Implementer token without commit-status write | Code the cycle runs in `npm test` can post a status with raw HTTP. | The profiles and doctor name the permission; `review` and `human-approval` are pinned to the review app. |
+| Board and forge identities per owner | A Jira accountId and a GitLab username differ, so one `owners.*` string cannot match both. | `owners.<role>` takes `{ board, forge }`. |
+| A CR push time on the port | review-pr and the heartbeat measure "pending longer than `stall_minutes` after the push" with no time on `CR`. | `CR` carries the head's push time. |
+| Pilot on a real product repo | v2 has 173 passing tests but has never run against a real product. | Three scheduled cycles in a row write a heartbeat with no `errors`, and a ticket goes from Backlog to Shipped. |
 
 ### Skill text to make exact
 

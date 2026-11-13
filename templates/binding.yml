@@ -149,4 +149,4 @@ learning:                       # the self-improvement loop
   auto_merge_classes: []        # classes that merge without the factory owner (only tuning may be listed; guardrail never).
                                 #   Keep [] until a bench baseline exists, then [tuning].
   judge_tier: fast              # tier judge-run scores on (fast | balanced | deep)
-  budget_usd_per_week: 50       # learning and bench spend cap
+  budget_usd_per_week: 0        # learning and bench spend cap; 0 turns learning off. Set it (e.g. 50) with agent_command

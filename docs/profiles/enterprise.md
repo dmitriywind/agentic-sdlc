@@ -30,11 +30,11 @@ traces:
   uri: ".agents/runtime/traces/{run_id}.jsonl"   # init's placeholder; point it at org storage, e.g. s3://my-bucket/agentic/{run_id}.jsonl
 learning:
   every_cycles: 20
-  bench_size: 10
+  bench_size: 20                                 # at least bench_min_cases
   bench_min_cases: 20
   bench_trials: 3
   auto_merge_classes: []                         # add tuning once a bench baseline exists
-  judge_tier: deep
+  judge_tier: fast                               # template default; judge-run picks the next tier when it is the run's own model
   budget_usd_per_week: 50                        # template default; raise it for org-wide use
 ```
 All executor kinds are allowed: `managed`, `webhook`, `assign`, `command`, `harness`. See [executors.md](../../skills/sdlc/references/executors.md).
