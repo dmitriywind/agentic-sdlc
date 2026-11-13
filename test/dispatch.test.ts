@@ -209,7 +209,7 @@ test('idempotency: a trusted marker for the same key inside cycle.dedupe_minutes
   assert.equal((await go(['implement-spec', '--ticket', '1'])).out.kind, 'harness');
 });
 
-test('dispatch: an unfinished run blocks until stall_minutes; its done marker ends it; sdlc only claims; a failed start writes the done marker', async () => {
+test('dispatch: an unfinished run blocks until stall_minutes; a closing comment or the done line ends it; sdlc only claims; a failed start writes the done line', async () => {
   const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
   const { createLocalBoard } = await import('../src/board/local.ts');
   const root = mkdtempSync(join(tmpdir(), 'disp2-'));
@@ -233,7 +233,15 @@ test('dispatch: an unfinished run blocks until stall_minutes; its done marker en
   await board.comment('1', `${first.out.done}\ndone`);
   await new Promise((r) => setTimeout(r, 20));
   assert.equal((await go(['implement-spec', '--ticket', '1'])).out.kind, 'harness');
-  assert.equal((await go(['sdlc', '--ticket', '2'])).out.kind, 'claim');
+  assert.equal((await go(['sdlc', '--ticket', '2', '--unattended'])).out.kind, 'claim'); // a claim passes no executor check
+  // On the heartbeat ticket another run's comment does not end improve-factory; its done line does.
+  const imp = await go(['improve-factory']);
+  await new Promise((r) => setTimeout(r, 20));
+  await board.comment('2', '<!-- heartbeat -->\nanother run');
+  assert.equal((await go(['improve-factory'])).out.reason, 'the previous run has not finished');
+  await board.comment('2', imp.out.done);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal((await go(['improve-factory'])).out.kind, 'harness');
   assert.equal((await go(['triage', '--ticket', '1'])).code, 1); // webhook env var unset: the start fails
   assert.ok((await board.comments('1')).some((c) => c.body.startsWith('<!-- agentic-sdlc:done 1-triage -->')));
 });

@@ -68,10 +68,10 @@ export function childEnv(env: NodeJS.ProcessEnv, secrets: string[]): NodeJS.Proc
 }
 
 type Managed = Extract<Executor, { kind: 'managed' }>;
-type Task = { skill: string; ticket: string; cr: string };
+type Task = { skill: string; ticket: string; cr: string; done?: string };
 
 const subject = (t: Task) => (t.ticket ? `ticket ${t.ticket}${t.cr ? ` (change request ${t.cr})` : ''}` : `change request ${t.cr}`);
-const taskText = (t: Task) => `Run skill ${t.skill} on ${subject(t)}. Load .agents/skills/${t.skill}/SKILL.md first and follow it.`;
+const taskText = (t: Task) => `Run skill ${t.skill} on ${subject(t)}. Load .agents/skills/${t.skill}/SKILL.md first and follow it.${t.done ? ` Put the line ${t.done} in your closing comment.` : ''}`;
 
 export const DISPATCH_MARKER = 'agentic-sdlc:dispatch';
 /** The line a dispatched run's closing comment carries, with its key: the run has finished. */
@@ -133,6 +133,7 @@ const need = <T>(v: T | undefined, name: string): T => {
 
 export const cli: PortCli = async (argv, ctx) => {
   let onFail: (() => Promise<unknown>) | undefined;
+  let sent = false;
   try {
     const f: Record<string, string> = {};
     const pos: string[] = [];
@@ -176,7 +177,11 @@ export const cli: PortCli = async (argv, ctx) => {
       const mine = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `)).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
       const at = mine ? Date.parse(mine.createdAt) : NaN;
       // Finished: a later bot comment carrying `<!-- agentic-sdlc:done <key> -->` (every dispatched run ends with one).
-      const finished = mine && all.some((c) => Date.parse(c.createdAt) > at && c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`));
+      // On a ticket a run's own closing comment ends it; the heartbeat ticket carries other runs' comments, so
+      // there only the done line counts. Timestamps may have whole seconds only: same-second comments count.
+      const later = (c: { id: string; createdAt: string }) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
+      const isMarker = (c: { body: string }) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER}`);
+      const finished = mine && all.some((c) => later(c) && (c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`) || (target !== b.heartbeat?.ticket && !isMarker(c))));
       const stall = Number(b.stall_minutes) || 0;
       const age = (Date.now() - at) / 60_000;
       if (mine && (age < window || (!finished && age < stall))) {
@@ -190,6 +195,12 @@ export const cli: PortCli = async (argv, ctx) => {
       console.log(JSON.stringify({ kind, ref: ref ?? (kind === 'assign' ? marker ?? null : null), startedAt, ...(key ? { key, done: `<!-- ${DONE_MARKER} ${key} -->` } : {}), ...extra }));
       return 0;
     };
+    const doneLine = key ? `<!-- ${DONE_MARKER} ${key} -->` : undefined;
+    // The cycle claims itself with `dispatch sdlc`: a marker only, never a run, and no executor check.
+    if (skill === 'sdlc') {
+      if (key) await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key} -->\nagentic-sdlc: cycle claimed`);
+      return await done('claim', null, doneLine ? { done: doneLine } : {});
+    }
 
     let skillTier: string | undefined;
     try { skillTier = skillTierOf(readFileSync(join(ctx.root, '.agents', 'skills', skill, 'SKILL.md'), 'utf8')); }
@@ -204,18 +215,17 @@ export const cli: PortCli = async (argv, ctx) => {
     if (key || ex.kind === 'assign') {
       marker = (await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->\nagentic-sdlc: run skill ${skill} (${ex.kind})`)).id;
       const k = key ?? `${ticket}-${skill}`;
-      onFail = () => boardOf().comment(target!, `<!-- ${DONE_MARKER} ${k} -->\nagentic-sdlc: ${skill} did not start`);
+      // Only while nothing has left: once a request is sent, the remote run may exist, so no done line.
+      onFail = () => (sent ? Promise.resolve() : boardOf().comment(target!, `<!-- ${DONE_MARKER} ${k} -->\nagentic-sdlc: ${skill} did not start`));
     }
-    // The cycle claims itself with \`dispatch sdlc\`: a marker only, never a second run.
-    if (skill === 'sdlc') return await done('claim', null, { ...(key ? { done: `<!-- ${DONE_MARKER} ${key} -->` } : {}) });
 
     if (ex.kind === 'harness') {
-      return await done('harness', null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
+      return await done('harness', null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ''}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
     }
     if (ex.kind === 'command') {
       const dir = mkdtempSync(join(tmpdir(), 'agentic-sdlc-'));
       const promptFile = join(dir, 'prompt.md');
-      writeFileSync(promptFile, `Run skill ${skill} on ${subject({ skill, ticket, cr })}. Load .agents/skills/${skill}/SKILL.md first.
+      writeFileSync(promptFile, `${taskText({ skill, ticket, cr, done: doneLine })}
 `);
       const mcpsFile = join(dir, 'mcps.json');
       writeFileSync(mcpsFile, JSON.stringify(stage.mcps, null, 2)); // env var names only
@@ -230,6 +240,7 @@ export const cli: PortCli = async (argv, ctx) => {
         const [cmd, args, childVars] = process.platform === 'win32'
           ? ['cmd', ['/d', '/v:off', '/c', '%AGENTIC_SDLC_CMD%'], { ...env, AGENTIC_SDLC_CMD: line }]
           : ['sh', ['-c', line], env];
+        sent = true;
         const child = spawnChild(cmd as string, args as string[], { cwd: workdir, env: childVars as NodeJS.ProcessEnv, detached: true, stdio: ['ignore', fd, fd], windowsHide: true });
         child.on('error', () => {}); // a late spawn failure shows as a missing pid below, not a crash
         child.unref();
@@ -241,11 +252,14 @@ export const cli: PortCli = async (argv, ctx) => {
     if (ex.kind === 'webhook') {
       const headers: Record<string, string> = ex.token_env ? { authorization: `Bearer ${envOf(ctx.env, ex.token_env)}` } : {};
       const url = envOf(ctx.env, ex.url_env);
-      const r = await ctx.http('POST', url, { headers, body: { skill, ticket, cr, callback: null, ...stageBody } });
+      sent = true;
+      const r = await ctx.http('POST', url, { headers, body: { skill, ticket, cr, callback: null, ...(doneLine ? { done: doneLine } : {}), ...stageBody } });
       return await done('webhook', r?.id ?? null);
     }
     if (ex.kind === 'managed') {
-      const r = await ctx.http(...managedRequest(ex, ctx.env, { skill, ticket, cr }, stage.model, stageBody));
+      const req = managedRequest(ex, ctx.env, { skill, ticket, cr, done: doneLine }, stage.model, stageBody);
+      sent = true;
+      const r = await ctx.http(...req);
       return await done('managed', r?.id ?? r?.name ?? null);
     }
     if (ex.kind !== 'assign') throw new Error(`unknown executor kind '${(ex as { kind: string }).kind}' for ${skill}`);

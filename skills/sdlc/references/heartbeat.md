@@ -14,7 +14,7 @@ the rows back.
   evidence.
 - Runs and measures over many heartbeats: `agentic-sdlc ledger runs [--since <days>] [--skill <s>]`
   and `agentic-sdlc ledger summary [--since <days>]`. Both read only heartbeats by `owners.bots`.
-  `ledger summary` also prints `learning: { due, cyclesSince, spentWeekUsd }`, computed from
+  `ledger summary` also prints `learning: { due, judge, cyclesSince, spentWeekUsd }`, computed from
   heartbeats and run rows; no skill keeps a counter.
 - Scores are not written here. `judge-run` posts them with `ledger record`, as one
   `<!-- scores -->` comment on `heartbeat.ticket`; owners post `agentic-sdlc:grade` comments.
@@ -51,6 +51,7 @@ the rows back.
 
 | Field | Meaning |
 |---|---|
+| (done line) | The cycle's done line from `dispatch sdlc` goes after the json fence, never before `<!-- heartbeat -->`. |
 | `kind` | `cycle` (the default), `review` (the review runtime, one per run) or `learn` (written by `improve-factory`). Only `cycle` heartbeats count cycles. A `review` or `learn` heartbeat holds only `kind`, `factory`, `runs` and, for `learn`, `learning`. |
 | `factory` | `vcs head` sha of the trunk the skills were read from. Ties every row to one factory version. |
 | `statusCounts` | Board items per Status. |

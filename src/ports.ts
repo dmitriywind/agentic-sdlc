@@ -81,7 +81,7 @@ export interface Forge {
   comment(n: string, body: string): Promise<{ id: string; url?: string }>;
   /** Every human-visible comment on the CR, oldest first; author is the login or username. System notes are dropped. */
   comments(n: string): Promise<Comment[]>;
-  /** Posts with review_token_env; { as: 'ci' } (only the proofs-on-base gate) posts with token_env, the CI job's own token. */
+  /** Posts with review_token_env; { as: 'ci' } (the proofs-on-base and linkage gates) posts with token_env, the CI job's own token. */
   status(sha: string, s: { context: string; state: 'pending' | 'success' | 'failure'; description: string; url?: string }, opts?: { as?: 'ci' }): Promise<void>;
   approve(n: string): Promise<void>;
   approvals(n: string): Promise<Review[]>;

@@ -223,7 +223,7 @@ export async function runBench(
     let spent = 0;
     const trials = o.trials ?? 1;
     for (const c of cases) for (let trial = 1; trial <= trials && !stopped; trial++) {
-      if (spent >= budget) { stopped = 'budget'; break; }
+      if (budget !== undefined && budget !== null && spent >= budget) { stopped = 'budget'; break; }
       const trees: Tree[] = [];
       try {
         const agent = await snap(c.baseSha);
@@ -455,7 +455,7 @@ export const cli: PortCli = async (argv, ctx) => {
       const { createVcs } = await import('./vcs/index.ts');
       const r = await runBench(
         cases,
-        { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values['dry-run'], scorerDir: join(root, RESULTS_DIR, stem), trials, budget: a.values.budget !== undefined ? (Number.isFinite(Number(a.values.budget)) ? Number(a.values.budget) : (() => { throw new Error(`--budget must be a number, got '${a.values.budget}'`); })()) : undefined },
+        { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values['dry-run'], scorerDir: join(root, RESULTS_DIR, stem), trials, budget: a.values.budget !== undefined ? (a.values.budget.trim() !== '' && Number.isFinite(Number(a.values.budget)) ? Number(a.values.budget) : (() => { throw new Error(`--budget must be a number, got '${a.values.budget}'`); })()) : undefined },
         { exec: ctx.exec, vcs: await createVcs(with_(binding.vcs.options)) },
       );
       if ('cases' in r) {

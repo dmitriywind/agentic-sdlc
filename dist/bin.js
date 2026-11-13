@@ -8714,9 +8714,15 @@ function github(ctx) {
       return view(n);
     },
     async cut(revision, version2) {
+      const since = Date.now() - 5e3;
       gh(["workflow", "run", "agentic-sdlc-release.yml", "-f", `revision=${revision}`, "-f", `version=${version2}`]);
-      const [run] = JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "-L", "1", "--json", "databaseId,url"]) || "[]");
-      return { requested: true, ...run ? { run: String(run.databaseId), url: run.url } : {} };
+      for (let i = 0; i < 10; i++) {
+        const runs = JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "--event", "workflow_dispatch", "-L", "5", "--json", "databaseId,url,createdAt"]) || "[]");
+        const run = runs.find((r) => Date.parse(r.createdAt) >= since);
+        if (run) return { requested: true, run: String(run.databaseId), url: run.url };
+        await new Promise((r) => setTimeout(r, 2e3));
+      }
+      return { requested: true };
     },
     async comment(n, body) {
       const url = gh(["pr", "comment", n, "--body-file", "-"], body).trim();
@@ -9932,6 +9938,8 @@ environment: ${env}`,
       const shas = byId.get(x.id) ?? [];
       const anc = shas.map((s) => s ? isAnc(s, sha2) : void 0);
       if (!shas.length || anc.includes(void 0) || anc.every(Boolean)) continue;
+      const now = rank((await d.board.get(x.id)).fields.shipped);
+      if (now < rank(target) || now >= next) continue;
       await d.board.set(x.id, "shipped", back);
       changed.push(x.id);
     }
@@ -9946,6 +9954,7 @@ environment: ${env}`,
       for (const x of cut) {
         const shas = byId.get(x.id) ?? [];
         if (!shas.length || shas.some((s) => !s || isAnc(s, sha2) !== true)) continue;
+        if (rank((await d.board.get(x.id)).fields.shipped) >= rank(target)) continue;
         await d.board.set(x.id, "shipped", back);
         await d.board.set(x.id, "release_version", null);
         changed.push(x.id);
@@ -10048,7 +10057,7 @@ var init_gates = __esm({
     patternRe = (p) => new RegExp("^" + p.split(/(<ticket>|<name>)/).map((x) => x === "<ticket>" ? "[A-Za-z0-9_-]+" : x === "<name>" ? "[a-z0-9]+(?:-[a-z0-9]+)*" : esc(x)).join("") + "$");
     readDiff = (d, n) => d.forge.diff(n).catch(() => void 0);
     DEPENDENCY_LINES = /^(dependabot|renovate)\//;
-    DEPENDENCY_BOTS = /^(app\/)?(dependabot|renovate)(\[bot\])?$/i;
+    DEPENDENCY_BOTS = /^(app\/)?(dependabot|renovate)([-_]?bot|\[bot\])?$/i;
     redact2 = (s, max = 120) => String(s ?? "").replace(/[\x00-\x1f]/g, " ").replace(/\b[A-Za-z0-9_+/=-]{32,}\b/g, "[redacted]").slice(0, max);
     cleanUrl = (u) => redact2(String(u ?? "").replace(/^(\w+:\/\/)[^/@]*@/, "$1").replace(/[?#].*$/, ""), 200);
     cli5 = (argv, base) => guard(async () => {
@@ -10173,6 +10182,9 @@ import { existsSync as existsSync5, readdirSync as readdirSync3, readFileSync as
 import { join as join6, relative as relative2, resolve as resolve3 } from "path";
 import { parseArgs as parseArgs2 } from "util";
 function parseHeartbeat(body) {
+  const lines = body.trimStart().split(/\r?\n/);
+  while (lines.length && lines[0].startsWith("<!-- agentic-sdlc:")) lines.shift();
+  body = lines.join("\n");
   if (!body.trimStart().startsWith(HEARTBEAT_MARKER)) return void 0;
   const m = body.match(/```json\s*\r?\n([\s\S]*?)\r?\n```/);
   if (!m) return void 0;
@@ -10629,7 +10641,7 @@ async function runBench(cases, o, deps) {
     let spent = 0;
     const trials = o.trials ?? 1;
     for (const c of cases) for (let trial = 1; trial <= trials && !stopped; trial++) {
-      if (spent >= budget) {
+      if (budget !== void 0 && budget !== null && spent >= budget) {
         stopped = "budget";
         break;
       }
@@ -10883,7 +10895,7 @@ var init_bench = __esm({
           const { createVcs: createVcs2 } = await Promise.resolve().then(() => (init_vcs(), vcs_exports));
           const r = await runBench(
             cases,
-            { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values["dry-run"], scorerDir: join7(root, RESULTS_DIR, stem), trials, budget: a.values.budget !== void 0 ? Number.isFinite(Number(a.values.budget)) ? Number(a.values.budget) : (() => {
+            { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values["dry-run"], scorerDir: join7(root, RESULTS_DIR, stem), trials, budget: a.values.budget !== void 0 ? a.values.budget.trim() !== "" && Number.isFinite(Number(a.values.budget)) ? Number(a.values.budget) : (() => {
               throw new Error(`--budget must be a number, got '${a.values.budget}'`);
             })() : void 0 },
             { exec: ctx.exec, vcs: await createVcs2(with_(binding.vcs.options)) }
@@ -11017,7 +11029,7 @@ var init_dispatch = __esm({
       return prev;
     };
     subject = (t) => t.ticket ? `ticket ${t.ticket}${t.cr ? ` (change request ${t.cr})` : ""}` : `change request ${t.cr}`;
-    taskText = (t) => `Run skill ${t.skill} on ${subject(t)}. Load .agents/skills/${t.skill}/SKILL.md first and follow it.`;
+    taskText = (t) => `Run skill ${t.skill} on ${subject(t)}. Load .agents/skills/${t.skill}/SKILL.md first and follow it.${t.done ? ` Put the line ${t.done} in your closing comment.` : ""}`;
     DISPATCH_MARKER = "agentic-sdlc:dispatch";
     DONE_MARKER = "agentic-sdlc:done";
     need2 = (v, name) => {
@@ -11026,6 +11038,7 @@ var init_dispatch = __esm({
     };
     cli8 = async (argv, ctx) => {
       let onFail;
+      let sent = false;
       try {
         const f = {};
         const pos = [];
@@ -11068,7 +11081,9 @@ var init_dispatch = __esm({
           const all = (await boardOf().comments(target)).filter(bot);
           const mine = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `)).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
           const at = mine ? Date.parse(mine.createdAt) : NaN;
-          const finished = mine && all.some((c) => Date.parse(c.createdAt) > at && c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`));
+          const later = (c) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
+          const isMarker = (c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER}`);
+          const finished = mine && all.some((c) => later(c) && (c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`) || target !== b.heartbeat?.ticket && !isMarker(c)));
           const stall = Number(b.stall_minutes) || 0;
           const age = (Date.now() - at) / 6e4;
           if (mine && (age < window || !finished && age < stall)) {
@@ -11081,6 +11096,12 @@ var init_dispatch = __esm({
           console.log(JSON.stringify({ kind, ref: ref ?? (kind === "assign" ? marker ?? null : null), startedAt, ...key ? { key, done: `<!-- ${DONE_MARKER} ${key} -->` } : {}, ...extra }));
           return 0;
         };
+        const doneLine = key ? `<!-- ${DONE_MARKER} ${key} -->` : void 0;
+        if (skill === "sdlc") {
+          if (key) await boardOf().comment(target, `<!-- ${DISPATCH_MARKER} ${key} -->
+agentic-sdlc: cycle claimed`);
+          return await done("claim", null, doneLine ? { done: doneLine } : {});
+        }
         let skillTier;
         try {
           skillTier = skillTierOf(readFileSync9(join8(ctx.root, ".agents", "skills", skill, "SKILL.md"), "utf8"));
@@ -11096,17 +11117,16 @@ var init_dispatch = __esm({
           marker = (await boardOf().comment(target, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->
 agentic-sdlc: run skill ${skill} (${ex.kind})`)).id;
           const k = key ?? `${ticket}-${skill}`;
-          onFail = () => boardOf().comment(target, `<!-- ${DONE_MARKER} ${k} -->
+          onFail = () => sent ? Promise.resolve() : boardOf().comment(target, `<!-- ${DONE_MARKER} ${k} -->
 agentic-sdlc: ${skill} did not start`);
         }
-        if (skill === "sdlc") return await done("claim", null, { ...key ? { done: `<!-- ${DONE_MARKER} ${key} -->` } : {} });
         if (ex.kind === "harness") {
-          return await done("harness", null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
+          return await done("harness", null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ""}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
         }
         if (ex.kind === "command") {
           const dir = mkdtempSync3(join8(tmpdir3(), "agentic-sdlc-"));
           const promptFile = join8(dir, "prompt.md");
-          writeFileSync4(promptFile, `Run skill ${skill} on ${subject({ skill, ticket, cr })}. Load .agents/skills/${skill}/SKILL.md first.
+          writeFileSync4(promptFile, `${taskText({ skill, ticket, cr, done: doneLine })}
 `);
           const mcpsFile = join8(dir, "mcps.json");
           writeFileSync4(mcpsFile, JSON.stringify(stage.mcps, null, 2));
@@ -11119,6 +11139,7 @@ agentic-sdlc: ${skill} did not start`);
           const fd = openSync(log, "a");
           try {
             const [cmd, args, childVars] = process.platform === "win32" ? ["cmd", ["/d", "/v:off", "/c", "%AGENTIC_SDLC_CMD%"], { ...env, AGENTIC_SDLC_CMD: line }] : ["sh", ["-c", line], env];
+            sent = true;
             const child = spawnChild(cmd, args, { cwd: workdir, env: childVars, detached: true, stdio: ["ignore", fd, fd], windowsHide: true });
             child.on("error", () => {
             });
@@ -11133,11 +11154,14 @@ agentic-sdlc: ${skill} did not start`);
         if (ex.kind === "webhook") {
           const headers = ex.token_env ? { authorization: `Bearer ${envOf(ctx.env, ex.token_env)}` } : {};
           const url = envOf(ctx.env, ex.url_env);
-          const r = await ctx.http("POST", url, { headers, body: { skill, ticket, cr, callback: null, ...stageBody } });
+          sent = true;
+          const r = await ctx.http("POST", url, { headers, body: { skill, ticket, cr, callback: null, ...doneLine ? { done: doneLine } : {}, ...stageBody } });
           return await done("webhook", r?.id ?? null);
         }
         if (ex.kind === "managed") {
-          const r = await ctx.http(...managedRequest(ex, ctx.env, { skill, ticket, cr }, stage.model, stageBody));
+          const req = managedRequest(ex, ctx.env, { skill, ticket, cr, done: doneLine }, stage.model, stageBody);
+          sent = true;
+          const r = await ctx.http(...req);
           return await done("managed", r?.id ?? r?.name ?? null);
         }
         if (ex.kind !== "assign") throw new Error(`unknown executor kind '${ex.kind}' for ${skill}`);

@@ -160,7 +160,7 @@ async function post(d: Deps, sha: string, description: string, ok: boolean) {
 
 /** Change lines of dependency bots: product changes with no ticket, reviewed like any CR. */
 const DEPENDENCY_LINES = /^(dependabot|renovate)\//;
-const DEPENDENCY_BOTS = /^(app\/)?(dependabot|renovate)(\[bot\])?$/i;
+const DEPENDENCY_BOTS = /^(app\/)?(dependabot|renovate)([-_]?bot|\[bot\])?$/i;
 
 export async function linkage(d: Deps, n: string) {
   const cr = await d.forge.view(n);
@@ -404,6 +404,8 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
       const shas = byId.get(x.id) ?? [];
       const anc = shas.map((s) => (s ? isAnc(s, sha) : undefined));
       if (!shas.length || anc.includes(undefined) || anc.every(Boolean)) continue;
+      const now = rank((await d.board.get(x.id)).fields.shipped);
+      if (now < rank(target) || now >= next) continue; // another deploy moved it meanwhile
       await d.board.set(x.id, 'shipped', back);
       changed.push(x.id);
     }
@@ -420,6 +422,7 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
       for (const x of cut) {
         const shas = byId.get(x.id) ?? [];
         if (!shas.length || shas.some((s) => !s || isAnc(s, sha) !== true)) continue;
+        if (rank((await d.board.get(x.id)).fields.shipped) >= rank(target)) continue; // it shipped meanwhile
         await d.board.set(x.id, 'shipped', back);
         await d.board.set(x.id, 'release_version', null);
         changed.push(x.id);

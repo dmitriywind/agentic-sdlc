@@ -8292,9 +8292,15 @@ function github(ctx) {
       return view(n);
     },
     async cut(revision, version) {
+      const since = Date.now() - 5e3;
       gh(["workflow", "run", "agentic-sdlc-release.yml", "-f", `revision=${revision}`, "-f", `version=${version}`]);
-      const [run] = JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "-L", "1", "--json", "databaseId,url"]) || "[]");
-      return { requested: true, ...run ? { run: String(run.databaseId), url: run.url } : {} };
+      for (let i = 0; i < 10; i++) {
+        const runs = JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "--event", "workflow_dispatch", "-L", "5", "--json", "databaseId,url,createdAt"]) || "[]");
+        const run = runs.find((r) => Date.parse(r.createdAt) >= since);
+        if (run) return { requested: true, run: String(run.databaseId), url: run.url };
+        await new Promise((r) => setTimeout(r, 2e3));
+      }
+      return { requested: true };
     },
     async comment(n, body) {
       const url = gh(["pr", "comment", n, "--body-file", "-"], body).trim();

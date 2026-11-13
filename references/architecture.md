@@ -206,8 +206,10 @@ Keys this contract relies on by name:
   `vcs.release_prefix` and has no In release), `product.evidence: [sbom | provenance | signature]`,
   `paths.no_proof` (globs a product CR may change with no proof file).
 - `cycle.dedupe_minutes`: a second dispatch of the same skill and subject inside it is a double fire
-  and is skipped (unset or 0: no check; the template sets 10). A dispatch whose previous run has no
-  later bot comment is skipped until `stall_minutes`: that run has not finished.
+  and is skipped (unset or 0: no check; the template sets 10). A run has finished when a later bot comment on its own ticket follows the dispatch marker, or, on the
+  heartbeat ticket (the cycle, `improve-factory`, judges, factory CRs), when its done line
+  `<!-- agentic-sdlc:done <key> -->` appears. `dispatch` hands that line to every executor in its task.
+  An unfinished run blocks a second dispatch until `stall_minutes`.
 - `paths.factory`: a change only there is a **factory change**: no ticket, its own change pattern
   (`vcs.factory_change_pattern`), classified by the `approval` gate and checked by
   `skill-regression`.
@@ -236,7 +238,7 @@ executors and factory versions.
 1. **Ledger.** Every run the cycle starts is one row in the heartbeat's `runs`: skill, skill
    version (content hash), ticket or CR, tier, model, executor, tokens, cost, minutes, outcome and
    `trace` (a reference into `traces.uri` when the executor stored its transcript). `ledger
-   summary` adds `learning: { due, cyclesSince, spentWeekUsd }`, computed from heartbeats and run
+   summary` adds `learning: { due, judge, cyclesSince, spentWeekUsd }` (`judge`: the weekly budget is not spent), computed from heartbeats and run
    rows, so no skill keeps a counter. `ledger stale --max-hours <h>` exits 1 when the newest
    heartbeat is older.
 2. **Scorers.** A scorer is a file `.agents/scorers/<name>.md`: frontmatter `name`, `applies_to`

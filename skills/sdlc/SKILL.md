@@ -68,10 +68,10 @@ There are three layers:
 - A ticket made from a failure carries a regression case in its criteria.
 - No gate files security reports; `triage-signal` files them by hand.
 - When unsure of authority, call [`escalate-to-human`](../escalate-to-human/SKILL.md) before acting.
-- Finish with one short ticket comment: what was done, what was decided, the next status. A run that
-  `dispatch` started puts the `done` line it printed (`<!-- agentic-sdlc:done <key> -->`) in that
-  comment, on the dispatch target; the cycle puts its own in the heartbeat. Without it the run counts
-  as unfinished until `stall_minutes`.
+- Finish with one short ticket comment: what was done, what was decided, the next status. When your task names a
+  done line (`<!-- agentic-sdlc:done <key> -->`), put it in that comment, on the dispatch target; the
+  cycle puts its own after the heartbeat's json. Without it a run on the heartbeat ticket counts as
+  unfinished until `stall_minutes`.
 - A decision is recorded only on its ticket. A doc states the resulting rule as a plain sentence,
   with no ruling id, date or decider.
 

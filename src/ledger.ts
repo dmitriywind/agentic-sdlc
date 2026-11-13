@@ -43,6 +43,9 @@ export interface Cluster { skill: string; error?: string; scorer?: string; count
 export interface ScorerStats { runs: number; failRate: number; median: number | null }
 
 export function parseHeartbeat(body: string): any | undefined {
+  const lines = body.trimStart().split(/\r?\n/);
+  while (lines.length && lines[0].startsWith('<!-- agentic-sdlc:')) lines.shift();
+  body = lines.join('\n');
   if (!body.trimStart().startsWith(HEARTBEAT_MARKER)) return undefined;
   const m = body.match(/```json\s*\r?\n([\s\S]*?)\r?\n```/);
   if (!m) return undefined;
