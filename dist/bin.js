@@ -7623,11 +7623,12 @@ function createGithubBoard(ctx) {
       updatedAt: ""
     };
   };
-  const ITEM_CAP = 1e3, SEARCH_CAP = 200;
+  const ITEM_CAP = 5e3, SEARCH_CAP = 200;
   const items = () => {
     const all = json(["project", "item-list", num, "--owner", o.owner, "--limit", String(ITEM_CAP), "--format", "json"]).items;
     if (all.length >= ITEM_CAP) throw new Error(`the board has ${ITEM_CAP} or more items: archive Done items (gh project item-archive) so every ticket is read`);
-    return all.filter((i) => i.content?.number !== void 0);
+    const repo = String(o.repo).toLowerCase();
+    return all.filter((i) => i.content?.number !== void 0 && (!i.content.repository || String(i.content.repository).toLowerCase() === repo));
   };
   const get = async (id) => {
     const it = items().find((i) => String(i.content.number) === id);
@@ -8683,6 +8684,10 @@ function github(ctx) {
       const rows = JSON.parse(gh(["pr", "list", "--state", q.state ?? "open", "--json", "number", "--limit", "100"]));
       return Promise.all(rows.map((r) => view(String(r.number))));
     },
+    async closing(id) {
+      const rows = JSON.parse(gh(["pr", "list", "--state", "merged", "--search", `"Closes ${id}" in:body`, "--json", "number", "--limit", "30"]));
+      return (await Promise.all(rows.map((r) => view(String(r.number))))).filter((c) => c.closes.includes(id));
+    },
     async ready(n) {
       gh(["pr", "ready", n]);
       return view(n);
@@ -8805,6 +8810,10 @@ ${c.diff}`).join("");
       const st = { open: "opened", merged: "merged", all: "all" }[q.state ?? "open"];
       const ms = await call("GET", `/merge_requests?state=${st}&per_page=100`);
       return Promise.all(ms.map(toCR));
+    },
+    async closing(id) {
+      const ms = await call("GET", `/merge_requests?state=merged&in=description&search=${encodeURIComponent(`Closes ${id}`)}&per_page=30`);
+      return (await Promise.all(ms.map(toCR))).filter((c) => c.closes.includes(id));
     },
     ready: (n) => setTitle(n, (t) => t),
     draft: (n) => setTitle(n, (t) => `Draft: ${t}`),
@@ -9788,6 +9797,16 @@ async function merged(d, sha2) {
   if (!it.fields?.shipped) await d.board.set(id, "shipped", opts[0]);
   return { cr: cr.n, sha: sha2, moved: [id] };
 }
+async function mergeShas(d, ids) {
+  const out = /* @__PURE__ */ new Map();
+  if (d.forge.closing) {
+    for (const id of ids) out.set(id, (await d.forge.closing(id)).map((c) => c.mergeSha));
+    return out;
+  }
+  const merged2 = ids.length ? await d.forge.list({ state: "merged" }) : [];
+  for (const id of ids) out.set(id, merged2.filter((c) => c.closes.includes(id)).map((c) => c.mergeSha));
+  return out;
+}
 async function shipped(d, env, sha2, result, version2) {
   const envs = d.binding.product.environments;
   const i = envs.indexOf(env);
@@ -9812,12 +9831,13 @@ environment: ${env}`,
   if (result === "success") {
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, tags: [], unknown: true };
-    const merged2 = await d.forge.list({ state: "merged" });
     const unmatched = [];
     const rel = d.binding.board.labels?.release;
     const items = [];
-    for (const x of done.filter((x2) => rank(x2.fields.shipped) < rank(target))) {
-      const shas = merged2.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+    const todo = done.filter((x) => rank(x.fields.shipped) < rank(target));
+    const byId = await mergeShas(d, todo.map((x) => x.id));
+    for (const x of todo) {
+      const shas = byId.get(x.id) ?? [];
       if (!shas.length) {
         if (!(rel && x.labels.includes(rel))) unmatched.push(x.id);
         continue;
@@ -9852,9 +9872,10 @@ environment: ${env}`,
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, unknown: true };
-    const merged2 = await d.forge.list({ state: "merged" });
-    for (const x of done.filter((x2) => x2.status === "Done" && rank(x2.fields.shipped) >= rank(target))) {
-      const shas = merged2.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+    const back_ = done.filter((x) => x.status === "Done" && rank(x.fields.shipped) >= rank(target));
+    const byId = await mergeShas(d, back_.map((x) => x.id));
+    for (const x of back_) {
+      const shas = byId.get(x.id) ?? [];
       const anc = shas.map((s) => s ? isAnc(s, sha2) : void 0);
       if (!shas.length || anc.includes(void 0) || anc.every(Boolean)) continue;
       await d.board.set(x.id, "shipped", back);
@@ -9866,9 +9887,10 @@ environment: ${env}`,
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
     const isAnc = d.isAncestor;
     if (isAnc) {
-      const merged2 = await d.forge.list({ state: "merged" });
-      for (const x of done.filter((x2) => x2.status === "Done" && x2.fields.release_version && rank(x2.fields.shipped) < rank(target))) {
-        const shas = merged2.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+      const cut = done.filter((x) => x.status === "Done" && x.fields.release_version && rank(x.fields.shipped) < rank(target));
+      const byId = await mergeShas(d, cut.map((x) => x.id));
+      for (const x of cut) {
+        const shas = byId.get(x.id) ?? [];
         if (!shas.length || shas.some((s) => !s || isAnc(s, sha2) !== true)) continue;
         await d.board.set(x.id, "shipped", back);
         await d.board.set(x.id, "release_version", null);

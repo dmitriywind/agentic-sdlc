@@ -54,11 +54,13 @@ export function createGithubBoard(ctx: AdapterContext): Board {
       milestone: it.milestone?.title, children: [], assignees: it.assignees ?? [], createdAt: '', updatedAt: '',
     };
   };
-  const ITEM_CAP = 1000, SEARCH_CAP = 200;
+  const ITEM_CAP = 5000, SEARCH_CAP = 200;
   const items = (): any[] => {
     const all: any[] = json(['project', 'item-list', num, '--owner', o.owner, '--limit', String(ITEM_CAP), '--format', 'json']).items;
     if (all.length >= ITEM_CAP) throw new Error(`the board has ${ITEM_CAP} or more items: archive Done items (gh project item-archive) so every ticket is read`);
-    return all.filter((i: any) => i.content?.number !== undefined);
+    // A Project can hold several repos' issues; ids are issue numbers, so keep only this repo's.
+    const repo = String(o.repo).toLowerCase();
+    return all.filter((i: any) => i.content?.number !== undefined && (!i.content.repository || String(i.content.repository).toLowerCase() === repo));
   };
   const get = async (id: string): Promise<Item> => {
     const it = items().find((i) => String(i.content.number) === id);

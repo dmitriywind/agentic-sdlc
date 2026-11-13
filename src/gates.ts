@@ -304,6 +304,15 @@ export async function merged(d: Deps, sha: string): Promise<{ cr?: string; sha: 
  * running) step back one environment and keep their version. failure: a Signal, and in the last
  * environment the version in flight is reset.
  */
+/** Merge shas of the merged CRs that close each ticket; per ticket when the forge can search, else one list. */
+async function mergeShas(d: Deps, ids: string[]): Promise<Map<string, (string | undefined)[]>> {
+  const out = new Map<string, (string | undefined)[]>();
+  if (d.forge.closing) { for (const id of ids) out.set(id, (await d.forge.closing(id)).map((c) => c.mergeSha)); return out; }
+  const merged = ids.length ? await d.forge.list({ state: 'merged' }) : [];
+  for (const id of ids) out.set(id, merged.filter((c) => c.closes.includes(id)).map((c) => c.mergeSha));
+  return out;
+}
+
 export async function shipped(d: Deps, env: string, sha: string, result: string, version?: string) {
   const envs = d.binding.product.environments;
   const i = envs.indexOf(env);
@@ -328,12 +337,13 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
     // A ticket shipped here only when every merged CR closing it is an ancestor of the deployed sha.
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, tags: [], unknown: true };
-    const merged = await d.forge.list({ state: 'merged' });
     const unmatched: string[] = [];
     const rel = d.binding.board.labels?.release;
     const items = [];
-    for (const x of done.filter((x) => rank(x.fields.shipped) < rank(target))) {
-      const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+    const todo = done.filter((x) => rank(x.fields.shipped) < rank(target));
+    const byId = await mergeShas(d, todo.map((x) => x.id));
+    for (const x of todo) {
+      const shas = byId.get(x.id) ?? [];
       if (!shas.length) { if (!(rel && x.labels.includes(rel))) unmatched.push(x.id); continue; }
       const anc = shas.map((s) => (s ? isAnc(s, sha) : undefined));
       if (anc.includes(undefined)) return { env, result, changed: [], tags: [], unknown: true };
@@ -361,9 +371,10 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, unknown: true };
-    const merged = await d.forge.list({ state: 'merged' });
-    for (const x of done.filter((x) => x.status === 'Done' && rank(x.fields.shipped) >= rank(target))) {
-      const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+    const back_ = done.filter((x) => x.status === 'Done' && rank(x.fields.shipped) >= rank(target));
+    const byId = await mergeShas(d, back_.map((x) => x.id));
+    for (const x of back_) {
+      const shas = byId.get(x.id) ?? [];
       const anc = shas.map((s) => (s ? isAnc(s, sha) : undefined));
       if (!shas.length || anc.includes(undefined) || anc.every(Boolean)) continue;
       await d.board.set(x.id, 'shipped', back);
@@ -376,10 +387,11 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
     // Reset only tickets whose every merged CR is in the failed deploy; a newer release line stays.
     const isAnc = d.isAncestor;
     if (isAnc) {
-      const merged = await d.forge.list({ state: 'merged' });
       // The release skill sets In release at the cut; key on the version so a deploy that fails first still resets.
-      for (const x of done.filter((x) => x.status === 'Done' && x.fields.release_version && rank(x.fields.shipped) < rank(target))) {
-        const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+      const cut = done.filter((x) => x.status === 'Done' && x.fields.release_version && rank(x.fields.shipped) < rank(target));
+      const byId = await mergeShas(d, cut.map((x) => x.id));
+      for (const x of cut) {
+        const shas = byId.get(x.id) ?? [];
         if (!shas.length || shas.some((s) => !s || isAnc(s, sha) !== true)) continue;
         await d.board.set(x.id, 'shipped', back);
         await d.board.set(x.id, 'release_version', null);

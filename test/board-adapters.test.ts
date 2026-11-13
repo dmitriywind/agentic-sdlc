@@ -127,13 +127,23 @@ test('linear list and comments follow endCursor', async () => {
   assert.deepEqual((await board.comments('LIN-1')).map((c) => c.id).sort(), ['k1', 'k2']);
 });
 
-test('github refuses a board read at the 1000-item cap', async () => {
+test('github refuses a board read at the 5000-item cap', async () => {
   const items = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `I${i}`, status: 'Ready', content: { number: i + 1, title: 't', url: 'u' } }));
   const answer = (n: number) => (c: string) => (c.includes('item-list') ? { items: items(n) } : ghAnswer('Ready')(c));
-  const full = mk('github', gh, answer(1000)).board;
+  const full = mk('github', gh, answer(5000)).board;
   await assert.rejects(full.list(), /archive/);
   await assert.rejects(full.get('1'), /archive/);
-  assert.equal((await mk('github', gh, answer(999)).board.list()).length, 999);
+  assert.equal((await mk('github', gh, answer(4999)).board.list()).length, 4999);
+});
+
+test('github: a Project shared by two repos yields only the issues of this repo', async () => {
+  const mine = String((gh as any).repo);
+  const answer = (c: string) => (c.includes('item-list') ? { items: [
+    { id: 'A', status: 'Ready', content: { number: 12, title: 'mine', url: 'u', repository: mine.toUpperCase() } },
+    { id: 'B', status: 'Done', content: { number: 12, title: 'theirs', url: 'u', repository: 'other/repo' } },
+  ] } : ghAnswer('Ready')(c));
+  const list = await mk('github', gh, answer).board.list();
+  assert.deepEqual(list.map((i) => i.title), ['mine']);
 });
 
 test('jira list throws on a repeated token; linear list throws on an unchanged cursor', async () => {

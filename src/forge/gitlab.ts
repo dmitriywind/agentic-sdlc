@@ -50,6 +50,10 @@ export function gitlab(ctx: AdapterContext): Forge {
       const ms = await call('GET', `/merge_requests?state=${st}&per_page=100`);
       return Promise.all(ms.map(toCR));
     },
+    async closing(id) {
+      const ms = await call('GET', `/merge_requests?state=merged&in=description&search=${encodeURIComponent(`Closes ${id}`)}&per_page=30`);
+      return (await Promise.all(ms.map(toCR))).filter((c) => c.closes.includes(id));
+    },
     ready: (n) => setTitle(n, (t) => t),
     draft: (n) => setTitle(n, (t) => `Draft: ${t}`),
     async sync(n) { await call('PUT', `/merge_requests/${n}/rebase`); return view(n); },

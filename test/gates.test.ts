@@ -488,3 +488,13 @@ test('shipped: rolled-back steps back only the tickets not in the revision now r
   assert.equal(f.items[1].fields.shipped, 'On production');
   assert.equal(f.created.length, 0);
 });
+
+test('shipped: a forge that searches by ticket is asked per candidate ticket, not for every merged CR', async () => {
+  const f = fakes([item('40', 'Done', { shipped: 'Not shipped' }), item('41', 'Done', { shipped: 'On production' })]);
+  const asked: string[] = [];
+  f.d.forge.list = async () => { throw new Error('list must not be called'); };
+  f.d.forge.closing = async (id: string) => { asked.push(id); return [{ mergeSha: 'm40', closes: [id] } as any]; };
+  f.d.isAncestor = () => true;
+  assert.deepEqual((await shipped(f.d, 'staging', 'x', 'success')).changed, ['40']);
+  assert.deepEqual(asked, ['40']);
+});

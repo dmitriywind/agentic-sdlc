@@ -44,6 +44,10 @@ export function github(ctx: AdapterContext): Forge {
       const rows = JSON.parse(gh(['pr', 'list', '--state', q.state ?? 'open', '--json', 'number', '--limit', '100']));
       return Promise.all(rows.map((r: any) => view(String(r.number))));
     },
+    async closing(id) {
+      const rows = JSON.parse(gh(['pr', 'list', '--state', 'merged', '--search', `"Closes ${id}" in:body`, '--json', 'number', '--limit', '30']));
+      return (await Promise.all(rows.map((r: any) => view(String(r.number))))).filter((c) => c.closes.includes(id));
+    },
     async ready(n) { gh(['pr', 'ready', n]); return view(n); },
     async draft(n) { gh(['pr', 'ready', n, '--undo']); return view(n); },
     async sync(n) { gh(['pr', 'update-branch', n]); return view(n); },

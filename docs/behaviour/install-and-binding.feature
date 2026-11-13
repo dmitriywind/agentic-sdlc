@@ -117,3 +117,10 @@ Feature: Install and validate the binding
     Given the delivery workflow sets env.DELIVERY
     When doctor runs
     Then it fails when env.DELIVERY differs from product.delivery
+
+  # Source: src/board/github.ts, "items"
+  # Proof: test/board-adapters.test.ts "github: a Project shared by two repos yields only the issues of this repo"
+  Scenario: Repos can share one GitHub Project
+    Given a GitHub Project holds issue 12 of this repo and issue 12 of another repo
+    When the board adapter lists the board
+    Then it returns only the issue of board.options.repo

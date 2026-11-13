@@ -85,9 +85,8 @@ flowchart LR
 - Each repo has its own binding and its own pinned version. Upgrade one repo at a time.
 - Each repo has its own cycle and review schedulers, and its own heartbeat ticket.
 - Give each repo its own board scope, so a cycle routes only its own tickets: a Jira
-  `project_key`, a Linear `team_key`, or a GitHub Project per repo.
-  Warning: do not share one GitHub Project between repos. The adapter keys tickets by issue
-  number, so two repos collide (see the [roadmap](roadmap.md)).
+  `project_key`, a Linear `team_key`, or `board.options.repo` on a GitHub Project. Several repos
+  can share one GitHub Project; each repo's adapter reads only that repo's issues.
 - One person or team can be the Factory owner of many repos.
 - `improve-factory` changes the copy of the skills in its own repo only. A change that should
   reach every repo goes upstream to this repo, then out with the next tag.

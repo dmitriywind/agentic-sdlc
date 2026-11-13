@@ -117,3 +117,11 @@ Feature: Gate shipped
     And it keeps its Release Version
     And the ticket merged before R stays On production
     And no Signal opens
+
+  # Source: src/gates.ts, "mergeShas"
+  # Proof: test/gates.test.ts "shipped: a forge that searches by ticket is asked per candidate ticket, not for every merged CR"
+  Scenario: The gate looks up merges per candidate ticket
+    Given the forge can search merged CRs by the ticket they close
+    And only one Done ticket is not yet On the environment
+    When "gate shipped" runs with --result success
+    Then the gate asks the forge about that one ticket only

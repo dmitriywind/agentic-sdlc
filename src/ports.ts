@@ -70,6 +70,8 @@ export interface Forge {
   viewBySha(sha: string): Promise<CR>;
   diff(n: string): Promise<string>;
   list(q?: { state?: 'open' | 'merged' | 'all' }): Promise<CR[]>;
+  /** Merged CRs whose body closes ticket `id`. Optional: without it, callers filter list({ state: 'merged' }). */
+  closing?(id: string): Promise<CR[]>;
   ready(n: string): Promise<CR>;
   draft(n: string): Promise<CR>;
   sync(n: string): Promise<CR>;

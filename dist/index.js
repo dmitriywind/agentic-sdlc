@@ -7428,11 +7428,12 @@ function createGithubBoard(ctx) {
       updatedAt: ""
     };
   };
-  const ITEM_CAP = 1e3, SEARCH_CAP = 200;
+  const ITEM_CAP = 5e3, SEARCH_CAP = 200;
   const items = () => {
     const all = json(["project", "item-list", num, "--owner", o.owner, "--limit", String(ITEM_CAP), "--format", "json"]).items;
     if (all.length >= ITEM_CAP) throw new Error(`the board has ${ITEM_CAP} or more items: archive Done items (gh project item-archive) so every ticket is read`);
-    return all.filter((i) => i.content?.number !== void 0);
+    const repo = String(o.repo).toLowerCase();
+    return all.filter((i) => i.content?.number !== void 0 && (!i.content.repository || String(i.content.repository).toLowerCase() === repo));
   };
   const get = async (id) => {
     const it = items().find((i) => String(i.content.number) === id);
@@ -8270,6 +8271,10 @@ function github(ctx) {
       const rows = JSON.parse(gh(["pr", "list", "--state", q.state ?? "open", "--json", "number", "--limit", "100"]));
       return Promise.all(rows.map((r) => view(String(r.number))));
     },
+    async closing(id) {
+      const rows = JSON.parse(gh(["pr", "list", "--state", "merged", "--search", `"Closes ${id}" in:body`, "--json", "number", "--limit", "30"]));
+      return (await Promise.all(rows.map((r) => view(String(r.number))))).filter((c) => c.closes.includes(id));
+    },
     async ready(n) {
       gh(["pr", "ready", n]);
       return view(n);
@@ -8384,6 +8389,10 @@ ${c.diff}`).join("");
       const st = { open: "opened", merged: "merged", all: "all" }[q.state ?? "open"];
       const ms = await call("GET", `/merge_requests?state=${st}&per_page=100`);
       return Promise.all(ms.map(toCR));
+    },
+    async closing(id) {
+      const ms = await call("GET", `/merge_requests?state=merged&in=description&search=${encodeURIComponent(`Closes ${id}`)}&per_page=30`);
+      return (await Promise.all(ms.map(toCR))).filter((c) => c.closes.includes(id));
     },
     ready: (n) => setTitle(n, (t) => t),
     draft: (n) => setTitle(n, (t) => `Draft: ${t}`),

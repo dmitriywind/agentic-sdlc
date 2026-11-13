@@ -129,6 +129,7 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
 | `runs [--ref <r>] [--failed]` | CI runs | `Run[]` |
 
+The forge may implement `closing(id)`: the merged CRs whose body closes ticket `id` (GitHub and GitLab search the body). Gates use it to look up a ticket's merges without listing every merged CR.
 `CR = { n, url, title, source, target, headSha, baseSha, mergeSha?, draft, state: 'open'|'merged'|'closed', behind, closes: string[], checks: {name, state}[], body, author }`.
 `closes` is parsed from the body by the shared rule: exactly the lines `Closes <id>`. `author` is the forge login that opened the CR, in the form comment authors use.
 
