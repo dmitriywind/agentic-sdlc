@@ -15,7 +15,7 @@ Feature: Gate shipped
     And other tickets do not change
 
   # Source: src/gates.ts, "shipped" (unknown ancestry)
-  # Proof: test/gates.test.ts "shipped: only Done tickets whose merge sha is an ancestor; unknown ancestry ships nothing"
+  # Proof: test/gates.test.ts "shipped: only Done tickets whose merge sha is an ancestor; a ticket of unknown ancestry waits alone"
   Scenario: Unknown ancestry ships nothing
     Given the VCS cannot tell if a merge is an ancestor
     When "gate shipped <env>" runs with --result success
