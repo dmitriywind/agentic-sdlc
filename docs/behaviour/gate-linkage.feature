@@ -44,13 +44,13 @@ Feature: Gate ticket-linkage
     Then the gate fails
 
   # Source: src/gates.ts, "linkage" (post)
-  # Proof: test/gates.test.ts "linkage: posts status ticket-linkage on the head; a dependency bot CR needs no ticket"
+  # Proof: test/gates.test.ts "linkage: posts status ticket-linkage on the head; a CR by a dependency bot needs no ticket, its branch name alone does not"
   Scenario: The gate posts its result as a status on the CR head
     When "gate linkage" runs
     Then status "ticket-linkage" on the head is success or failure with the first error
 
   # Source: src/gates.ts, "linkage" (dependency change lines)
-  # Proof: test/gates.test.ts "linkage: posts status ticket-linkage on the head; a dependency bot CR needs no ticket"
+  # Proof: test/gates.test.ts "linkage: posts status ticket-linkage on the head; a CR by a dependency bot needs no ticket, its branch name alone does not"
   Scenario: A dependency bot CR needs no ticket
     Given a CR from a change line "dependabot/<…>" or "renovate/<…>" that closes no ticket
     When "gate linkage" runs

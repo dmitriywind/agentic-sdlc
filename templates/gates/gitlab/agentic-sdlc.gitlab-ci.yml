@@ -21,7 +21,6 @@
 .agentic:
   image: node:22
   environment: { name: agentic-gates, action: access }
-  resource_group: agentic-board   # merged, shipped and signals write the same tickets: one job at a time
   variables:
     GIT_DEPTH: "0"   # shipped walks the full history and tags
   before_script:
@@ -119,6 +118,7 @@ skill-regression:
 # Trunk pipeline after a merge. set: your trunk branch if it is not the default branch.
 merged:
   extends: .agentic
+  resource_group: agentic-board   # trunk jobs that write the same tickets run one at a time
   stage: .post
   rules:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -129,6 +129,7 @@ merged:
 # set: first-env and last-env must match product.environments in the binding
 shipped-first-env:
   extends: .agentic
+  resource_group: agentic-board   # trunk jobs that write the same tickets run one at a time
   stage: .post
   needs: [deploy-staging]
   rules:
@@ -139,6 +140,7 @@ shipped-first-env:
 
 shipped-first-env-failed:
   extends: .agentic
+  resource_group: agentic-board   # trunk jobs that write the same tickets run one at a time
   stage: .post
   needs: [deploy-staging]
   rules:
@@ -150,6 +152,7 @@ shipped-first-env-failed:
 # The last environment deploys from the release line.
 shipped-last-env:
   extends: .agentic
+  resource_group: agentic-board   # trunk jobs that write the same tickets run one at a time
   stage: .post
   needs: [deploy-production]
   rules:
@@ -160,6 +163,7 @@ shipped-last-env:
 
 shipped-last-env-failed:
   extends: .agentic
+  resource_group: agentic-board   # trunk jobs that write the same tickets run one at a time
   stage: .post
   needs: [deploy-production]
   rules:
@@ -170,6 +174,7 @@ shipped-last-env-failed:
 
 signal-on-red:
   extends: .agentic
+  resource_group: agentic-board   # trunk jobs that write the same tickets run one at a time
   stage: .post
   rules:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -73,7 +73,7 @@ export interface Forge {
   /** Merged CRs whose body closes ticket `id`. Optional: without it, callers filter list({ state: 'merged' }). */
   closing?(id: string): Promise<CR[]>;
   /** Asks the forge to cut a release line through its release workflow, which the Product owner approves. Optional. */
-  cut?(revision: string, version: string): Promise<{ requested: true; url?: string }>;
+  cut?(revision: string, version: string): Promise<{ requested: true; run?: string; url?: string }>;
   ready(n: string): Promise<CR>;
   draft(n: string): Promise<CR>;
   sync(n: string): Promise<CR>;

@@ -172,3 +172,18 @@ Feature: Routing and the unattended cycle
     And no bot comment followed the dispatch marker
     When implement-spec is dispatched again for the ticket inside stall_minutes
     Then the dispatch prints "{ skipped: true }" with "the previous run has not finished"
+
+  # Source: src/dispatch.ts, "idempotency"; skills/sdlc/SKILL.md, "Common contract"
+  # Proof: test/dispatch.test.ts "dispatch: an unfinished run blocks until stall_minutes; its done marker ends it; sdlc only claims; a failed start writes the done marker"
+  Scenario: A run ends with its done marker, and a failed start writes one
+    Given dispatch printed a done line for a run
+    When the run posts that line in its closing comment
+    Then the next dispatch of the same skill and subject starts
+    And a dispatch whose executor fails to start posts the done line itself
+
+  # Source: src/ledger.ts, "learningState"
+  # Proof: test/ledger.test.ts "learningState: review and learn heartbeats count no cycle; a learn heartbeat with improve-factory resets the count"
+  Scenario: Only cycle heartbeats count cycles
+    Given review and learn heartbeats between cycle heartbeats
+    When "ledger summary" counts cycles since improve-factory
+    Then it counts only the cycle heartbeats

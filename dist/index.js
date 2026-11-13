@@ -8293,7 +8293,8 @@ function github(ctx) {
     },
     async cut(revision, version) {
       gh(["workflow", "run", "agentic-sdlc-release.yml", "-f", `revision=${revision}`, "-f", `version=${version}`]);
-      return { requested: true };
+      const [run] = JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "-L", "1", "--json", "databaseId,url"]) || "[]");
+      return { requested: true, ...run ? { run: String(run.databaseId), url: run.url } : {} };
     },
     async comment(n, body) {
       const url = gh(["pr", "comment", n, "--body-file", "-"], body).trim();

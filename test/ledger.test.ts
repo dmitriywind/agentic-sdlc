@@ -153,7 +153,7 @@ test('learningState: cycles since the last improve-factory heartbeat, due at eve
     beat({ at: '2026-11-06T00:00:00Z', runs: [run({ id: '3', skill: 'improve-factory', cost_usd: 2 })] }),
     beat({ at: '2026-10-01T00:00:00Z', runs: [run({ id: '1', skill: 'bench', cost_usd: 7 })] }),
   ];
-  assert.deepEqual(learningState(comments, 2, now), { due: true, cyclesSince: 2, spentWeekUsd: 2.5 });
+  assert.deepEqual(learningState(comments, 2, now), { due: true, judge: true, cyclesSince: 2, spentWeekUsd: 2.5 });
   assert.equal(learningState(comments, 3, now).due, false);
   assert.equal(learningState(comments, 2, now, 2.5).due, false); // the week's learning spend reached the budget
   assert.equal(learningState(comments, 2, now, 10).due, true);
@@ -202,10 +202,22 @@ test('cli: plan, record and stale on a local board', async () => {
     assert.equal(await cli(['runs'], ctx), 0);
     assert.equal(JSON.parse(out.at(-1)!)[0].score, 1);
     assert.equal(await cli(['summary'], ctx), 0);
-    assert.deepEqual(JSON.parse(out.at(-1)!).learning, { due: true, cyclesSince: 1, spentWeekUsd: 0 });
+    assert.deepEqual(JSON.parse(out.at(-1)!).learning, { due: true, judge: true, cyclesSince: 1, spentWeekUsd: 0 });
     assert.equal(await cli(['record', '--run', 'r9'], ctx), 2);
     assert.equal(await cli(['plan', '--run', 'nope'], ctx), 1);
   } finally {
     console.log = log; console.error = err;
   }
+});
+
+test('learningState: review and learn heartbeats count no cycle; a learn heartbeat with improve-factory resets the count', () => {
+  const now = Date.parse('2026-11-09T00:00:00Z');
+  const comments = [
+    beat({ at: '2026-11-08T03:00:00Z', kind: 'review', runs: [run({ id: 'r', skill: 'review-pr' })] }),
+    beat({ at: '2026-11-08T02:00:00Z', runs: [] }),
+    beat({ at: '2026-11-08T01:00:00Z', kind: 'learn', runs: [run({ id: 'l', skill: 'improve-factory', cost_usd: 1 })] }),
+    beat({ at: '2026-11-08T00:00:00Z', runs: [] }),
+    beat({ at: '2026-11-07T00:00:00Z', runs: [] }),
+  ];
+  assert.deepEqual(learningState(comments, 2, now), { due: false, judge: true, cyclesSince: 1, spentWeekUsd: 1 });
 });

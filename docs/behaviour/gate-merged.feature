@@ -54,3 +54,10 @@ Feature: Gate merged
     When "gate merged" runs for its CR
     Then the ticket moves to Done
     And Shipped stays "On staging"
+
+  # Source: src/gates.ts, "merged"
+  # Proof: test/gates.test.ts "merged: a forge error fails the gate; only \"no change request\" is a direct push"
+  Scenario: A forge error fails the gate
+    Given the forge answers the merge sha lookup with an error
+    When "gate merged" runs
+    Then the gate fails, so the run is red and can be re-run

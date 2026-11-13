@@ -139,3 +139,10 @@ Feature: Gate shipped
     Given board.env_labels lists "env:staging"
     When "gate shipped staging --result failure" runs twice for the same sha
     Then one Signal labelled "signal:deploy" and "env:staging" is open
+
+  # Source: src/gates.ts, "shipped" (rolled-back)
+  # Proof: test/gates.test.ts "shipped: a rollback in an earlier environment leaves tickets that are further on"
+  Scenario: A rollback in an earlier environment leaves tickets that are further on
+    Given a ticket On production and a ticket On staging
+    When "gate shipped staging --result rolled-back --sha <older>" runs
+    Then only the ticket On staging steps back

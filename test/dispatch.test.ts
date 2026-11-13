@@ -208,3 +208,32 @@ test('idempotency: a trusted marker for the same key inside cycle.dedupe_minutes
   b.owners = { bots: ['someone-else'] };
   assert.equal((await go(['implement-spec', '--ticket', '1'])).out.kind, 'harness');
 });
+
+test('dispatch: an unfinished run blocks until stall_minutes; its done marker ends it; sdlc only claims; a failed start writes the done marker', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { createLocalBoard } = await import('../src/board/local.ts');
+  const root = mkdtempSync(join(tmpdir(), 'disp2-'));
+  mkdirSync(join(root, '.agents', 'skills', 'implement-spec'), { recursive: true });
+  writeFileSync(join(root, '.agents', 'skills', 'implement-spec', 'SKILL.md'), '---\nname: implement-spec\ndescription: d\nmetadata:\n  tier: deep\n---\nx\n');
+  const b = { ...binding, cycle: { dedupe_minutes: 0.0001 }, stall_minutes: 60, owners: { bots: ['local'] }, heartbeat: { ticket: '2' }, forge: { adapter: 'github', options: {} }, models: { fast: 'f', balanced: 'b', deep: 'd' }, executors: { default: { kind: 'harness' }, triage: { kind: 'webhook', url_env: 'NOPE' } } } as any;
+  const board = createLocalBoard({ root, binding: b, options: {}, env: {}, exec: () => '', http: async () => ({}) });
+  await board.create({ title: 't', body: '', status: 'Ready' });
+  await board.create({ title: 'heartbeat', body: '', status: 'Backlog' });
+  const go = async (argv: string[]) => {
+    const f = fakeCtx(root, {}, () => '{}');
+    f.ctx.binding = b;
+    const log: string[] = [];
+    const orig = console.log, err = console.error; console.log = (s: string) => log.push(s); console.error = () => {};
+    try { return { code: await cli(argv, f.ctx), out: log[0] ? JSON.parse(log[0]) : undefined }; } finally { console.log = orig; console.error = err; }
+  };
+  const first = await go(['implement-spec', '--ticket', '1']);
+  await new Promise((r) => setTimeout(r, 20)); // past the double-fire window
+  const again = await go(['implement-spec', '--ticket', '1']);
+  assert.equal(again.out.reason, 'the previous run has not finished');
+  await board.comment('1', `${first.out.done}\ndone`);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal((await go(['implement-spec', '--ticket', '1'])).out.kind, 'harness');
+  assert.equal((await go(['sdlc', '--ticket', '2'])).out.kind, 'claim');
+  assert.equal((await go(['triage', '--ticket', '1'])).code, 1); // webhook env var unset: the start fails
+  assert.ok((await board.comments('1')).some((c) => c.body.startsWith('<!-- agentic-sdlc:done 1-triage -->')));
+});

@@ -8715,7 +8715,8 @@ function github(ctx) {
     },
     async cut(revision, version2) {
       gh(["workflow", "run", "agentic-sdlc-release.yml", "-f", `revision=${revision}`, "-f", `version=${version2}`]);
-      return { requested: true };
+      const [run] = JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "-L", "1", "--json", "databaseId,url"]) || "[]");
+      return { requested: true, ...run ? { run: String(run.databaseId), url: run.url } : {} };
     },
     async comment(n, body) {
       const url = gh(["pr", "comment", n, "--body-file", "-"], body).trim();
@@ -9704,7 +9705,8 @@ function proofRunner(run) {
 async function post(d, sha2, description, ok) {
   try {
     await d.forge.status(sha2, { context: "ticket-linkage", state: ok ? "success" : "failure", description: description.slice(0, 140) }, { as: "ci" });
-  } catch {
+  } catch (e) {
+    if (d.binding.forge.adapter === "github") throw e;
   }
 }
 async function linkage(d, n) {
@@ -9716,7 +9718,7 @@ async function linkage(d, n) {
     await post(d, cr.headSha, "factory change: no ticket", true);
     return { ok: true, factory: true, class: cls, errors: [] };
   }
-  if (DEPENDENCY_LINES.test(cr.source) && !cr.closes.length) {
+  if (DEPENDENCY_LINES.test(cr.source) && DEPENDENCY_BOTS.test(cr.author ?? "") && !cr.closes.length) {
     await post(d, cr.headSha, "dependency update: no ticket", true);
     return { ok: true, factory: false, dependency: true, class: cls, errors: [] };
   }
@@ -9817,7 +9819,10 @@ async function proofsOnBase(d, n) {
 async function merged(d, sha2) {
   const b = d.binding.board;
   const opts = shippedOptions(d.binding.product.environments, d.binding.product.delivery);
-  const cr = await d.forge.viewBySha(sha2).catch(() => void 0);
+  const cr = await d.forge.viewBySha(sha2).catch((e) => {
+    if (/no change request for/.test(e.message)) return void 0;
+    throw e;
+  });
   const none = (reason) => ({ cr: cr?.n, sha: sha2, moved: [], reason });
   if (!cr?.n) return none("no CR merged at this sha");
   if (cr.target !== d.binding.vcs.trunk) return none(`target ${cr.target} is not trunk ${d.binding.vcs.trunk}`);
@@ -9882,7 +9887,7 @@ environment: ${env}`,
     for (const x of todo) {
       const shas = byId.get(x.id) ?? [];
       if (!shas.length) {
-        if (!(rel && x.labels.includes(rel))) unmatched.push(x.id);
+        if (x.status === "Done" && !(rel && x.labels.includes(rel))) unmatched.push(x.id);
         continue;
       }
       const anc = shas.map((s) => s ? isAnc(s, sha2) : void 0);
@@ -9920,7 +9925,8 @@ environment: ${env}`,
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, unknown: true };
-    const back_ = done.filter((x) => x.status === "Done" && rank(x.fields.shipped) >= rank(target));
+    const next = i + 1 < envs.length ? rank(`On ${envs[i + 1]}`) : Infinity;
+    const back_ = done.filter((x) => x.status === "Done" && rank(x.fields.shipped) >= rank(target) && rank(x.fields.shipped) < next);
     const byId = await mergeShas(d, back_.map((x) => x.id));
     for (const x of back_) {
       const shas = byId.get(x.id) ?? [];
@@ -10019,7 +10025,7 @@ function scorerErrors(f, text) {
   if (!["pass-fail", "0-4"].includes(fm.scale)) errors.push(`scorers/${f}: scale ${fm.scale} invalid`);
   return errors;
 }
-var import_yaml3, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tierOf, withoutTier, nameHas, esc, patternRe, readDiff, DEPENDENCY_LINES, redact2, cleanUrl, cli5;
+var import_yaml3, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tierOf, withoutTier, nameHas, esc, patternRe, readDiff, DEPENDENCY_LINES, DEPENDENCY_BOTS, redact2, cleanUrl, cli5;
 var init_gates = __esm({
   "src/gates.ts"() {
     "use strict";
@@ -10042,6 +10048,7 @@ var init_gates = __esm({
     patternRe = (p) => new RegExp("^" + p.split(/(<ticket>|<name>)/).map((x) => x === "<ticket>" ? "[A-Za-z0-9_-]+" : x === "<name>" ? "[a-z0-9]+(?:-[a-z0-9]+)*" : esc(x)).join("") + "$");
     readDiff = (d, n) => d.forge.diff(n).catch(() => void 0);
     DEPENDENCY_LINES = /^(dependabot|renovate)\//;
+    DEPENDENCY_BOTS = /^(app\/)?(dependabot|renovate)(\[bot\])?$/i;
     redact2 = (s, max = 120) => String(s ?? "").replace(/[\x00-\x1f]/g, " ").replace(/\b[A-Za-z0-9_+/=-]{32,}\b/g, "[redacted]").slice(0, max);
     cleanUrl = (u) => redact2(String(u ?? "").replace(/^(\w+:\/\/)[^/@]*@/, "$1").replace(/[?#].*$/, ""), 200);
     cli5 = (argv, base) => guard(async () => {
@@ -10295,7 +10302,7 @@ function learningState(comments, everyCycles, now = Date.now(), budgetUsd) {
   const week = flattenRuns(comments, { sinceDays: 7, now }).filter((r) => LEARNING_SKILLS.includes(r.skill));
   const spentWeekUsd = Math.round(week.reduce((t, r) => t + (r.cost_usd ?? 0), 0) * 100) / 100;
   const underBudget = budgetUsd === void 0 || budgetUsd === null ? true : Number(budgetUsd) > 0 && spentWeekUsd < Number(budgetUsd);
-  return { due: Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles) && underBudget, cyclesSince, spentWeekUsd };
+  return { due: Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles) && underBudget, judge: underBudget, cyclesSince, spentWeekUsd };
 }
 function scorersFor(root, skill) {
   const dir = join6(root, ".agents", "scorers");
@@ -10622,7 +10629,7 @@ async function runBench(cases, o, deps) {
     let spent = 0;
     const trials = o.trials ?? 1;
     for (const c of cases) for (let trial = 1; trial <= trials && !stopped; trial++) {
-      if (spent > budget) {
+      if (spent >= budget) {
         stopped = "budget";
         break;
       }
@@ -10876,7 +10883,9 @@ var init_bench = __esm({
           const { createVcs: createVcs2 } = await Promise.resolve().then(() => (init_vcs(), vcs_exports));
           const r = await runBench(
             cases,
-            { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values["dry-run"], scorerDir: join7(root, RESULTS_DIR, stem), trials, budget: a.values.budget !== void 0 ? Number(a.values.budget) : void 0 },
+            { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values["dry-run"], scorerDir: join7(root, RESULTS_DIR, stem), trials, budget: a.values.budget !== void 0 ? Number.isFinite(Number(a.values.budget)) ? Number(a.values.budget) : (() => {
+              throw new Error(`--budget must be a number, got '${a.values.budget}'`);
+            })() : void 0 },
             { exec: ctx.exec, vcs: await createVcs2(with_(binding.vcs.options)) }
           );
           if ("cases" in r) {
@@ -10901,6 +10910,7 @@ var init_bench = __esm({
 var dispatch_exports = {};
 __export(dispatch_exports, {
   DISPATCH_MARKER: () => DISPATCH_MARKER,
+  DONE_MARKER: () => DONE_MARKER,
   childEnv: () => childEnv,
   cli: () => cli8,
   judgeTier: () => judgeTier,
@@ -10986,7 +10996,7 @@ function managedRequest(ex, env, t, model, stageBody) {
       }];
   }
 }
-var import_yaml5, envOf, TIERS4, BASE_ENV, spawnChild, setSpawn, subject, taskText, DISPATCH_MARKER, need2, cli8;
+var import_yaml5, envOf, TIERS4, BASE_ENV, spawnChild, setSpawn, subject, taskText, DISPATCH_MARKER, DONE_MARKER, need2, cli8;
 var init_dispatch = __esm({
   "src/dispatch.ts"() {
     "use strict";
@@ -11009,11 +11019,13 @@ var init_dispatch = __esm({
     subject = (t) => t.ticket ? `ticket ${t.ticket}${t.cr ? ` (change request ${t.cr})` : ""}` : `change request ${t.cr}`;
     taskText = (t) => `Run skill ${t.skill} on ${subject(t)}. Load .agents/skills/${t.skill}/SKILL.md first and follow it.`;
     DISPATCH_MARKER = "agentic-sdlc:dispatch";
+    DONE_MARKER = "agentic-sdlc:done";
     need2 = (v, name) => {
       if (v === void 0 || v === "") throw new Error(`managed executor needs ${name}`);
       return v;
     };
     cli8 = async (argv, ctx) => {
+      let onFail;
       try {
         const f = {};
         const pos = [];
@@ -11056,7 +11068,7 @@ var init_dispatch = __esm({
           const all = (await boardOf().comments(target)).filter(bot);
           const mine = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `)).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
           const at = mine ? Date.parse(mine.createdAt) : NaN;
-          const finished = mine && all.some((c) => Date.parse(c.createdAt) > at && !c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER}`));
+          const finished = mine && all.some((c) => Date.parse(c.createdAt) > at && c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`));
           const stall = Number(b.stall_minutes) || 0;
           const age = (Date.now() - at) / 6e4;
           if (mine && (age < window || !finished && age < stall)) {
@@ -11066,7 +11078,7 @@ var init_dispatch = __esm({
         }
         let marker;
         const done = async (kind, ref, extra = {}) => {
-          console.log(JSON.stringify({ kind, ref: ref ?? (kind === "assign" ? marker ?? null : null), startedAt, ...key ? { key } : {}, ...extra }));
+          console.log(JSON.stringify({ kind, ref: ref ?? (kind === "assign" ? marker ?? null : null), startedAt, ...key ? { key, done: `<!-- ${DONE_MARKER} ${key} -->` } : {}, ...extra }));
           return 0;
         };
         let skillTier;
@@ -11083,7 +11095,11 @@ var init_dispatch = __esm({
         if (key || ex.kind === "assign") {
           marker = (await boardOf().comment(target, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->
 agentic-sdlc: run skill ${skill} (${ex.kind})`)).id;
+          const k = key ?? `${ticket}-${skill}`;
+          onFail = () => boardOf().comment(target, `<!-- ${DONE_MARKER} ${k} -->
+agentic-sdlc: ${skill} did not start`);
         }
+        if (skill === "sdlc") return await done("claim", null, { ...key ? { done: `<!-- ${DONE_MARKER} ${key} -->` } : {} });
         if (ex.kind === "harness") {
           return await done("harness", null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
         }
@@ -11129,6 +11145,7 @@ agentic-sdlc: run skill ${skill} (${ex.kind})`)).id;
         await boardOf().assign(ticket, ex.user);
         return await done("assign", null);
       } catch (e) {
+        if (onFail) await onFail().catch(() => void 0);
         console.error(e.message);
         return 1;
       }

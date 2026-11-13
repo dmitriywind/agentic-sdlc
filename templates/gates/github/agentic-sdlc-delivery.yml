@@ -10,10 +10,8 @@ on:
     # set: your vcs.trunk
     branches: [main]
 
-# One run at a time: shipped, merged and signals write the same tickets, so they queue instead of racing.
-concurrency:
-  group: agentic-board
-  cancel-in-progress: false
+# No concurrency group: GitHub keeps one pending run per group and cancels older ones, which would drop
+# events. The gates read a ticket again before each write and never lower Shipped, so runs may overlap.
 
 permissions:
   contents: write   # gate shipped tags the released revision

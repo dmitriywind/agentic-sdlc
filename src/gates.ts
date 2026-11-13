@@ -155,11 +155,12 @@ export function proofRunner(run: (cmd: string) => unknown): (cmd: string) => boo
 /** Posts status ticket-linkage with the CI job's own token; a forge that refuses leaves the job result as the check. */
 async function post(d: Deps, sha: string, description: string, ok: boolean) {
   try { await d.forge.status(sha, { context: 'ticket-linkage', state: ok ? 'success' : 'failure', description: description.slice(0, 140) }, { as: 'ci' }); }
-  catch { /* no status token: the job result carries it */ }
+  catch (e) { if (d.binding.forge.adapter === 'github') throw e; /* elsewhere the job result is the check */ }
 }
 
 /** Change lines of dependency bots: product changes with no ticket, reviewed like any CR. */
 const DEPENDENCY_LINES = /^(dependabot|renovate)\//;
+const DEPENDENCY_BOTS = /^(app\/)?(dependabot|renovate)(\[bot\])?$/i;
 
 export async function linkage(d: Deps, n: string) {
   const cr = await d.forge.view(n);
@@ -168,7 +169,7 @@ export async function linkage(d: Deps, n: string) {
   // Only an all-factory CR skips linkage; a mixed or unparsed one still closes a ticket.
   const paths = diff === undefined ? null : diffPaths(diff);
   if (cls !== 'product' && paths?.every((p) => matchesAny(p, factoryGlobs(d.binding)))) { await post(d, cr.headSha, 'factory change: no ticket', true); return { ok: true, factory: true, class: cls, errors: [] as string[] }; }
-  if (DEPENDENCY_LINES.test(cr.source) && !cr.closes.length) { await post(d, cr.headSha, 'dependency update: no ticket', true); return { ok: true, factory: false, dependency: true, class: cls, errors: [] as string[] }; }
+  if (DEPENDENCY_LINES.test(cr.source) && DEPENDENCY_BOTS.test(cr.author ?? '') && !cr.closes.length) { await post(d, cr.headSha, 'dependency update: no ticket', true); return { ok: true, factory: false, dependency: true, class: cls, errors: [] as string[] }; }
   const errors: string[] = [];
   if (cr.closes.length !== 1) errors.push(`CR ${n} must close exactly one ticket, found ${cr.closes.length}`);
   else {
@@ -295,7 +296,7 @@ export async function proofsOnBase(d: Deps, n: string) {
 export async function merged(d: Deps, sha: string): Promise<{ cr?: string; sha: string; moved: string[]; reason?: string }> {
   const b = d.binding.board;
   const opts = shippedOptions(d.binding.product.environments, d.binding.product.delivery);
-  const cr = await d.forge.viewBySha(sha).catch(() => undefined);
+  const cr = await d.forge.viewBySha(sha).catch((e: Error) => { if (/no change request for/.test(e.message)) return undefined; throw e; });
   const none = (reason: string) => ({ cr: cr?.n, sha, moved: [] as string[], reason });
   if (!cr?.n) return none('no CR merged at this sha');
   if (cr.target !== d.binding.vcs.trunk) return none(`target ${cr.target} is not trunk ${d.binding.vcs.trunk}`);
@@ -364,7 +365,7 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
     const byId = await mergeShas(d, todo.map((x) => x.id));
     for (const x of todo) {
       const shas = byId.get(x.id) ?? [];
-      if (!shas.length) { if (!(rel && x.labels.includes(rel))) unmatched.push(x.id); continue; }
+      if (!shas.length) { if (x.status === 'Done' && !(rel && x.labels.includes(rel))) unmatched.push(x.id); continue; }
       const anc = shas.map((s) => (s ? isAnc(s, sha) : undefined));
       if (anc.includes(undefined)) { unknown.push(x.id); continue; } // that ticket waits; the others ship
       if (anc.every(Boolean)) items.push(x);
@@ -395,7 +396,9 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, unknown: true };
-    const back_ = done.filter((x) => x.status === 'Done' && rank(x.fields.shipped) >= rank(target));
+    // Only tickets on this environment (or In release, before the last); a ticket further on is not here any more.
+    const next = i + 1 < envs.length ? rank(`On ${envs[i + 1]}`) : Infinity;
+    const back_ = done.filter((x) => x.status === 'Done' && rank(x.fields.shipped) >= rank(target) && rank(x.fields.shipped) < next);
     const byId = await mergeShas(d, back_.map((x) => x.id));
     for (const x of back_) {
       const shas = byId.get(x.id) ?? [];

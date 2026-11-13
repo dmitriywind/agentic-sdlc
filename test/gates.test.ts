@@ -512,11 +512,29 @@ test('shipped: a slower earlier-environment deploy never lowers a newer Shipped;
   assert.deepEqual(f.created[0].labels, ['signal:deploy', 'env:staging']);
 });
 
-test('linkage: posts status ticket-linkage on the head; a dependency bot CR needs no ticket', async () => {
-  const f = fakes([item('12', 'Ready')], { ok: { closes: ['12'], source: '12/x', headSha: 'h1' }, dep: { closes: [], source: 'dependabot/npm/yaml-2', headSha: 'h2' }, bad: { closes: [], source: 'feature/x', headSha: 'h3' } },
+test('linkage: posts status ticket-linkage on the head; a CR by a dependency bot needs no ticket, its branch name alone does not', async () => {
+  const f = fakes([item('12', 'Ready')], { ok: { closes: ['12'], source: '12/x', headSha: 'h1' }, dep: { closes: [], source: 'dependabot/npm/yaml-2', headSha: 'h2', author: 'dependabot[bot]' }, bad: { closes: [], source: 'feature/x', headSha: 'h3' }, fake: { closes: [], source: 'renovate/x', headSha: 'h4', author: 'mallory' } },
     { ok: 'diff --git a/src/a.ts b/src/a.ts\n', dep: 'diff --git a/package.json b/package.json\n', bad: 'diff --git a/src/a.ts b/src/a.ts\n' });
   assert.equal((await linkage(f.d, 'ok')).ok, true);
   assert.equal((await linkage(f.d, 'dep')).ok, true);
   assert.equal((await linkage(f.d, 'bad')).ok, false);
+  assert.equal((await linkage(f.d, 'fake')).ok, false); // a dependency branch name from another author needs a ticket
+  f.statuses.pop();
   assert.deepEqual(f.statuses.map((s) => [s.sha, s.context, s.state]), [['h1', 'ticket-linkage', 'success'], ['h2', 'ticket-linkage', 'success'], ['h3', 'ticket-linkage', 'failure']]);
+});
+
+test('shipped: a rollback in an earlier environment leaves tickets that are further on', async () => {
+  const f = fakes([item('60', 'Done', { shipped: 'On staging' }), item('61', 'Done', { shipped: 'On production', release_version: '5' })],
+    { m60: { state: 'merged', closes: ['60'], mergeSha: 'new' }, m61: { state: 'merged', closes: ['61'], mergeSha: 'new2' } });
+  f.d.isAncestor = () => false;
+  assert.deepEqual((await shipped(f.d, 'staging', 'old', 'rolled-back')).changed, ['60']);
+  assert.equal(f.items[1].fields.shipped, 'On production');
+});
+
+test('merged: a forge error fails the gate; only "no change request" is a direct push', async () => {
+  const f = fakes([item('70', 'In review')]);
+  f.d.forge.viewBySha = async () => { throw new Error('HTTP 502'); };
+  await assert.rejects(merged(f.d, 's'), /502/);
+  f.d.forge.viewBySha = async (sha: string) => { throw new Error(`no change request for ${sha}`); };
+  assert.match((await merged(f.d, 's')).reason!, /no CR/);
 });

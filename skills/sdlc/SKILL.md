@@ -68,7 +68,10 @@ There are three layers:
 - A ticket made from a failure carries a regression case in its criteria.
 - No gate files security reports; `triage-signal` files them by hand.
 - When unsure of authority, call [`escalate-to-human`](../escalate-to-human/SKILL.md) before acting.
-- Finish with one short ticket comment: what was done, what was decided, the next status.
+- Finish with one short ticket comment: what was done, what was decided, the next status. A run that
+  `dispatch` started puts the `done` line it printed (`<!-- agentic-sdlc:done <key> -->`) in that
+  comment, on the dispatch target; the cycle puts its own in the heartbeat. Without it the run counts
+  as unfinished until `stall_minutes`.
 - A decision is recorded only on its ticket. A doc states the resulting rule as a plain sentence,
   with no ruling id, date or decider.
 
@@ -117,7 +120,8 @@ In order:
    another cycle is running; stop and write nothing. List the board once (`board list`). Read open CRs (`forge list`), the last
    `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --last <n> --marker
    "<!-- heartbeat -->" --trusted`) and `ledger summary`.
-2. **Judge.** For each run in the newest heartbeats since the last judge step that has no `score` yet,
+2. **Judge.** When `ledger summary` shows `learning.judge` (the weekly budget is not spent and learning
+   is on): for each run in the newest heartbeats since the last judge step that has no `score` yet,
    except `judge-run` runs, `dispatch judge-run --ticket <id>` (`--cr <n>`; the heartbeat ticket for a
    run with neither) `--run <run id> --run-model <the row's model>`. It prints
    `{ skip: true }` when no independent model exists: name it in this heartbeat's `errors`.

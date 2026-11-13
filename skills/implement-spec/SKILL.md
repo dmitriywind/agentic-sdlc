@@ -23,8 +23,9 @@ to `shape`.
    reviews it, and stop. A ticket at In progress whose open CR, opened by the factory, closes it is rework: read the newest review-pr report on that CR
    (`forge comments <n> --last 1 --marker "<!-- review-pr" --trusted`), the cause review-pr wrote on the
    ticket, and the failed run (`forge runs --failed`), and fix each Important finding and the failure
-   first. A ticket at In review that no open CR closes goes back: `board move <id> "In progress"
-   --only-from "In review"`, then it is worked as above.
+   first. A ticket at In review that no open CR closes goes back (`board move <id> "In progress"
+   --only-from "In review"`), then it is worked as above, unless a merged CR closes it
+   (`forge list --state merged`): then leave it for gate `merged`, and stop.
    Done when the board shows In progress.
 2. **Branch.** `agentic-sdlc vcs start <name>`, named by `vcs.change_pattern`: it reopens the existing change
    line when one exists (rework uses the CR's source branch name) and otherwise starts from the

@@ -62,8 +62,10 @@ installs are pinned: the project's `agentic-sdlc` devDependency (a `github:` spe
 `allow-git=root` in `.npmrc` for npm 12) through `npm ci`, and each action
 carries a `# pin to a commit SHA` note.
 
-Delivery workflows serialise board writes: GitHub uses `concurrency: agentic-board` and GitLab uses
-`resource_group: agentic-board`. One run at a time writes the tickets.
+Board writes from delivery runs are safe when they overlap: each gate reads a ticket again before it
+writes and never lowers Shipped. GitLab also runs its trunk jobs one at a time (`resource_group:
+agentic-board`). GitHub uses no concurrency group, because a group keeps only one pending run and
+cancels older ones.
 
 Trunk-based is enforced by trunk protection (change request only, green required checks, linear
 history, no direct push except the bot) and release branches cut with `vcs cut` under

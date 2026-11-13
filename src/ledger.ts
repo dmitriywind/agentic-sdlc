@@ -248,7 +248,7 @@ export function learningState(comments: Comment[], everyCycles: number, now = Da
   const spentWeekUsd = Math.round(week.reduce((t, r) => t + (r.cost_usd ?? 0), 0) * 100) / 100;
   // Unset: no cap. 0: learning is off. Otherwise: under the week's budget.
   const underBudget = budgetUsd === undefined || budgetUsd === null ? true : Number(budgetUsd) > 0 && spentWeekUsd < Number(budgetUsd);
-  return { due: Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles) && underBudget, cyclesSince, spentWeekUsd };
+  return { due: Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles) && underBudget, judge: underBudget, cyclesSince, spentWeekUsd };
 }
 
 export interface Scorer { name: string; scale: 'pass-fail' | '0-4'; applies_to: '*' | string[] }

@@ -70,6 +70,13 @@ jobs:
         if: github.event_name != 'merge_group'
         run: agentic-sdlc gate branch-names --ref "$HEAD_REF"
 
+      - name: Ticket linkage on the queue commit
+        # A merge queue commit needs every required context; linkage was proven on the PR head.
+        if: github.event_name == 'merge_group'
+        env:
+          QUEUE_SHA: ${{ github.event.merge_group.head_sha }}
+        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$QUEUE_SHA" -f state=success -f context=ticket-linkage -f description='proven on the PR head' >/dev/null
+
       - name: Ticket linkage
         if: github.event_name != 'merge_group' && github.event.pull_request.draft == false
         run: agentic-sdlc gate linkage --cr "$CR"

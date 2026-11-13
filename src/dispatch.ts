@@ -74,6 +74,8 @@ const subject = (t: Task) => (t.ticket ? `ticket ${t.ticket}${t.cr ? ` (change r
 const taskText = (t: Task) => `Run skill ${t.skill} on ${subject(t)}. Load .agents/skills/${t.skill}/SKILL.md first and follow it.`;
 
 export const DISPATCH_MARKER = 'agentic-sdlc:dispatch';
+/** The line a dispatched run's closing comment carries, with its key: the run has finished. */
+export const DONE_MARKER = 'agentic-sdlc:done';
 
 /** The skill's model tier: frontmatter metadata.tier, else the deprecated top-level tier. */
 export function skillTierOf(text: string): string | undefined {
@@ -130,6 +132,7 @@ const need = <T>(v: T | undefined, name: string): T => {
 };
 
 export const cli: PortCli = async (argv, ctx) => {
+  let onFail: (() => Promise<unknown>) | undefined;
   try {
     const f: Record<string, string> = {};
     const pos: string[] = [];
@@ -172,8 +175,8 @@ export const cli: PortCli = async (argv, ctx) => {
       const all = (await boardOf().comments(target)).filter(bot);
       const mine = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `)).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
       const at = mine ? Date.parse(mine.createdAt) : NaN;
-      // Finished: a later bot comment that is not a dispatch marker (every run ends with a ticket comment).
-      const finished = mine && all.some((c) => Date.parse(c.createdAt) > at && !c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER}`));
+      // Finished: a later bot comment carrying `<!-- agentic-sdlc:done <key> -->` (every dispatched run ends with one).
+      const finished = mine && all.some((c) => Date.parse(c.createdAt) > at && c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`));
       const stall = Number(b.stall_minutes) || 0;
       const age = (Date.now() - at) / 60_000;
       if (mine && (age < window || (!finished && age < stall))) {
@@ -184,7 +187,7 @@ export const cli: PortCli = async (argv, ctx) => {
     /** Prints the start record; the marker was posted before the executor started. */
     let marker: string | undefined;
     const done = async (kind: string, ref: string | null, extra: object = {}) => {
-      console.log(JSON.stringify({ kind, ref: ref ?? (kind === 'assign' ? marker ?? null : null), startedAt, ...(key ? { key } : {}), ...extra }));
+      console.log(JSON.stringify({ kind, ref: ref ?? (kind === 'assign' ? marker ?? null : null), startedAt, ...(key ? { key, done: `<!-- ${DONE_MARKER} ${key} -->` } : {}), ...extra }));
       return 0;
     };
 
@@ -200,7 +203,11 @@ export const cli: PortCli = async (argv, ctx) => {
     // Claim before start: a second fire sees the marker even while this executor is still starting.
     if (key || ex.kind === 'assign') {
       marker = (await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->\nagentic-sdlc: run skill ${skill} (${ex.kind})`)).id;
+      const k = key ?? `${ticket}-${skill}`;
+      onFail = () => boardOf().comment(target!, `<!-- ${DONE_MARKER} ${k} -->\nagentic-sdlc: ${skill} did not start`);
     }
+    // The cycle claims itself with \`dispatch sdlc\`: a marker only, never a second run.
+    if (skill === 'sdlc') return await done('claim', null, { ...(key ? { done: `<!-- ${DONE_MARKER} ${key} -->` } : {}) });
 
     if (ex.kind === 'harness') {
       return await done('harness', null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
@@ -246,6 +253,7 @@ export const cli: PortCli = async (argv, ctx) => {
     await boardOf().assign(ticket, ex.user);
     return await done('assign', null);
   } catch (e) {
+    if (onFail) await onFail().catch(() => undefined);
     console.error((e as Error).message);
     return 1;
   }
