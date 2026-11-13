@@ -1,5 +1,5 @@
 Preamble (scheduler setup, not part of the prompt):
-1. This is the review runtime (`forge.review_runtime: separate`). Start it when the cycle ends (a job
+1. This is the review runtime. Start it when the cycle ends (a job
    dependency, or the cycle's `AGENTIC_REVIEW_FIRE_CMD`), never on its own clock.
 2. Export the review token (`forge.options.review_token_env`, e.g. AGENTIC_REVIEW_TOKEN) here and nowhere else, plus the board and forge tokens and the agent's own key.
 3. Set `AGENTIC_SDLC_UNATTENDED=1` and `AGENTIC_SDLC_ROLE=review` (the plugin's hook allows `forge approve` only then).

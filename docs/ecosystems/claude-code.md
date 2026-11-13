@@ -47,7 +47,7 @@ cycle needs. Permission rules use the space form `Bash(npx --no agentic-sdlc *)`
 The JSON has `total_cost_usd` (a client-side estimate). Prompt text:
 [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run after the
 cycle, as a separate job with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md):
-only that job gets `AGENTIC_REVIEW_TOKEN` and allows `forge approve` (`forge.review_runtime: separate`).
+only that job gets `AGENTIC_REVIEW_TOKEN` and allows `forge approve`.
 
 ## Run without your machine - Individual
 Subscription only.

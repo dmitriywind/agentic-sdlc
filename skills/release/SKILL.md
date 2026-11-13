@@ -17,7 +17,8 @@ The Product owner approves the last environment; this skill never does.
 ## Steps
 
 0. **Resume.** `board comments <request> --trusted`. When the newest comment carrying
-   `<!-- release-proposal` has no trusted Product owner reply after it, stop: no comment, no
+   `<!-- release-proposal` has no Product owner reply after it (`board comments <request> --author
+   <owners.product>`; a bot or Factory owner comment is never a go-ahead), stop: no comment, no
    further reads. A reply that approves goes to step 6; one that changes contents, to step 3; one
    asking to refresh, to step 1. Done when the run stopped or knows its entry step.
 0a. **P0 entry.** Dispatched for a Done P0 ticket instead of a request: `board list --label
@@ -44,8 +45,8 @@ The Product owner approves the last environment; this skill never does.
    revision, and the open signals per environment with each one's Status. For a P0, the first line names the P0
    and says only the commits needed for it are in the proposal. Then stop. Done when posted and the run has stopped.
 6. **Mark.**
-   Go-ahead first: continue only after a trusted Product owner reply on the proposal approves it
-   (`board comments <id> --trusted` on the release request; a later run resumes here). A reply that
+   Go-ahead first: continue only after a Product owner reply on the proposal approves it
+   (`board comments <request> --author <owners.product>`; a later run resumes here). A reply that
    changes the contents restarts at step 3. Then `board set <id> release_version <version>` on each selected ticket. Done when every
    ticket shows it.
 7. **Cut.** `agentic-sdlc vcs cut <revision> <version>` from the chosen revision, never from a

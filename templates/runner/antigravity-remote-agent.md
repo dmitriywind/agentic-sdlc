@@ -3,7 +3,7 @@
 Profile: individual (remote agent, Google AI Pro/Ultra personal account) or enterprise (Gemini API).
 Install at: the Antigravity CLI (`agy`) for the remote agent, or an HTTPS call for the API.
 Secrets: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_SDLC_UNATTENDED=1; AGENTIC_REVIEW_TOKEN for the review task only; the API path also needs a Gemini API key (set: variable name per the Gemini docs).
-Two tasks (`forge.review_runtime: separate`): the cycle task runs `cycle-prompt.md` and never holds AGENTIC_REVIEW_TOKEN; the review task runs `review-prompt.md`, with the token, when the cycle ends (`AGENTIC_REVIEW_FIRE_CMD`, see `routine.md`).
+Two tasks: the cycle task runs `cycle-prompt.md` and never holds AGENTIC_REVIEW_TOKEN; the review task runs `review-prompt.md`, with the token, when the cycle ends (`AGENTIC_REVIEW_FIRE_CMD`, see `routine.md`).
 
 Individual (remote agent):
 1. Needs a Google AI Pro or Ultra personal account (not Workspace or Cloud business). Connect GitHub via OAuth; the repo is cloned into the remote workspace.

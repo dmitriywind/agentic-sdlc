@@ -32,7 +32,6 @@ between two sources. Fix each in the skill, then update its feature file.
 | `skills/review-pr/SKILL.md` severity | A deviation with an updated spec comment is neither a finding nor a Nit. |
 | `skills/review-pr/SKILL.md` steps 2, 10 | A check missing past `stall_minutes` has two rules (escalate Access, or send back); draft and ready CRs are not split. |
 | `skills/review-pr/SKILL.md` step 2 | Whether the report is posted while a criterion is PENDING. |
-| `skills/review-pr/SKILL.md` with `review_runtime: same` | Which identity posts the review status. |
 | `skills/escalate-to-human/SKILL.md` step 1 | Whether an owner reply must name P0 to settle the P0 trigger. |
 | `skills/escalate-to-human/SKILL.md` step 3 | Where the `proceed` line goes for a factory CR with no ticket. |
 | `skills/shape/SKILL.md` initiative stop | "No comment" conflicts with the common contract's closing comment. |

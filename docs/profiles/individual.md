@@ -20,7 +20,6 @@ executors:
   #   secrets: the only env vars the child gets; never AGENTIC_REVIEW_TOKEN
 forge:
   adapter: github
-  review_runtime: separate                       # review-pr runs in its own scheduled job, the only one with the review token
   options: { repo: me/app, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
   review_identity: my-reviewer-account           # a second account or fine-grained token
   human_approval: full-lane                      # full-lane | always | never: who besides the agent review approves
@@ -51,7 +50,7 @@ must not be `review_identity`. The runner templates fail when `ANTHROPIC_API_KEY
 Read each guide's terms caveat before you put a consumer login in CI. Some vendors say third-party wrapping is not supported on consumer plans.
 
 ## Security checklist
-- [ ] A separate review token: `review_token_env` belongs to a second account or a fine-grained token, and only the review runtime holds it (`forge.review_runtime: separate`: the runner templates' review job or task runs `review-prompt.md`; the cycle never sees the token).
+- [ ] A separate review token: `review_token_env` belongs to a second account or a fine-grained token, and only the review runtime holds it (the runner templates' review job or task runs `review-prompt.md`; the cycle never sees the token).
 - [ ] The trunk ruleset requires `human-approval`; the `approval` gate holds `guardrail` factory CRs for the factory owner and Full-lane CRs per `forge.human_approval` (see [forges.md](../forges.md)).
 - [ ] Secrets only as env var names in the binding. No values in the repo, board or CR comments.
 - [ ] Sandbox: `cloud` or `container`. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses `local`.

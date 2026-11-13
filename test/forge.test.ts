@@ -261,3 +261,16 @@ test('cli: comments --trusted --last 1 returns the newest trusted comment past a
   const out = await stdout(() => cli(['comments', '7', '--trusted', '--last', '1'], base));
   assert.deepEqual(out.map((c: any) => c.id), ['2']);
 });
+
+test('cli: status refuses the contexts only a gate posts', async () => {
+  const posted: string[] = [];
+  const { ctx } = mk('gitlab', { project: 'p', base_url: 'https://gl', token_env: 'TOK', review_token_env: 'REV' }, (m, url) => { if (m === 'POST') posted.push(url); return {}; });
+  (ctx.env as any).REV = 'r';
+  const base = { root: ctx.root, binding: ctx.binding, env: ctx.env, exec: ctx.exec, http: ctx.http };
+  const e = process.stderr.write; process.stderr.write = (() => true) as any;
+  try {
+    for (const c of ['human-approval', 'ticket-linkage', 'proofs-on-base'])
+      assert.equal(await cli(['status', 'abc', '--context', c, '--state', 'success', '--description', 'd'], base), 2, c);
+  } finally { process.stderr.write = e; }
+  assert.deepEqual(posted, []);
+});

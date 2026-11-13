@@ -19,6 +19,14 @@ Feature: Review a change request
     And it runs "forge ready <n>" and "forge automerge <n>"
     And the ticket still shows In review
 
+  # Source: references/architecture.md, "Two runtimes, two identities"; src/forge/index.ts, "status"
+  # Proof: test/forge.test.ts "cli: status refuses the contexts only a gate posts"
+  Scenario: The reviewer cannot post a gate's status
+    Given the review runtime holds the review token
+    When it runs "forge status <head> --context human-approval --state success"
+    Then the CLI refuses with a usage error
+    And no status is posted
+
   # Source: skills/review-pr/SKILL.md, "Send back"
   Scenario: Findings on a CR a person opened go back to that person
     Given a CR opened by an author outside owners.bots

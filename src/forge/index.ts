@@ -7,6 +7,9 @@ import { bitbucket } from './bitbucket.ts';
 import { github } from './github.ts';
 import { gitlab } from './gitlab.ts';
 
+/** Status contexts only a gate posts. */
+export const GATE_CONTEXTS = ['human-approval', 'ticket-linkage', 'proofs-on-base'];
+
 const adapters = { github, gitlab, azure, bitbucket };
 
 export function createForge(ctx: AdapterContext): Forge {
@@ -43,6 +46,8 @@ export const cli: PortCli = (argv, ctx) =>
         });
       case 'status': {
         const state = a.need('state');
+        // Gates post these from CI through the port, never through this verb: an agent posting one would forge a gate.
+        if (GATE_CONTEXTS.includes(a.need('context'))) throw new UsageError(`context '${a.need('context')}' is posted only by its gate`);
         if (!['pending', 'success', 'failure'].includes(state)) throw new UsageError('--state must be pending|success|failure');
         await f.status(n(), { context: a.need('context'), state: state as 'pending', description: a.need('description'), url: a.get('url') });
         return {};

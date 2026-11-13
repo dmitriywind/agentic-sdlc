@@ -6,7 +6,7 @@
 #   enterprise: ANTHROPIC_API_KEY
 # Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_REVIEW_TOKEN (the names your binding uses).
 # --allowedTools: set the npm entries to your binding's commands.fast_check and commands.verify.
-# Three jobs (forge.review_runtime: separate): `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
+# Three jobs: `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
 # `review` starts when the cycle finishes, with the review token and the review prompt only;
 # `dead-man` fails (and notifies) when no heartbeat landed for --max-hours.
 # Setup script and prompts come from `agentic-sdlc init` (.agents/runner-setup.sh, .agents/cycle-prompt.md, .agents/review-prompt.md).
@@ -56,6 +56,7 @@ jobs:
   review:
     needs: cycle
     if: ${{ !cancelled() }}  # review even when the cycle failed
+    environment: agentic-review   # AGENTIC_REVIEW_TOKEN lives only here (trunk-only deployment branches)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:

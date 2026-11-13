@@ -41,7 +41,6 @@ const PROOFS = ['test', 'eval', 'visual', 'data-check', 'computer-use', 'manual'
 const EXECUTORS = ['harness', 'command', 'webhook', 'managed', 'assign'];
 const EXECUTOR_KEYS: Record<string, string[]> = { command: ['run'], webhook: ['url_env'], managed: ['token_env'], assign: ['user'] };
 const MANAGED_APIS = ['claude', 'cursor', 'antigravity', 'generic'];
-const REVIEW_RUNTIMES = ['separate', 'same'];
 export const HUMAN_APPROVAL = ['full-lane', 'always', 'never'];
 const SANDBOXES =['cloud', 'container', 'local'];
 const PROFILES = ['individual', 'enterprise'];
@@ -102,8 +101,7 @@ export function validateBinding(b: Binding): string[] {
       else if (tier !== undefined && !TIERS.includes(tier)) p.push(`executors.${k}.model.tier '${tier}' is not one of ${TIERS.join('|')}`);
     }
   }
-  const rr = x.forge?.review_runtime;
-  if (rr !== undefined && !REVIEW_RUNTIMES.includes(rr)) p.push(`forge.review_runtime '${rr}' is not one of ${REVIEW_RUNTIMES.join('|')}`);
+  if (['human-approval', 'ticket-linkage', 'proofs-on-base'].includes(x.forge?.review_check_name)) p.push(`forge.review_check_name '${x.forge.review_check_name}' is a gate's context`);
   const ha = x.forge?.human_approval;
   if (ha !== undefined && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join('|')}`);
   for (const k of ['bench_min_cases', 'bench_trials']) {
@@ -122,7 +120,7 @@ export function bindingWarnings(b: Binding): string[] {
   const x = b as any;
   if (x?.product?.kind !== undefined) w.push('product.kind is unused; remove it');
   if (x?.board?.milestone !== undefined) w.push('board.milestone is unused; remove it');
-  if (x?.forge?.review_runtime === 'same') w.push('forge.review_runtime is same: the cycle holds the review token, so an implementer can approve its own CR');
+  if (x?.forge?.review_runtime !== undefined) w.push('forge.review_runtime is unused: review-pr always runs in its own runtime; remove it');
   const size = x?.learning?.bench_size, min = x?.learning?.bench_min_cases ?? 20;
   if (size !== undefined && Number(size) < min) w.push(`learning.bench_size ${size} is below bench_min_cases ${min}: bench compare reports regressed for every change`);
   if (x?.profile === 'individual') {

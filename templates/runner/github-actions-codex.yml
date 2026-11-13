@@ -1,7 +1,7 @@
 # Profile: enterprise (API key).
 # Install at: .github/workflows/factory-cycle-codex.yml
 # Secrets: CODEX_API_KEY (an OpenAI API key), AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_REVIEW_TOKEN.
-# Two jobs (forge.review_runtime: separate): `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
+# Two jobs: `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
 # `review` starts when the cycle finishes, with the review token and the review prompt only; `dead-man` runs `ledger stale`.
 # Note: a ChatGPT-login auth.json can also work in CI (seed it with `codex login`, keep it in a secret
 # store, one runner at a time, tokens rotate), but the OpenAI docs call it an advanced path for trusted
@@ -43,6 +43,7 @@ jobs:
   review:
     needs: cycle
     if: ${{ !cancelled() }}  # review even when the cycle failed
+    environment: agentic-review   # AGENTIC_REVIEW_TOKEN lives only here (trunk-only deployment branches)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:

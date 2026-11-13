@@ -49,7 +49,6 @@ forge:
   review_identity: reviewer-account # the account behind review_token_env: posts the review status and the approving review
   human_approval: full-lane     # full-lane | always | never. Which product CRs need one approving review by a human
                                 #   (not owners.bots, not review_identity) on the head: gate approval posts status human-approval
-  review_runtime: separate      # separate | same. separate: review-pr runs in its own scheduled runtime, the only one
                                 #   given review_token_env; the cycle never holds it. same: the cycle reviews too (validate warns)
   review_check_name: review     # status context review-pr posts on a pass
   verify_check_name: Required   # CI job (no secrets) running commands.install and commands.verify; review-pr reads it

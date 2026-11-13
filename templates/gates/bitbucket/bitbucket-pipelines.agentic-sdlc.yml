@@ -56,7 +56,7 @@ pipelines:
                 - agentic-sdlc --root "$AGENTIC_ROOT" gate branch-names --ref "$BITBUCKET_BRANCH"
                 - agentic-sdlc --root "$AGENTIC_ROOT" gate linkage --cr "$BITBUCKET_PR_ID"
                 # Posts status human-approval; the worktree shares this clone's objects, so the PR head is readable.
-                - agentic-sdlc --root "$AGENTIC_ROOT" gate approval --cr "$BITBUCKET_PR_ID"
+                - agentic-sdlc --root "$AGENTIC_ROOT" gate approval --cr "$BITBUCKET_PR_ID" --fail-pending
                 - if git diff --name-only "origin/$BITBUCKET_PR_DESTINATION_BRANCH...HEAD" | grep -q '^\.agents/'; then agentic-sdlc gate skill-regression; fi
   branches:
     main:   # set: your vcs.trunk
@@ -107,7 +107,7 @@ pipelines:
             # The relay runs this pipeline on the trunk ref: the binding comes from the trunk, never the PR.
             - '[ "$BITBUCKET_BRANCH" = "${AGENTIC_TRUNK:-main}" ] || { echo "run agentic-approval on the trunk" >&2; exit 1; }'
             - *agentic-cli
-            - agentic-sdlc gate approval --cr "$CR"
+            - agentic-sdlc gate approval --cr "$CR" --fail-pending
     agentic-automerge:
       # Schedule it (Pipelines > Schedules, every few minutes). Merges open CRs whose body carries
       # the marker `<!-- agentic-sdlc:automerge -->` once their checks are green.

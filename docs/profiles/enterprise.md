@@ -25,7 +25,6 @@ mcps:
 forge:
   options: { token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
   review_identity: factory-review-app            # a forge app or bot account with its own token
-  review_runtime: separate                       # review-pr runs in its own runtime, the only one with the review token
   human_approval: full-lane                      # full-lane | always | never
 traces:
   uri: ".agents/runtime/traces/{run_id}.jsonl"   # init's placeholder; point it at org storage, e.g. s3://my-bucket/agentic/{run_id}.jsonl
@@ -54,7 +53,7 @@ All executor kinds are allowed: `managed`, `webhook`, `assign`, `command`, `harn
 Mix vendors per stage: the executor entries are per skill, and the bench compares executors like models.
 
 ## Security checklist
-- [ ] A separate review identity: a forge app or bot with its own token in `review_token_env`, held only by the review runtime (`forge.review_runtime: separate`: a scheduled job or deployment running `review-prompt.md`), never by the cycle or an implementer.
+- [ ] A separate review identity: a forge app or bot with its own token in `review_token_env`, held only by the review runtime (a scheduled job or deployment running `review-prompt.md`), never by the cycle or an implementer.
 - [ ] The trunk ruleset requires `human-approval`; the `approval` gate holds `guardrail` factory CRs for the factory owner and Full-lane CRs per `forge.human_approval` ([forges.md](../forges.md)).
 - [ ] Secrets only as env var names. Each stage lists `secrets:`; nothing else is passed.
 - [ ] Stage `mcps:` lists only the servers that stage needs.

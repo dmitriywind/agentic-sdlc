@@ -2,7 +2,7 @@
 
 Profile: individual (paid Cursor plan) or enterprise (service account). Billed as cloud agent usage; needs Premium or higher, Teams or Enterprise.
 Install at: cursor.com/automations, or `/automate` in Cursor.
-Secrets (cloud agent environment secrets; set: where, per cursor.com/agents; no model key is needed), two environments (`forge.review_runtime: separate`):
+Secrets (cloud agent environment secrets; set: where, per cursor.com/agents; no model key is needed), two environments:
 - cycle environment: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_SDLC_UNATTENDED=1. Never AGENTIC_REVIEW_TOKEN.
 - review environment: the same plus AGENTIC_REVIEW_TOKEN.
 

@@ -21,7 +21,7 @@ The init log is the exact list; the `--harness` flag decides. Only `~/.cursor/sk
 agent -p --force "Load the sdlc skill and run one cycle." --output-format json
 ```
 Without `--force` the CLI only proposes changes. Log in with `agent login` or set `CURSOR_API_KEY`. [docs](https://cursor.com/docs/cli/headless)
-Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run as a separate scheduled run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md); only that run gets `AGENTIC_REVIEW_TOKEN` (`forge.review_runtime: separate`).
+Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run as a separate scheduled run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md); only that run gets `AGENTIC_REVIEW_TOKEN`.
 
 ## Run without your machine - Individual
 | Option | How | Limits |

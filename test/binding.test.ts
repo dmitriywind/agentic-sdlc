@@ -72,18 +72,17 @@ test('validateBinding checks executor stage fields, traces and computer-use', ()
   for (const s of ["mcps 'nope'", "secrets 'lower'", "secrets '1A'", "sandbox 'vm'", 'executors.review.model needs', 'executors.shape.model needs', 'traces.uri']) assert.ok(p.includes(s), s);
 });
 
-test('validateBinding requires each executor kind its keys; review_runtime is separate|same', () => {
+test('validateBinding requires each executor kind its keys; review_runtime only warns as unused', () => {
   const b = structuredClone(good) as any;
   b.executors = {
     default: { kind: 'harness' }, a: { kind: 'command' }, c: { kind: 'webhook' }, d: { kind: 'managed', api: 'openai' }, e: { kind: 'assign' },
   };
-  b.forge.review_runtime = 'maybe';
   const p = validateBinding(b).join('\n');
-  for (const s of ['executors.a.run is required', 'executors.c.url_env is required', 'executors.d.token_env is required', "executors.d.api 'openai'", 'executors.e.user is required', "review_runtime 'maybe'"]) assert.ok(p.includes(s), s);
+  for (const s of ['executors.a.run is required', 'executors.c.url_env is required', 'executors.d.token_env is required', "executors.d.api 'openai'", 'executors.e.user is required']) assert.ok(p.includes(s), s);
   b.executors = { default: { kind: 'harness' }, a: { kind: 'command', run: 'x' }, c: { kind: 'webhook', url_env: 'U' }, d: { kind: 'managed', api: 'cursor', token_env: 'T' }, e: { kind: 'assign', user: 'u' } };
   b.forge.review_runtime = 'same';
   assert.deepEqual(validateBinding(b), []);
-  assert.match(bindingWarnings(b)[0], /^forge\.review_runtime is same/);
+  assert.match(bindingWarnings(b)[0], /^forge\.review_runtime is unused/);
 });
 
 test('bindingWarnings: bench_size below bench_min_cases can never pass bench compare', () => {

@@ -80,7 +80,7 @@ jobs:
           AGENTIC_FORGE_TOKEN: $(AGENTIC_FORGE_TOKEN)
           AGENTIC_BOARD_TOKEN: $(AGENTIC_BOARD_TOKEN)
       # Posts status human-approval on the head (the worktree shares this checkout's objects, so the head is readable).
-      - script: agentic-sdlc --root "$AGENTIC_ROOT" gate approval --cr "$SYSTEM_PULLREQUEST_PULLREQUESTID"
+      - script: agentic-sdlc --root "$AGENTIC_ROOT" gate approval --cr "$SYSTEM_PULLREQUEST_PULLREQUESTID" --fail-pending
         displayName: human-approval
         env:
           AGENTIC_FORGE_TOKEN: $(AGENTIC_FORGE_TOKEN)

@@ -6,7 +6,7 @@
 #   individual: CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`)
 #   enterprise: ANTHROPIC_API_KEY
 # Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, and AGENTIC_REVIEW_TOKEN (the names your binding uses).
-# AGENTIC_REVIEW_TOKEN must reach the review job only (forge.review_runtime: separate). Project CI/CD
+# AGENTIC_REVIEW_TOKEN must reach the review job only. Project CI/CD
 # variables reach every job, so keep it in a protected environment named `factory-review`
 # (variable environment scope = factory-review); the cycle job has no environment and cannot read it.
 # The review starts when the cycle job ends (needs); the dead-man job runs `ledger stale` after both.

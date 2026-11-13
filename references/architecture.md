@@ -194,7 +194,7 @@ groups are `version`, `profile`, `owners`, `board`, `forge`, `vcs`, `product`, `
 Keys this contract relies on by name:
 
 - `forge.human_approval: full-lane | always | never` (default `full-lane`), `forge.review_identity`,
-  `forge.review_runtime: separate | same`, `forge.options.review_token_env`,
+  `forge.options.review_token_env`,
   `forge.required_checks`.
 - `commands.install`, `commands.verify` (the `Required` job), `commands.proofs_on_base` (the
   `proofs-on-base` gate: a command with `{files}`, run once per new proof file), `commands.preview` (optional: deploys
@@ -340,11 +340,12 @@ allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm 
 `individual` binding names an executor kind that needs an API key; the individual runner fails
 when `ANTHROPIC_API_KEY` is set, since it outranks the subscription token.
 
-**Two runtimes, two identities.** With `forge.review_runtime: separate` (the default), every
-scheduler runs two jobs: the cycle (`templates/runner/cycle-prompt.md`), which never holds the
+**Two runtimes, two identities.** Every scheduler runs two jobs: the cycle (`templates/runner/cycle-prompt.md`), which never holds the
 review token, and the review (`templates/runner/review-prompt.md`), which runs after the cycle
 finishes (a job dependency, never its own clock), holds `forge.options.review_token_env` and runs
-only `review-pr`, for product and factory CRs. The review runtime **never runs CR code**: it reads
+only `review-pr`, for product and factory CRs. `forge status` refuses the contexts the gates own
+(`human-approval`, `ticket-linkage`, `proofs-on-base`), and `gate approval --fail-pending` fails the job
+while approval waits, for forges where the job result is the merge gate. The review runtime **never runs CR code**: it reads
 `Required` and `proofs-on-base` from CI and runs no install or test command. So an implementer can
 never post the `review` status or the approving review for its own CR, and a CR's code never sees
 the review token. `same` is allowed only with a warning. Unattended jobs set

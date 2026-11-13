@@ -97,7 +97,7 @@ human-approval:
     - *agentic-cli
     - cd "$CI_PROJECT_DIR"
   script:
-    - agentic-sdlc --root "$AGENTIC_ROOT" gate approval --cr "$AGENTIC_CR"
+    - agentic-sdlc --root "$AGENTIC_ROOT" gate approval --cr "$AGENTIC_CR" --fail-pending
 
 # Reads the MR's own .agents/skills (static file checks with the pinned CLI). No secret.
 skill-regression:

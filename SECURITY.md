@@ -13,10 +13,12 @@ The package hands real tokens to agents that read untrusted text. Its design res
 the contract (`references/architecture.md`, sections 3.4 and 10) is the full statement.
 
 - **A separate review identity.** `forge status` and `forge approve` use only
-  `forge.options.review_token_env`, the `forge.review_identity` account. With
-  `forge.review_runtime: separate` (the default) only the review job holds that token; the cycle
+  `forge.options.review_token_env`, the `forge.review_identity` account. Only the review job holds that token; the cycle
   and every implementer never do, so an implementer cannot approve its own CR. Give the factory's
   accounts no admin or bypass right on the trunk.
+- **Gate statuses only from gates.** `forge status` refuses the contexts `human-approval`,
+  `ticket-linkage` and `proofs-on-base`, so an agent with the review token cannot forge a gate.
+  Where the forge allows it, pin those contexts to the CI app in the trunk ruleset.
 - **CI never runs CR code with secrets.** The `Required` check and the `proofs-on-base` gate run
   on `pull_request` with no secrets. Gates that need tokens run against the target branch's
   binding and never check out or execute the CR. The review runtime runs no install or test

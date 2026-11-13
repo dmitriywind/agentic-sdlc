@@ -78,16 +78,12 @@ Feature: Routing and the unattended cycle
     And then it judges each run in that heartbeat
     And then it learns, when "learning.due" showed in the read-state step
 
-  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 3 "Review drafts"
-  Scenario Outline: The review step depends on "forge.review_runtime"
-    Given "forge.review_runtime" is "<runtime>"
-    When the cycle reaches the review step
-    Then <result>
-
-    Examples:
-      | runtime  | result                                                                                                                      |
-      | separate | the cycle skips the step, the review runtime runs "review-pr" after the cycle, and the cycle never holds the review token   |
-      | same     | a reviewer subagent takes each ticket at In review with a draft CR and each draft factory CR                                |
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 3
+  Scenario: The cycle never reviews
+    When the cycle reaches step 3
+    Then the cycle reviews nothing
+    And the review runtime runs "review-pr" after the cycle
+    And the cycle never holds the review token
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", steps 4 and 5
   Scenario: The cycle caps implementations and keeps Ready filled

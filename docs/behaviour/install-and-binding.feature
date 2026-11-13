@@ -81,11 +81,11 @@ Feature: Install and validate the binding
     And the command exits with code 0
 
   # Source: src/binding.ts, "bindingWarnings" (review_runtime)
-  # Proof: test/binding.test.ts "validateBinding requires each executor kind its keys; review_runtime is separate|same"
-  Scenario: forge.review_runtime "same" warns that an implementer can approve its own CR
-    Given forge.review_runtime is "same"
+  # Proof: test/binding.test.ts "validateBinding requires each executor kind its keys; review_runtime only warns as unused"
+  Scenario: forge.review_runtime is an unused key
+    Given the binding sets forge.review_runtime
     When the binding is validated
-    Then a warning says the cycle holds the review token
+    Then a warning says review-pr always runs in its own runtime
 
   # Source: src/install.ts, "doctor" and "trunkProtection"
   # Proof: test/install.test.ts "doctor: unpinned required checks warn; non-GitHub gets a reminder"

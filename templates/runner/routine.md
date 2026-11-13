@@ -1,6 +1,6 @@
 # Scheduling the factory cycle
 
-Every scheduler runs two prompts (`forge.review_runtime: separate`, the default), one run of each at a time:
+Every scheduler runs two prompts, one run of each at a time:
 - the cycle: `cycle-prompt.md` (installed at `.agents/cycle-prompt.md`), WITHOUT `AGENTIC_REVIEW_TOKEN`;
 - the review, started when the cycle ends: `review-prompt.md` (installed at `.agents/review-prompt.md`), the only run holding `AGENTIC_REVIEW_TOKEN` and `AGENTIC_SDLC_ROLE=review`.
 

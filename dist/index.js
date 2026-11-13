@@ -8636,7 +8636,6 @@ var PROOFS = ["test", "eval", "visual", "data-check", "computer-use", "manual"];
 var EXECUTORS = ["harness", "command", "webhook", "managed", "assign"];
 var EXECUTOR_KEYS = { command: ["run"], webhook: ["url_env"], managed: ["token_env"], assign: ["user"] };
 var MANAGED_APIS = ["claude", "cursor", "antigravity", "generic"];
-var REVIEW_RUNTIMES = ["separate", "same"];
 var HUMAN_APPROVAL = ["full-lane", "always", "never"];
 var SANDBOXES = ["cloud", "container", "local"];
 var PROFILES = ["individual", "enterprise"];
@@ -8695,8 +8694,7 @@ function validateBinding(b) {
       else if (tier !== void 0 && !TIERS.includes(tier)) p.push(`executors.${k}.model.tier '${tier}' is not one of ${TIERS.join("|")}`);
     }
   }
-  const rr = x.forge?.review_runtime;
-  if (rr !== void 0 && !REVIEW_RUNTIMES.includes(rr)) p.push(`forge.review_runtime '${rr}' is not one of ${REVIEW_RUNTIMES.join("|")}`);
+  if (["human-approval", "ticket-linkage", "proofs-on-base"].includes(x.forge?.review_check_name)) p.push(`forge.review_check_name '${x.forge.review_check_name}' is a gate's context`);
   const ha = x.forge?.human_approval;
   if (ha !== void 0 && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join("|")}`);
   for (const k of ["bench_min_cases", "bench_trials"]) {

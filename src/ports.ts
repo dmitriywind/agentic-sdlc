@@ -178,7 +178,6 @@ export interface Binding {
     options: Record<string, unknown>;
     review_identity: string;
     /** separate (default): review-pr runs in its own runtime, the only one holding the review token; same: the cycle reviews too. */
-    review_runtime?: 'separate' | 'same';
     /** Who must approve besides the agent review (status human-approval). Absent: full-lane. */
     human_approval?: 'full-lane' | 'always' | 'never';
     review_check_name: string;

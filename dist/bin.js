@@ -7434,8 +7434,7 @@ function validateBinding(b) {
       else if (tier !== void 0 && !TIERS.includes(tier)) p.push(`executors.${k}.model.tier '${tier}' is not one of ${TIERS.join("|")}`);
     }
   }
-  const rr = x.forge?.review_runtime;
-  if (rr !== void 0 && !REVIEW_RUNTIMES.includes(rr)) p.push(`forge.review_runtime '${rr}' is not one of ${REVIEW_RUNTIMES.join("|")}`);
+  if (["human-approval", "ticket-linkage", "proofs-on-base"].includes(x.forge?.review_check_name)) p.push(`forge.review_check_name '${x.forge.review_check_name}' is a gate's context`);
   const ha = x.forge?.human_approval;
   if (ha !== void 0 && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join("|")}`);
   for (const k of ["bench_min_cases", "bench_trials"]) {
@@ -7452,7 +7451,7 @@ function bindingWarnings(b) {
   const x = b;
   if (x?.product?.kind !== void 0) w.push("product.kind is unused; remove it");
   if (x?.board?.milestone !== void 0) w.push("board.milestone is unused; remove it");
-  if (x?.forge?.review_runtime === "same") w.push("forge.review_runtime is same: the cycle holds the review token, so an implementer can approve its own CR");
+  if (x?.forge?.review_runtime !== void 0) w.push("forge.review_runtime is unused: review-pr always runs in its own runtime; remove it");
   const size = x?.learning?.bench_size, min = x?.learning?.bench_min_cases ?? 20;
   if (size !== void 0 && Number(size) < min) w.push(`learning.bench_size ${size} is below bench_min_cases ${min}: bench compare reports regressed for every change`);
   if (x?.profile === "individual") {
@@ -7473,7 +7472,7 @@ function bindingWarnings(b) {
 function shippedOptions(envs) {
   return ["Not shipped", ...envs.slice(0, -1).map((e) => `On ${e}`), ...envs.length > 1 ? ["In release"] : [], `On ${envs[envs.length - 1]}`];
 }
-var import_yaml, BINDING_PATH, ADAPTERS, OPTIONS, REQUIRED, PROOFS, EXECUTORS, EXECUTOR_KEYS, MANAGED_APIS, REVIEW_RUNTIMES, HUMAN_APPROVAL, SANDBOXES, PROFILES, TIERS, STATUSES;
+var import_yaml, BINDING_PATH, ADAPTERS, OPTIONS, REQUIRED, PROOFS, EXECUTORS, EXECUTOR_KEYS, MANAGED_APIS, HUMAN_APPROVAL, SANDBOXES, PROFILES, TIERS, STATUSES;
 var init_binding = __esm({
   "src/binding.ts"() {
     "use strict";
@@ -7526,7 +7525,6 @@ var init_binding = __esm({
     EXECUTORS = ["harness", "command", "webhook", "managed", "assign"];
     EXECUTOR_KEYS = { command: ["run"], webhook: ["url_env"], managed: ["token_env"], assign: ["user"] };
     MANAGED_APIS = ["claude", "cursor", "antigravity", "generic"];
-    REVIEW_RUNTIMES = ["separate", "same"];
     HUMAN_APPROVAL = ["full-lane", "always", "never"];
     SANDBOXES = ["cloud", "container", "local"];
     PROFILES = ["individual", "enterprise"];
@@ -8871,6 +8869,7 @@ var init_gitlab = __esm({
 // src/forge/index.ts
 var forge_exports = {};
 __export(forge_exports, {
+  GATE_CONTEXTS: () => GATE_CONTEXTS,
   cli: () => cli2,
   createForge: () => createForge
 });
@@ -8880,7 +8879,7 @@ function createForge(ctx) {
   if (!make) throw new Error(`unknown forge adapter: ${ctx.binding.forge.adapter}`);
   return make(ctx);
 }
-var adapters, cli2;
+var GATE_CONTEXTS, adapters, cli2;
 var init_forge = __esm({
   "src/forge/index.ts"() {
     "use strict";
@@ -8890,6 +8889,7 @@ var init_forge = __esm({
     init_bitbucket();
     init_github2();
     init_gitlab();
+    GATE_CONTEXTS = ["human-approval", "ticket-linkage", "proofs-on-base"];
     adapters = { github, gitlab, azure, bitbucket };
     cli2 = (argv, ctx) => guard(async () => {
       const [verb, ...rest] = argv;
@@ -8929,6 +8929,7 @@ var init_forge = __esm({
           });
         case "status": {
           const state = a.need("state");
+          if (GATE_CONTEXTS.includes(a.need("context"))) throw new UsageError(`context '${a.need("context")}' is posted only by its gate`);
           if (!["pending", "success", "failure"].includes(state)) throw new UsageError("--state must be pending|success|failure");
           await f.status(n(), { context: a.need("context"), state, description: a.need("description"), url: a.get("url") });
           return {};
@@ -9993,8 +9994,11 @@ var init_gates = __esm({
           if (!a.pos[0]) throw new UsageError("shipped <env> is required");
           return shipped(deps(), a.pos[0], a.need("sha"), a.need("result"));
         }
-        case "approval":
-          return approval(deps(), a.need("cr"));
+        case "approval": {
+          const r = await approval(deps(), a.need("cr"));
+          if (a.has("fail-pending") && r.state === "pending") throw new Error(`human-approval pending: ${r.class} needs ${r.need}`);
+          return r;
+        }
         case "proofs-on-base":
           return fail(await proofsOnBase(deps(), a.need("cr")));
         case "signal-on-red":

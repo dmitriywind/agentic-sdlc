@@ -112,10 +112,8 @@ In order:
    `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --last <n> --marker
    "<!-- heartbeat -->" --trusted`) and `ledger summary`.
 2. **Triage Signals.** Every ticket at Signals, in the order `triage-signal` names.
-3. **Review drafts.** When `forge.review_runtime` is `separate` (the default), skip this step: the
-   review runtime runs `review-pr` after the cycle finishes, and the cycle never holds the review
-   token. When it is `same`: every ticket at In review with a draft CR, and every draft factory
-   CR, in a reviewer subagent.
+3. **Leave review to the review runtime.** The review runtime runs `review-pr` after the cycle
+   finishes; the cycle never holds the review token and never reviews.
 4. **Implement.** Start at most `cycle.max_implementations` implementations from the top of the
    Ready queue.
 5. **Keep Ready filled.** While Ready plus the shapes under way hold fewer than `cycle.min_ready`

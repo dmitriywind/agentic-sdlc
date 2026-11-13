@@ -32,7 +32,7 @@ Give the agent the prompt in [`templates/runner/cycle-prompt.md`](../../template
 Run the agent headless from any scheduler (cron, CI, a job runner). Set the env var names the binding lists
 (`AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN`). Do not give the cycle runtime `AGENTIC_REVIEW_TOKEN`:
 schedule a second run right after it with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md)
-(installed at `.agents/review-prompt.md`) and give the review token to that run only (`forge.review_runtime: separate`).
+(installed at `.agents/review-prompt.md`) and give the review token to that run only.
 Set `AGENTIC_SDLC_UNATTENDED=1` in both.
 [`templates/runner/setup.sh`](../../templates/runner/setup.sh) prepares a fresh runner.
 

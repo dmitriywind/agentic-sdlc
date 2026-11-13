@@ -3,7 +3,7 @@
 Profile: individual (SuperGrok / X Premium+ login, beta) or enterprise (XAI_API_KEY, OIDC/SSO).
 Install at: a CI job (adapt github-actions-claude.yml or gitlab-ci-cycle.yml, swapping the agent command) or a Grok Bot routine.
 Secrets: XAI_API_KEY (CI), AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN; AGENTIC_REVIEW_TOKEN for the review job only.
-Two jobs (`forge.review_runtime: separate`), both with `AGENTIC_SDLC_UNATTENDED=1`: the cycle job without AGENTIC_REVIEW_TOKEN, then a review job with it, run right after (as in `github-actions-claude.yml`).
+Two jobs, both with `AGENTIC_SDLC_UNATTENDED=1`: the cycle job without AGENTIC_REVIEW_TOKEN, then a review job with it, run right after (as in `github-actions-claude.yml`).
 
 1. Install the Grok Build CLI: `curl -fsSL https://x.ai/cli/install.sh | bash`. It is an early beta.
 2. Auth in CI: set `XAI_API_KEY`, or run `grok login --device-auth` once on the host and reuse the cached token. Whether a subscription login is allowed in CI is not stated.

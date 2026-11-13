@@ -3,7 +3,7 @@
 Profile: individual (also works on Team/Enterprise seats). Research preview; needs a claude.ai login (not an API key, Bedrock or Vertex).
 Install at: claude.ai/code/routines, or `/schedule` in Claude Code. The task belongs to, and acts as, one claude.ai account.
 Secrets: none for the model. The repo needs the Claude GitHub App or `/web-setup`.
-Two routines, two cloud environments (`forge.review_runtime: separate`):
+Two routines, two cloud environments:
 - cycle environment: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_SDLC_UNATTENDED=1, AGENTIC_REVIEW_FIRE_CMD. Never AGENTIC_REVIEW_TOKEN.
 - review environment: the same plus AGENTIC_REVIEW_TOKEN and AGENTIC_SDLC_ROLE=review (the names your binding uses).
 Plugin: the prompts start with `/agentic-sdlc:sdlc`. Enable the plugin for the repo in `.claude/settings.json` (`extraKnownMarketplaces` with `{ "agentic-sdlc": { "source": { "source": "github", "repo": "dmitriywind/agentic-sdlc" } } }` and `enabledPlugins: { "agentic-sdlc@agentic-sdlc": true }`); without it the prompt falls back to `.agents/skills/`.

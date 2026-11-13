@@ -21,7 +21,7 @@ agy -p "Load the sdlc skill and run one cycle." --output-format json
 ```
 Needs a prior interactive login; an unauthenticated non-TTY run exits "authentication required". Unapproved tools are soft-denied
 (exit 0) unless `permissions.allow` lists them or you pass `--dangerously-skip-permissions`. No API-key variable is documented.
-[docs](https://antigravity.google/docs/cli/headless) Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run as a separate scheduled run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md); only that run gets `AGENTIC_REVIEW_TOKEN` (`forge.review_runtime: separate`).
+[docs](https://antigravity.google/docs/cli/headless) Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run as a separate scheduled run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md); only that run gets `AGENTIC_REVIEW_TOKEN`.
 
 ## Run without your machine - Individual
 | Option | How | Limits |

@@ -22,7 +22,7 @@ grok -p "Load the sdlc skill and run one cycle." --output-format json --always-a
 ```
 Auth: browser sign-in on first launch, `grok login --device-auth` for headless hosts, or `XAI_API_KEY`. Flags: `-p`, `-m`, `-c`, `--cwd`,
 `--output-format plain|json|streaming-json`, `--no-auto-update`. Exit codes and a GitHub Actions example: not documented at the time of writing.
-[docs](https://docs.x.ai/build/cli/headless-scripting) Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run as a separate scheduled run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md); only that run gets `AGENTIC_REVIEW_TOKEN` (`forge.review_runtime: separate`).
+[docs](https://docs.x.ai/build/cli/headless-scripting) Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run as a separate scheduled run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md); only that run gets `AGENTIC_REVIEW_TOKEN`.
 
 ## Run without your machine - Individual
 Template and steps: [`templates/runner/grok.md`](../../templates/runner/grok.md).

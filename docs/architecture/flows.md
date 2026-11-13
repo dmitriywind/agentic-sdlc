@@ -77,7 +77,6 @@ sequenceDiagram
 - The orchestrator routes, waits and reports. Subagents do the work.
 - After `time_budget_minutes` nothing new starts.
 - A failed step goes in the heartbeat `errors`. The cycle goes on.
-- With `forge.review_runtime: same` the cycle reviews drafts itself, before implementing.
 
 ## 3. Change request hand-off
 

@@ -463,7 +463,11 @@ export const cli: PortCli = (argv, base) =>
         if (!a.pos[0]) throw new UsageError('shipped <env> is required');
         return shipped(deps(), a.pos[0], a.need('sha'), a.need('result'));
       }
-      case 'approval': return approval(deps(), a.need('cr'));
+      case 'approval': {
+        const r = await approval(deps(), a.need('cr'));
+        if (a.has('fail-pending') && r.state === 'pending') throw new Error(`human-approval pending: ${r.class} needs ${r.need}`);
+        return r;
+      }
       case 'proofs-on-base': return fail(await proofsOnBase(deps(), a.need('cr')));
       case 'signal-on-red': return signalOnRed(deps(), a.need('run'));
       case 'skill-regression': {

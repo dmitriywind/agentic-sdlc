@@ -79,6 +79,14 @@ Feature: Release to the last environment
       | changes the contents | step 3, Ready check |
       | asks to refresh      | step 1, Gather      |
 
+  # Source: skills/release/SKILL.md, "Steps 0. Resume" and "Steps 6. Mark"
+  Scenario: Only the Product owner gives the go-ahead
+    Given the proposal has a later comment by a bot or by the Factory owner
+    And no comment by owners.product follows the proposal
+    When the release skill resumes
+    Then it reads comments with "--author <owners.product>"
+    And it stops without a cut
+
   # Source: skills/release/SKILL.md, "Steps 6. Mark" and "Steps 7. Cut"
   Scenario: The go-ahead leads to a cut from one trunk revision
     Given a trusted Product owner approved the proposal
