@@ -1,5 +1,5 @@
 name: agentic-sdlc delivery
-# Deploy and trunk runs -> shipped / signal-on-red. Trunk push -> merged backstop. Release line push -> In release.
+# Deploy runs -> shipped. CI runs -> signal-on-red. Trunk push -> merged (the only gate that moves a ticket to Done).
 # A release/** push runs that branch's copy of this file: import .github/rulesets/release.json so only the release bot creates or updates release lines.
 on:
   workflow_run:
@@ -7,8 +7,8 @@ on:
     workflows: ["Deploy staging", "Deploy production", "CI"]
     types: [completed]
   push:
-    # set: your vcs.trunk and your vcs.release_prefix, e.g. release/**
-    branches: [main, "release/**"]
+    # set: your vcs.trunk
+    branches: [main]
 
 permissions:
   contents: write   # gate shipped tags the released revision
@@ -74,17 +74,14 @@ jobs:
           esac
 
       - name: Signal on red
-        # Trunk and release pushes only: a red PR run is the CR's business, not a signal.
+        # Trunk and release pushes of CI only: a red PR run is the CR's business, and a red deploy is shipped's Signal.
+        # set: your trunk CI workflow name
         if: >-
-          github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+          github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && github.event.workflow_run.name == 'CI' &&
           (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out') &&
           (github.event.workflow_run.head_branch == env.TRUNK || startsWith(github.event.workflow_run.head_branch, env.RELEASE_PREFIX))
         run: agentic-sdlc gate signal-on-red --run "$RUN_ID"
 
       - name: Merged
         if: github.event_name == 'push' && github.ref_name == env.TRUNK
-        run: agentic-sdlc gate board-sync --sha "$GITHUB_SHA" --event merged
-
-      - name: Release line
-        if: github.event_name == 'push' && startsWith(github.ref_name, env.RELEASE_PREFIX)
-        run: agentic-sdlc gate board-sync --event in-release --release "${GITHUB_REF_NAME#"$RELEASE_PREFIX"}"
+        run: agentic-sdlc gate merged --sha "$GITHUB_SHA"

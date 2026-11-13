@@ -57,7 +57,6 @@ pipelines:
                 - agentic-sdlc --root "$AGENTIC_ROOT" gate linkage --cr "$BITBUCKET_PR_ID"
                 # Posts status human-approval; the worktree shares this clone's objects, so the PR head is readable.
                 - agentic-sdlc --root "$AGENTIC_ROOT" gate approval --cr "$BITBUCKET_PR_ID"
-                - agentic-sdlc --root "$AGENTIC_ROOT" gate board-sync --cr "$BITBUCKET_PR_ID" --event ready
                 - if git diff --name-only "origin/$BITBUCKET_PR_DESTINATION_BRANCH...HEAD" | grep -q '^\.agents/'; then agentic-sdlc gate skill-regression; fi
   branches:
     main:   # set: your vcs.trunk
@@ -66,7 +65,7 @@ pipelines:
           deployment: agentic-gates
           script:
             - *agentic-cli
-            - agentic-sdlc gate board-sync --sha "$BITBUCKET_COMMIT" --event merged
+            - agentic-sdlc gate merged --sha "$BITBUCKET_COMMIT"
       # Shipped follows the deploy's real result: after-script runs on success and on failure.
       - step:
           name: deploy first-env
@@ -81,12 +80,6 @@ pipelines:
             - if [ "$BITBUCKET_EXIT_CODE" = 0 ]; then R=success; else R=failure; fi
             - agentic-sdlc gate shipped first-env --sha "$BITBUCKET_COMMIT" --result "$R"
     'release/*':   # set: your vcs.release_prefix
-      - step:
-          name: in-release
-          deployment: agentic-gates
-          script:
-            - *agentic-cli
-            - agentic-sdlc gate board-sync --event in-release --release "${BITBUCKET_BRANCH#release/}"
       - step:
           name: deploy last-env
           clone:

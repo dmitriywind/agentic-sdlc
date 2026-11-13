@@ -12,8 +12,8 @@ stays off the board and outside these rules.
 | Backlog | Accepted; to be groomed and shaped. | Accepted signal or idea, or a ticket bounced for a bad spec or scope. | Priority set, then shaped: sized, criteria with proof, lane chosen, spec in the Full lane, checklist passed. | triage-signal, Product owner, backlog-grooming, shape (children), any skill bouncing a bad spec |
 | Ready | The implementation queue. One deliverable within the size limit, criteria and lane set, spec attached in the Full lane. | Shape checklist passed, no open blocker. | An implementer claims it. | shape |
 | In progress | Implementing on one short-lived change line. | Claimed, change line started from the trunk. | Draft CR open and closing its ticket, fast check green. | implement-spec; review-pr when it sends a CR back |
-| In review | A CR is open, draft or ready. A draft is checked against the requirements; a ready CR waits on CI, approvals and auto-merge. | CR opened, linked to the ticket. | Merged to the trunk. | gate `board-sync` on every CR open, ready or back-to-draft event; implement-spec when the CR is already open |
-| Done | Merged to the trunk. Where the code runs is the Shipped field. | Merge on the trunk. | End. A later failure never moves it. | gate `board-sync` on merge |
+| In review | A CR is open, draft or ready. A draft is checked against the requirements; a ready CR waits on CI, approvals and auto-merge. | CR opened, linked to the ticket. | Merged to the trunk. | implement-spec after it opens the CR or pushes rework; implement-spec for a CR a person opened |
+| Done | Merged to the trunk. Where the code runs is the Shipped field. | Merge on the trunk. | End. A later failure never moves it. | gate `merged` on the trunk push; gate `shipped` when a deploy reports first |
 | Cancelled | Rejected, superseded, will not fix. | A reason comment. | End; closed as not planned. | triage-signal, backlog-grooming, shape (failure that does not reproduce, with evidence), Product owner |
 
 ## Open blocker
@@ -32,8 +32,7 @@ review sends it back. Red CI puts the CR back to draft; the Status stays In revi
 
 - **Shipped** is where the product runs. Its options derive from `product.environments`: Not
   shipped, `On <env>` per environment, and In release before the last one.
-- Gates write it: `On <env>` after a green deploy (or publish) to that environment; In release
-  when `board-sync --event in-release` sees the pushed release line. Merged work begins Not
-  shipped.
+- Gate `shipped` writes `On <env>` after a green deploy (or publish) to that environment. `release`
+  writes In release at the cut. Gate `merged` writes Not shipped when the field is empty.
 - A release failure returns its tickets to On <the environment before the last>, clears the
   Release Version, and opens a Signal held with `needs-human` when the last environment failed.

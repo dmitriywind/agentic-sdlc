@@ -42,13 +42,12 @@ Feature: Routing and the unattended cycle
     And the dispatch uses "--ticket <request>"
 
   # Source: skills/sdlc/SKILL.md, "The needs-human hold"
-  # Proof: test/gates.test.ts "board-sync: sha must resolve, trunk-only merged, keeps shipped, one closes, skips done/held, in-release"
   Scenario: A held ticket is skipped, keeps its Status and resumes when the label goes
     Given a ticket at Status Ready has the label "board.labels.human"
     When the orchestrator routes the ticket
     Then no skill is routed
     And no skill moves or reorders the ticket
-    And no automation moves the ticket
+    And no automation moves the ticket, except gate merged when its CR merges
     And the ticket keeps the Status Ready
     When a human removes the label
     Then the next run resumes the ticket at the Status Ready

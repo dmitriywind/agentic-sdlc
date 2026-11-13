@@ -20,7 +20,7 @@ export function bitbucket(ctx: AdapterContext): Forge {
       headSha: sha, baseSha: p.destination.commit.hash, draft: !!p.draft,
       state: p.state === 'OPEN' ? 'open' : p.state === 'MERGED' ? 'merged' : 'closed',
       mergeSha: p.merge_commit?.hash, behind: tip.target.hash !== p.destination.commit.hash, closes: parseCloses(p.description ?? ''),
-      checks: (st.values ?? []).map((s: any) => ({ name: s.name ?? s.key, state: cs(s.state) })), body: p.description ?? '',
+      checks: (st.values ?? []).map((s: any) => ({ name: s.name ?? s.key, state: cs(s.state) })), body: p.description ?? '', author: p.author?.nickname ?? '',
     };
   };
   const put = async (n: string, body: unknown) => { await call('PUT', `/pullrequests/${n}`, body); return view(n); };

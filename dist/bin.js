@@ -8387,6 +8387,7 @@ function azure(ctx) {
       behind: false,
       // ponytail: Azure DevOps exposes no "behind" flag; sync is unsupported anyway
       closes: parseCloses(p.description ?? ""),
+      author: p.createdBy?.uniqueName ?? "",
       // The newest status per context wins: an older iteration's success does not hide a new pending.
       checks: [...new Map((st.value ?? []).sort((a, b) => a.id - b.id).map((s) => [s.context.name, { name: s.context.name, state: cs(s.state) }])).values()],
       body: p.description ?? ""
@@ -8519,7 +8520,8 @@ function bitbucket(ctx) {
       behind: tip.target.hash !== p.destination.commit.hash,
       closes: parseCloses(p.description ?? ""),
       checks: (st.values ?? []).map((s) => ({ name: s.name ?? s.key, state: cs2(s.state) })),
-      body: p.description ?? ""
+      body: p.description ?? "",
+      author: p.author?.nickname ?? ""
     };
   };
   const put = async (n, body) => {
@@ -8655,7 +8657,8 @@ function github(ctx) {
       mergeSha: p.merged_at ? p.merge_commit_sha : void 0,
       closes: parseCloses(p.body ?? ""),
       checks: roll.map((c) => ({ name: c.name ?? c.context, state: checkState(c) })),
-      body: p.body ?? ""
+      body: p.body ?? "",
+      author: p.user?.login ?? ""
     };
   };
   return {
@@ -8762,7 +8765,8 @@ function gitlab(ctx) {
       mergeSha: m.merge_commit_sha ?? m.squash_commit_sha ?? void 0,
       closes: parseCloses(m.description ?? ""),
       checks: st.map((s) => ({ name: s.name, state: cs3(s.status) })),
-      body: m.description ?? ""
+      body: m.description ?? "",
+      author: m.author?.username ?? ""
     };
   };
   const view = async (n) => toCR(await call("GET", `/merge_requests/${n}`));
@@ -9419,9 +9423,8 @@ function deliveryWorkflow(b, root) {
   if (b.forge.adapter !== "github" || !existsSync3(f)) return void 0;
   const wf = (0, import_yaml2.parse)(readFileSync5(f, "utf8"));
   const br2 = wf?.on?.push?.branches ?? [];
-  const rel = `${b.vcs.release_prefix}**`;
-  if (!br2.includes(b.vcs.trunk) || !br2.includes(rel))
-    return `fail delivery workflow: push branches ${br2.join(", ")} do not name trunk ${b.vcs.trunk} and ${rel}; edit its 'set:' lines`;
+  if (!br2.includes(b.vcs.trunk))
+    return `fail delivery workflow: push branches ${br2.join(", ")} do not name trunk ${b.vcs.trunk}; edit its 'set:' lines`;
   for (const [k, key, v] of [["TRUNK", "vcs.trunk", b.vcs.trunk], ["RELEASE_PREFIX", "vcs.release_prefix", b.vcs.release_prefix]])
     if (wf?.env?.[k] !== v) return `fail delivery workflow: env.${k} is '${wf?.env?.[k] ?? ""}', not ${key} '${v}'; edit its 'set:' lines`;
   return `ok   delivery workflow: names trunk ${b.vcs.trunk}`;
@@ -9542,7 +9545,6 @@ __export(gates_exports, {
   approval: () => approval,
   approvers: () => approvers,
   benchedSkills: () => benchedSkills,
-  boardSync: () => boardSync,
   branchNames: () => branchNames,
   classify: () => classify,
   cli: () => cli5,
@@ -9551,6 +9553,7 @@ __export(gates_exports, {
   globToRegExp: () => globToRegExp,
   linkage: () => linkage,
   matchesAny: () => matchesAny,
+  merged: () => merged,
   proofFiles: () => proofFiles,
   proofRunner: () => proofRunner,
   proofsOnBase: () => proofsOnBase,
@@ -9756,37 +9759,20 @@ async function proofsOnBase(d, n) {
   }
   return { ok: !error, cr: cr.n, class: cls, files, passedOnBase, posted, errors: error ? [error] : [] };
 }
-async function boardSync(d, o) {
+async function merged(d, sha2) {
   const b = d.binding.board;
   const opts = shippedOptions(d.binding.product.environments);
-  if (o.event === "in-release") {
-    if (!o.release) throw new UsageError("--release is required for in-release");
-    if (!opts.includes("In release")) return { event: o.event, moved: [], reason: "one environment: no In release" };
-    const moved = [];
-    for (const x of await d.board.list()) {
-      if (x.fields.release_version !== o.release || opts.indexOf(x.fields.shipped || opts[0]) >= opts.indexOf("In release")) continue;
-      await d.board.set(x.id, "shipped", "In release");
-      moved.push(x.id);
-    }
-    return { event: o.event, release: o.release, moved };
-  }
-  if (o.event !== "merged" && !OPEN_EVENTS.includes(o.event)) throw new UsageError(`unknown event: ${o.event}`);
-  const cr = o.sha ? await d.forge.viewBySha(o.sha).catch(() => void 0) : await d.forge.view(o.cr);
-  if (!cr?.n) throw new Error(`no CR merged at ${o.sha}`);
-  const none = (reason) => ({ cr: cr.n, event: o.event, moved: [], reason });
+  const cr = await d.forge.viewBySha(sha2).catch(() => void 0);
+  const none = (reason) => ({ cr: cr?.n, sha: sha2, moved: [], reason });
+  if (!cr?.n) return none("no CR merged at this sha");
+  if (cr.target !== d.binding.vcs.trunk) return none(`target ${cr.target} is not trunk ${d.binding.vcs.trunk}`);
   if (cr.closes.length !== 1) return none(`CR closes ${cr.closes.length} tickets, not exactly one`);
   const id = cr.closes[0];
-  if (o.event === "merged") {
-    if (cr.target !== d.binding.vcs.trunk) return none(`target ${cr.target} is not trunk ${d.binding.vcs.trunk}`);
-    const it = await d.board.move(id, "Done");
-    if (!it?.fields?.shipped) await d.board.set(id, "shipped", opts[0]);
-  } else {
-    const it = await d.board.get(id);
-    if (b.done_statuses.includes(it.status)) return none(`${id} is ${it.status}`);
-    if (it.labels.includes(b.labels.human)) return none(`${id} is held (${b.labels.human})`);
-    await d.board.move(id, "In review");
-  }
-  return { cr: cr.n, event: o.event, moved: [id] };
+  const it = await d.board.get(id);
+  if (it.status === "Cancelled") return none(`${id} is Cancelled`);
+  if (!b.done_statuses.includes(it.status)) await d.board.move(id, "Done", it.status);
+  if (!it.fields?.shipped) await d.board.set(id, "shipped", opts[0]);
+  return { cr: cr.n, sha: sha2, moved: [id] };
 }
 async function shipped(d, env, sha2, result) {
   const envs = d.binding.product.environments;
@@ -9797,7 +9783,7 @@ async function shipped(d, env, sha2, result) {
   const rank = (s) => opts.indexOf(s || opts[0]);
   const target = `On ${env}`;
   const last = i === envs.length - 1;
-  const done = (await d.board.list({ status: ["Done"] })).filter((x) => x.status === "Done");
+  const done = (await d.board.list({ status: ["Done", "In review"] })).filter((x) => x.status === "Done" || x.status === "In review");
   const changed = [];
   const signal = async (held) => {
     await d.board.create({
@@ -9812,12 +9798,12 @@ environment: ${env}`,
   if (result === "success") {
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, tags: [], unknown: true };
-    const merged = await d.forge.list({ state: "merged" });
+    const merged2 = await d.forge.list({ state: "merged" });
     const unmatched = [];
     const rel = d.binding.board.labels?.release;
     const items = [];
     for (const x of done.filter((x2) => rank(x2.fields.shipped) < rank(target))) {
-      const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+      const shas = merged2.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
       if (!shas.length) {
         if (!(rel && x.labels.includes(rel))) unmatched.push(x.id);
         continue;
@@ -9836,6 +9822,7 @@ environment: ${env}`,
       }
     }
     for (const x of items) {
+      if (x.status !== "Done") await d.board.move(x.id, "Done", x.status);
       await d.board.set(x.id, "shipped", target);
       changed.push(x.id);
     }
@@ -9845,9 +9832,9 @@ environment: ${env}`,
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
     const isAnc = d.isAncestor;
     if (isAnc) {
-      const merged = await d.forge.list({ state: "merged" });
-      for (const x of done.filter((x2) => x2.fields.release_version && x2.fields.shipped === "In release")) {
-        const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+      const merged2 = await d.forge.list({ state: "merged" });
+      for (const x of done.filter((x2) => x2.status === "Done" && x2.fields.release_version && rank(x2.fields.shipped) < rank(target))) {
+        const shas = merged2.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
         if (!shas.length || shas.some((s) => !s || isAnc(s, sha2) !== true)) continue;
         await d.board.set(x.id, "shipped", back);
         await d.board.set(x.id, "release_version", null);
@@ -9928,7 +9915,7 @@ function scorerErrors(f, text) {
   if (!["pass-fail", "0-4"].includes(fm.scale)) errors.push(`scorers/${f}: scale ${fm.scale} invalid`);
   return errors;
 }
-var import_yaml3, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tierOf, withoutTier, nameHas, esc, patternRe, readDiff, OPEN_EVENTS, redact2, cleanUrl, cli5;
+var import_yaml3, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tierOf, withoutTier, nameHas, esc, patternRe, readDiff, redact2, cleanUrl, cli5;
 var init_gates = __esm({
   "src/gates.ts"() {
     "use strict";
@@ -9950,7 +9937,6 @@ var init_gates = __esm({
     esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     patternRe = (p) => new RegExp("^" + p.split(/(<ticket>|<name>)/).map((x) => x === "<ticket>" ? "[A-Za-z0-9_-]+" : x === "<name>" ? "[a-z0-9]+(?:-[a-z0-9]+)*" : esc(x)).join("") + "$");
     readDiff = (d, n) => d.forge.diff(n).catch(() => void 0);
-    OPEN_EVENTS = ["opened", "ready", "draft"];
     redact2 = (s, max = 120) => String(s ?? "").replace(/[\x00-\x1f]/g, " ").replace(/\b[A-Za-z0-9_+/=-]{32,}\b/g, "[redacted]").slice(0, max);
     cleanUrl = (u) => redact2(String(u ?? "").replace(/^(\w+:\/\/)[^/@]*@/, "$1").replace(/[?#].*$/, ""), 200);
     cli5 = (argv, base) => guard(async () => {
@@ -10001,11 +9987,8 @@ var init_gates = __esm({
         }
         case "linkage":
           return fail(await linkage(deps(), a.need("cr")));
-        case "board-sync": {
-          const event = a.need("event");
-          if (event !== "in-release" && !a.has("cr") && !a.has("sha")) throw new UsageError("--cr or --sha is required");
-          return boardSync(deps(), { cr: a.get("cr"), sha: a.get("sha"), event, release: a.get("release") });
-        }
+        case "merged":
+          return merged(deps(), a.need("sha"));
         case "shipped": {
           if (!a.pos[0]) throw new UsageError("shipped <env> is required");
           return shipped(deps(), a.pos[0], a.need("sha"), a.need("result"));
@@ -10157,11 +10140,11 @@ function byScorer(rows) {
     median: median(vs.filter((v) => typeof v === "number"))
   }]));
 }
-function measures(rows, merged) {
+function measures(rows, merged2) {
   const cost = (rs) => rs.reduce((t, r) => t + (r.cost_usd ?? 0), 0);
   const round = (n) => Math.round(n * 1e3) / 1e3;
   const withCr = rows.filter((r) => r.cr);
-  const crs = new Set(withCr.map((r) => r.cr).filter((n) => !merged || merged.includes(n)));
+  const crs = new Set(withCr.map((r) => r.cr).filter((n) => !merged2 || merged2.includes(n)));
   const total = cost(rows);
   return {
     ...crs.size ? { costPerCR: round(cost(withCr.filter((r) => crs.has(r.cr))) / crs.size) } : {},
@@ -10278,14 +10261,14 @@ var init_ledger = __esm({
     });
     normaliseError = (msg) => msg.toLowerCase().replace(/(["'`]).*?\1/g, "<s>").replace(/\S*[\\/]\S*/g, "<path>").replace(/\b[0-9a-f]{7,40}\b/g, "<sha>").replace(/\d+(\.\d+)?/g, "<n>").replace(/\s+/g, " ").trim().slice(0, 120);
     LEARNING_SKILLS = ["judge-run", "improve-factory", "bench"];
-    summarise = (rows, merged) => ({
+    summarise = (rows, merged2) => ({
       total: stats(rows),
       bySkill: groupStats(rows, (r) => r.skill),
       byModel: groupStats(rows, (r) => r.model),
       byExecutor: groupStats(rows, (r) => r.executor ?? "harness"),
       byScorer: byScorer(rows),
       failureClusters: clusters(rows),
-      measures: measures(rows, merged)
+      measures: measures(rows, merged2)
     });
     isScores = (c) => c.body.trimStart().startsWith(SCORES_MARKER);
     USAGE2 = [
@@ -10349,12 +10332,12 @@ var init_ledger = __esm({
         }
         const rows = flattenRuns(comments, { sinceDays, skill: a.values.skill });
         if (verb === "runs") return console.log(JSON.stringify(rows, null, 2)), 0;
-        let merged;
+        let merged2;
         try {
-          merged = (await (await forge()).list({ state: "merged" })).filter((c) => c.state === "merged").map((c) => c.n);
+          merged2 = (await (await forge()).list({ state: "merged" })).filter((c) => c.state === "merged").map((c) => c.n);
         } catch {
         }
-        console.log(JSON.stringify({ ...summarise(rows, merged), learning: learningState(comments, b.learning?.every_cycles) }, null, 2));
+        console.log(JSON.stringify({ ...summarise(rows, merged2), learning: learningState(comments, b.learning?.every_cycles) }, null, 2));
         return 0;
       } catch (e) {
         console.error(e.message);
@@ -10461,12 +10444,12 @@ function diverse(cases, n) {
 async function buildCases(board, forge, binding, limit, o = {}) {
   const isTest = rule(binding, "proof_pattern", PROOF_FILE);
   const trusted = specAuthors(binding).map((a) => a.toLowerCase());
-  const merged = (await forge.list({ state: "merged" })).filter((c) => c.state === "merged");
+  const merged2 = (await forge.list({ state: "merged" })).filter((c) => c.state === "merged");
   const tickets = (await board.list({ status: binding.board.done_statuses })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const cases = [];
   for (const t of tickets) {
     if (!o.perSize && cases.length >= limit) break;
-    const cr = merged.find((c) => c.closes.includes(t.id));
+    const cr = merged2.find((c) => c.closes.includes(t.id));
     if (!cr) continue;
     const d = await forge.diff(cr.n);
     const oracleTests = addedFiles(d).filter((p) => isTest.test(p));
@@ -11320,7 +11303,7 @@ var GROUPS = {
   forge: [() => Promise.resolve().then(() => (init_forge(), forge_exports)), true, "open view diff list ready draft sync automerge approve approvals comment comments status runs"],
   vcs: [() => Promise.resolve().then(() => (init_vcs(), vcs_exports)), true, "start head changed base push cut tag tags drop checkout-tests"],
   dispatch: [() => Promise.resolve().then(() => (init_dispatch(), dispatch_exports)), true, "dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>]"],
-  gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base board-sync shipped signal-on-red skill-regression"],
+  gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base merged shipped signal-on-red skill-regression"],
   ledger: [() => Promise.resolve().then(() => (init_ledger(), ledger_exports)), true, "runs summary plan record stale hash: the run ledger from heartbeats"],
   bench: [() => Promise.resolve().then(() => (init_bench(), bench_exports)), true, "build propose run report compare"],
   mcp: [() => Promise.resolve().then(() => (init_mcp(), mcp_exports)), true, "serve the port verbs as MCP tools: stdio, or --http --port <p> with AGENTIC_SDLC_MCP_TOKEN; --allow approve,status"]

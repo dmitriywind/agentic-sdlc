@@ -13,7 +13,7 @@ name: agentic-sdlc CR gate
 # on the next pull_request_target event or a re-run.
 on:
   pull_request_target:
-    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, edited, closed]
+    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, edited]
   workflow_run:
     workflows: ["agentic-sdlc review event"]
     types: [completed]
@@ -22,9 +22,9 @@ on:
 permissions: {}
 
 concurrency:
-  # Board-moving actions (closed, opened, reopened, ready_for_review, converted_to_draft) each have their own group and are never cancelled, so a later push cannot drop the board move.
-  group: agentic-cr-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.merge_group.head_sha }}-${{ contains(fromJSON('["closed","opened","reopened","ready_for_review","converted_to_draft"]'), github.event.action) && github.event.action || github.event_name }}
-  cancel-in-progress: ${{ !contains(fromJSON('["closed","opened","reopened","ready_for_review","converted_to_draft"]'), github.event.action) }}
+  # No job here moves the board (skills and the trunk-push merged gate do), so a newer event replaces an older run.
+  group: agentic-cr-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.merge_group.head_sha }}-${{ github.event_name }}
+  cancel-in-progress: true
 
 jobs:
   ticket-linkage:
@@ -43,9 +43,6 @@ jobs:
       AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
       CR: ${{ github.event.pull_request.number }}
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
-      ACTION: ${{ github.event.action }}
-      DRAFT: ${{ github.event.pull_request.draft }}
-      MERGED: ${{ github.event.pull_request.merged }}
     steps:
       # Base branch only: the binding in force is the trunk's, not the PR's.
       # pin to a commit SHA (actions/checkout, actions/setup-node)
@@ -67,33 +64,19 @@ jobs:
           fi
 
       - name: Branch names
-        if: github.event_name != 'merge_group' && github.event.action != 'closed'
+        if: github.event_name != 'merge_group'
         run: agentic-sdlc gate branch-names --ref "$HEAD_REF"
 
       - name: Ticket linkage
-        if: github.event_name != 'merge_group' && github.event.action != 'closed' && github.event.pull_request.draft == false
+        if: github.event_name != 'merge_group' && github.event.pull_request.draft == false
         run: agentic-sdlc gate linkage --cr "$CR"
 
-      - name: Board sync
-        if: github.event_name == 'pull_request_target'
-        run: |
-          if [ "$ACTION" = closed ]; then
-            [ "$MERGED" = true ] || exit 0
-            event=merged
-          elif [ "$ACTION" = converted_to_draft ] || [ "$DRAFT" = true ]; then
-            event=draft
-          elif [ "$ACTION" = opened ] || [ "$ACTION" = reopened ] || [ "$ACTION" = ready_for_review ]; then
-            event=ready
-          else
-            exit 0
-          fi
-          agentic-sdlc gate board-sync --cr "$CR" --event "$event"
 
   human-approval:
     # Posts status human-approval on the head (with the review identity's token): computes the class and
     # checks the approving reviews the class needs. Runs on a PR event and, via workflow_run, on a review event.
     name: human-approval
-    if: (github.event_name == 'pull_request_target' && github.event.action != 'closed') || github.event_name == 'workflow_run'
+    if: github.event_name == 'pull_request_target' || github.event_name == 'workflow_run'
     environment: agentic-review
     runs-on: ubuntu-latest
     timeout-minutes: 10

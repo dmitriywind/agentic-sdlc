@@ -76,8 +76,11 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    - Then `forge ready <n>` and `forge automerge <n>`. Done when the CR is approved by the review
      identity, ready, any human approval is requested, and the ticket still shows In review.
 8. **Send back.**
-   - Findings (any Important) on a product CR: move the ticket to In progress for
-     [`implement-spec`](../implement-spec/SKILL.md).
+   - Findings (any Important) on a product CR opened by the factory: move the ticket to In progress
+     for [`implement-spec`](../implement-spec/SKILL.md).
+   - Findings on a CR a person opened (author outside `owners.bots`): `forge draft <n>`; the ticket
+     stays In review and the report is the hand-back. Never push to that change line; review again
+     when its head changes.
    - Spec or scope wrong: move it to Backlog with the reason.
    - Findings on a factory CR: the CR stays draft with the report; `improve-factory` reads it as
      `rejected`. Done when the ticket or the CR shows the outcome.

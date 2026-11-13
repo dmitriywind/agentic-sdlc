@@ -55,6 +55,8 @@ export interface CR {
   closes: string[];
   checks: Check[];
   body: string;
+  /** The forge login that opened the CR, in the form comment authors use. */
+  author: string;
 }
 
 /** One review of a CR, oldest first. state is lower case: approved, changes_requested, commented, dismissed, pending. sha: the commit reviewed. */

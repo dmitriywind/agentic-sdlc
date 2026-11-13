@@ -74,10 +74,20 @@ Feature: Implement a spec
   # Source: skills/implement-spec/SKILL.md, "Draft CR"
   Scenario: A CR that is already open moves the ticket to In review
     Given a ticket at In progress
-    And a CR for the change line is already open
+    And a CR opened by the factory for the change line is already open
     When the fast check passes and the change line is pushed
     Then the ticket moves to In review
     And the factory opens no second CR
+
+  # Source: skills/implement-spec/SKILL.md, "Claim"
+  Scenario: A CR a person opened is handed to review, not taken over
+    Given a ticket at Ready or In progress
+    And an open CR closes the ticket
+    And an author outside owners.bots opened the CR
+    When implement-spec claims the ticket
+    Then the ticket moves to In review with --only-from its status
+    And implement-spec posts one comment that review-pr reviews the CR
+    And implement-spec pushes nothing to that change line
 
   # Source: skills/implement-spec/SKILL.md, "Rules"
   Scenario: A diff over the size limit goes back to Backlog

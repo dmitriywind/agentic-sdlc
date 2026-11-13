@@ -38,7 +38,7 @@ Scenario: PASS marks the CR ready with auto-merge
 | [gate-branch-names](gate-branch-names.feature) | `gate branch-names` and the pre-push check | UC-19 |
 | [gate-linkage](gate-linkage.feature) | `gate ticket-linkage` | UC-10 |
 | [gate-approval](gate-approval.feature) | `gate human-approval` | UC-10, UC-11, UC-17 |
-| [gate-board-sync](gate-board-sync.feature) | `gate board-sync` | UC-10 |
+| [gate-merged](gate-merged.feature) | `gate merged` on the trunk push | UC-10, UC-15 |
 | [gate-proofs-on-base](gate-proofs-on-base.feature) | `gate proofs-on-base` | UC-10 |
 | [gate-shipped](gate-shipped.feature) | `gate shipped`, tags and rollback | UC-13, UC-15 |
 | [gate-signal-on-red](gate-signal-on-red.feature) | `gate signal-on-red` | UC-15 |

@@ -163,7 +163,7 @@ flowchart LR
   end
   subgraph CI["Forge CI: trusted rules"]
     T["Binding read from<br/>TARGET branch"]
-    GT["Gates: linkage, approval,<br/>board-sync, shipped"]
+    GT["Gates: linkage, approval,<br/>merged, shipped"]
     BT["Board token"]
   end
   subgraph IS["Implementer sandbox"]

@@ -20,7 +20,7 @@ export function gitlab(ctx: AdapterContext): Forge {
       headSha: m.sha, baseSha: m.diff_refs?.base_sha ?? '', draft: DRAFT.test(m.title) || !!m.draft,
       state: m.state === 'opened' ? 'open' : m.state === 'merged' ? 'merged' : 'closed',
       behind: m.detailed_merge_status === 'need_rebase', mergeSha: m.merge_commit_sha ?? m.squash_commit_sha ?? undefined, closes: parseCloses(m.description ?? ''),
-      checks: st.map((s: any) => ({ name: s.name, state: cs(s.status) })), body: m.description ?? '',
+      checks: st.map((s: any) => ({ name: s.name, state: cs(s.status) })), body: m.description ?? '', author: m.author?.username ?? '',
     };
   };
   const view = async (n: string) => toCR(await call('GET', `/merge_requests/${n}`));

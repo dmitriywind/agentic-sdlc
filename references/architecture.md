@@ -129,8 +129,8 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
 | `runs [--ref <r>] [--failed]` | CI runs | `Run[]` |
 
-`CR = { n, url, title, source, target, headSha, baseSha, mergeSha?, draft, state: 'open'|'merged'|'closed', behind, closes: string[], checks: {name, state}[], body }`.
-`closes` is parsed from the body by the shared rule: exactly the lines `Closes <id>`.
+`CR = { n, url, title, source, target, headSha, baseSha, mergeSha?, draft, state: 'open'|'merged'|'closed', behind, closes: string[], checks: {name, state}[], body, author }`.
+`closes` is parsed from the body by the shared rule: exactly the lines `Closes <id>`. `author` is the forge login that opened the CR, in the form comment authors use.
 
 Adapters: `github` (`gh`), `gitlab` (`glab` / REST v4, merge requests, "merge when pipeline
 succeeds"), `azure` (Azure DevOps REST, PR policies, auto-complete), `bitbucket` (Cloud REST 2.0,
@@ -163,9 +163,8 @@ change line `start` opens.
 | `linkage` | Posts check `ticket-linkage`: a product CR closes exactly one open ticket and names it in its source. |
 | `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base. |
 | `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by `owners.factory`. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
-| `board-sync --cr <n> \| --sha <sha> --event opened\|ready\|draft\|merged` | CR events move its one ticket to In review; a merge into the trunk moves it to Done and sets Shipped Not shipped when empty. Held and done tickets are skipped. |
-| `board-sync --event in-release --release <v>` | A release-line push sets Shipped In release on the tickets of version `<v>`. |
-| `shipped <env> --sha <sha> --result success\|failure` | Only Done tickets whose CR merge is an ancestor of `<sha>` get `On <env>`; unknown ancestry ships nothing. A failure in the last environment returns In release tickets to the previous environment, clears the version and opens a held Signal. |
+| `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. Done records a fact: a held ticket moves and keeps its label; a Cancelled ticket stays. A push with no CR changes nothing. It is the only gate that moves a Status; no CR-pipeline gate writes the board. |
+| `shipped <env> --sha <sha> --result success\|failure` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); unknown ancestry ships nothing. A failure in the last environment returns the tickets of the version in flight (Release Version set, not yet On the last environment) to the previous environment, clears the version and opens a held Signal. |
 | `signal-on-red --run <id>` | A red trunk or release-line run opens a Signal with a redacted evidence bundle. Other refs are ignored. |
 | `skill-regression` | A change under `paths.factory` keeps the skill pack valid: frontmatter, links, scorers. |
 

@@ -7994,6 +7994,7 @@ function azure(ctx) {
       behind: false,
       // ponytail: Azure DevOps exposes no "behind" flag; sync is unsupported anyway
       closes: parseCloses(p.description ?? ""),
+      author: p.createdBy?.uniqueName ?? "",
       // The newest status per context wins: an older iteration's success does not hide a new pending.
       checks: [...new Map((st.value ?? []).sort((a, b) => a.id - b.id).map((s) => [s.context.name, { name: s.context.name, state: cs(s.state) }])).values()],
       body: p.description ?? ""
@@ -8116,7 +8117,8 @@ function bitbucket(ctx) {
       behind: tip.target.hash !== p.destination.commit.hash,
       closes: parseCloses(p.description ?? ""),
       checks: (st.values ?? []).map((s) => ({ name: s.name ?? s.key, state: cs2(s.state) })),
-      body: p.description ?? ""
+      body: p.description ?? "",
+      author: p.author?.nickname ?? ""
     };
   };
   const put = async (n, body) => {
@@ -8245,7 +8247,8 @@ function github(ctx) {
       mergeSha: p.merged_at ? p.merge_commit_sha : void 0,
       closes: parseCloses(p.body ?? ""),
       checks: roll.map((c) => ({ name: c.name ?? c.context, state: checkState(c) })),
-      body: p.body ?? ""
+      body: p.body ?? "",
+      author: p.user?.login ?? ""
     };
   };
   return {
@@ -8344,7 +8347,8 @@ function gitlab(ctx) {
       mergeSha: m.merge_commit_sha ?? m.squash_commit_sha ?? void 0,
       closes: parseCloses(m.description ?? ""),
       checks: st.map((s) => ({ name: s.name, state: cs3(s.status) })),
-      body: m.description ?? ""
+      body: m.description ?? "",
+      author: m.author?.username ?? ""
     };
   };
   const view = async (n) => toCR(await call("GET", `/merge_requests/${n}`));

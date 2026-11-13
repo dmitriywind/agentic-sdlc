@@ -2,8 +2,8 @@
 # Secrets: AGENTIC_FORGE_TOKEN, AGENTIC_BOARD_TOKEN, AGENTIC_REVIEW_TOKEN as CI/CD variables that are
 # Protected, Masked and hidden; keep "protected variables in MR pipelines" off. Environment scope is a name
 # match that an MR can declare in its own .gitlab-ci.yml, so it is no boundary on its own. Protected
-# variables do not reach MR pipelines, so the secret-holding gates (ticket-linkage, human-approval,
-# board-in-review) must run from the trigger relay on the default branch. Known limitation, tracked for the next release.
+# variables do not reach MR pipelines, so the secret-holding gates (ticket-linkage, human-approval) must run
+# from the trigger relay on the default branch. Known limitation, tracked for the next release. No MR job moves the board.
 # Project settings: "Pipelines must succeed", fast-forward merge, merge trains on the trunk. Required
 # checks: ticket-linkage, Required, proofs-on-base, review, human-approval, skill-regression.
 # Event -> gate wiring only.
@@ -99,17 +99,6 @@ human-approval:
   script:
     - agentic-sdlc --root "$AGENTIC_ROOT" gate approval --cr "$AGENTIC_CR"
 
-board-in-review:
-  extends: .agentic-mr
-  stage: test
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TITLE =~ /^(Draft|WIP):/
-      variables: { EVENT: draft }
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      variables: { EVENT: ready }
-  script:
-    - agentic-sdlc --root "$AGENTIC_ROOT" gate board-sync --cr "$CI_MERGE_REQUEST_IID" --event "$EVENT"
-
 # Reads the MR's own .agents/skills (static file checks with the pinned CLI). No secret.
 skill-regression:
   image: node:22
@@ -127,22 +116,13 @@ skill-regression:
       fi
 
 # Trunk pipeline after a merge. set: your trunk branch if it is not the default branch.
-board-merged:
+merged:
   extends: .agentic
   stage: .post
   rules:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
-    - agentic-sdlc gate board-sync --sha "$CI_COMMIT_SHA" --event merged
-
-# Release line push: its tickets go In release.
-board-in-release:
-  extends: .agentic
-  stage: .post
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\//
-  script:
-    - agentic-sdlc gate board-sync --event in-release --release "${CI_COMMIT_BRANCH#release/}"
+    - agentic-sdlc gate merged --sha "$CI_COMMIT_SHA"
 
 # Shipped follows the deploy job's real result: on_success / on_failure evaluate the jobs in needs.
 # set: first-env and last-env must match product.environments in the binding

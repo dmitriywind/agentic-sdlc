@@ -5,6 +5,7 @@ not on npm.
 
 ## Unreleased
 
+- Breaking: one writer per board transition. `gate board-sync` is gone. `gate merged --sha` (trunk push only) moves a merged ticket to Done; held tickets move and keep the label, Cancelled ones stay. implement-spec moves its ticket to In review after `forge open` and after a rework push; a CR a person opened is handed to review-pr, which never pushes to it. `release` sets Shipped In release at the cut. No CR-pipeline job on any forge writes the board. `shipped` ships a merged ticket still at In review (and moves it to Done) and resets a failed release by its version. The delivery workflow no longer runs `signal-on-red` for deploy runs, so one failed deploy opens one Signal. `CR` gains `author`.
 - Docs: `docs/adoption.md` (choose the setup, one repo, many repos, migration, upgrade), `docs/use-cases.md` (actors, 19 use cases, team shapes), `docs/behaviour/` (20 Gherkin feature files, 174 scenarios, each with its source and, for CLI mechanism, the proving test), `docs/roadmap.md`, and three new flows (routing by status, intake, the needs-human hold).
 - AGENTS.md: a behaviour change updates its feature file, flow and use case in the same change.
 

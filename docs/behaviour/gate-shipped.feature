@@ -57,7 +57,7 @@ Feature: Gate shipped
   # Source: src/gates.ts, "shipped" (rollback); skills/sdlc/references/gates.md
   # Proof: test/gates.test.ts "shipped: staging, production + tag, failures, unknown env"
   Scenario: A failure in the last environment returns the tickets and opens a held Signal
-    Given Done tickets show Shipped "In release" with a release_version
+    Given Done tickets with a release_version are not yet On the last environment
     When "gate shipped" runs for the last environment with --result failure
     Then Shipped is "On <environment before the last>" on those tickets
     And release_version is cleared
@@ -69,6 +69,22 @@ Feature: Gate shipped
     Given one ticket merged after the failed revision and is In release for a newer version
     When "gate shipped" runs for the last environment with --result failure
     Then that ticket keeps Shipped "In release" and its release_version
+
+  # Source: src/gates.ts, "shipped"
+  # Proof: test/gates.test.ts "shipped: a deploy that beats the merge gate ships the In review ticket and moves it to Done"
+  Scenario: A deploy that reports before the merge gate still ships the ticket
+    Given a ticket at In review whose CR merged at an ancestor of the deployed sha
+    When "gate shipped" runs for an environment with --result success
+    Then the ticket moves to Done
+    And Shipped is "On <environment>"
+
+  # Source: src/gates.ts, "shipped" (rollback keyed on the version)
+  # Proof: test/gates.test.ts "shipped: a last-env failure before In release is set still resets the cut tickets"
+  Scenario: A failure that arrives before In release is set still resets the cut tickets
+    Given a Done ticket with a release_version and Shipped "On staging"
+    When "gate shipped" runs for the last environment with --result failure
+    Then release_version is cleared on that ticket
+    And a ticket already On the last environment keeps its release_version
 
   # Source: src/gates.ts, "shipped" (failure in another environment)
   # Proof: test/gates.test.ts "shipped: staging, production + tag, failures, unknown env"

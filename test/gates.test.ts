@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
-import { approval, approvers, boardSync, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
+import { approval, approvers, merged, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
 import { PROOF_FILE } from '../src/bench.ts';
 
 const binding = {
@@ -31,7 +31,7 @@ function fakes(items: Item[], crs: Record<string, Partial<CR>> = {}, diffs: Reco
     set: async (id: string, f: string, v: string | null) => { if (v === null) delete (get(id).fields as any)[f]; else (get(id).fields as any)[f] = v; return get(id); },
     create: async (t: any) => { created.push(t); const i = item(`n${created.length}`, t.status, {}, { title: t.title }); i.labels = t.labels ?? []; items.push(i); return i; },
   };
-  const cr = (n: string): CR => ({ n, url: '', title: '', source: '', target: 'main', headSha: '', baseSha: '', draft: false, state: 'open', behind: false, closes: [], checks: [], body: '', ...crs[n] });
+  const cr = (n: string): CR => ({ n, url: '', title: '', source: '', target: 'main', headSha: '', baseSha: '', draft: false, state: 'open', behind: false, closes: [], checks: [], body: '', author: 'bot', ...crs[n] });
   const forge: any = {
     view: async (n: string) => cr(n),
     viewBySha: async (sha: string) => cr(Object.keys(crs).find((k) => crs[k].mergeSha === sha)!),
@@ -82,14 +82,12 @@ test('linkage: product CR needs exactly one open ticket named by the source', as
   assert.equal((await linkage(d, 'mixed')).ok, false);
 });
 
-test('board-sync: opened -> In review; merged (by cr or sha) -> Done + Not shipped', async () => {
-  const f = fakes([item('12', 'Backlog')], { c1: { n: 'c1', closes: ['12'], mergeSha: 'abc' } });
-  await boardSync(f.d, { cr: 'c1', event: 'opened' });
-  assert.equal(f.items[0].status, 'In review');
-  await boardSync(f.d, { sha: 'abc', event: 'merged' });
+test('merged: the CR at a trunk sha moves its one ticket to Done, Not shipped when empty', async () => {
+  const f = fakes([item('12', 'In review')], { c1: { n: 'c1', closes: ['12'], mergeSha: 'abc' } });
+  assert.deepEqual((await merged(f.d, 'abc')).moved, ['12']);
   assert.equal(f.items[0].status, 'Done');
   assert.equal(f.items[0].fields.shipped, 'Not shipped');
-  await assert.rejects(boardSync(f.d, { cr: 'c1', event: 'nope' }));
+  assert.match((await merged(f.d, 'nope')).reason!, /no CR/);
 });
 
 test('shipped: staging, production + tag, failures, unknown env', async () => {
@@ -341,33 +339,44 @@ test('shipped: only Done tickets whose merge sha is an ancestor; unknown ancestr
   assert.deepEqual((await shipped(h.d, 'production', 'x', 'failure')).changed, ['5']);
 });
 
-test('board-sync: sha must resolve, trunk-only merged, keeps shipped, one closes, skips done/held, in-release', async () => {
-  const f = fakes([item('12', 'Backlog'), item('13', 'Done'), item('14', 'Backlog', {}, { labels: ['needs-human'] }), item('15', 'In review', { shipped: 'On staging' })], {
-    side: { closes: ['12'], target: 'release/1' },
-    two: { closes: ['12', '13'] },
-    done: { closes: ['13'] },
-    held: { closes: ['14'] },
-    re: { closes: ['15'] },
+test('merged: trunk only, exactly one ticket, keeps Shipped, moves a held ticket, leaves Cancelled', async () => {
+  const f = fakes([item('12', 'In progress'), item('13', 'Done'), item('14', 'In review', {}, { labels: ['needs-human'] }), item('15', 'In review', { shipped: 'On staging' }), item('16', 'Cancelled')], {
+    side: { closes: ['12'], target: 'release/1', mergeSha: 's1' },
+    two: { closes: ['12', '13'], mergeSha: 's2' },
+    held: { closes: ['14'], mergeSha: 's3' },
+    re: { closes: ['15'], mergeSha: 's4' },
+    can: { closes: ['16'], mergeSha: 's5' },
+    late: { closes: ['12'], mergeSha: 's6' },
   });
-  await assert.rejects(boardSync(f.d, { sha: 'nope', event: 'merged' }), /no CR/);
-  assert.match((await boardSync(f.d, { cr: 'side', event: 'merged' })).reason!, /not trunk/);
-  assert.equal(f.items[0].status, 'Backlog');
-  assert.match((await boardSync(f.d, { cr: 'two', event: 'opened' })).reason!, /exactly one/);
-  assert.match((await boardSync(f.d, { cr: 'done', event: 'ready' })).reason!, /Done/);
-  assert.match((await boardSync(f.d, { cr: 'held', event: 'opened' })).reason!, /held/);
-  assert.equal(f.items[2].status, 'Backlog');
-  await boardSync(f.d, { cr: 're', event: 'merged' });
-  assert.equal(f.items[3].status, 'Done');
+  assert.match((await merged(f.d, 's1')).reason!, /not trunk/);
+  assert.match((await merged(f.d, 's2')).reason!, /exactly one/);
+  assert.equal(f.items[0].status, 'In progress');
+  await merged(f.d, 's3');
+  assert.equal(f.items[2].status, 'Done');
+  assert.deepEqual(f.items[2].labels, ['needs-human']);
+  await merged(f.d, 's4');
   assert.equal(f.items[3].fields.shipped, 'On staging');
+  assert.match((await merged(f.d, 's5')).reason!, /Cancelled/);
+  assert.equal(f.items[4].status, 'Cancelled');
+  await merged(f.d, 's6');
+  assert.equal(f.items[0].status, 'Done');
+});
 
-  f.items[0].fields = { release_version: '2026.2', shipped: 'On staging' };
-  f.items[3].fields = { release_version: '2026.2', shipped: 'On production' };
-  f.items[1].fields = { release_version: '2026.1', shipped: 'On staging' };
-  assert.deepEqual((await boardSync(f.d, { event: 'in-release', release: '2026.2' })).moved, ['12']);
-  assert.equal(f.items[0].fields.shipped, 'In release');
-  assert.equal(f.items[3].fields.shipped, 'On production');
-  assert.equal(f.items[1].fields.shipped, 'On staging');
-  await assert.rejects(boardSync(f.d, { event: 'in-release' }));
+test('shipped: a deploy that beats the merge gate ships the In review ticket and moves it to Done', async () => {
+  const f = fakes([item('7', 'In review')], { m7: { state: 'merged', closes: ['7'], mergeSha: 'm7' } });
+  f.d.isAncestor = () => true;
+  assert.deepEqual((await shipped(f.d, 'staging', 'x', 'success')).changed, ['7']);
+  assert.equal(f.items[0].status, 'Done');
+  assert.equal(f.items[0].fields.shipped, 'On staging');
+});
+
+test('shipped: a last-env failure before In release is set still resets the cut tickets', async () => {
+  const f = fakes([item('8', 'Done', { shipped: 'On staging', release_version: '2026.3' }), item('9', 'Done', { shipped: 'On production', release_version: '2026.2' })],
+    { m8: { state: 'merged', closes: ['8'], mergeSha: 'm8' }, m9: { state: 'merged', closes: ['9'], mergeSha: 'm9' } });
+  f.d.isAncestor = () => true;
+  assert.deepEqual((await shipped(f.d, 'production', 'x', 'failure')).changed, ['8']);
+  assert.equal(f.items[0].fields.release_version, undefined);
+  assert.equal(f.items[1].fields.release_version, '2026.2');
 });
 
 test('signal-on-red: only trunk or release refs; strict title', async () => {

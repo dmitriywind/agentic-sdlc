@@ -19,6 +19,16 @@ Feature: Review a change request
     And it runs "forge ready <n>" and "forge automerge <n>"
     And the ticket still shows In review
 
+  # Source: skills/review-pr/SKILL.md, "Send back"
+  Scenario: Findings on a CR a person opened go back to that person
+    Given a CR opened by an author outside owners.bots
+    And the review finds an Important finding
+    When the reviewer decides
+    Then the reviewer runs "forge draft <n>"
+    And the ticket stays In review
+    And the reviewer pushes nothing to the change line
+    And the reviewer reviews again when the CR head changes
+
   # Source: skills/review-pr/SKILL.md, "Report" and "Send back"
   Scenario: An Important finding sends the ticket back
     Given a product CR with a criterion graded NOT DONE

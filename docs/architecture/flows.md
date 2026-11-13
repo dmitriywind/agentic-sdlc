@@ -95,8 +95,7 @@ sequenceDiagram
   participant B as Board
   I->>F: Open draft CR, Closes id
   F->>G: branch-names, linkage, approval
-  F->>G: board-sync (opened)
-  G->>B: Ticket In review
+  I->>B: Ticket In review (--only-from In progress)
   F->>C: pull_request
   C->>F: Required (install + verify), proofs-on-base
   R->>F: Read diff, ticket, spec and CI results
@@ -113,10 +112,12 @@ sequenceDiagram
   G->>F: human-approval
   R->>F: Mark ready, turn on automerge
   F->>F: Merge to trunk when every required check is green
-  F->>G: board-sync (merged)
+  F->>G: merged (trunk push)
   G->>B: Ticket Done, Not shipped
 ```
 
+- No CR-pipeline gate writes the board. implement-spec moves the ticket to In review; the trunk-push
+  `merged` gate moves it to Done.
 - The implementer never reviews its own CR. The review runtime never runs CR code.
 - A Fast-lane product CR merges on the agent review. A Full-lane one also needs a human
   approval when `forge.human_approval` is `full-lane` or `always`.
@@ -134,7 +135,7 @@ flowchart TD
   SG --> RL["Release request (labelled Backlog ticket)<br/>or P0 fix On first env"]
   RL --> RS["release skill picks SHA<br/>and version"]
   RS --> CUT["vcs cut: release line"]
-  CUT --> IR["Gate board-sync:<br/>Shipped In release"]
+  CUT --> IR["release skill:<br/>Shipped In release"]
   IR --> D2["Deploy last env<br/>(owner approves)"]
   D2 -->|"success"| OK["Gate shipped: On last env,<br/>tag created"]
   D2 -->|"failure"| FAIL["Tickets back to previous env,<br/>version cleared"]

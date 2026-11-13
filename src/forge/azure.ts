@@ -23,7 +23,7 @@ export function azure(ctx: AdapterContext): Forge {
       headSha: p.lastMergeSourceCommit?.commitId ?? '', baseSha: p.lastMergeTargetCommit?.commitId ?? '',
       draft: !!p.isDraft, state: p.status === 'active' ? 'open' : p.status === 'completed' ? 'merged' : 'closed',
       mergeSha: p.lastMergeCommit?.commitId, behind: false, // ponytail: Azure DevOps exposes no "behind" flag; sync is unsupported anyway
-      closes: parseCloses(p.description ?? ''),
+      closes: parseCloses(p.description ?? ''), author: p.createdBy?.uniqueName ?? '',
       // The newest status per context wins: an older iteration's success does not hide a new pending.
       checks: [...new Map<string, Check>((st.value ?? []).sort((a: any, b: any) => a.id - b.id).map((s: any) => [s.context.name, { name: s.context.name, state: cs(s.state) }])).values()],
       body: p.description ?? '',

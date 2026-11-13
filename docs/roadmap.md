@@ -38,7 +38,7 @@ between two sources. Fix each in the skill, then update its feature file.
 | `skills/shape/SKILL.md` initiative stop | "No comment" conflicts with the common contract's closing comment. |
 | `skills/shape/SKILL.md` checklist | Says `linkage` fails on an unticked box; `gates.md` defines no checkbox rule. |
 | `skills/shape/SKILL.md` split | Whether the original keeps its Priority after it becomes an initiative. |
-| `skills/backlog-grooming/SKILL.md` step 2 | Closes a parent "as completed"; `board.md` says Done with the lowest Shipped; `statuses.md` says only `board-sync` moves to Done. |
+| `skills/backlog-grooming/SKILL.md` step 2 | Closes a parent "as completed"; `board.md` says Done with the lowest Shipped; `statuses.md` says only gate `merged` moves to Done. |
 | `skills/sdlc/references/board.md`, `skills/triage-signal/SKILL.md` | Neither names who writes the P0 field. |
 | `skills/sdlc/SKILL.md` cycle rules | After `time_budget_minutes`, whether judge and learn still run. |
 | `skills/sdlc/SKILL.md` cycle rules | "When it has none" has no clear subject; `statuses.md` says the heartbeat ticket is not a ticket, yet it can hold. |

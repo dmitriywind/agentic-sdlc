@@ -325,9 +325,8 @@ export function deliveryWorkflow(b: any, root: string): string | undefined {
   if (b.forge.adapter !== 'github' || !existsSync(f)) return undefined;
   const wf = parse(readFileSync(f, 'utf8'));
   const br: string[] = wf?.on?.push?.branches ?? [];
-  const rel = `${b.vcs.release_prefix}**`;
-  if (!br.includes(b.vcs.trunk) || !br.includes(rel))
-    return `fail delivery workflow: push branches ${br.join(', ')} do not name trunk ${b.vcs.trunk} and ${rel}; edit its 'set:' lines`;
+  if (!br.includes(b.vcs.trunk))
+    return `fail delivery workflow: push branches ${br.join(', ')} do not name trunk ${b.vcs.trunk}; edit its 'set:' lines`;
   for (const [k, key, v] of [['TRUNK', 'vcs.trunk', b.vcs.trunk], ['RELEASE_PREFIX', 'vcs.release_prefix', b.vcs.release_prefix]])
     if (wf?.env?.[k] !== v) return `fail delivery workflow: env.${k} is '${wf?.env?.[k] ?? ''}', not ${key} '${v}'; edit its 'set:' lines`;
   return `ok   delivery workflow: names trunk ${b.vcs.trunk}`;

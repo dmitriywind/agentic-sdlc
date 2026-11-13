@@ -268,39 +268,25 @@ export async function proofsOnBase(d: Deps, n: string) {
   return { ok: !error, cr: cr.n, class: cls, files, passedOnBase, posted, errors: error ? [error] : [] };
 }
 
-const OPEN_EVENTS = ['opened', 'ready', 'draft'];
-
-export async function boardSync(d: Deps, o: { cr?: string; sha?: string; event: string; release?: string }) {
+/**
+ * A push to the trunk: the CR merged at that sha moves its one ticket to Done (Shipped Not shipped when
+ * empty). Done records a fact, so a held ticket moves too and keeps its label; a Cancelled ticket stays.
+ * A push with no CR (a direct push) changes nothing.
+ */
+export async function merged(d: Deps, sha: string): Promise<{ cr?: string; sha: string; moved: string[]; reason?: string }> {
   const b = d.binding.board;
   const opts = shippedOptions(d.binding.product.environments);
-  if (o.event === 'in-release') {
-    if (!o.release) throw new UsageError('--release is required for in-release');
-    if (!opts.includes('In release')) return { event: o.event, moved: [], reason: 'one environment: no In release' };
-    const moved: string[] = [];
-    for (const x of await d.board.list()) {
-      if (x.fields.release_version !== o.release || opts.indexOf(x.fields.shipped || opts[0]) >= opts.indexOf('In release')) continue;
-      await d.board.set(x.id, 'shipped', 'In release');
-      moved.push(x.id);
-    }
-    return { event: o.event, release: o.release, moved };
-  }
-  if (o.event !== 'merged' && !OPEN_EVENTS.includes(o.event)) throw new UsageError(`unknown event: ${o.event}`);
-  const cr = o.sha ? await d.forge.viewBySha(o.sha).catch(() => undefined) : await d.forge.view(o.cr!);
-  if (!cr?.n) throw new Error(`no CR merged at ${o.sha}`);
-  const none = (reason: string) => ({ cr: cr.n, event: o.event, moved: [] as string[], reason });
+  const cr = await d.forge.viewBySha(sha).catch(() => undefined);
+  const none = (reason: string) => ({ cr: cr?.n, sha, moved: [] as string[], reason });
+  if (!cr?.n) return none('no CR merged at this sha');
+  if (cr.target !== d.binding.vcs.trunk) return none(`target ${cr.target} is not trunk ${d.binding.vcs.trunk}`);
   if (cr.closes.length !== 1) return none(`CR closes ${cr.closes.length} tickets, not exactly one`);
   const id = cr.closes[0];
-  if (o.event === 'merged') {
-    if (cr.target !== d.binding.vcs.trunk) return none(`target ${cr.target} is not trunk ${d.binding.vcs.trunk}`);
-    const it = await d.board.move(id, 'Done');
-    if (!it?.fields?.shipped) await d.board.set(id, 'shipped', opts[0]);
-  } else {
-    const it = await d.board.get(id);
-    if (b.done_statuses.includes(it.status)) return none(`${id} is ${it.status}`);
-    if (it.labels.includes(b.labels.human)) return none(`${id} is held (${b.labels.human})`);
-    await d.board.move(id, 'In review');
-  }
-  return { cr: cr.n, event: o.event, moved: [id] };
+  const it = await d.board.get(id);
+  if (it.status === 'Cancelled') return none(`${id} is Cancelled`);
+  if (!b.done_statuses.includes(it.status)) await d.board.move(id, 'Done', it.status);
+  if (!it.fields?.shipped) await d.board.set(id, 'shipped', opts[0]);
+  return { cr: cr.n, sha, moved: [id] };
 }
 
 export async function shipped(d: Deps, env: string, sha: string, result: string) {
@@ -312,7 +298,8 @@ export async function shipped(d: Deps, env: string, sha: string, result: string)
   const rank = (s?: string) => opts.indexOf(s || opts[0]);
   const target = `On ${env}`;
   const last = i === envs.length - 1;
-  const done = (await d.board.list({ status: ['Done'] })).filter((x) => x.status === 'Done');
+  // A merged ticket the merge gate has not reached yet is still In review; it ships and moves to Done here.
+  const done = (await d.board.list({ status: ['Done', 'In review'] })).filter((x) => x.status === 'Done' || x.status === 'In review');
   const changed: string[] = [];
   const signal = async (held: boolean) => {
     await d.board.create({
@@ -347,7 +334,11 @@ export async function shipped(d: Deps, env: string, sha: string, result: string)
         tags.push(`${prefix}${v}`);
       }
     }
-    for (const x of items) { await d.board.set(x.id, 'shipped', target); changed.push(x.id); }
+    for (const x of items) {
+      if (x.status !== 'Done') await d.board.move(x.id, 'Done', x.status);
+      await d.board.set(x.id, 'shipped', target);
+      changed.push(x.id);
+    }
     return { env, result, changed, tags, unmatched };
   }
   if (last) {
@@ -356,7 +347,8 @@ export async function shipped(d: Deps, env: string, sha: string, result: string)
     const isAnc = d.isAncestor;
     if (isAnc) {
       const merged = await d.forge.list({ state: 'merged' });
-      for (const x of done.filter((x) => x.fields.release_version && x.fields.shipped === 'In release')) {
+      // The release skill sets In release at the cut; key on the version so a deploy that fails first still resets.
+      for (const x of done.filter((x) => x.status === 'Done' && x.fields.release_version && rank(x.fields.shipped) < rank(target))) {
         const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
         if (!shas.length || shas.some((s) => !s || isAnc(s, sha) !== true)) continue;
         await d.board.set(x.id, 'shipped', back);
@@ -466,11 +458,7 @@ export const cli: PortCli = (argv, base) =>
         return { ok: true, names };
       }
       case 'linkage': return fail(await linkage(deps(), a.need('cr')));
-      case 'board-sync': {
-        const event = a.need('event');
-        if (event !== 'in-release' && !a.has('cr') && !a.has('sha')) throw new UsageError('--cr or --sha is required');
-        return boardSync(deps(), { cr: a.get('cr'), sha: a.get('sha'), event, release: a.get('release') });
-      }
+      case 'merged': return merged(deps(), a.need('sha'));
       case 'shipped': {
         if (!a.pos[0]) throw new UsageError('shipped <env> is required');
         return shipped(deps(), a.pos[0], a.need('sha'), a.need('result'));

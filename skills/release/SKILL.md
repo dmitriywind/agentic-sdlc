@@ -49,8 +49,8 @@ The Product owner approves the last environment; this skill never does.
    changes the contents restarts at step 3. Then `board set <id> release_version <version>` on each selected ticket. Done when every
    ticket shows it.
 7. **Cut.** `agentic-sdlc vcs cut <revision> <version>` from the chosen revision, never from a
-   moving ref (`vcs.release_prefix` is applied by the verb). The cut starts release CI, and the
-   tickets show Shipped = In release. Done when the release line exists at that revision. Then
+   moving ref (`vcs.release_prefix` is applied by the verb). Then `board set <id> shipped "In release"` on each selected ticket. The cut starts release CI. Done
+   when the release line exists at that revision and every selected ticket shows In release. Then
    close the request (`board close <request> completed`), report, with progress per milestone
    read from the board (progress only; versions do not follow milestones), and let the pipelines
    run.

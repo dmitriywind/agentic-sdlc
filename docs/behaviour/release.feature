@@ -85,7 +85,7 @@ Feature: Release to the last environment
     When the release skill continues
     Then it sets release_version on each selected ticket
     And it runs "agentic-sdlc vcs cut <revision> <version>" from the chosen revision
-    And the tickets show Shipped In release
+    And it sets Shipped "In release" on each selected ticket
     And it closes the request as completed
 
   # Source: skills/release/SKILL.md, "Rules"

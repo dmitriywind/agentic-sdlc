@@ -24,7 +24,7 @@ export function github(ctx: AdapterContext): Forge {
       headSha: p.head.sha, baseSha: p.base.sha, draft: !!p.draft,
       state: p.merged_at ? 'merged' : p.state === 'open' ? 'open' : 'closed',
       behind: p.mergeable_state === 'behind', mergeSha: p.merged_at ? p.merge_commit_sha : undefined, closes: parseCloses(p.body ?? ''),
-      checks: roll.map((c: any) => ({ name: c.name ?? c.context, state: checkState(c) })), body: p.body ?? '',
+      checks: roll.map((c: any) => ({ name: c.name ?? c.context, state: checkState(c) })), body: p.body ?? '', author: p.user?.login ?? '',
     };
   };
   return {

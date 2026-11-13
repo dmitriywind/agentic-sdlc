@@ -18,7 +18,9 @@ to `shape`.
 1. **Claim.** Take the dispatched ticket; with none, the top Ready ticket in queue order that is neither held nor assigned to anyone but this run's executor. Move it
    to In progress (`board move <id> "In progress" --only-from Ready`); the move guard keeps two
    runs off one ticket. A ticket already at In progress with no open CR is worked the same way. A ticket
-   at In progress whose open CR closes it is rework: read the newest review-pr report on that CR
+   at Ready or In progress whose open CR closes it and was opened by an author outside `owners.bots` belongs
+   to that person: `board move <id> "In review" --only-from <its status>`, post one comment that review-pr
+   reviews it, and stop. A ticket at In progress whose open CR, opened by the factory, closes it is rework: read the newest review-pr report on that CR
    (`forge comments <n> --last 1 --marker "<!-- review-pr" --trusted`) and fix each Important finding first.
    Done when the board shows In progress.
 2. **Branch.** `agentic-sdlc vcs start <name>`, named by `vcs.change_pattern`: it reopens the existing change
@@ -40,9 +42,9 @@ to `shape`.
 6. **Draft CR.** `agentic-sdlc forge open --source <change line> --title <t> --body-file <file> --draft`,
    filling `paths.pr_template`: plain words and ticket ids only, the one `Closes <id>` (see
    [`sdlc`](../sdlc/SKILL.md) Branches and releases), what changed, why, how to see it work, and every deviation
-   from the spec with its reason. Then `forge view <n>` and read `closes` back. Done when it lists
-   exactly this ticket and the ticket shows In review. A CR already open: after the fast check, move
-   the ticket to In review.
+   from the spec with its reason. Then `forge view <n>` and read `closes` back. Then `board move <id> "In review" --only-from "In progress"`. Done when `closes` lists exactly this
+   ticket and the ticket shows In review. A CR already open (rework): after the fast check and the push,
+   make the same move. No gate makes this move.
 
 ## Rules
 

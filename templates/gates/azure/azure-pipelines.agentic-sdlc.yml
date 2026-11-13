@@ -85,15 +85,8 @@ jobs:
         env:
           AGENTIC_FORGE_TOKEN: $(AGENTIC_FORGE_TOKEN)
           AGENTIC_REVIEW_TOKEN: $(AGENTIC_REVIEW_TOKEN)
-      - script: agentic-sdlc --root "$AGENTIC_ROOT" gate board-sync --cr "$SYSTEM_PULLREQUEST_PULLREQUESTID" --event ready
-        displayName: board-sync
-        env:
-          AGENTIC_FORGE_TOKEN: $(AGENTIC_FORGE_TOKEN)
-          AGENTIC_BOARD_TOKEN: $(AGENTIC_BOARD_TOKEN)
       # Not PR events, so wire them yourself (each checkout fetchDepth: 0):
-      #   merged: a Service hook ("Pull request merged") queuing `gate board-sync --sha <merge sha> --event merged`
-      #   draft: the same hook on "Pull request updated" running `gate board-sync --cr <n> --event draft`
-      #   release line push (release/*): `gate board-sync --event in-release --release <version>`
+      #   trunk CI pipeline: `gate merged --sha $(Build.SourceVersion)` (the only gate that moves a ticket to Done)
       #   each deploy pipeline: `gate shipped <env> --sha <sha> --result success|failure` from the deploy's real result
       - script: |
           if git diff --name-only "origin/${SYSTEM_PULLREQUEST_TARGETBRANCH#refs/heads/}...HEAD" | grep -q '^\.agents/'; then
