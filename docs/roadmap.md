@@ -19,7 +19,8 @@ flowchart LR
 | Implementer token without commit-status write | Code the cycle runs in `npm test` can post a status with raw HTTP. | The profiles and doctor name the permission; `review` and `human-approval` are pinned to the review app. |
 | Board and forge identities per owner | A Jira accountId and a GitLab username differ, so one `owners.*` string cannot match both. | `owners.<role>` takes `{ board, forge }`. |
 | A CR push time on the port | review-pr and the heartbeat measure "pending longer than `stall_minutes` after the push" with no time on `CR`. | `CR` carries the head's push time. |
-| Pilot on a real product repo | v2 has 173 passing tests but has never run against a real product. | Three scheduled cycles in a row write a heartbeat with no `errors`, and a ticket goes from Backlog to Shipped. |
+| Template heartbeat ticket is a number | `init` writes `heartbeat.ticket: "HEARTBEAT-1"`, which a GitHub or local board cannot address; validate warns. | The template default works on every board, or `init --board` sets it. |
+| Pilot on a real product repo | v2 has 177 passing tests but has never run against a real product. | Three scheduled cycles in a row write a heartbeat with no `errors`, and a ticket goes from Backlog to Shipped. |
 
 ### Skill text to make exact
 
