@@ -3,7 +3,8 @@ name: agentic-sdlc release
 # Product owner's go-ahead on the release request; the Environment below makes that approval a forge rule:
 # set Environment `agentic-release` with the Product owner as a required reviewer, deployment branches
 # limited to the trunk, and secret AGENTIC_RELEASE_TOKEN: a release bot that is the only bypass actor of
-# .github/rulesets/release.json. The cycle never holds that token.
+# .github/rulesets/release.json. The cycle never holds that token. `forge cut` only starts this workflow;
+# the cut itself is `vcs cut` below, run with the release bot's credential.
 on:
   workflow_dispatch:
     inputs:

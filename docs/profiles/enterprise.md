@@ -35,7 +35,7 @@ learning:
   bench_trials: 3
   auto_merge_classes: []                         # add tuning once a bench baseline exists
   judge_tier: fast                               # template default; judge-run picks the next tier when it is the run's own model
-  budget_usd_per_week: 50                        # template default; raise it for org-wide use
+  budget_usd_per_week: 50                        # the template default is 0 (learning off); set a cap to turn learning on
 ```
 All executor kinds are allowed: `managed`, `webhook`, `assign`, `command`, `harness`. See [executors.md](../../skills/sdlc/references/executors.md).
 

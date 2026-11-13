@@ -62,7 +62,8 @@ Eleven skills, each with a model tier in `metadata.tier`:
 The self-improvement loop is described in the contract, section 6. In short: every run is a
 ledger row, scorers grade it, and `improve-factory` proposes one change at a time, proved on a
 bench built from your own merged work. Until a bench baseline exists, nothing merges without the
-factory owner.
+factory owner. Learning is off until you set `learning.budget_usd_per_week` above 0 and an
+`agent_command` for the bench.
 
 ## Install
 
@@ -88,7 +89,7 @@ The CLI installs from Git only. Warning: the npm package `agentic-sdlc` is a dif
 
 What `init` writes, for every harness: `.agents/binding.yml`, `.agents/scorers/`, the gate
 templates for your forge (GitHub: workflows, `pull_request_template.md` and
-`.github/rulesets/trunk.json`), `.agents/hooks/pre-push`, `.agents/runner-setup.sh`, the cycle and
+`.github/rulesets/trunk.json` and `release.json`, and the release workflow for release-line delivery), `.agents/hooks/pre-push`, `.agents/runner-setup.sh`, the cycle and
 review prompts in `.agents/`, and a pointer block in `AGENTS.md`. Per harness:
 
 | Harness | Skills | Instructions | MCP server |

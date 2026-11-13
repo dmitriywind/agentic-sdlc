@@ -206,7 +206,8 @@ Keys this contract relies on by name:
   `vcs.release_prefix` and has no In release), `product.evidence: [sbom | provenance | signature]`,
   `paths.no_proof` (globs a product CR may change with no proof file).
 - `cycle.dedupe_minutes`: a second dispatch of the same skill and subject inside it is a double fire
-  and is skipped (unset or 0: no check; the template sets 10).
+  and is skipped (unset or 0: no check; the template sets 10). A dispatch whose previous run has no
+  later bot comment is skipped until `stall_minutes`: that run has not finished.
 - `paths.factory`: a change only there is a **factory change**: no ticket, its own change pattern
   (`vcs.factory_change_pattern`), classified by the `approval` gate and checked by
   `skill-regression`.

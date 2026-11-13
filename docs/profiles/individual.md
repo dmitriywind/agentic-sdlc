@@ -30,7 +30,7 @@ learning:
   bench_min_cases: 20                            # bench compare needs this many shared cases
   bench_trials: 3                                # and this many trials per case
   auto_merge_classes: []                         # add tuning once a bench baseline exists
-  budget_usd_per_week: 50                        # lower it to stay inside the plan's weekly allowance
+  budget_usd_per_week: 50                        # the template default is 0 (learning off); keep the cap inside the plan's weekly allowance
 # agent_command: "<subscription CLI headless command with {model} {prompt_file} {workdir}>"   # bench only
 ```
 Executors: `harness` only, plus `command` for a headless CLI logged in with the subscription.
