@@ -15,6 +15,7 @@ flowchart LR
 
 | Item | Why | Done when |
 |---|---|---|
+| Stress-test fixes, in the report's order | The [stress test](audits/2026-11-13-stress-test.md) found 12 P1 breaks; most come from several writers on one board field. | Every P1 break is fixed or rejected with a reason, and the feature files match. |
 | Pilot on a real product repo | v2 has 158 passing tests but has never run against a real product. | Three scheduled cycles in a row write a heartbeat with no `errors`, and a ticket goes from Backlog to Shipped. |
 | Default binding passes `validate` with no warning | A fresh `init` warns: `learning.budget_usd_per_week > 0 but agent_command is unset`. | `init` then `validate` prints no warning. |
 | GitHub board scoped to its repo | The adapter reads every Project item and keys tickets by issue number, so two repos in one Project collide. | `board list` returns only items whose issue is in `board.options.repo`, with a test. |
