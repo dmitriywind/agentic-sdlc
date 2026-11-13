@@ -10,12 +10,12 @@ worked around.
 | Gate or job | Posts | Outcome |
 |---|---|---|
 | CI job `Required` | check `Required` | On `pull_request`, with no secrets: `commands.install`, then `commands.verify` on the CR head. No agent posts it. |
-| `proofs-on-base --cr <n>` | status `proofs-on-base` | Same no-secrets job: the CR's new or changed proof files run against the merge base's product code; success when each new proof fails there. |
+| `proofs-on-base --cr <n>` | status `proofs-on-base` | Same no-secrets job: the CR's new or changed proof files run against the merge base's product code; success when each new proof fails there, or when a product CR changes only `paths.no_proof`. |
 | `linkage` | check `ticket-linkage` | A product CR closes exactly one open ticket and names it in its source. |
 | `approval --cr <n>` | status `human-approval` | Classifies the CR (`product-fast`, `product-full`, `tuning`, `guardrail`) and passes it only with the approvals the class needs; see Approval. |
 | `branch-names` | check | A change line outside `vcs.change_pattern`, `vcs.factory_change_pattern`, `vcs.release_prefix` and the trunk cannot be pushed or merged. |
-| `merged` | board move | A trunk push moves the one ticket its CR closes to Done, Shipped Not shipped when empty. It is the only gate that moves a ticket's Status; no CR-pipeline gate writes the board. |
-| `shipped <env>` | Shipped field | A green deploy to `<env>` writes On <env>; a failed deploy to the last environment returns the tickets to On <the environment before the last> and opens a held Signal; a Done ticket with no merged CR found is listed as unmatched in the output. |
+| `merged` | board move | A trunk push moves the one ticket its CR closes to Done, Shipped Not shipped when empty. No CR-pipeline gate writes the board. |
+| `shipped <env>` | Shipped field | A green deploy to `<env>` writes On <env> (an In review ticket moves to Done first; `--version` records an artifact version); `--result rolled-back` steps back the tickets not in the revision now running; a failed deploy to the last environment returns the tickets to On <the environment before the last> and opens a held Signal; a Done ticket with no merged CR found is listed as unmatched in the output. |
 | `signal-on-red` | a Signal | A red trunk or release-line run opens a Signal with a redacted evidence bundle. |
 | `skill-regression` | check | A change under `paths.factory` keeps the skill pack valid: frontmatter, links, scorers. |
 | dead-man job | a Signal | `agentic-sdlc ledger stale --max-hours <h>` fails when the newest heartbeat is older. |

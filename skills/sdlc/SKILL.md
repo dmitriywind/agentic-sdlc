@@ -152,7 +152,8 @@ obeys the same skills and gates; a reviewer is never the implementer of the same
   last-environment-failure Signal. It applies at Backlog, Ready, In progress and In review, and to
   a Signal.
 - A held ticket keeps its Status. Every skill skips it, never moves or reorders it, and no
-  automation moves it.
+  automation moves it, except gate `merged` when its CR merges: Done records the merge and the
+  label stays.
 - Removing the label is the only release; the next run resumes at the same Status.
 
 ## Statuses, board, lanes, gates
@@ -166,14 +167,15 @@ obeys the same skills and gates; a reviewer is never the implementer of the same
 ## Branches and releases
 
 - Trunk-based on Git: one trunk (`vcs.trunk`), short-lived change lines matching
-  `vcs.change_pattern` in, release lines `vcs.release_prefix` out. No long-lived develop line. A P0 fix
+  `vcs.change_pattern` in, release lines `vcs.release_prefix` out. No long-lived develop line. With release-line delivery, a P0 fix
   starts release as soon as it is Done with Shipped On <env before last>; the Product owner still
   approves the cut. One ticket, one change line, one CR.
 - The change line names its ticket, and the CR closes exactly that ticket: one line `Closes <id>`.
   `implement-spec` writes it; every later reader takes the CR's `closes` and checks it against the
   change line.
-- A merge to the trunk moves the ticket to Done and deploys the first environment. The last
-  environment deploys from a release line after the Product owner approves it. Agents never
+- A merge to the trunk moves the ticket to Done and deploys the first environment. With
+  `product.delivery: release-line` the last environment deploys from a release line after the Product
+  owner approves it; with `continuous` every environment deploys from the trunk. Agents never
   approve it.
 - The tag is `vcs.tag_prefix` plus the version, created by the release pipeline at success in the
   last environment.

@@ -179,7 +179,6 @@ export interface Binding {
     adapter: 'github' | 'gitlab' | 'azure' | 'bitbucket';
     options: Record<string, unknown>;
     review_identity: string;
-    /** separate (default): review-pr runs in its own runtime, the only one holding the review token; same: the cycle reviews too. */
     /** Who must approve besides the agent review (status human-approval). Absent: full-lane. */
     human_approval?: 'full-lane' | 'always' | 'never';
     review_check_name: string;
@@ -208,6 +207,8 @@ export interface Binding {
     preview?: string;
     /** Runs proof files on the merge base; {files} is filled. Without it, gate proofs-on-base fails closed. */
     proofs_on_base?: string;
+    /** Exits 0 when every product.evidence kind exists for {sha}; the release ready check runs it. */
+    evidence_check?: string;
   };
   paths: Record<string, string | string[]>;
   sizes: string[];
@@ -235,7 +236,6 @@ export interface Binding {
     bench_min_cases?: number;
     /** bench run trials per case, and the trials compare needs (default 3). */
     bench_trials?: number;
-    /** Runs per week judge-run offers to an owner for a human grade. */
   };
 }
 

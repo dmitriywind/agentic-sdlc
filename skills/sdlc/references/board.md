@@ -30,8 +30,8 @@ Read from [`sdlc`](../SKILL.md).
   milestones. `board.later_milestone` holds accepted work that is nice to have and has no delivery
   date; nothing shapes or builds a ticket there until `backlog-grooming` moves it into a dated
   milestone.
-- **Release Version:** set by `release` before the release line is cut; cleared when a release
-  fails.
+- **Release Version:** set by `release` before the release line is cut, or by `gate shipped --version`
+  under continuous delivery; cleared when a release fails.
 
 ## Lanes
 

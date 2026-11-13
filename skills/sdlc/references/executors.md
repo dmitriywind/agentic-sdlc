@@ -15,7 +15,7 @@ executors:
 | Kind | Start | Result comes back by |
 |---|---|---|
 | `harness` | A subagent loads `.agents/skills/<skill>/SKILL.md` (or the plugin skill), model by its tier. | The subagent's own board and forge writes. |
-| `command` | The CLI runs `run` with `{skill} {ticket} {cr} {workdir} {prompt_file}` filled in. | Exit code plus the bot's board and forge writes. |
+| `command` | The CLI runs `run` with `{skill} {ticket} {cr} {workdir} {prompt_file} {mcps_file} {model}` filled in. | Exit code plus the bot's board and forge writes. |
 | `webhook` | The CLI POSTs the task (`skill`, `ticket`, `cr`) as JSON to the URL. | The bot's board and forge writes; the next cycle reads them. |
 | `managed` | The CLI starts a run on a managed-agent API, shaped by `api`: `claude` (Managed Agents `POST /v1/sessions`), `cursor` (Cloud Agents `POST /v1/agents`), `antigravity` (Gemini Interactions), or `generic` (`POST <endpoint>/sessions`). | Same. The run id goes in the ledger row. |
 | `assign` | The CLI assigns the ticket (or CR) to the bot user and adds the skill name as a comment. | Same. |

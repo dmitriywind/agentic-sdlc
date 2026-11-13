@@ -23,6 +23,7 @@ board:
   #   server: my-board-connector
   #   tools: { list: <tool>, get: <tool>, update: <tool> }
   statuses: [Ideas, Signals, Backlog, Ready, In progress, In review, Done, Cancelled] # the process statuses, in order
+  # later_milestone: Later       # milestone for accepted nice-to-have work; shape never routes it
   fields:                       # logical field -> the tracker's field name
     size: Size
     priority: Priority
@@ -49,7 +50,7 @@ forge:
   review_identity: reviewer-account # the account behind review_token_env: posts the review status and the approving review
   human_approval: full-lane     # full-lane | always | never. Which product CRs need one approving review by a human
                                 #   (not owners.bots, not review_identity) on the head: gate approval posts status human-approval
-                                #   given review_token_env; the cycle never holds it. same: the cycle reviews too (validate warns)
+                                #   given review_token_env; the cycle never holds it
   review_check_name: review     # status context review-pr posts on a pass
   verify_check_name: Required   # CI job (no secrets) running commands.install and commands.verify; review-pr reads it
   required_checks: [ticket-linkage, Required, proofs-on-base, review, human-approval, skill-regression] # must be green before merge

@@ -37,8 +37,7 @@ initiative (see [Sub-issues](../sdlc/references/board.md#sub-issues)): stop with
    (`board create … --parent <id>`), which becomes the initiative and stays at Backlog (see
    [Sub-issues](../sdlc/references/board.md#sub-issues)); children take its milestone and go on the board at
    Backlog. Done when every child is within the limit and has a Status.
-5. **Criteria.** Write acceptance criteria in the ticket as plain bullets, never checkboxes: the
-   `linkage` gate fails on an unticked box. Each is an observable statement naming its proof kind
+5. **Criteria.** Write acceptance criteria in the ticket as plain bullets, never checkboxes. Each is an observable statement naming its proof kind
    (one of `product.proofs`: test, eval, visual, data-check, computer-use, manual; `computer-use` names a user path an agent drives in a preview of the CR head, so it needs `commands.preview` (without it pick `manual`), and prefer an automated proof when one exists) and the check that will prove it; add what is out of scope. Use the words of `paths.glossary`. A `manual` criterion names who checks it (owners.product unless the ticket names another owner); review-pr asks them. Done
    when every criterion is checkable and has a named proof.
 6. **Lane.** Write the Lane field (`board set <id> lane <Fast|Full>`). Fast when Size is at or below

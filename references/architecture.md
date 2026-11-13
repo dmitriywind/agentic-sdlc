@@ -124,7 +124,7 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `automerge <n>` | Merge when every required check is green | `CR` |
 | `comment <n> --body-file <f>` | CR comment | `{ id, url }` |
 | `comments <n> [--last <k>] [--marker <text>] [--author <a>]… [--trusted]` | CR comments (review report, owner reply on a factory CR), newest first, system notes dropped; same filters as `board comments` (`--last` counts after them) | `Comment[]` |
-| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted only with `options.review_token_env`. The `proofs-on-base` gate alone posts with `options.token_env` (the CI job's token); the CLI verb never does. Azure DevOps posts on the PR iteration whose head is `<sha>`, since branch policies read PR statuses | `{}` |
+| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted only with `options.review_token_env`. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`). The `proofs-on-base` gate alone posts with `options.token_env` (the CI job's token); the CLI verb never does. Azure DevOps posts on the PR iteration whose head is `<sha>`, since branch policies read PR statuses | `{}` |
 | `approve <n>` | Approving review as `review_identity`, with `options.review_token_env` | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
 | `runs [--ref <r>] [--failed]` | CI runs | `Run[]` |
@@ -162,9 +162,9 @@ change line `start` opens.
 |---|---|
 | `branch-names` | A change line outside the binding's patterns is refused. |
 | `linkage` | Posts check `ticket-linkage`: a product CR closes exactly one open ticket and names it in its source. |
-| `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base. |
-| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by `owners.factory`. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
-| `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. Done records a fact: a held ticket moves and keeps its label; a Cancelled ticket stays. A push with no CR changes nothing. It is the only gate that moves a Status; no CR-pipeline gate writes the board. |
+| `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base, or when a product CR changes only `paths.no_proof`. |
+| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`; with `--fail-pending` it also exits 1 while approval waits (for forges where the job result is the merge gate). Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by `owners.factory`. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
+| `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. Done records a fact: a held ticket moves and keeps its label; a Cancelled ticket stays. A push with no CR changes nothing. No CR-pipeline gate writes the board; besides this gate only `shipped` moves a ticket (In review to Done, when a deploy reports first). |
 | `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
 | `signal-on-red --run <id>` | A red trunk or release-line run opens a Signal with a redacted evidence bundle. Other refs are ignored. |
 | `skill-regression` | A change under `paths.factory` keeps the skill pack valid: frontmatter, links, scorers. |
@@ -176,8 +176,9 @@ Checks:
   its own job, also with no secrets: where it cannot post the status, its result is the check. The GitHub CR workflow also triggers on `merge_group`, for merge queues.
 - **`review`** is posted by `review-pr` as `forge.review_identity`.
 - **Required checks**: `ticket-linkage`, `Required`, `proofs-on-base`, `review`,
-  `human-approval`, `skill-regression`. The trunk ruleset pins each to its source app
-  (`integration_id`); `doctor` warns when a required check is not pinned. No CODEOWNERS file:
+  `human-approval`, `skill-regression`. The trunk ruleset pins the four CI checks to their
+  source app (`integration_id`); `review` and `human-approval` post with the review token, so pin them
+  to the review app when it is an App. `doctor` warns when a required check is not pinned. No CODEOWNERS file:
   the `approval` gate enforces owner approval by class, so `tuning` can auto-merge.
 - A dead-man job runs `ledger stale --max-hours <h>` on a schedule.
 
@@ -199,7 +200,13 @@ Keys this contract relies on by name:
   `forge.required_checks`.
 - `commands.install`, `commands.verify` (the `Required` job), `commands.proofs_on_base` (the
   `proofs-on-base` gate: a command with `{files}`, run once per new proof file), `commands.preview` (optional: deploys
-  a CR head for `verify-ux`), `commands.rollback`.
+  a CR head for `verify-ux`), `commands.rollback`, `commands.evidence_check` (exits 0 when every
+  `product.evidence` kind exists for `{sha}`; the release ready check runs it).
+- `product.delivery: release-line | continuous` (default `release-line`; continuous needs no
+  `vcs.release_prefix` and has no In release), `product.evidence: [sbom | provenance | signature]`,
+  `paths.no_proof` (globs a product CR may change with no proof file).
+- `cycle.dedupe_minutes`: a second dispatch of the same skill and subject inside it is a double fire
+  and is skipped (unset or 0: no check; the template sets 10).
 - `paths.factory`: a change only there is a **factory change**: no ticket, its own change pattern
   (`vcs.factory_change_pattern`), classified by the `approval` gate and checked by
   `skill-regression`.
@@ -356,5 +363,5 @@ only `review-pr`, for product and factory CRs. `forge status` refuses the contex
 while approval waits, for forges where the job result is the merge gate. The review runtime **never runs CR code**: it reads
 `Required` and `proofs-on-base` from CI and runs no install or test command. So an implementer can
 never post the `review` status or the approving review for its own CR, and a CR's code never sees
-the review token. `same` is allowed only with a warning. Unattended jobs set
+the review token. Unattended jobs set
 `AGENTIC_SDLC_UNATTENDED=1`.
