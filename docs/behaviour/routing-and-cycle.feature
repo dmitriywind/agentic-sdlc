@@ -174,7 +174,7 @@ Feature: Routing and the unattended cycle
     Then the dispatch prints "{ skipped: true }" with "the previous run has not finished"
 
   # Source: src/dispatch.ts, "idempotency"; skills/sdlc/SKILL.md, "Common contract"
-  # Proof: test/dispatch.test.ts "dispatch: an unfinished run blocks until stall_minutes; a closing comment or the done line ends it; sdlc only claims; a failed start writes the done line"
+  # Proof: test/dispatch.test.ts "dispatch: an unfinished run blocks until stall_minutes; only its own done line ends it; sdlc only claims; a failed start writes the done line"
   Scenario: A run ends with its done marker, and a failed start writes one
     Given dispatch printed a done line for a run
     When the run posts that line in its closing comment

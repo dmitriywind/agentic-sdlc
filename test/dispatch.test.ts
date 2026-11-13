@@ -209,7 +209,7 @@ test('idempotency: a trusted marker for the same key inside cycle.dedupe_minutes
   assert.equal((await go(['implement-spec', '--ticket', '1'])).out.kind, 'harness');
 });
 
-test('dispatch: an unfinished run blocks until stall_minutes; a closing comment or the done line ends it; sdlc only claims; a failed start writes the done line', async () => {
+test('dispatch: an unfinished run blocks until stall_minutes; only its own done line ends it; sdlc only claims; a failed start writes the done line', async () => {
   const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
   const { createLocalBoard } = await import('../src/board/local.ts');
   const root = mkdtempSync(join(tmpdir(), 'disp2-'));
@@ -230,6 +230,9 @@ test('dispatch: an unfinished run blocks until stall_minutes; a closing comment 
   await new Promise((r) => setTimeout(r, 20)); // past the double-fire window
   const again = await go(['implement-spec', '--ticket', '1']);
   assert.equal(again.out.reason, 'the previous run has not finished');
+  await board.comment('1', 'a closing comment of another run');
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal((await go(['implement-spec', '--ticket', '1'])).out.reason, 'the previous run has not finished'); // only its own done line ends it
   await board.comment('1', `${first.out.done}\ndone`);
   await new Promise((r) => setTimeout(r, 20));
   assert.equal((await go(['implement-spec', '--ticket', '1'])).out.kind, 'harness');

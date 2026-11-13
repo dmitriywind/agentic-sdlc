@@ -8292,13 +8292,13 @@ function github(ctx) {
       return view(n);
     },
     async cut(revision, version) {
-      const since = Date.now() - 5e3;
+      const list = () => JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "--event", "workflow_dispatch", "-L", "5", "--json", "databaseId,url"]) || "[]");
+      const before = Math.max(0, ...list().map((r) => r.databaseId));
       gh(["workflow", "run", "agentic-sdlc-release.yml", "-f", `revision=${revision}`, "-f", `version=${version}`]);
       for (let i = 0; i < 10; i++) {
-        const runs = JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "--event", "workflow_dispatch", "-L", "5", "--json", "databaseId,url,createdAt"]) || "[]");
-        const run = runs.find((r) => Date.parse(r.createdAt) >= since);
+        const run = list().filter((r) => r.databaseId > before).sort((a, b) => a.databaseId - b.databaseId)[0];
         if (run) return { requested: true, run: String(run.databaseId), url: run.url };
-        await new Promise((r) => setTimeout(r, 2e3));
+        if (i < 9) await new Promise((r) => setTimeout(r, 2e3));
       }
       return { requested: true };
     },

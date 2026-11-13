@@ -53,14 +53,14 @@ export function github(ctx: AdapterContext): Forge {
     async sync(n) { gh(['pr', 'update-branch', n]); return view(n); },
     async automerge(n) { gh(['pr', 'merge', n, '--auto', '--squash']); return view(n); },
     async cut(revision, version) {
-      const since = Date.now() - 5_000; // clock skew margin
+      const list = () => JSON.parse(gh(['run', 'list', '--workflow', 'agentic-sdlc-release.yml', '--event', 'workflow_dispatch', '-L', '5', '--json', 'databaseId,url']) || '[]') as { databaseId: number; url: string }[];
+      const before = Math.max(0, ...list().map((r) => r.databaseId));
       gh(['workflow', 'run', 'agentic-sdlc-release.yml', '-f', `revision=${revision}`, '-f', `version=${version}`]);
-      // The run appears a few seconds after the dispatch; an older run is never returned.
+      // The new run appears a few seconds after the dispatch; run ids only grow, so no clock is compared.
       for (let i = 0; i < 10; i++) {
-        const runs = JSON.parse(gh(['run', 'list', '--workflow', 'agentic-sdlc-release.yml', '--event', 'workflow_dispatch', '-L', '5', '--json', 'databaseId,url,createdAt']) || '[]') as { databaseId: number; url: string; createdAt: string }[];
-        const run = runs.find((r) => Date.parse(r.createdAt) >= since);
+        const run = list().filter((r) => r.databaseId > before).sort((a, b) => a.databaseId - b.databaseId)[0];
         if (run) return { requested: true, run: String(run.databaseId), url: run.url };
-        await new Promise((r) => setTimeout(r, 2_000));
+        if (i < 9) await new Promise((r) => setTimeout(r, 2_000));
       }
       return { requested: true };
     },

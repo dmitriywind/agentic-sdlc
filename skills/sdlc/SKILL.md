@@ -70,8 +70,8 @@ There are three layers:
 - When unsure of authority, call [`escalate-to-human`](../escalate-to-human/SKILL.md) before acting.
 - Finish with one short ticket comment: what was done, what was decided, the next status. When your task names a
   done line (`<!-- agentic-sdlc:done <key> -->`), put it in that comment, on the dispatch target; the
-  cycle puts its own after the heartbeat's json. Without it a run on the heartbeat ticket counts as
-  unfinished until `stall_minutes`.
+  cycle puts its own after the heartbeat's json. Without it the run counts as unfinished until
+  `stall_minutes`, and no second run of it starts.
 - A decision is recorded only on its ticket. A doc states the resulting rule as a plain sentence,
   with no ruling id, date or decider.
 

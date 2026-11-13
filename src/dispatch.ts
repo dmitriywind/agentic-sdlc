@@ -172,16 +172,16 @@ export const cli: PortCli = async (argv, ctx) => {
       }
       key = [ticket || cr || 'factory', skill, f.run, head].filter(Boolean).join('-');
       const trusted = (b.owners?.bots ?? []).map((a) => a.toLowerCase());
-      const bot = (c: { author?: string }) => trusted.includes(String(c.author).toLowerCase());
+      const closer = ex.kind === 'assign' ? String((ex as { user?: string }).user ?? '').toLowerCase() : '';
+      const bot = (c: { author?: string }) => trusted.includes(String(c.author).toLowerCase()) || (!!closer && String(c.author).toLowerCase() === closer);
       const all = (await boardOf().comments(target)).filter(bot);
       const mine = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `)).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
       const at = mine ? Date.parse(mine.createdAt) : NaN;
       // Finished: a later bot comment carrying `<!-- agentic-sdlc:done <key> -->` (every dispatched run ends with one).
-      // On a ticket a run's own closing comment ends it; the heartbeat ticket carries other runs' comments, so
-      // there only the done line counts. Timestamps may have whole seconds only: same-second comments count.
+      // Finished: the run's own done line, which dispatch hands to every executor. Other runs' comments never
+      // count. Timestamps may have whole seconds only, so a same-second comment counts.
       const later = (c: { id: string; createdAt: string }) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
-      const isMarker = (c: { body: string }) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER}`);
-      const finished = mine && all.some((c) => later(c) && (c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`) || (target !== b.heartbeat?.ticket && !isMarker(c))));
+      const finished = mine && all.some((c) => later(c) && c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`));
       const stall = Number(b.stall_minutes) || 0;
       const age = (Date.now() - at) / 60_000;
       if (mine && (age < window || (!finished && age < stall))) {
@@ -213,7 +213,7 @@ export const cli: PortCli = async (argv, ctx) => {
     const info = { ...(judge ?? {}), model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox };
     // Claim before start: a second fire sees the marker even while this executor is still starting.
     if (key || ex.kind === 'assign') {
-      marker = (await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->\nagentic-sdlc: run skill ${skill} (${ex.kind})`)).id;
+      marker = (await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->\nagentic-sdlc: run skill ${skill} (${ex.kind})${key ? `; close with <!-- ${DONE_MARKER} ${key} -->` : ''}`)).id;
       const k = key ?? `${ticket}-${skill}`;
       // Only while nothing has left: once a request is sent, the remote run may exist, so no done line.
       onFail = () => (sent ? Promise.resolve() : boardOf().comment(target!, `<!-- ${DONE_MARKER} ${k} -->\nagentic-sdlc: ${skill} did not start`));
@@ -240,11 +240,11 @@ export const cli: PortCli = async (argv, ctx) => {
         const [cmd, args, childVars] = process.platform === 'win32'
           ? ['cmd', ['/d', '/v:off', '/c', '%AGENTIC_SDLC_CMD%'], { ...env, AGENTIC_SDLC_CMD: line }]
           : ['sh', ['-c', line], env];
-        sent = true;
         const child = spawnChild(cmd as string, args as string[], { cwd: workdir, env: childVars as NodeJS.ProcessEnv, detached: true, stdio: ['ignore', fd, fd], windowsHide: true });
         child.on('error', () => {}); // a late spawn failure shows as a missing pid below, not a crash
         child.unref();
         if (!child.pid) throw new Error(`could not start the command executor for ${skill}; see ${log}`);
+        sent = true;
         return await done('command', String(child.pid), { log, ...info });
       } finally { closeSync(fd); }
     }
@@ -267,6 +267,8 @@ export const cli: PortCli = async (argv, ctx) => {
     await boardOf().assign(ticket, ex.user);
     return await done('assign', null);
   } catch (e) {
+    // A 4xx answer or a network error means no remote run exists: the done line is still written.
+    if (sent && (e instanceof TypeError || / -> 4\d\d:/.test(String((e as Error).message)))) sent = false;
     if (onFail) await onFail().catch(() => undefined);
     console.error((e as Error).message);
     return 1;

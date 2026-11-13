@@ -160,7 +160,7 @@ async function post(d: Deps, sha: string, description: string, ok: boolean) {
 
 /** Change lines of dependency bots: product changes with no ticket, reviewed like any CR. */
 const DEPENDENCY_LINES = /^(dependabot|renovate)\//;
-const DEPENDENCY_BOTS = /^(app\/)?(dependabot|renovate)([-_]?bot|\[bot\])?$/i;
+const DEPENDENCY_BOTS = /^((app\/)?(dependabot|renovate)(\[bot\])?|renovate-bot)$/i;
 
 export async function linkage(d: Deps, n: string) {
   const cr = await d.forge.view(n);
@@ -422,7 +422,8 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
       for (const x of cut) {
         const shas = byId.get(x.id) ?? [];
         if (!shas.length || shas.some((s) => !s || isAnc(s, sha) !== true)) continue;
-        if (rank((await d.board.get(x.id)).fields.shipped) >= rank(target)) continue; // it shipped meanwhile
+        const now = (await d.board.get(x.id)).fields;
+        if (rank(now.shipped) >= rank(target) || now.release_version !== x.fields.release_version) continue; // it moved meanwhile
         await d.board.set(x.id, 'shipped', back);
         await d.board.set(x.id, 'release_version', null);
         changed.push(x.id);

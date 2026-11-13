@@ -8714,13 +8714,13 @@ function github(ctx) {
       return view(n);
     },
     async cut(revision, version2) {
-      const since = Date.now() - 5e3;
+      const list = () => JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "--event", "workflow_dispatch", "-L", "5", "--json", "databaseId,url"]) || "[]");
+      const before = Math.max(0, ...list().map((r) => r.databaseId));
       gh(["workflow", "run", "agentic-sdlc-release.yml", "-f", `revision=${revision}`, "-f", `version=${version2}`]);
       for (let i = 0; i < 10; i++) {
-        const runs = JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "--event", "workflow_dispatch", "-L", "5", "--json", "databaseId,url,createdAt"]) || "[]");
-        const run = runs.find((r) => Date.parse(r.createdAt) >= since);
+        const run = list().filter((r) => r.databaseId > before).sort((a, b) => a.databaseId - b.databaseId)[0];
         if (run) return { requested: true, run: String(run.databaseId), url: run.url };
-        await new Promise((r) => setTimeout(r, 2e3));
+        if (i < 9) await new Promise((r) => setTimeout(r, 2e3));
       }
       return { requested: true };
     },
@@ -9954,7 +9954,8 @@ environment: ${env}`,
       for (const x of cut) {
         const shas = byId.get(x.id) ?? [];
         if (!shas.length || shas.some((s) => !s || isAnc(s, sha2) !== true)) continue;
-        if (rank((await d.board.get(x.id)).fields.shipped) >= rank(target)) continue;
+        const now = (await d.board.get(x.id)).fields;
+        if (rank(now.shipped) >= rank(target) || now.release_version !== x.fields.release_version) continue;
         await d.board.set(x.id, "shipped", back);
         await d.board.set(x.id, "release_version", null);
         changed.push(x.id);
@@ -10057,7 +10058,7 @@ var init_gates = __esm({
     patternRe = (p) => new RegExp("^" + p.split(/(<ticket>|<name>)/).map((x) => x === "<ticket>" ? "[A-Za-z0-9_-]+" : x === "<name>" ? "[a-z0-9]+(?:-[a-z0-9]+)*" : esc(x)).join("") + "$");
     readDiff = (d, n) => d.forge.diff(n).catch(() => void 0);
     DEPENDENCY_LINES = /^(dependabot|renovate)\//;
-    DEPENDENCY_BOTS = /^(app\/)?(dependabot|renovate)([-_]?bot|\[bot\])?$/i;
+    DEPENDENCY_BOTS = /^((app\/)?(dependabot|renovate)(\[bot\])?|renovate-bot)$/i;
     redact2 = (s, max = 120) => String(s ?? "").replace(/[\x00-\x1f]/g, " ").replace(/\b[A-Za-z0-9_+/=-]{32,}\b/g, "[redacted]").slice(0, max);
     cleanUrl = (u) => redact2(String(u ?? "").replace(/^(\w+:\/\/)[^/@]*@/, "$1").replace(/[?#].*$/, ""), 200);
     cli5 = (argv, base) => guard(async () => {
@@ -11077,13 +11078,13 @@ var init_dispatch = __esm({
           }
           key = [ticket || cr || "factory", skill, f.run, head].filter(Boolean).join("-");
           const trusted = (b.owners?.bots ?? []).map((a) => a.toLowerCase());
-          const bot = (c) => trusted.includes(String(c.author).toLowerCase());
+          const closer = ex.kind === "assign" ? String(ex.user ?? "").toLowerCase() : "";
+          const bot = (c) => trusted.includes(String(c.author).toLowerCase()) || !!closer && String(c.author).toLowerCase() === closer;
           const all = (await boardOf().comments(target)).filter(bot);
           const mine = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `)).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
           const at = mine ? Date.parse(mine.createdAt) : NaN;
           const later = (c) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
-          const isMarker = (c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER}`);
-          const finished = mine && all.some((c) => later(c) && (c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`) || target !== b.heartbeat?.ticket && !isMarker(c)));
+          const finished = mine && all.some((c) => later(c) && c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`));
           const stall = Number(b.stall_minutes) || 0;
           const age = (Date.now() - at) / 6e4;
           if (mine && (age < window || !finished && age < stall)) {
@@ -11115,7 +11116,7 @@ agentic-sdlc: cycle claimed`);
         const info = { ...judge ?? {}, model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox };
         if (key || ex.kind === "assign") {
           marker = (await boardOf().comment(target, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->
-agentic-sdlc: run skill ${skill} (${ex.kind})`)).id;
+agentic-sdlc: run skill ${skill} (${ex.kind})${key ? `; close with <!-- ${DONE_MARKER} ${key} -->` : ""}`)).id;
           const k = key ?? `${ticket}-${skill}`;
           onFail = () => sent ? Promise.resolve() : boardOf().comment(target, `<!-- ${DONE_MARKER} ${k} -->
 agentic-sdlc: ${skill} did not start`);
@@ -11139,12 +11140,12 @@ agentic-sdlc: ${skill} did not start`);
           const fd = openSync(log, "a");
           try {
             const [cmd, args, childVars] = process.platform === "win32" ? ["cmd", ["/d", "/v:off", "/c", "%AGENTIC_SDLC_CMD%"], { ...env, AGENTIC_SDLC_CMD: line }] : ["sh", ["-c", line], env];
-            sent = true;
             const child = spawnChild(cmd, args, { cwd: workdir, env: childVars, detached: true, stdio: ["ignore", fd, fd], windowsHide: true });
             child.on("error", () => {
             });
             child.unref();
             if (!child.pid) throw new Error(`could not start the command executor for ${skill}; see ${log}`);
+            sent = true;
             return await done("command", String(child.pid), { log, ...info });
           } finally {
             closeSync(fd);
@@ -11169,6 +11170,7 @@ agentic-sdlc: ${skill} did not start`);
         await boardOf().assign(ticket, ex.user);
         return await done("assign", null);
       } catch (e) {
+        if (sent && (e instanceof TypeError || / -> 4\d\d:/.test(String(e.message)))) sent = false;
         if (onFail) await onFail().catch(() => void 0);
         console.error(e.message);
         return 1;
