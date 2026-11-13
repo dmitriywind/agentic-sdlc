@@ -161,3 +161,14 @@ test('product.delivery: continuous needs no release prefix; release-line needs t
   r.product.delivery = 'weekly';
   assert.match(validateBinding(r).join('\n'), /product.delivery 'weekly'/);
 });
+
+test('product.evidence: known kinds only; evidence without commands.evidence_check warns', () => {
+  const b = structuredClone(good) as any;
+  b.product.evidence = ['sbom', 'vibes'];
+  assert.match(validateBinding(b).join('\n'), /product.evidence has unknown kinds: vibes/);
+  b.product.evidence = ['sbom', 'provenance'];
+  assert.deepEqual(validateBinding(b), []);
+  assert.match(bindingWarnings(b).join('\n'), /commands.evidence_check is unset/);
+  b.commands.evidence_check = 'verify {sha}';
+  assert.deepEqual(bindingWarnings(b).filter((w) => w.includes('evidence')), []);
+});

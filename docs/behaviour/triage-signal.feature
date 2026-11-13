@@ -107,3 +107,11 @@ Feature: Triage a signal
       | is an advisory with no fix yet                                                       | the skill holds it with "escalate-to-human"             |
       | has evidence that cannot be redacted                                                 | the skill escalates                                     |
       | cannot be told from noise                                                            | the skill escalates                                     |
+
+  # Source: skills/triage-signal/SKILL.md, "Security first"
+  Scenario: A security report with a legal reporting deadline is escalated at once
+    Given paths.security_policy names a reporting duty with a deadline
+    And a security report describes an actively exploited vulnerability
+    When triage-signal handles the report
+    Then it calls escalate-to-human with the Legal trigger at once
+    And the ask names the deadline

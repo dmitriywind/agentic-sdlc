@@ -45,6 +45,7 @@ export const HUMAN_APPROVAL = ['full-lane', 'always', 'never'];
 const SANDBOXES =['cloud', 'container', 'local'];
 const PROFILES = ['individual', 'enterprise'];
 export const DELIVERY = ['release-line', 'continuous'];
+const EVIDENCE = ['sbom', 'provenance', 'signature'];
 const TIERS = ['fast', 'balanced', 'deep'];
 const STATUSES = ['Ideas', 'Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done', 'Cancelled'];
 
@@ -89,6 +90,8 @@ export function validateBinding(b: Binding): string[] {
     if (!Array.isArray(pr.environments) || !pr.environments.length) p.push('product.environments must be a non-empty list');
     if (pr.delivery !== undefined && !DELIVERY.includes(pr.delivery)) p.push(`product.delivery '${pr.delivery}' is not one of ${DELIVERY.join('|')}`);
     if (pr.delivery === 'release-line' && Array.isArray(pr.environments) && pr.environments.length < 2) p.push('product.delivery release-line needs two or more environments; use continuous');
+    const ev = (pr.evidence ?? []).filter((k: string) => !EVIDENCE.includes(k));
+    if (ev.length) p.push(`product.evidence has unknown kinds: ${ev.join(', ')} (known: ${EVIDENCE.join(', ')})`);
     const bad = (pr.proofs ?? []).filter((k: string) => !PROOFS.includes(k));
     if (bad.length) p.push(`product.proofs has unknown kinds: ${bad.join(', ')}`);
   }
@@ -112,7 +115,7 @@ export function validateBinding(b: Binding): string[] {
     const v = x.learning?.[k];
     if (v !== undefined && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
   }
-  for (const k of ['preview', 'proofs_on_base']) if (x.commands?.[k] !== undefined && typeof x.commands[k] !== 'string') p.push(`commands.${k} must be a command line`);
+  for (const k of ['preview', 'proofs_on_base', 'evidence_check']) if (x.commands?.[k] !== undefined && typeof x.commands[k] !== 'string') p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? '').includes('{run_id}')) p.push('traces.uri must contain {run_id}');
   if (x.executors && !x.executors.default) p.push('executors.default is missing');
   return p;
@@ -124,6 +127,7 @@ export function bindingWarnings(b: Binding): string[] {
   const x = b as any;
   if (x?.product?.kind !== undefined) w.push('product.kind is unused; remove it');
   if (x?.board?.milestone !== undefined) w.push('board.milestone is unused; remove it');
+  if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push('product.evidence is set but commands.evidence_check is unset: no release can show its evidence');
   if (x?.forge?.review_runtime !== undefined) w.push('forge.review_runtime is unused: review-pr always runs in its own runtime; remove it');
   const size = x?.learning?.bench_size, min = x?.learning?.bench_min_cases ?? 20;
   if (size !== undefined && Number(size) < min) w.push(`learning.bench_size ${size} is below bench_min_cases ${min}: bench compare reports regressed for every change`);

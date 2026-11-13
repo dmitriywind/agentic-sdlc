@@ -21,7 +21,11 @@ questions; a part missing is written as "none" when triaged.
    evidence.
 2. **Security first.** For a security report, follow `paths.security_policy`: acknowledge once,
    using only the contact the report gives; keep exploit detail and personal data out of every
-   public ticket. Done when acknowledged, or noted that no contact was given.
+   public ticket. When `paths.security_policy` names a reporting duty with a deadline (for an EU
+   product, the Cyber Resilience Act: an actively exploited vulnerability or a severe incident
+   needs an early warning within 24 hours and a notification within 72 hours), call
+   [`escalate-to-human`](../escalate-to-human/SKILL.md) (Legal) at once, naming the deadline. Done
+   when acknowledged, or noted that no contact was given, and any deadline is escalated.
 3. **Still real at the trunk tip.** For a release-failure Signal, first make a read-only diagnosis:
    read the failed run (`forge runs --failed`) and name the cause; change nothing. Then check the
    cause against the code at the trunk tip and the changes since the reported build. Done when you

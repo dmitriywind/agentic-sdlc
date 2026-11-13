@@ -8649,6 +8649,7 @@ var HUMAN_APPROVAL = ["full-lane", "always", "never"];
 var SANDBOXES = ["cloud", "container", "local"];
 var PROFILES = ["individual", "enterprise"];
 var DELIVERY = ["release-line", "continuous"];
+var EVIDENCE = ["sbom", "provenance", "signature"];
 var TIERS = ["fast", "balanced", "deep"];
 var STATUSES = ["Ideas", "Signals", "Backlog", "Ready", "In progress", "In review", "Done", "Cancelled"];
 function validateBinding(b) {
@@ -8691,6 +8692,8 @@ function validateBinding(b) {
     if (!Array.isArray(pr.environments) || !pr.environments.length) p.push("product.environments must be a non-empty list");
     if (pr.delivery !== void 0 && !DELIVERY.includes(pr.delivery)) p.push(`product.delivery '${pr.delivery}' is not one of ${DELIVERY.join("|")}`);
     if (pr.delivery === "release-line" && Array.isArray(pr.environments) && pr.environments.length < 2) p.push("product.delivery release-line needs two or more environments; use continuous");
+    const ev = (pr.evidence ?? []).filter((k) => !EVIDENCE.includes(k));
+    if (ev.length) p.push(`product.evidence has unknown kinds: ${ev.join(", ")} (known: ${EVIDENCE.join(", ")})`);
     const bad = (pr.proofs ?? []).filter((k) => !PROOFS.includes(k));
     if (bad.length) p.push(`product.proofs has unknown kinds: ${bad.join(", ")}`);
   }
@@ -8714,7 +8717,7 @@ function validateBinding(b) {
     const v = x.learning?.[k];
     if (v !== void 0 && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
   }
-  for (const k of ["preview", "proofs_on_base"]) if (x.commands?.[k] !== void 0 && typeof x.commands[k] !== "string") p.push(`commands.${k} must be a command line`);
+  for (const k of ["preview", "proofs_on_base", "evidence_check"]) if (x.commands?.[k] !== void 0 && typeof x.commands[k] !== "string") p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? "").includes("{run_id}")) p.push("traces.uri must contain {run_id}");
   if (x.executors && !x.executors.default) p.push("executors.default is missing");
   return p;

@@ -67,6 +67,7 @@ vcs:
 product:
   environments: [staging, production] # ordered; the last is where users get value; Shipped options derive from it (library: [prerelease, registry]; mobile: [internal, beta, store])
   delivery: release-line         # release-line: the last environment deploys from a release line the Product owner approves | continuous: every environment deploys from the trunk, no release line (web CD, a model registry, a package published per merge)
+  evidence: []                  # release evidence the ready check requires: sbom | provenance | signature (SLSA build provenance, an SPDX or CycloneDX SBOM, a signature); commands.evidence_check proves it
   proofs: [test, eval, visual, data-check, computer-use, manual] # kinds a criterion may name; computer-use = verify-ux drives the built product; manual always escalates for a human check
 
 executors:                      # who runs each skill; default is a harness subagent, model by the skill's tier
@@ -100,7 +101,8 @@ commands:
   proofs_on_base: "npm test -- {files}" # gate proofs-on-base: runs the CR's new or changed proof files ({files}) against the merge base's product code
   # preview: "./deploy-preview.sh {sha}" # optional: deploys a CR head for verify-ux
   # light_verify: "npm run test:unit" # used when only paths.light_verify files changed
-  # rollback: "./deploy.sh rollback <released-rev>" # release cites its last recorded staging run
+  # rollback: "./deploy.sh rollback <released-rev>" # release cites its last green rollback run
+  # evidence_check: "gh attestation verify dist/app.tar.gz --repo my-org/my-repo" # exits 0 when every product.evidence kind exists for {sha}
 
 paths:
   guiding_narrative: docs/narrative.md  # judged first; only the Product owner moves it

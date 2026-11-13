@@ -284,6 +284,7 @@ Nothing in the skills assumes a web app or a code product. The binding states wh
 product:
   environments: [staging, production]   # ordered; the last is where users get value
   delivery: release-line                 # release-line | continuous
+  evidence: [sbom, provenance, signature] # release evidence; commands.evidence_check proves it
   proofs: [test, eval, visual, data-check, computer-use, manual]
 paths:
   no_proof: ["docs/**", "*.md"]          # a product CR changing only these needs no proof file

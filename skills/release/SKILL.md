@@ -35,8 +35,9 @@ The Product owner approves the last environment; this skill never does.
 3. **Ready check.** All must hold: every included ticket is Done with Shipped = On <env before last>; none is
    held; no P0 is open; no release-failure Signal is open; no signal carrying a `board.env_labels`
    label still sits at Signals; the environment before the last and CI are green on the chosen revision; `commands.rollback`
-   is named, with a recorded rollback run in the environment before the last since the previous
-   release tag. This checks preparation; it is no wait gate. Done when each is shown, or the failing ones are named and you stop.
+   is named, and a green rollback run in the environment before the last since the previous release
+   tag is shown by `forge runs` or linked in a trusted comment on the request; when `product.evidence`
+   lists kinds, `commands.evidence_check` (with `{sha}` the chosen revision) exits 0. This checks preparation; it is no wait gate. Done when each is shown, or the failing ones are named and you stop.
 4. **Version.** Per `vcs.version_scheme`. CalVer is `YYYY.MM.N`, `N` counting releases in that
    month from 1; semver bumps from the last release. Never reuse a version, even a failed one. Done
    when the version is unused as a tag and a release line.

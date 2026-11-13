@@ -39,9 +39,10 @@ below says so when it is not enforced. All of it uses existing binding keys.
 - OpenTelemetry for traces, metrics and logs ([opentelemetry.io](https://opentelemetry.io)).
 - Progressive exposure behind flags; each flag has an owner and an expiry, and backlog-grooming files its removal ticket.
 - An SBOM (CycloneDX or SPDX) ([cyclonedx.org](https://cyclonedx.org)), SLSA provenance
-  ([slsa.dev](https://slsa.dev)) and signatures for every release artifact.
+  ([slsa.dev](https://slsa.dev)) and signatures for every release artifact. Enforced when
+  `product.evidence` lists them: the release ready check runs `commands.evidence_check`.
 - EU Cyber Resilience Act readiness: reporting duties start on 11 Sep 2026, with an early warning in 24 hours and
-  a notification in 72 hours. Route reports through `SECURITY.md` and triage-signal.
+  a notification in 72 hours. Name the duty in `SECURITY.md`: triage-signal then escalates each such report at once.
 - EU AI Act and accessibility (WCAG 2.2 AA) duties checked through `paths.review_checklist`.
 - Blameless postmortems whose actions re-enter the Backlog.
 - Track delivery with the DORA measures ([dora.dev](https://dora.dev)).

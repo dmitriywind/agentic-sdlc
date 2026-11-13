@@ -110,3 +110,10 @@ Feature: Release to the last environment
     When the release skill runs
     Then it cuts the next version
     And it does not change the failed release line
+
+  # Source: skills/release/SKILL.md, "Steps 3. Ready check"
+  Scenario: A release with required evidence is ready only when the evidence check passes
+    Given product.evidence lists kinds
+    When the release skill runs the ready check on the chosen revision
+    Then it runs commands.evidence_check for that revision
+    And it stops and names the failure when the command does not exit 0

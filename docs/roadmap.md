@@ -51,10 +51,7 @@ between two sources. Fix each in the skill, then update its feature file.
 
 | Item | Why |
 |---|---|
-| `product.delivery: release-line \| continuous` | A product with continuous delivery has no release line today. |
 | Owners as lists; optional operator, security and compliance owners | Teams have more than one owner per role. |
-| Release evidence: SBOM, SLSA provenance, signatures | Release ready check for supply chain (see the [operating baseline](operating-baseline.md#operate-in-q4-2026-and-2027-not-enforced-yet)). |
-| `product.compliance` with reporting clocks | EU CRA early warning in 24 hours, notification in 72 hours, read by `triage-signal`. |
 | `product.slo` and DORA measures | Error budget pauses feature work; P0 counted as change failure; rework rate. |
 | Pin CI actions by SHA; fail when `AGENTIC_SDLC_VERSION` is unset | Mutable refs in gate templates. |
 

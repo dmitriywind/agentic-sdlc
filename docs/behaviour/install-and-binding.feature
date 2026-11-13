@@ -124,3 +124,11 @@ Feature: Install and validate the binding
     Given a GitHub Project holds issue 12 of this repo and issue 12 of another repo
     When the board adapter lists the board
     Then it returns only the issue of board.options.repo
+
+  # Source: src/binding.ts, "validateBinding" and "bindingWarnings" (product.evidence)
+  # Proof: test/binding.test.ts "product.evidence: known kinds only; evidence without commands.evidence_check warns"
+  Scenario: Release evidence needs a command that proves it
+    Given product.evidence lists sbom and provenance
+    And commands.evidence_check is unset
+    When the binding is validated
+    Then a warning says no release can show its evidence

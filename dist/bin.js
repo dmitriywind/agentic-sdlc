@@ -7421,6 +7421,8 @@ function validateBinding(b) {
     if (!Array.isArray(pr.environments) || !pr.environments.length) p.push("product.environments must be a non-empty list");
     if (pr.delivery !== void 0 && !DELIVERY.includes(pr.delivery)) p.push(`product.delivery '${pr.delivery}' is not one of ${DELIVERY.join("|")}`);
     if (pr.delivery === "release-line" && Array.isArray(pr.environments) && pr.environments.length < 2) p.push("product.delivery release-line needs two or more environments; use continuous");
+    const ev = (pr.evidence ?? []).filter((k) => !EVIDENCE.includes(k));
+    if (ev.length) p.push(`product.evidence has unknown kinds: ${ev.join(", ")} (known: ${EVIDENCE.join(", ")})`);
     const bad = (pr.proofs ?? []).filter((k) => !PROOFS.includes(k));
     if (bad.length) p.push(`product.proofs has unknown kinds: ${bad.join(", ")}`);
   }
@@ -7444,7 +7446,7 @@ function validateBinding(b) {
     const v = x.learning?.[k];
     if (v !== void 0 && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
   }
-  for (const k of ["preview", "proofs_on_base"]) if (x.commands?.[k] !== void 0 && typeof x.commands[k] !== "string") p.push(`commands.${k} must be a command line`);
+  for (const k of ["preview", "proofs_on_base", "evidence_check"]) if (x.commands?.[k] !== void 0 && typeof x.commands[k] !== "string") p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? "").includes("{run_id}")) p.push("traces.uri must contain {run_id}");
   if (x.executors && !x.executors.default) p.push("executors.default is missing");
   return p;
@@ -7454,6 +7456,7 @@ function bindingWarnings(b) {
   const x = b;
   if (x?.product?.kind !== void 0) w.push("product.kind is unused; remove it");
   if (x?.board?.milestone !== void 0) w.push("board.milestone is unused; remove it");
+  if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push("product.evidence is set but commands.evidence_check is unset: no release can show its evidence");
   if (x?.forge?.review_runtime !== void 0) w.push("forge.review_runtime is unused: review-pr always runs in its own runtime; remove it");
   const size = x?.learning?.bench_size, min = x?.learning?.bench_min_cases ?? 20;
   if (size !== void 0 && Number(size) < min) w.push(`learning.bench_size ${size} is below bench_min_cases ${min}: bench compare reports regressed for every change`);
@@ -7476,7 +7479,7 @@ function shippedOptions(envs, delivery = "release-line") {
   const inRelease = delivery === "release-line" && envs.length > 1;
   return ["Not shipped", ...envs.slice(0, -1).map((e) => `On ${e}`), ...inRelease ? ["In release"] : [], `On ${envs[envs.length - 1]}`];
 }
-var import_yaml, BINDING_PATH, ADAPTERS, OPTIONS, REQUIRED, PROOFS, EXECUTORS, EXECUTOR_KEYS, MANAGED_APIS, HUMAN_APPROVAL, SANDBOXES, PROFILES, DELIVERY, TIERS, STATUSES;
+var import_yaml, BINDING_PATH, ADAPTERS, OPTIONS, REQUIRED, PROOFS, EXECUTORS, EXECUTOR_KEYS, MANAGED_APIS, HUMAN_APPROVAL, SANDBOXES, PROFILES, DELIVERY, EVIDENCE, TIERS, STATUSES;
 var init_binding = __esm({
   "src/binding.ts"() {
     "use strict";
@@ -7533,6 +7536,7 @@ var init_binding = __esm({
     SANDBOXES = ["cloud", "container", "local"];
     PROFILES = ["individual", "enterprise"];
     DELIVERY = ["release-line", "continuous"];
+    EVIDENCE = ["sbom", "provenance", "signature"];
     TIERS = ["fast", "balanced", "deep"];
     STATUSES = ["Ideas", "Signals", "Backlog", "Ready", "In progress", "In review", "Done", "Cancelled"];
   }
