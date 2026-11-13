@@ -60,6 +60,6 @@ factory-dead-man:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $SDLC_CYCLE == "1"'
       when: always
   script:
-    - npm ci --ignore-scripts || npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.3}"
+    - npm ci --ignore-scripts || npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.4}"
     # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
     - npx --no agentic-sdlc ledger stale --max-hours 3   # set: a few cadences

@@ -3,7 +3,7 @@
 All notable changes to this package. Versions follow semver. A release is a `v<version>` Git tag; the package is
 not on npm.
 
-## Unreleased
+## 2.0.0-alpha.4 (2026-11-14)
 
 - Round 5 review fixes: a run ends only with its own done line (no other comment counts; the assign hand-off names the line, and the assignee may post it); a command start counts only once the child has a pid; a refused (4xx) or unreachable request still writes the done line; dependency bots match exact logins; the failure reset leaves a ticket whose version changed; `forge cut` finds its run by run id, not by clock.
 - Round 4 review fixes: every executor gets the done line in its task (harness instruction, command prompt, webhook and managed bodies); a run on its own ticket ends with any later bot comment, on the heartbeat ticket only with its done line, and same-second timestamps count; `dispatch sdlc` claims before any executor or sandbox check; a failed start writes the done line only before a request leaves; a heartbeat with a leading agentic-sdlc line still parses; rollback and the failure reset read each ticket again before writing; dependency bot logins such as `renovate-bot` match; `forge cut` returns only a run created by this dispatch; `bench run` treats a null budget as no cap and rejects an empty `--budget`.

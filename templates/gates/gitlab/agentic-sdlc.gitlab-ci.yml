@@ -15,7 +15,7 @@
     if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
       npm ci --ignore-scripts && export PATH="$PWD/node_modules/.bin:$PATH"
     else
-      npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.3}"
+      npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.4}"
     fi
 
 .agentic:
@@ -66,7 +66,7 @@ proofs-on-base:
   script:
     - npm ci     # set: the binding's commands.install (puts the pinned agentic-sdlc devDependency in node_modules)
     - export PATH="$PWD/node_modules/.bin:$PATH"
-    - command -v agentic-sdlc >/dev/null || npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.3}"
+    - command -v agentic-sdlc >/dev/null || npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.4}"
     - agentic-sdlc gate proofs-on-base --cr "$CI_MERGE_REQUEST_IID"
 
 ticket-linkage:
@@ -111,7 +111,7 @@ skill-regression:
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - |
       if git diff --name-only "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME...HEAD" | grep -q '^\.agents/'; then
-        if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then npm ci --ignore-scripts && export PATH="$PWD/node_modules/.bin:$PATH"; else npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.3}"; fi
+        if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then npm ci --ignore-scripts && export PATH="$PWD/node_modules/.bin:$PATH"; else npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.4}"; fi
         agentic-sdlc gate skill-regression
       fi
 
