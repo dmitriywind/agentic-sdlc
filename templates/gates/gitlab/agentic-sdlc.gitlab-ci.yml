@@ -21,6 +21,7 @@
 .agentic:
   image: node:22
   environment: { name: agentic-gates, action: access }
+  resource_group: agentic-board   # merged, shipped and signals write the same tickets: one job at a time
   variables:
     GIT_DEPTH: "0"   # shipped walks the full history and tags
   before_script:

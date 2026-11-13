@@ -10,6 +10,11 @@ on:
     # set: your vcs.trunk
     branches: [main]
 
+# One run at a time: shipped, merged and signals write the same tickets, so they queue instead of racing.
+concurrency:
+  group: agentic-board
+  cancel-in-progress: false
+
 permissions:
   contents: write   # gate shipped tags the released revision
   issues: write
@@ -73,7 +78,11 @@ jobs:
           # The last environment ships from a release line, or from the trunk under continuous delivery.
           if [ "$RUN_NAME" = "Deploy production" ]; then
             case "$DELIVERY:$HEAD_BRANCH" in
-              release-line:"$RELEASE_PREFIX"*|continuous:"$TRUNK") agentic-sdlc gate shipped last-env --sha "$RUN_SHA" --result "$result" ${VERSION:+--version "$VERSION"} ;;
+              release-line:"$RELEASE_PREFIX"*) agentic-sdlc gate shipped last-env --sha "$RUN_SHA" --result "$result" ;;
+              continuous:"$TRUNK")
+                # Continuous delivery has no release ready check: missing release evidence reports the deploy as failed.
+                if [ "$result" = success ] && ! agentic-sdlc gate evidence --sha "$RUN_SHA"; then result=failure; fi
+                agentic-sdlc gate shipped last-env --sha "$RUN_SHA" --result "$result" ${VERSION:+--version "$VERSION"} ;;
             esac
           fi
 

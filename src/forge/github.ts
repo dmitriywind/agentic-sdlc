@@ -45,13 +45,17 @@ export function github(ctx: AdapterContext): Forge {
       return Promise.all(rows.map((r: any) => view(String(r.number))));
     },
     async closing(id) {
-      const rows = JSON.parse(gh(['pr', 'list', '--state', 'merged', '--search', `"Closes ${id}" in:body`, '--json', 'number', '--limit', '30']));
+      const rows = JSON.parse(gh(['pr', 'list', '--state', 'merged', '--search', `"Closes ${id}" OR "Closes #${id}" in:body`, '--json', 'number', '--limit', '30']));
       return (await Promise.all(rows.map((r: any) => view(String(r.number))))).filter((c) => c.closes.includes(id));
     },
     async ready(n) { gh(['pr', 'ready', n]); return view(n); },
     async draft(n) { gh(['pr', 'ready', n, '--undo']); return view(n); },
     async sync(n) { gh(['pr', 'update-branch', n]); return view(n); },
     async automerge(n) { gh(['pr', 'merge', n, '--auto', '--squash']); return view(n); },
+    async cut(revision, version) {
+      gh(['workflow', 'run', 'agentic-sdlc-release.yml', '-f', `revision=${revision}`, '-f', `version=${version}`]);
+      return { requested: true };
+    },
     async comment(n, body) {
       const url = gh(['pr', 'comment', n, '--body-file', '-'], body).trim();
       return { id: url.split('issuecomment-')[1] ?? url, url };

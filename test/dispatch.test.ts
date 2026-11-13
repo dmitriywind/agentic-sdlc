@@ -49,7 +49,7 @@ test('executor lookup ignores inherited keys; an unknown kind is an error', asyn
 test('judge-run: binding judge_tier, stepped off the judged model; one model everywhere skips', async () => {
   const b = (judge_tier: string, models: object) => ({ learning: { judge_tier }, models }) as any;
   const m = { fast: 'f', balanced: 'b', deep: 'd' };
-  assert.deepEqual(judgeTier(b('balanced', m)), { tier: 'balanced', model: 'b' });
+  assert.ok('skip' in judgeTier(b('balanced', m))); // an unknown run model is never judged
   assert.deepEqual(judgeTier(b('balanced', m), 'b'), { tier: 'deep', model: 'd' });
   assert.deepEqual(judgeTier(b('deep', m), 'd'), { tier: 'balanced', model: 'b' });
   assert.deepEqual(judgeTier(b('fast', { fast: 'x', balanced: 'x', deep: 'd' }), 'x'), { tier: 'deep', model: 'd' });
@@ -104,7 +104,7 @@ test('command: minimal env plus listed secrets, {model} and {mcps_file}; no secr
 test('model: id wins over tier; judge-run keeps its judge tier', async () => {
   const pin = await run({ default: { kind: 'command', run: 'bot', model: { id: 'pinned' } } }, ['x', '--ticket', '1'], {}, undefined, { models });
   assert.equal(pin.out.model, 'pinned');
-  const j = await run({ default: { kind: 'command', run: 'bot', model: { id: 'pinned' } } }, ['judge-run', '--ticket', '1'], {}, undefined, { models, learning: { judge_tier: 'balanced' } });
+  const j = await run({ default: { kind: 'command', run: 'bot', model: { id: 'pinned' } } }, ['judge-run', '--ticket', '1', '--run-model', 'other'], {}, undefined, { models, learning: { judge_tier: 'balanced' } });
   assert.equal(j.out.model, 'b');
 });
 

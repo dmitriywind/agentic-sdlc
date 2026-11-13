@@ -8272,7 +8272,7 @@ function github(ctx) {
       return Promise.all(rows.map((r) => view(String(r.number))));
     },
     async closing(id) {
-      const rows = JSON.parse(gh(["pr", "list", "--state", "merged", "--search", `"Closes ${id}" in:body`, "--json", "number", "--limit", "30"]));
+      const rows = JSON.parse(gh(["pr", "list", "--state", "merged", "--search", `"Closes ${id}" OR "Closes #${id}" in:body`, "--json", "number", "--limit", "30"]));
       return (await Promise.all(rows.map((r) => view(String(r.number))))).filter((c) => c.closes.includes(id));
     },
     async ready(n) {
@@ -8290,6 +8290,10 @@ function github(ctx) {
     async automerge(n) {
       gh(["pr", "merge", n, "--auto", "--squash"]);
       return view(n);
+    },
+    async cut(revision, version) {
+      gh(["workflow", "run", "agentic-sdlc-release.yml", "-f", `revision=${revision}`, "-f", `version=${version}`]);
+      return { requested: true };
     },
     async comment(n, body) {
       const url = gh(["pr", "comment", n, "--body-file", "-"], body).trim();
@@ -8686,6 +8690,7 @@ function validateBinding(b) {
       if (typeof x.vcs[k] !== "string" || !x.vcs[k]) p.push(`vcs.${k} must ${what}`);
     if (typeof x.vcs.tag_prefix !== "string") p.push("vcs.tag_prefix must be a string (empty for none)");
     if (typeof x.vcs.release_prefix === "string" && x.vcs.release_prefix && !x.vcs.release_prefix.endsWith("/")) p.push("vcs.release_prefix must end in '/'");
+    if (x.vcs.release_prefix === "") p.push("vcs.release_prefix must not be empty: it would match every branch (leave it out for continuous delivery)");
   }
   const pr = x.product;
   if (pr) {

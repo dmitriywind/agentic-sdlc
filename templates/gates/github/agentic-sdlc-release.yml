@@ -1,0 +1,46 @@
+name: agentic-sdlc release
+# The release cut. The release skill starts it with `agentic-sdlc forge cut <revision> <version>` after the
+# Product owner's go-ahead on the release request; the Environment below makes that approval a forge rule:
+# set Environment `agentic-release` with the Product owner as a required reviewer, deployment branches
+# limited to the trunk, and secret AGENTIC_RELEASE_TOKEN: a release bot that is the only bypass actor of
+# .github/rulesets/release.json. The cycle never holds that token.
+on:
+  workflow_dispatch:
+    inputs:
+      revision: { description: "trunk revision to cut", required: true }
+      version: { description: "release version", required: true }
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agentic-release
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: agentic-release
+    env:
+      REVISION: ${{ inputs.revision }}
+      VERSION: ${{ inputs.version }}
+      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
+    steps:
+      # pin to a commit SHA (actions/checkout, actions/setup-node)
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.AGENTIC_RELEASE_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install agentic-sdlc (the trunk's pinned devDependency)
+        run: |
+          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
+            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+          else
+            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.3}"
+          fi
+      - name: Cut the release line
+        run: agentic-sdlc vcs cut "$REVISION" "$VERSION"

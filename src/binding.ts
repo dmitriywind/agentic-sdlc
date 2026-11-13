@@ -84,6 +84,7 @@ export function validateBinding(b: Binding): string[] {
       if (typeof x.vcs[k] !== 'string' || !x.vcs[k]) p.push(`vcs.${k} must ${what}`);
     if (typeof x.vcs.tag_prefix !== 'string') p.push('vcs.tag_prefix must be a string (empty for none)');
     if (typeof x.vcs.release_prefix === 'string' && x.vcs.release_prefix && !x.vcs.release_prefix.endsWith('/')) p.push("vcs.release_prefix must end in '/'");
+    if (x.vcs.release_prefix === '') p.push('vcs.release_prefix must not be empty: it would match every branch (leave it out for continuous delivery)');
   }
   const pr = x.product;
   if (pr) {
@@ -127,6 +128,10 @@ export function bindingWarnings(b: Binding): string[] {
   const x = b as any;
   if (x?.product?.kind !== undefined) w.push('product.kind is unused; remove it');
   if (x?.board?.milestone !== undefined) w.push('board.milestone is unused; remove it');
+  const hb = String(x?.heartbeat?.ticket ?? '');
+  if (['github', 'local'].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
+  const envs: string[] = x?.product?.environments ?? [];
+  for (const l of x?.board?.env_labels ?? []) if (String(l).startsWith('env:') && !envs.includes(String(l).slice(4))) w.push(`board.env_labels '${l}' names no product.environments entry`);
   if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push('product.evidence is set but commands.evidence_check is unset: no release can show its evidence');
   if (x?.forge?.review_runtime !== undefined) w.push('forge.review_runtime is unused: review-pr always runs in its own runtime; remove it');
   const size = x?.learning?.bench_size, min = x?.learning?.bench_min_cases ?? 20;

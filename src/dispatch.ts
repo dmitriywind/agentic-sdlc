@@ -21,10 +21,11 @@ const TIERS = ['fast', 'balanced', 'deep'] as const;
  * never grades itself (next tier up; from deep, down). Every tier on that model: skip.
  */
 export function judgeTier(b: Binding, runModel?: string): { tier: string; model: string } | { skip: true; reason: string } {
+  if (!runModel) return { skip: true, reason: 'the judged run reported no model, so independence cannot be shown' };
   const want = b.learning?.judge_tier ?? 'fast';
   const i = TIERS.indexOf(want);
   const order = [want, ...TIERS.slice(i + 1), ...TIERS.slice(0, i).reverse()];
-  const tier = order.find((t) => !runModel || b.models[t] !== runModel);
+  const tier = order.find((t) => b.models[t] !== runModel);
   if (!tier) return { skip: true, reason: `every model tier is ${runModel}, the judged run's model; a model never grades its own run` };
   return { tier, model: b.models[tier] };
 }
@@ -153,7 +154,8 @@ export const cli: PortCli = async (argv, ctx) => {
     // means the same dispatch already started: a double fire. The next scheduled run is never skipped.
     let board: Board | undefined;
     const boardOf = () => (board ??= createBoard({ ...ctx, options: b.board.options }));
-    const target = ticket || b.heartbeat?.ticket;
+    // A judge's marker goes on the heartbeat ticket: the judged ticket may be at Ideas, which the factory never touches.
+    const target = (skill === 'judge-run' ? '' : ticket) || b.heartbeat?.ticket;
     const window = Number(b.cycle?.dedupe_minutes) || 0; // unset or 0: no check (the binding template sets 10)
     let key: string | undefined;
     if (window > 0 && target) {
@@ -166,10 +168,18 @@ export const cli: PortCli = async (argv, ctx) => {
       }
       key = [ticket || cr || 'factory', skill, f.run, head].filter(Boolean).join('-');
       const trusted = (b.owners?.bots ?? []).map((a) => a.toLowerCase());
-      const since = Date.now() - window * 60_000;
-      const seen = (await boardOf().comments(target, { marker: `${DISPATCH_MARKER} ${key} ` }))
-        .find((c) => trusted.includes(c.author?.toLowerCase()) && Date.parse(c.createdAt) >= since);
-      if (seen) { console.log(JSON.stringify({ skipped: true, key, since: seen.createdAt, comment: seen.id })); return 0; }
+      const bot = (c: { author?: string }) => trusted.includes(String(c.author).toLowerCase());
+      const all = (await boardOf().comments(target)).filter(bot);
+      const mine = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `)).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
+      const at = mine ? Date.parse(mine.createdAt) : NaN;
+      // Finished: a later bot comment that is not a dispatch marker (every run ends with a ticket comment).
+      const finished = mine && all.some((c) => Date.parse(c.createdAt) > at && !c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER}`));
+      const stall = Number(b.stall_minutes) || 0;
+      const age = (Date.now() - at) / 60_000;
+      if (mine && (age < window || (!finished && age < stall))) {
+        console.log(JSON.stringify({ skipped: true, key, since: mine.createdAt, comment: mine.id, reason: age < window ? 'double fire' : 'the previous run has not finished' }));
+        return 0;
+      }
     }
     /** Prints the start record; the marker was posted before the executor started. */
     let marker: string | undefined;

@@ -18,6 +18,8 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
 
 ## Steps
 
+0. **Once per head.** When the newest `<!-- review-pr <head sha> -->` report is for the current head and
+   no trusted comment came after it, stop: post nothing. Done when you stopped or continue.
 1. **Read.** `agentic-sdlc forge view <n>` and `forge diff <n>`; the ticket and its spec comment
    (`board comments <id> --marker <spec_marker> --trusted`). Done when you hold the head and every
    acceptance criterion, and `closes` lists exactly the change line's ticket.
@@ -30,7 +32,7 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    proof `manual` is DONE only when a trusted comment by an owner (`board comments <id>
    --trusted`) confirms it for this head. Otherwise post one ask on the ticket naming the
    criterion and the head sha, only when `board comments <id> --marker "<!-- manual-check
-   <criterion> -->"` finds none, and grade it PENDING. PENDING is not a finding and keeps the CR
+   <criterion> <head sha> -->"` finds none (a new head asks again), and grade it PENDING. PENDING is not a finding and keeps the CR
    draft; after `stall_minutes` with no reply call
    [`escalate-to-human`](../escalate-to-human/SKILL.md) (Sign-off). A pending criterion
    stops the review as step 4 does: no status, no approval; review this head again on the next
@@ -82,11 +84,11 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    - Findings on a CR a person opened (author outside `owners.bots`): `forge draft <n>`; the ticket
      stays In review and the report is the hand-back. Never push to that change line; review again
      when its head changes.
-   - Spec or scope wrong: move it to Backlog with the reason.
+   - Spec or scope wrong: `forge draft <n>`, then move the ticket to Backlog with the reason.
    - Findings on a factory CR: the CR stays draft with the report; `improve-factory` reads it as
      `rejected`. Done when the ticket or the CR shows the outcome.
 9. **Behind the trunk.** A ready In review CR whose change line is behind the trunk: `forge sync
-   <n>`, then on the new head repeat steps 4 and 7 once CI has reported. Done when the review
+   <n>` (a CR a person opened: one comment asking its author to update it instead), then on the new head repeat steps 4 and 7 once CI has reported. Done when the review
    status is green on the new head.
 10. **Red or stalled gate.** A ready In review CR with a `required_checks` entry red, or missing
     for longer than `stall_minutes` (never `review` or `human-approval`: those wait for this skill

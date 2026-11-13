@@ -13,4 +13,6 @@ Preamble (scheduler setup, not part of the prompt):
 Call the CLI as `npx --no agentic-sdlc ...` and pass `--unattended` to every dispatch.
 Run review-pr on every ticket at In review whose CR is draft, or ready and behind, red or stalled: `npx --no agentic-sdlc dispatch review-pr --ticket <id> --unattended`.
 Run it too on every open factory CR (a change only under `paths.factory`; it has no ticket): `npx --no agentic-sdlc dispatch review-pr --cr <n> --unattended`.
+Run it on every ticket at In review whose CR is ready with no `review` status on its head, and on every open dependency CR (`dependabot/`, `renovate/`): `--cr <n>`.
+Then write one heartbeat with `"kind": "review"` holding a row per run you dispatched (`.agents/skills/sdlc/references/heartbeat.md`).
 Do nothing else.

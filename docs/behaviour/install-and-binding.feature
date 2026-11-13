@@ -132,3 +132,12 @@ Feature: Install and validate the binding
     And commands.evidence_check is unset
     When the binding is validated
     Then a warning says no release can show its evidence
+
+  # Source: src/binding.ts, "bindingWarnings" and "validateBinding"
+  # Proof: test/binding.test.ts "bindingWarnings: a GitHub heartbeat ticket must be a number; env labels must name an environment; an empty release prefix fails"
+  Scenario: Setups that fail at run time are named before the first cycle
+    Given a GitHub board with heartbeat.ticket "HEARTBEAT-1"
+    And board.env_labels lists "env:qa" while product.environments has no "qa"
+    When the binding is validated
+    Then a warning names each of them
+    And an empty vcs.release_prefix fails validation

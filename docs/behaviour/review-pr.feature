@@ -132,3 +132,17 @@ Feature: Review a change request
     When the reviewer reads the CI results
     Then it reads the failing check
     And with the cause in the diff, the ticket moves to In progress with the cause
+
+  # Source: skills/review-pr/SKILL.md, "Once per head"
+  Scenario: A head that already has a report is not reviewed again
+    Given the newest review-pr report is for the current head
+    And no trusted comment came after it
+    When review-pr runs
+    Then it posts nothing and stops
+
+  # Source: skills/review-pr/SKILL.md, "Behind the trunk"
+  Scenario: The factory never pushes a sync onto a person's CR
+    Given a ready CR a person opened is behind the trunk
+    When review-pr handles it
+    Then it posts one comment asking the author to update the CR
+    And it runs no "forge sync"

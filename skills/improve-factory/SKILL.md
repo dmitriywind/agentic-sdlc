@@ -45,7 +45,9 @@ It is the only skill that proposes a new rule.
    `vcs.factory_change_pattern`) and its class is stated.
 7. **Prove on the bench.** Estimate the cost first: `bench run --suite <s> --model <id> --dry-run`
    prints the command per case; price it from the ledger's cost per `implement-spec` run. Stop
-   with `learning: over budget` when the estimate plus `spentWeekUsd` reaches the budget.
+   with `learning: over budget` when the estimate plus `spentWeekUsd` reaches the budget, and with
+   `learning: too few cases` when the suite has fewer than `learning.bench_min_cases` cases. Pass
+   `--budget <budget minus spentWeekUsd>` to every `bench run`.
    - Baseline: `learning.benchBaseline` when its factory is the trunk and its model and executor
      match; otherwise `agentic-sdlc bench run --suite <s> --model <id>` on the trunk. With no
      suite, `bench build --suite <s> [--paths <glob>]… [--per-size <n>]` first.
@@ -67,8 +69,10 @@ It is the only skill that proposes a new rule.
    rows for a `models` change). `review-pr` reviews it; the `approval` gate decides whether a
    human must approve. Never mark it ready or merge it yourself. Done when the draft CR is open
    with its proof.
-9. **Record.** Set `learning.lastProposal` and, when you ran the trunk bench,
-   `learning.benchBaseline` in the coming heartbeat. Done when both are there.
+9. **Record.** Write one `learn` heartbeat on `heartbeat.ticket`
+   ([heartbeat](../sdlc/references/heartbeat.md)): your own run row, whose cost includes the bench
+   runs, and `learning` with `lastProposal` and, when you ran the trunk bench, `benchBaseline`. Done
+   when it is posted.
 
 ## Rules
 

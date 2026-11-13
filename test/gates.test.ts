@@ -308,7 +308,7 @@ test('proofs-on-base: each new proof must fail on the merge base; factory CRs pa
   assert.equal((await proofsOnBase(f.d, 'fac')).posted, false);
 });
 
-test('shipped: only Done tickets whose merge sha is an ancestor; unknown ancestry ships nothing', async () => {
+test('shipped: only Done tickets whose merge sha is an ancestor; a ticket of unknown ancestry waits alone', async () => {
   const mk = () => fakes([
     item('1', 'Done', { shipped: 'Not shipped' }),
     item('2', 'Done', { shipped: 'Not shipped' }),
@@ -328,8 +328,8 @@ test('shipped: only Done tickets whose merge sha is an ancestor; unknown ancestr
   const g = mk();
   assert.deepEqual(await shipped(g.d, 'staging', 'dep', 'success'), { env: 'staging', result: 'success', changed: [], tags: [], unknown: true });
   g.d.isAncestor = (x) => (x === 'old' ? true : undefined);
-  assert.equal((await shipped(g.d, 'staging', 'dep', 'success') as any).unknown, true);
-  assert.equal(g.items[0].fields.shipped, 'Not shipped');
+  assert.deepEqual((await shipped(g.d, 'staging', 'dep', 'success') as any).unknown, ['2']); // only that ticket waits
+  assert.equal(g.items[0].fields.shipped, 'On staging');
 
   const h = fakes([
     item('5', 'Done', { shipped: 'In release', release_version: '1' }),
@@ -497,4 +497,26 @@ test('shipped: a forge that searches by ticket is asked per candidate ticket, no
   f.d.isAncestor = () => true;
   assert.deepEqual((await shipped(f.d, 'staging', 'x', 'success')).changed, ['40']);
   assert.deepEqual(asked, ['40']);
+});
+
+test('shipped: a slower earlier-environment deploy never lowers a newer Shipped; a re-run failure opens one Signal', async () => {
+  const f = fakes([item('50', 'Done', { shipped: 'Not shipped' })], { m50: { state: 'merged', closes: ['50'], mergeSha: 'm50' } });
+  f.d.isAncestor = () => true;
+  const get = f.d.board.get;
+  f.d.board.get = async (id: string) => { const it = await get(id); it.fields.shipped = 'On production'; return it; }; // production landed meanwhile
+  assert.deepEqual((await shipped(f.d, 'staging', 'x', 'success')).changed, []);
+  f.d.board.get = get;
+  f.d.binding = { ...binding, board: { ...binding.board, env_labels: ['env:staging'] } };
+  assert.equal((await shipped(f.d, 'staging', 'bad', 'failure')).signal, true);
+  assert.equal((await shipped(f.d, 'staging', 'bad', 'failure')).signal, false);
+  assert.deepEqual(f.created[0].labels, ['signal:deploy', 'env:staging']);
+});
+
+test('linkage: posts status ticket-linkage on the head; a dependency bot CR needs no ticket', async () => {
+  const f = fakes([item('12', 'Ready')], { ok: { closes: ['12'], source: '12/x', headSha: 'h1' }, dep: { closes: [], source: 'dependabot/npm/yaml-2', headSha: 'h2' }, bad: { closes: [], source: 'feature/x', headSha: 'h3' } },
+    { ok: 'diff --git a/src/a.ts b/src/a.ts\n', dep: 'diff --git a/package.json b/package.json\n', bad: 'diff --git a/src/a.ts b/src/a.ts\n' });
+  assert.equal((await linkage(f.d, 'ok')).ok, true);
+  assert.equal((await linkage(f.d, 'dep')).ok, true);
+  assert.equal((await linkage(f.d, 'bad')).ok, false);
+  assert.deepEqual(f.statuses.map((s) => [s.sha, s.context, s.state]), [['h1', 'ticket-linkage', 'success'], ['h2', 'ticket-linkage', 'success'], ['h3', 'ticket-linkage', 'failure']]);
 });

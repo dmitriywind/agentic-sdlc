@@ -37,6 +37,11 @@ export const cli: PortCli = (argv, ctx) =>
       case 'draft': return f.draft(n());
       case 'sync': return f.sync(n());
       case 'automerge': return f.automerge(n());
+      case 'cut': {
+        if (!f.cut) throw new Error(`forge ${ctx.binding.forge.adapter} has no release workflow: cut with \`vcs cut\` under the release credential`);
+        if (!a.pos[1]) throw new UsageError('forge cut <revision> <version>');
+        return f.cut(a.pos[0] ?? '', a.pos[1]);
+      }
       case 'comment': return f.comment(n(), body());
       case 'comments':
         // Adapters return oldest first; the CLI answers newest first, as `board comments` does.

@@ -21,7 +21,10 @@ to `shape`.
    at Ready or In progress whose open CR closes it and was opened by an author outside `owners.bots` belongs
    to that person: `board move <id> "In review" --only-from <its status>`, post one comment that review-pr
    reviews it, and stop. A ticket at In progress whose open CR, opened by the factory, closes it is rework: read the newest review-pr report on that CR
-   (`forge comments <n> --last 1 --marker "<!-- review-pr" --trusted`) and fix each Important finding first.
+   (`forge comments <n> --last 1 --marker "<!-- review-pr" --trusted`), the cause review-pr wrote on the
+   ticket, and the failed run (`forge runs --failed`), and fix each Important finding and the failure
+   first. A ticket at In review that no open CR closes goes back: `board move <id> "In progress"
+   --only-from "In review"`, then it is worked as above.
    Done when the board shows In progress.
 2. **Branch.** `agentic-sdlc vcs start <name>`, named by `vcs.change_pattern`: it reopens the existing change
    line when one exists (rework uses the CR's source branch name) and otherwise starts from the

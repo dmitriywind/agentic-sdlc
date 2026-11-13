@@ -37,7 +37,8 @@ The Product owner approves the last environment; this skill never does.
    label still sits at Signals; the environment before the last and CI are green on the chosen revision; `commands.rollback`
    is named, and a green rollback run in the environment before the last since the previous release
    tag is shown by `forge runs` or linked in a trusted comment on the request; when `product.evidence`
-   lists kinds, `commands.evidence_check` (with `{sha}` the chosen revision) exits 0. This checks preparation; it is no wait gate. Done when each is shown, or the failing ones are named and you stop.
+   lists kinds, `agentic-sdlc gate evidence --sha <revision>` exits 0. A release-failure Signal is a
+   ticket labelled `signal:deploy` that is not Done or Cancelled. This checks preparation; it is no wait gate. Done when each is shown, or the failing ones are named and you stop.
 4. **Version.** Per `vcs.version_scheme`. CalVer is `YYYY.MM.N`, `N` counting releases in that
    month from 1; semver bumps from the last release. Never reuse a version, even a failed one. Done
    when the version is unused as a tag and a release line.
@@ -48,11 +49,15 @@ The Product owner approves the last environment; this skill never does.
 6. **Mark.**
    Go-ahead first: continue only after a Product owner reply on the proposal approves it
    (`board comments <request> --author <owners.product>`; a later run resumes here). A reply that
-   changes the contents restarts at step 3. Then `board set <id> release_version <version>` on each selected ticket. Done when every
-   ticket shows it.
-7. **Cut.** `agentic-sdlc vcs cut <revision> <version>` from the chosen revision, never from a
-   moving ref (`vcs.release_prefix` is applied by the verb). Then `board set <id> shipped "In release"` on each selected ticket. The cut starts release CI. Done
-   when the release line exists at that revision and every selected ticket shows In release. Then
+   changes the contents restarts at step 3. Run the ready check (step 3) again on the same revision: a P0, a Signal or a red check that
+   appeared since the proposal stops the cut. Then `board set <id> release_version <version>` and
+   `board set <id> shipped "In release"` on each selected ticket still On <env before last>, before
+   the cut, so a fast deploy can never be overwritten. Done when every ticket shows both.
+7. **Cut.** `agentic-sdlc forge cut <revision> <version>` where the forge runs a release workflow
+   (GitHub: the Product owner approves its Environment); otherwise `agentic-sdlc vcs cut <revision>
+   <version>` under the release credential. Never cut from a moving ref (`vcs.release_prefix` is
+   applied by the verb). When the cut fails, set the tickets back to On <env before last> and clear
+   their version. The cut starts release CI. Done when the release line exists at that revision. Then
    close the request (`board close <request> completed`), report, with progress per milestone
    read from the board (progress only; versions do not follow milestones), and let the pipelines
    run.

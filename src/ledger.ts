@@ -238,9 +238,12 @@ export async function readRuns(board: Board, ticket: string, authors: string[], 
  * learning.every_cycles; spentWeekUsd sums judge-run, improve-factory and bench runs of 7 days.
  */
 export function learningState(comments: Comment[], everyCycles: number, now = Date.now(), budgetUsd?: number) {
-  const beats = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean); // newest first
-  const last = beats.findIndex((hb) => (hb.runs ?? []).some((r: LedgerRun) => r.skill === 'improve-factory'));
-  const cyclesSince = last < 0 ? beats.length : last;
+  // newest first; review and learn runtimes write their own heartbeats (kind), which count no cycle
+  const beats = comments.map((c) => parseHeartbeat(c.body)).filter((hb) => hb && (hb.kind ?? 'cycle') === 'cycle');
+  const learnAt = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean).findIndex((hb) => (hb.runs ?? []).some((r: LedgerRun) => r.skill === 'improve-factory'));
+  // Cycles since the newest heartbeat (of any kind) that carries an improve-factory run.
+  const all = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean);
+  const cyclesSince = learnAt < 0 ? beats.length : all.slice(0, learnAt).filter((hb) => (hb.kind ?? 'cycle') === 'cycle').length;
   const week = flattenRuns(comments, { sinceDays: 7, now }).filter((r) => LEARNING_SKILLS.includes(r.skill));
   const spentWeekUsd = Math.round(week.reduce((t, r) => t + (r.cost_usd ?? 0), 0) * 100) / 100;
   const underBudget = !(Number(budgetUsd) > 0) || spentWeekUsd < Number(budgetUsd);

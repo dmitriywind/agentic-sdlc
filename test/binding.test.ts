@@ -172,3 +172,15 @@ test('product.evidence: known kinds only; evidence without commands.evidence_che
   b.commands.evidence_check = 'verify {sha}';
   assert.deepEqual(bindingWarnings(b).filter((w) => w.includes('evidence')), []);
 });
+
+test('bindingWarnings: a GitHub heartbeat ticket must be a number; env labels must name an environment; an empty release prefix fails', () => {
+  const b = structuredClone(good) as any;
+  b.board.adapter = 'github'; b.board.options = { owner: 'o', project_number: 1, repo: 'o/r' };
+  b.heartbeat = { ticket: 'HEARTBEAT-1' }; b.board.env_labels = ['env:staging', 'env:qa'];
+  const w = bindingWarnings(b).join('\n');
+  assert.match(w, /heartbeat.ticket 'HEARTBEAT-1' is not an issue number/);
+  assert.match(w, /env_labels 'env:qa' names no product.environments entry/);
+  assert.doesNotMatch(w, /env:staging/);
+  b.vcs.release_prefix = '';
+  assert.match(validateBinding(b).join('\n'), /release_prefix must not be empty/);
+});

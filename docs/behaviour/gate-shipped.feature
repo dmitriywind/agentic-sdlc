@@ -7,7 +7,7 @@ Feature: Gate shipped
   So that the board shows what runs in each environment
 
   # Source: src/gates.ts, "shipped"; skills/sdlc/references/gates.md
-  # Proof: test/gates.test.ts "shipped: only Done tickets whose merge sha is an ancestor; unknown ancestry ships nothing"
+  # Proof: test/gates.test.ts "shipped: only Done tickets whose merge sha is an ancestor; a ticket of unknown ancestry waits alone"
   Scenario: Only Done tickets whose merge is in the deployed revision ship
     Given a successful deploy to an environment at a revision
     When "gate shipped <env>" runs
@@ -125,3 +125,17 @@ Feature: Gate shipped
     And only one Done ticket is not yet On the environment
     When "gate shipped" runs with --result success
     Then the gate asks the forge about that one ticket only
+
+  # Source: src/gates.ts, "shipped" (read again before the write)
+  # Proof: test/gates.test.ts "shipped: a slower earlier-environment deploy never lowers a newer Shipped; a re-run failure opens one Signal"
+  Scenario: A slower deploy of an earlier environment never lowers Shipped
+    Given a ticket that reached On production while the staging gate was running
+    When the staging gate writes its result
+    Then the ticket keeps On production
+
+  # Source: src/gates.ts, "shipped" (signal)
+  # Proof: test/gates.test.ts "shipped: a slower earlier-environment deploy never lowers a newer Shipped; a re-run failure opens one Signal"
+  Scenario: One failed deploy opens one Signal with its environment label
+    Given board.env_labels lists "env:staging"
+    When "gate shipped staging --result failure" runs twice for the same sha
+    Then one Signal labelled "signal:deploy" and "env:staging" is open

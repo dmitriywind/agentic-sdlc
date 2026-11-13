@@ -274,3 +274,10 @@ test('cli: status refuses the contexts only a gate posts', async () => {
   } finally { process.stderr.write = e; }
   assert.deepEqual(posted, []);
 });
+
+test('cli: forge cut needs a forge release workflow; gitlab has none', async () => {
+  const { ctx } = mk('gitlab', { project: 'p', base_url: 'https://gl', token_env: 'TOK' }, () => ({}));
+  const base = { root: ctx.root, binding: ctx.binding, env: ctx.env, exec: ctx.exec, http: ctx.http };
+  const e = process.stderr.write; process.stderr.write = (() => true) as any;
+  try { assert.equal(await cli(['cut', 'abc', '1.2.0'], base), 1); } finally { process.stderr.write = e; }
+});

@@ -117,3 +117,11 @@ Feature: Release to the last environment
     When the release skill runs the ready check on the chosen revision
     Then it runs commands.evidence_check for that revision
     And it stops and names the failure when the command does not exit 0
+
+  # Source: skills/release/SKILL.md, "Steps 6. Mark" and "Steps 7. Cut"
+  Scenario: The tickets show In release before the cut, and the ready check runs again
+    Given the Product owner approved the proposal
+    When the release skill marks and cuts
+    Then it runs the ready check again on the same revision
+    And it sets release_version and Shipped "In release" before the cut
+    And on GitHub it runs "forge cut <revision> <version>", whose Environment the Product owner approves

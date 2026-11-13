@@ -51,6 +51,7 @@ the rows back.
 
 | Field | Meaning |
 |---|---|
+| `kind` | `cycle` (the default), `review` (the review runtime, one per run) or `learn` (written by `improve-factory`). Only `cycle` heartbeats count cycles. A `review` or `learn` heartbeat holds only `kind`, `factory`, `runs` and, for `learn`, `learning`. |
 | `factory` | `vcs head` sha of the trunk the skills were read from. Ties every row to one factory version. |
 | `statusCounts` | Board items per Status. |
 | `oldestOpen` | Per Status outside `board.done_statuses`: the item longest in it; `days` since its Status last changed. |

@@ -196,7 +196,7 @@ function carry(from: string, to: string, p: string) {
  */
 export async function runBench(
   cases: BenchCase[],
-  o: { model: string; executor?: Executor; executorName?: string; factory?: string; suite?: string; root: string; binding: Binding; dryRun?: boolean; scorerDir?: string; trials?: number },
+  o: { model: string; executor?: Executor; executorName?: string; factory?: string; suite?: string; root: string; binding: Binding; dryRun?: boolean; scorerDir?: string; trials?: number; budget?: number },
   deps: BenchDeps,
 ): Promise<BenchResult | { dryRun: { id: string; command: string }[] }> {
   const executor = o.executor ?? { kind: 'harness' };
@@ -218,7 +218,8 @@ export async function runBench(
     const isProof = rule(binding, 'proof_pattern', PROOF_FILE);
     const isConfig = rule(binding, 'verify_config_pattern', VERIFY_CONFIG);
     const scratch = mkdtempSync(join(tmpdir(), 'agentic-bench-prompts-'));
-    const budget = binding.learning.budget_usd_per_week;
+    // The caller passes the week's remaining learning budget; without it, the whole weekly budget.
+    const budget = o.budget ?? binding.learning.budget_usd_per_week;
     let spent = 0;
     const trials = o.trials ?? 1;
     for (const c of cases) for (let trial = 1; trial <= trials && !stopped; trial++) {
@@ -383,7 +384,7 @@ export const cli: PortCli = async (argv, ctx) => {
       args: rest,
       options: {
         limit: { type: 'string' }, model: { type: 'string' }, executor: { type: 'string' }, factory: { type: 'string' }, cases: { type: 'string' }, 'dry-run': { type: 'boolean' },
-        suite: { type: 'string' }, paths: { type: 'string', multiple: true }, 'per-size': { type: 'string' }, n: { type: 'string' }, trials: { type: 'string' },
+        suite: { type: 'string' }, paths: { type: 'string', multiple: true }, 'per-size': { type: 'string' }, n: { type: 'string' }, trials: { type: 'string' }, budget: { type: 'string' },
       },
       allowPositionals: true,
     });
@@ -454,7 +455,7 @@ export const cli: PortCli = async (argv, ctx) => {
       const { createVcs } = await import('./vcs/index.ts');
       const r = await runBench(
         cases,
-        { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values['dry-run'], scorerDir: join(root, RESULTS_DIR, stem), trials },
+        { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values['dry-run'], scorerDir: join(root, RESULTS_DIR, stem), trials, budget: a.values.budget !== undefined ? Number(a.values.budget) : undefined },
         { exec: ctx.exec, vcs: await createVcs(with_(binding.vcs.options)) },
       );
       if ('cases' in r) {

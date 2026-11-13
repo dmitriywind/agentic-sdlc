@@ -23,7 +23,8 @@ questions; a part missing is written as "none" when triaged.
    using only the contact the report gives; keep exploit detail and personal data out of every
    public ticket. When `paths.security_policy` names a reporting duty with a deadline (for an EU
    product, the Cyber Resilience Act: an actively exploited vulnerability or a severe incident
-   needs an early warning within 24 hours and a notification within 72 hours), call
+   needs an early warning within 24 hours and a notification within 72 hours; this holds for any
+   Signal that describes active exploitation, whatever its stream), call
    [`escalate-to-human`](../escalate-to-human/SKILL.md) (Legal) at once, naming the deadline. Done
    when acknowledged, or noted that no contact was given, and any deadline is escalated.
 3. **Still real at the trunk tip.** For a release-failure Signal, first make a read-only diagnosis:

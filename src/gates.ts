@@ -152,13 +152,23 @@ export function proofRunner(run: (cmd: string) => unknown): (cmd: string) => boo
   };
 }
 
+/** Posts status ticket-linkage with the CI job's own token; a forge that refuses leaves the job result as the check. */
+async function post(d: Deps, sha: string, description: string, ok: boolean) {
+  try { await d.forge.status(sha, { context: 'ticket-linkage', state: ok ? 'success' : 'failure', description: description.slice(0, 140) }, { as: 'ci' }); }
+  catch { /* no status token: the job result carries it */ }
+}
+
+/** Change lines of dependency bots: product changes with no ticket, reviewed like any CR. */
+const DEPENDENCY_LINES = /^(dependabot|renovate)\//;
+
 export async function linkage(d: Deps, n: string) {
   const cr = await d.forge.view(n);
   const diff = await readDiff(d, n);
   const cls = await classify(d, cr, diff);
   // Only an all-factory CR skips linkage; a mixed or unparsed one still closes a ticket.
   const paths = diff === undefined ? null : diffPaths(diff);
-  if (cls !== 'product' && paths?.every((p) => matchesAny(p, factoryGlobs(d.binding)))) return { ok: true, factory: true, class: cls, errors: [] as string[] };
+  if (cls !== 'product' && paths?.every((p) => matchesAny(p, factoryGlobs(d.binding)))) { await post(d, cr.headSha, 'factory change: no ticket', true); return { ok: true, factory: true, class: cls, errors: [] as string[] }; }
+  if (DEPENDENCY_LINES.test(cr.source) && !cr.closes.length) { await post(d, cr.headSha, 'dependency update: no ticket', true); return { ok: true, factory: false, dependency: true, class: cls, errors: [] as string[] }; }
   const errors: string[] = [];
   if (cr.closes.length !== 1) errors.push(`CR ${n} must close exactly one ticket, found ${cr.closes.length}`);
   else {
@@ -168,6 +178,7 @@ export async function linkage(d: Deps, n: string) {
     else if (d.binding.board.done_statuses.includes(item.status)) errors.push(`ticket ${id} is not open (${item.status})`);
     if (!nameHas(cr.source, id)) errors.push(`source change line "${cr.source}" does not name ${id}`);
   }
+  await post(d, cr.headSha, errors.length ? errors[0] : 'closes one open ticket', !errors.length);
   return { ok: !errors.length, factory: false, class: cls, errors };
 }
 
@@ -292,8 +303,11 @@ export async function merged(d: Deps, sha: string): Promise<{ cr?: string; sha: 
   const id = cr.closes[0];
   const it = await d.board.get(id);
   if (it.status === 'Cancelled') return none(`${id} is Cancelled`);
-  if (!b.done_statuses.includes(it.status)) await d.board.move(id, 'Done', it.status);
-  if (!it.fields?.shipped) await d.board.set(id, 'shipped', opts[0]);
+  if (!b.done_statuses.includes(it.status)) {
+    try { await d.board.move(id, 'Done', it.status); }
+    catch (e) { if (!b.done_statuses.includes((await d.board.get(id)).status)) throw e; } // shipped moved it first
+  }
+  if (!(await d.board.get(id)).fields?.shipped) await d.board.set(id, 'shipped', opts[0]);
   return { cr: cr.n, sha, moved: [id] };
 }
 
@@ -326,18 +340,24 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
   const done = (await d.board.list({ status: ['Done', 'In review'] })).filter((x) => x.status === 'Done' || x.status === 'In review');
   const changed: string[] = [];
   const signal = async (held: boolean) => {
+    const title = `Deploy to ${env} failed at ${sha.slice(0, 12)}`;
+    // A re-run of the same failed deploy opens no second Signal.
+    if ((await d.board.list({ label: 'signal:deploy' })).some((x) => x.title === title && !d.binding.board.done_statuses.includes(x.status))) return false;
+    const envLabel = (d.binding.board.env_labels ?? []).find((l) => l === `env:${env}`);
     await d.board.create({
-      title: `Deploy to ${env} failed at ${sha.slice(0, 12)}`,
+      title,
       body: `Deploy to ${env} failed.\nsha: ${sha}\nenvironment: ${env}`,
       status: 'Signals',
-      labels: ['signal:deploy', ...(held ? [d.binding.board.labels.human] : [])],
+      labels: ['signal:deploy', ...(envLabel ? [envLabel] : []), ...(held ? [d.binding.board.labels.human] : [])],
     });
+    return true;
   };
   if (result === 'success') {
     // A ticket shipped here only when every merged CR closing it is an ancestor of the deployed sha.
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, tags: [], unknown: true };
     const unmatched: string[] = [];
+    const unknown: string[] = [];
     const rel = d.binding.board.labels?.release;
     const items = [];
     const todo = done.filter((x) => rank(x.fields.shipped) < rank(target));
@@ -346,10 +366,11 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
       const shas = byId.get(x.id) ?? [];
       if (!shas.length) { if (!(rel && x.labels.includes(rel))) unmatched.push(x.id); continue; }
       const anc = shas.map((s) => (s ? isAnc(s, sha) : undefined));
-      if (anc.includes(undefined)) return { env, result, changed: [], tags: [], unknown: true };
+      if (anc.includes(undefined)) { unknown.push(x.id); continue; } // that ticket waits; the others ship
       if (anc.every(Boolean)) items.push(x);
     }
-    if (version) for (const x of items) if (!x.fields.release_version) { await d.board.set(x.id, 'release_version', version); x.fields.release_version = version; }
+    // --version is the artifact now running: it replaces an older version (a rolled-back one, a resubmitted build).
+    if (version) for (const x of items) if (x.fields.release_version !== version) { await d.board.set(x.id, 'release_version', version); x.fields.release_version = version; }
     // Tags first: a tag failure throws before the board changes, so a re-run retries; an existing tag is kept.
     const tags: string[] = [];
     if (last) {
@@ -361,11 +382,14 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
       }
     }
     for (const x of items) {
-      if (x.status !== 'Done') await d.board.move(x.id, 'Done', x.status);
+      // Read again: a later environment's deploy may have written a newer value meanwhile; never lower it.
+      const now = await d.board.get(x.id);
+      if (rank(now.fields.shipped) >= rank(target)) continue;
+      if (!d.binding.board.done_statuses.includes(now.status)) await d.board.move(x.id, 'Done', now.status);
       await d.board.set(x.id, 'shipped', target);
       changed.push(x.id);
     }
-    return { env, result, changed, tags, unmatched };
+    return { env, result, changed, tags, unmatched, ...(unknown.length ? { unknown } : {}) };
   }
   if (result === 'rolled-back') {
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
@@ -399,8 +423,8 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
       }
     }
   }
-  await signal(last);
-  return { env, result, changed, signal: true };
+  const opened = await signal(last);
+  return { env, result, changed, signal: opened };
 }
 
 const redact = (s: string, max = 120) =>
@@ -511,6 +535,15 @@ export const cli: PortCli = (argv, base) =>
         return r;
       }
       case 'proofs-on-base': return fail(await proofsOnBase(deps(), a.need('cr')));
+      case 'evidence': {
+        const sha = a.need('sha');
+        const kinds = base.binding.product.evidence ?? [];
+        if (!kinds.length) return { ok: true, kinds, reason: 'product.evidence is empty' };
+        const cmd = base.binding.commands?.evidence_check;
+        if (!cmd) throw new Error('product.evidence is set but commands.evidence_check is unset');
+        shell(base.exec, cmd.replaceAll('{sha}', sha), base.root);
+        return { ok: true, kinds, sha };
+      }
       case 'signal-on-red': return signalOnRed(deps(), a.need('run'));
       case 'skill-regression': {
         const { errors, warnings } = skillRegression(base.root);

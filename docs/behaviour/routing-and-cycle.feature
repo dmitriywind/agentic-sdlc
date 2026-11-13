@@ -137,3 +137,38 @@ Feature: Routing and the unattended cycle
     When the cycle reads "ledger summary"
     Then "learning.due" is false
     And the cycle starts no improve-factory run
+
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 1
+  Scenario: A second cycle that starts while one runs writes nothing
+    Given a cycle is running and has not written its heartbeat
+    When a second cycle runs "dispatch sdlc --ticket <heartbeat.ticket>"
+    Then the dispatch prints "{ skipped: true }"
+    And the second cycle stops and writes no heartbeat
+
+  # Source: skills/sdlc/SKILL.md, "The needs-human hold"
+  Scenario: An owner who only comments releases the hold
+    Given a ticket is held with a "### Needs human" comment
+    And a trusted owner reply follows that comment
+    When the cycle reads the board
+    Then the cycle removes the label board.labels.human
+    And the ticket is routed at its Status
+
+  # Source: skills/sdlc/SKILL.md, "Routing"
+  Scenario Outline: CR states that used to strand a ticket are routed
+    Given <state>
+    When the cycle routes the board
+    Then <skill> is dispatched
+
+    Examples:
+      | state                                                         | skill                                  |
+      | a ticket at In review that no open CR closes                  | implement-spec, back to In progress    |
+      | a ready CR at In review with no review status on its head     | review-pr                              |
+      | a Ready ticket whose open CR a person opened                  | implement-spec, a hand-off to review   |
+      | an open dependency CR with no ticket                          | review-pr with --cr                    |
+
+  # Source: src/dispatch.ts, "idempotency"
+  Scenario: A run that has not finished blocks a second start until stall_minutes
+    Given implement-spec was dispatched for a ticket more than cycle.dedupe_minutes ago
+    And no bot comment followed the dispatch marker
+    When implement-spec is dispatched again for the ticket inside stall_minutes
+    Then the dispatch prints "{ skipped: true }" with "the previous run has not finished"

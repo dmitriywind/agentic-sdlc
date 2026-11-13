@@ -28,17 +28,20 @@ concurrency:
 
 jobs:
   ticket-linkage:
-    name: ticket-linkage
+    # Posts status ticket-linkage on the head with this job's GITHUB_TOKEN (the Actions app the ruleset pins).
+    name: linkage-gate
     if: github.event_name != 'workflow_run'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
+      checks: read
+      statuses: write
     env:
-      # Secret names the binding's options point at: forge token_env, board token_env. No review token here.
+      # Secret names the binding's options point at: board token_env. The forge token is this job's own GITHUB_TOKEN. No review token here.
       GH_TOKEN: ${{ github.token }}
-      AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
+      AGENTIC_FORGE_TOKEN: ${{ github.token }}
       AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
       AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
       CR: ${{ github.event.pull_request.number }}
@@ -75,7 +78,7 @@ jobs:
   human-approval:
     # Posts status human-approval on the head (with the review identity's token): computes the class and
     # checks the approving reviews the class needs. Runs on a PR event and, via workflow_run, on a review event.
-    name: human-approval
+    name: approval-gate
     if: github.event_name == 'pull_request_target' || github.event_name == 'workflow_run'
     environment: agentic-review
     runs-on: ubuntu-latest

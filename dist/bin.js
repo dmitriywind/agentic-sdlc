@@ -7415,6 +7415,7 @@ function validateBinding(b) {
       if (typeof x.vcs[k] !== "string" || !x.vcs[k]) p.push(`vcs.${k} must ${what}`);
     if (typeof x.vcs.tag_prefix !== "string") p.push("vcs.tag_prefix must be a string (empty for none)");
     if (typeof x.vcs.release_prefix === "string" && x.vcs.release_prefix && !x.vcs.release_prefix.endsWith("/")) p.push("vcs.release_prefix must end in '/'");
+    if (x.vcs.release_prefix === "") p.push("vcs.release_prefix must not be empty: it would match every branch (leave it out for continuous delivery)");
   }
   const pr = x.product;
   if (pr) {
@@ -7456,6 +7457,10 @@ function bindingWarnings(b) {
   const x = b;
   if (x?.product?.kind !== void 0) w.push("product.kind is unused; remove it");
   if (x?.board?.milestone !== void 0) w.push("board.milestone is unused; remove it");
+  const hb = String(x?.heartbeat?.ticket ?? "");
+  if (["github", "local"].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
+  const envs = x?.product?.environments ?? [];
+  for (const l of x?.board?.env_labels ?? []) if (String(l).startsWith("env:") && !envs.includes(String(l).slice(4))) w.push(`board.env_labels '${l}' names no product.environments entry`);
   if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push("product.evidence is set but commands.evidence_check is unset: no release can show its evidence");
   if (x?.forge?.review_runtime !== void 0) w.push("forge.review_runtime is unused: review-pr always runs in its own runtime; remove it");
   const size = x?.learning?.bench_size, min = x?.learning?.bench_min_cases ?? 20;
@@ -8689,7 +8694,7 @@ function github(ctx) {
       return Promise.all(rows.map((r) => view(String(r.number))));
     },
     async closing(id) {
-      const rows = JSON.parse(gh(["pr", "list", "--state", "merged", "--search", `"Closes ${id}" in:body`, "--json", "number", "--limit", "30"]));
+      const rows = JSON.parse(gh(["pr", "list", "--state", "merged", "--search", `"Closes ${id}" OR "Closes #${id}" in:body`, "--json", "number", "--limit", "30"]));
       return (await Promise.all(rows.map((r) => view(String(r.number))))).filter((c) => c.closes.includes(id));
     },
     async ready(n) {
@@ -8707,6 +8712,10 @@ function github(ctx) {
     async automerge(n) {
       gh(["pr", "merge", n, "--auto", "--squash"]);
       return view(n);
+    },
+    async cut(revision, version2) {
+      gh(["workflow", "run", "agentic-sdlc-release.yml", "-f", `revision=${revision}`, "-f", `version=${version2}`]);
+      return { requested: true };
     },
     async comment(n, body) {
       const url = gh(["pr", "comment", n, "--body-file", "-"], body).trim();
@@ -8935,6 +8944,11 @@ var init_forge = __esm({
           return f.sync(n());
         case "automerge":
           return f.automerge(n());
+        case "cut": {
+          if (!f.cut) throw new Error(`forge ${ctx.binding.forge.adapter} has no release workflow: cut with \`vcs cut\` under the release credential`);
+          if (!a.pos[1]) throw new UsageError("forge cut <revision> <version>");
+          return f.cut(a.pos[0] ?? "", a.pos[1]);
+        }
         case "comment":
           return f.comment(n(), body());
         case "comments":
@@ -9687,12 +9701,25 @@ function proofRunner(run) {
     }
   };
 }
+async function post(d, sha2, description, ok) {
+  try {
+    await d.forge.status(sha2, { context: "ticket-linkage", state: ok ? "success" : "failure", description: description.slice(0, 140) }, { as: "ci" });
+  } catch {
+  }
+}
 async function linkage(d, n) {
   const cr = await d.forge.view(n);
   const diff = await readDiff(d, n);
   const cls = await classify(d, cr, diff);
   const paths = diff === void 0 ? null : diffPaths(diff);
-  if (cls !== "product" && paths?.every((p) => matchesAny(p, factoryGlobs(d.binding)))) return { ok: true, factory: true, class: cls, errors: [] };
+  if (cls !== "product" && paths?.every((p) => matchesAny(p, factoryGlobs(d.binding)))) {
+    await post(d, cr.headSha, "factory change: no ticket", true);
+    return { ok: true, factory: true, class: cls, errors: [] };
+  }
+  if (DEPENDENCY_LINES.test(cr.source) && !cr.closes.length) {
+    await post(d, cr.headSha, "dependency update: no ticket", true);
+    return { ok: true, factory: false, dependency: true, class: cls, errors: [] };
+  }
   const errors = [];
   if (cr.closes.length !== 1) errors.push(`CR ${n} must close exactly one ticket, found ${cr.closes.length}`);
   else {
@@ -9702,6 +9729,7 @@ async function linkage(d, n) {
     else if (d.binding.board.done_statuses.includes(item.status)) errors.push(`ticket ${id} is not open (${item.status})`);
     if (!nameHas(cr.source, id)) errors.push(`source change line "${cr.source}" does not name ${id}`);
   }
+  await post(d, cr.headSha, errors.length ? errors[0] : "closes one open ticket", !errors.length);
   return { ok: !errors.length, factory: false, class: cls, errors };
 }
 function approvers(reviews, sha2) {
@@ -9797,8 +9825,14 @@ async function merged(d, sha2) {
   const id = cr.closes[0];
   const it = await d.board.get(id);
   if (it.status === "Cancelled") return none(`${id} is Cancelled`);
-  if (!b.done_statuses.includes(it.status)) await d.board.move(id, "Done", it.status);
-  if (!it.fields?.shipped) await d.board.set(id, "shipped", opts[0]);
+  if (!b.done_statuses.includes(it.status)) {
+    try {
+      await d.board.move(id, "Done", it.status);
+    } catch (e) {
+      if (!b.done_statuses.includes((await d.board.get(id)).status)) throw e;
+    }
+  }
+  if (!(await d.board.get(id)).fields?.shipped) await d.board.set(id, "shipped", opts[0]);
   return { cr: cr.n, sha: sha2, moved: [id] };
 }
 async function mergeShas(d, ids) {
@@ -9823,19 +9857,24 @@ async function shipped(d, env, sha2, result, version2) {
   const done = (await d.board.list({ status: ["Done", "In review"] })).filter((x) => x.status === "Done" || x.status === "In review");
   const changed = [];
   const signal = async (held) => {
+    const title = `Deploy to ${env} failed at ${sha2.slice(0, 12)}`;
+    if ((await d.board.list({ label: "signal:deploy" })).some((x) => x.title === title && !d.binding.board.done_statuses.includes(x.status))) return false;
+    const envLabel = (d.binding.board.env_labels ?? []).find((l) => l === `env:${env}`);
     await d.board.create({
-      title: `Deploy to ${env} failed at ${sha2.slice(0, 12)}`,
+      title,
       body: `Deploy to ${env} failed.
 sha: ${sha2}
 environment: ${env}`,
       status: "Signals",
-      labels: ["signal:deploy", ...held ? [d.binding.board.labels.human] : []]
+      labels: ["signal:deploy", ...envLabel ? [envLabel] : [], ...held ? [d.binding.board.labels.human] : []]
     });
+    return true;
   };
   if (result === "success") {
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, tags: [], unknown: true };
     const unmatched = [];
+    const unknown = [];
     const rel = d.binding.board.labels?.release;
     const items = [];
     const todo = done.filter((x) => rank(x.fields.shipped) < rank(target));
@@ -9847,11 +9886,14 @@ environment: ${env}`,
         continue;
       }
       const anc = shas.map((s) => s ? isAnc(s, sha2) : void 0);
-      if (anc.includes(void 0)) return { env, result, changed: [], tags: [], unknown: true };
+      if (anc.includes(void 0)) {
+        unknown.push(x.id);
+        continue;
+      }
       if (anc.every(Boolean)) items.push(x);
     }
     if (version2) {
-      for (const x of items) if (!x.fields.release_version) {
+      for (const x of items) if (x.fields.release_version !== version2) {
         await d.board.set(x.id, "release_version", version2);
         x.fields.release_version = version2;
       }
@@ -9866,11 +9908,13 @@ environment: ${env}`,
       }
     }
     for (const x of items) {
-      if (x.status !== "Done") await d.board.move(x.id, "Done", x.status);
+      const now = await d.board.get(x.id);
+      if (rank(now.fields.shipped) >= rank(target)) continue;
+      if (!d.binding.board.done_statuses.includes(now.status)) await d.board.move(x.id, "Done", now.status);
       await d.board.set(x.id, "shipped", target);
       changed.push(x.id);
     }
-    return { env, result, changed, tags, unmatched };
+    return { env, result, changed, tags, unmatched, ...unknown.length ? { unknown } : {} };
   }
   if (result === "rolled-back") {
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
@@ -9902,8 +9946,8 @@ environment: ${env}`,
       }
     }
   }
-  await signal(last);
-  return { env, result, changed, signal: true };
+  const opened = await signal(last);
+  return { env, result, changed, signal: opened };
 }
 async function signalOnRed(d, id) {
   const runs = [...await d.forge.runs({ failed: true }), ...await d.forge.runs({})];
@@ -9975,7 +10019,7 @@ function scorerErrors(f, text) {
   if (!["pass-fail", "0-4"].includes(fm.scale)) errors.push(`scorers/${f}: scale ${fm.scale} invalid`);
   return errors;
 }
-var import_yaml3, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tierOf, withoutTier, nameHas, esc, patternRe, readDiff, redact2, cleanUrl, cli5;
+var import_yaml3, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tierOf, withoutTier, nameHas, esc, patternRe, readDiff, DEPENDENCY_LINES, redact2, cleanUrl, cli5;
 var init_gates = __esm({
   "src/gates.ts"() {
     "use strict";
@@ -9997,6 +10041,7 @@ var init_gates = __esm({
     esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     patternRe = (p) => new RegExp("^" + p.split(/(<ticket>|<name>)/).map((x) => x === "<ticket>" ? "[A-Za-z0-9_-]+" : x === "<name>" ? "[a-z0-9]+(?:-[a-z0-9]+)*" : esc(x)).join("") + "$");
     readDiff = (d, n) => d.forge.diff(n).catch(() => void 0);
+    DEPENDENCY_LINES = /^(dependabot|renovate)\//;
     redact2 = (s, max = 120) => String(s ?? "").replace(/[\x00-\x1f]/g, " ").replace(/\b[A-Za-z0-9_+/=-]{32,}\b/g, "[redacted]").slice(0, max);
     cleanUrl = (u) => redact2(String(u ?? "").replace(/^(\w+:\/\/)[^/@]*@/, "$1").replace(/[?#].*$/, ""), 200);
     cli5 = (argv, base) => guard(async () => {
@@ -10060,6 +10105,15 @@ var init_gates = __esm({
         }
         case "proofs-on-base":
           return fail(await proofsOnBase(deps(), a.need("cr")));
+        case "evidence": {
+          const sha2 = a.need("sha");
+          const kinds = base.binding.product.evidence ?? [];
+          if (!kinds.length) return { ok: true, kinds, reason: "product.evidence is empty" };
+          const cmd = base.binding.commands?.evidence_check;
+          if (!cmd) throw new Error("product.evidence is set but commands.evidence_check is unset");
+          shell(base.exec, cmd.replaceAll("{sha}", sha2), base.root);
+          return { ok: true, kinds, sha: sha2 };
+        }
         case "signal-on-red":
           return signalOnRed(deps(), a.need("run"));
         case "skill-regression": {
@@ -10234,9 +10288,10 @@ async function readRuns(board, ticket, authors, q = {}, graders = []) {
   return flattenRuns(await readLedger(board, ticket, authors, graders), q);
 }
 function learningState(comments, everyCycles, now = Date.now(), budgetUsd) {
-  const beats = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean);
-  const last = beats.findIndex((hb) => (hb.runs ?? []).some((r) => r.skill === "improve-factory"));
-  const cyclesSince = last < 0 ? beats.length : last;
+  const beats = comments.map((c) => parseHeartbeat(c.body)).filter((hb) => hb && (hb.kind ?? "cycle") === "cycle");
+  const learnAt = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean).findIndex((hb) => (hb.runs ?? []).some((r) => r.skill === "improve-factory"));
+  const all = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean);
+  const cyclesSince = learnAt < 0 ? beats.length : all.slice(0, learnAt).filter((hb) => (hb.kind ?? "cycle") === "cycle").length;
   const week = flattenRuns(comments, { sinceDays: 7, now }).filter((r) => LEARNING_SKILLS.includes(r.skill));
   const spentWeekUsd = Math.round(week.reduce((t, r) => t + (r.cost_usd ?? 0), 0) * 100) / 100;
   const underBudget = !(Number(budgetUsd) > 0) || spentWeekUsd < Number(budgetUsd);
@@ -10563,7 +10618,7 @@ async function runBench(cases, o, deps) {
     const isProof = rule(binding, "proof_pattern", PROOF_FILE);
     const isConfig = rule(binding, "verify_config_pattern", VERIFY_CONFIG);
     const scratch = mkdtempSync2(join7(tmpdir2(), "agentic-bench-prompts-"));
-    const budget = binding.learning.budget_usd_per_week;
+    const budget = o.budget ?? binding.learning.budget_usd_per_week;
     let spent = 0;
     const trials = o.trials ?? 1;
     for (const c of cases) for (let trial = 1; trial <= trials && !stopped; trial++) {
@@ -10752,7 +10807,8 @@ var init_bench = __esm({
             paths: { type: "string", multiple: true },
             "per-size": { type: "string" },
             n: { type: "string" },
-            trials: { type: "string" }
+            trials: { type: "string" },
+            budget: { type: "string" }
           },
           allowPositionals: true
         });
@@ -10820,7 +10876,7 @@ var init_bench = __esm({
           const { createVcs: createVcs2 } = await Promise.resolve().then(() => (init_vcs(), vcs_exports));
           const r = await runBench(
             cases,
-            { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values["dry-run"], scorerDir: join7(root, RESULTS_DIR, stem), trials },
+            { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values["dry-run"], scorerDir: join7(root, RESULTS_DIR, stem), trials, budget: a.values.budget !== void 0 ? Number(a.values.budget) : void 0 },
             { exec: ctx.exec, vcs: await createVcs2(with_(binding.vcs.options)) }
           );
           if ("cases" in r) {
@@ -10858,10 +10914,11 @@ import { closeSync, mkdirSync as mkdirSync4, mkdtempSync as mkdtempSync3, openSy
 import { tmpdir as tmpdir3 } from "os";
 import { join as join8 } from "path";
 function judgeTier(b, runModel) {
+  if (!runModel) return { skip: true, reason: "the judged run reported no model, so independence cannot be shown" };
   const want = b.learning?.judge_tier ?? "fast";
   const i = TIERS4.indexOf(want);
   const order = [want, ...TIERS4.slice(i + 1), ...TIERS4.slice(0, i).reverse()];
-  const tier = order.find((t) => !runModel || b.models[t] !== runModel);
+  const tier = order.find((t) => b.models[t] !== runModel);
   if (!tier) return { skip: true, reason: `every model tier is ${runModel}, the judged run's model; a model never grades its own run` };
   return { tier, model: b.models[tier] };
 }
@@ -10981,7 +11038,7 @@ var init_dispatch = __esm({
         }
         let board;
         const boardOf = () => board ??= createBoard({ ...ctx, options: b.board.options });
-        const target = ticket || b.heartbeat?.ticket;
+        const target = (skill === "judge-run" ? "" : ticket) || b.heartbeat?.ticket;
         const window = Number(b.cycle?.dedupe_minutes) || 0;
         let key;
         if (window > 0 && target) {
@@ -10995,10 +11052,15 @@ var init_dispatch = __esm({
           }
           key = [ticket || cr || "factory", skill, f.run, head].filter(Boolean).join("-");
           const trusted = (b.owners?.bots ?? []).map((a) => a.toLowerCase());
-          const since = Date.now() - window * 6e4;
-          const seen = (await boardOf().comments(target, { marker: `${DISPATCH_MARKER} ${key} ` })).find((c) => trusted.includes(c.author?.toLowerCase()) && Date.parse(c.createdAt) >= since);
-          if (seen) {
-            console.log(JSON.stringify({ skipped: true, key, since: seen.createdAt, comment: seen.id }));
+          const bot = (c) => trusted.includes(String(c.author).toLowerCase());
+          const all = (await boardOf().comments(target)).filter(bot);
+          const mine = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `)).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
+          const at = mine ? Date.parse(mine.createdAt) : NaN;
+          const finished = mine && all.some((c) => Date.parse(c.createdAt) > at && !c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER}`));
+          const stall = Number(b.stall_minutes) || 0;
+          const age = (Date.now() - at) / 6e4;
+          if (mine && (age < window || !finished && age < stall)) {
+            console.log(JSON.stringify({ skipped: true, key, since: mine.createdAt, comment: mine.id, reason: age < window ? "double fire" : "the previous run has not finished" }));
             return 0;
           }
         }
@@ -11364,10 +11426,10 @@ var GROUPS = {
   validate: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "check the binding and skills"],
   doctor: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "validate, then probe board, forge and vcs"],
   board: [() => Promise.resolve().then(() => (init_board(), board_exports)), true, "list get create move set label assign comment comments close child"],
-  forge: [() => Promise.resolve().then(() => (init_forge(), forge_exports)), true, "open view diff list ready draft sync automerge approve approvals comment comments status runs"],
+  forge: [() => Promise.resolve().then(() => (init_forge(), forge_exports)), true, "open view diff list ready draft sync automerge cut approve approvals comment comments status runs"],
   vcs: [() => Promise.resolve().then(() => (init_vcs(), vcs_exports)), true, "start head changed base push cut tag tags drop checkout-tests"],
   dispatch: [() => Promise.resolve().then(() => (init_dispatch(), dispatch_exports)), true, "dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>]"],
-  gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base merged shipped signal-on-red skill-regression"],
+  gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red skill-regression"],
   ledger: [() => Promise.resolve().then(() => (init_ledger(), ledger_exports)), true, "runs summary plan record stale hash: the run ledger from heartbeats"],
   bench: [() => Promise.resolve().then(() => (init_bench(), bench_exports)), true, "build propose run report compare"],
   mcp: [() => Promise.resolve().then(() => (init_mcp(), mcp_exports)), true, "serve the port verbs as MCP tools: stdio, or --http --port <p> with AGENTIC_SDLC_MCP_TOKEN; --allow approve,status"]
