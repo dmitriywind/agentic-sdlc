@@ -221,6 +221,13 @@ export async function approval(d: Deps, n: string) {
   return { cr: cr.n, class: klass, need, state: pass ? 'success' : 'pending', ...(by ? { by } : {}) };
 }
 
+/** True when every changed path matches paths.no_proof (docs, config): such a product CR needs no proof file. */
+function onlyNoProof(b: Binding, diff: string | undefined): boolean {
+  const globs = [b.paths?.no_proof ?? []].flat();
+  const paths = diff === undefined ? undefined : diffPaths(diff);
+  return globs.length > 0 && !!paths?.length && paths.every((p) => matchesAny(p, globs));
+}
+
 /** New or changed (not deleted) paths of a git diff that match the proof rule. */
 export function proofFiles(diff: string, isProof: RegExp): string[] {
   const out: string[] = [];
@@ -245,7 +252,8 @@ export async function proofsOnBase(d: Deps, n: string) {
   const files = cls === 'product' && diff !== undefined ? proofFiles(diff, rule(d.binding, 'proof_pattern', PROOF_FILE)) : [];
   const passedOnBase: string[] = [];
   let error: string | undefined;
-  if (cls !== 'product') error = undefined;
+  const noProof = cls === 'product' && !files.length && onlyNoProof(d.binding, diff);
+  if (cls !== 'product' || noProof) error = undefined;
   else if (!tpl) error = 'commands.proofs_on_base is not set';
   else if (!files.length) error = 'no new or changed proof file';
   else if (!d.run) error = 'no command runner';
@@ -260,7 +268,7 @@ export async function proofsOnBase(d: Deps, n: string) {
     }
     if (passedOnBase.length) error = `passes on the merge base: ${passedOnBase.join(', ')}`;
   }
-  const description = cls !== 'product' ? `${cls}: no product proof` : error ?? `${files.length} proof file(s) fail on the merge base`;
+  const description = cls !== 'product' ? `${cls}: no product proof` : noProof ? 'only paths.no_proof changed: no proof needed' : error ?? `${files.length} proof file(s) fail on the merge base`;
   let posted = true;
   // The job holds no secrets by design; when it cannot post, its own check (exit code) carries the result.
   try { await d.forge.status(cr.headSha, { context: 'proofs-on-base', state: error ? 'failure' : 'success', description: description.slice(0, 140) }, { as: 'ci' }); }
@@ -275,7 +283,7 @@ export async function proofsOnBase(d: Deps, n: string) {
  */
 export async function merged(d: Deps, sha: string): Promise<{ cr?: string; sha: string; moved: string[]; reason?: string }> {
   const b = d.binding.board;
-  const opts = shippedOptions(d.binding.product.environments);
+  const opts = shippedOptions(d.binding.product.environments, d.binding.product.delivery);
   const cr = await d.forge.viewBySha(sha).catch(() => undefined);
   const none = (reason: string) => ({ cr: cr?.n, sha, moved: [] as string[], reason });
   if (!cr?.n) return none('no CR merged at this sha');
@@ -289,12 +297,19 @@ export async function merged(d: Deps, sha: string): Promise<{ cr?: string; sha: 
   return { cr: cr.n, sha, moved: [id] };
 }
 
-export async function shipped(d: Deps, env: string, sha: string, result: string) {
+/**
+ * A deploy result for one environment. success: tickets whose merges are in `sha` get On <env>; with
+ * `version`, tickets without a Release Version get it (continuous delivery, a store build, a package,
+ * a model). rolled-back: tickets On <env> or later whose merges are not in `sha` (the revision now
+ * running) step back one environment and keep their version. failure: a Signal, and in the last
+ * environment the version in flight is reset.
+ */
+export async function shipped(d: Deps, env: string, sha: string, result: string, version?: string) {
   const envs = d.binding.product.environments;
   const i = envs.indexOf(env);
   if (i < 0) throw new UsageError(`unknown environment ${env}; one of ${envs.join(', ')}`);
-  if (result !== 'success' && result !== 'failure') throw new UsageError('--result must be success|failure');
-  const opts = shippedOptions(envs);
+  if (!['success', 'failure', 'rolled-back'].includes(result)) throw new UsageError('--result must be success|failure|rolled-back');
+  const opts = shippedOptions(envs, d.binding.product.delivery);
   const rank = (s?: string) => opts.indexOf(s || opts[0]);
   const target = `On ${env}`;
   const last = i === envs.length - 1;
@@ -324,6 +339,7 @@ export async function shipped(d: Deps, env: string, sha: string, result: string)
       if (anc.includes(undefined)) return { env, result, changed: [], tags: [], unknown: true };
       if (anc.every(Boolean)) items.push(x);
     }
+    if (version) for (const x of items) if (!x.fields.release_version) { await d.board.set(x.id, 'release_version', version); x.fields.release_version = version; }
     // Tags first: a tag failure throws before the board changes, so a re-run retries; an existing tag is kept.
     const tags: string[] = [];
     if (last) {
@@ -340,6 +356,20 @@ export async function shipped(d: Deps, env: string, sha: string, result: string)
       changed.push(x.id);
     }
     return { env, result, changed, tags, unmatched };
+  }
+  if (result === 'rolled-back') {
+    const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
+    const isAnc = d.isAncestor;
+    if (!isAnc) return { env, result, changed, unknown: true };
+    const merged = await d.forge.list({ state: 'merged' });
+    for (const x of done.filter((x) => x.status === 'Done' && rank(x.fields.shipped) >= rank(target))) {
+      const shas = merged.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+      const anc = shas.map((s) => (s ? isAnc(s, sha) : undefined));
+      if (!shas.length || anc.includes(undefined) || anc.every(Boolean)) continue;
+      await d.board.set(x.id, 'shipped', back);
+      changed.push(x.id);
+    }
+    return { env, result, changed };
   }
   if (last) {
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
@@ -461,7 +491,7 @@ export const cli: PortCli = (argv, base) =>
       case 'merged': return merged(deps(), a.need('sha'));
       case 'shipped': {
         if (!a.pos[0]) throw new UsageError('shipped <env> is required');
-        return shipped(deps(), a.pos[0], a.need('sha'), a.need('result'));
+        return shipped(deps(), a.pos[0], a.need('sha'), a.need('result'), a.get('version'));
       }
       case 'approval': {
         const r = await approval(deps(), a.need('cr'));

@@ -25,6 +25,8 @@ env:
   RUN_SHA: ${{ github.event.workflow_run.head_sha }}
   TRUNK: main   # set: your vcs.trunk (doctor checks it)
   RELEASE_PREFIX: release/   # set: your vcs.release_prefix (doctor checks it)
+  DELIVERY: release-line   # set: your product.delivery (doctor checks it)
+  VERSION: ""   # set: an artifact version expression for continuous delivery, e.g. ${{ github.run_number }}; empty for none
 
 jobs:
   delivery:
@@ -68,10 +70,12 @@ jobs:
           # set: the deploy/publish workflow for the first environment; its env name must match product.environments
           if [ "$RUN_NAME" = "Deploy staging" ]; then agentic-sdlc gate shipped first-env --sha "$RUN_SHA" --result "$result"; fi
           # set: the deploy/publish workflow for the last environment; its env name must match product.environments
-          # The last environment ships only from a release line.
-          case "$HEAD_BRANCH" in
-            "$RELEASE_PREFIX"*) if [ "$RUN_NAME" = "Deploy production" ]; then agentic-sdlc gate shipped last-env --sha "$RUN_SHA" --result "$result"; fi ;;
-          esac
+          # The last environment ships from a release line, or from the trunk under continuous delivery.
+          if [ "$RUN_NAME" = "Deploy production" ]; then
+            case "$DELIVERY:$HEAD_BRANCH" in
+              release-line:"$RELEASE_PREFIX"*|continuous:"$TRUNK") agentic-sdlc gate shipped last-env --sha "$RUN_SHA" --result "$result" ${VERSION:+--version "$VERSION"} ;;
+            esac
+          fi
 
       - name: Signal on red
         # Trunk and release pushes of CI only: a red PR run is the CR's business, and a red deploy is shipped's Signal.

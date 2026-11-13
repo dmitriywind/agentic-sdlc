@@ -326,7 +326,10 @@ export function deliveryWorkflow(b: any, root: string): string | undefined {
   const br: string[] = wf?.on?.push?.branches ?? [];
   if (!br.includes(b.vcs.trunk))
     return `fail delivery workflow: push branches ${br.join(', ')} do not name trunk ${b.vcs.trunk}; edit its 'set:' lines`;
-  for (const [k, key, v] of [['TRUNK', 'vcs.trunk', b.vcs.trunk], ['RELEASE_PREFIX', 'vcs.release_prefix', b.vcs.release_prefix]])
+  const delivery = b.product?.delivery ?? 'release-line';
+  const want: [string, string, string][] = [['TRUNK', 'vcs.trunk', b.vcs.trunk], ['DELIVERY', 'product.delivery', delivery]];
+  if (delivery === 'release-line') want.push(['RELEASE_PREFIX', 'vcs.release_prefix', b.vcs.release_prefix]);
+  for (const [k, key, v] of want)
     if (wf?.env?.[k] !== v) return `fail delivery workflow: env.${k} is '${wf?.env?.[k] ?? ''}', not ${key} '${v}'; edit its 'set:' lines`;
   return `ok   delivery workflow: names trunk ${b.vcs.trunk}`;
 }

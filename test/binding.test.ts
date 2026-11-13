@@ -150,3 +150,14 @@ test('validateBinding requires the vcs keys the gates and hook dereference', () 
   assert.match(run({ tag_prefix: undefined }), /vcs.tag_prefix/);
   assert.match(run({ release_prefix: 'release' }), /must end in/);
 });
+
+test('product.delivery: continuous needs no release prefix; release-line needs two environments', () => {
+  const c = structuredClone(good) as any;
+  c.product = { ...c.product, environments: ['production'], delivery: 'continuous' }; delete c.vcs.release_prefix;
+  assert.deepEqual(validateBinding(c), []);
+  const r = structuredClone(good) as any;
+  r.product = { ...r.product, environments: ['production'], delivery: 'release-line' };
+  assert.match(validateBinding(r).join('\n'), /release-line needs two or more environments/);
+  r.product.delivery = 'weekly';
+  assert.match(validateBinding(r).join('\n'), /product.delivery 'weekly'/);
+});

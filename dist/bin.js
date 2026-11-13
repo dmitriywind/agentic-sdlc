@@ -7410,7 +7410,8 @@ function validateBinding(b) {
   for (const t of ["fast", "balanced", "deep"]) if (x.models && !x.models[t]) p.push(`models.${t} missing`);
   if (x.vcs && !String(x.vcs.change_pattern ?? "").includes("<ticket>")) p.push("vcs.change_pattern must contain <ticket>");
   if (x.vcs) {
-    for (const [k, what] of [["trunk", "name the trunk branch"], ["release_prefix", "name the release line prefix"], ["factory_change_pattern", "be a branch pattern for factory changes"]])
+    const lines = (x.product?.delivery ?? "release-line") === "release-line";
+    for (const [k, what] of [["trunk", "name the trunk branch"], ...lines ? [["release_prefix", "name the release line prefix"]] : [], ["factory_change_pattern", "be a branch pattern for factory changes"]])
       if (typeof x.vcs[k] !== "string" || !x.vcs[k]) p.push(`vcs.${k} must ${what}`);
     if (typeof x.vcs.tag_prefix !== "string") p.push("vcs.tag_prefix must be a string (empty for none)");
     if (typeof x.vcs.release_prefix === "string" && x.vcs.release_prefix && !x.vcs.release_prefix.endsWith("/")) p.push("vcs.release_prefix must end in '/'");
@@ -7418,6 +7419,8 @@ function validateBinding(b) {
   const pr = x.product;
   if (pr) {
     if (!Array.isArray(pr.environments) || !pr.environments.length) p.push("product.environments must be a non-empty list");
+    if (pr.delivery !== void 0 && !DELIVERY.includes(pr.delivery)) p.push(`product.delivery '${pr.delivery}' is not one of ${DELIVERY.join("|")}`);
+    if (pr.delivery === "release-line" && Array.isArray(pr.environments) && pr.environments.length < 2) p.push("product.delivery release-line needs two or more environments; use continuous");
     const bad = (pr.proofs ?? []).filter((k) => !PROOFS.includes(k));
     if (bad.length) p.push(`product.proofs has unknown kinds: ${bad.join(", ")}`);
   }
@@ -7469,10 +7472,11 @@ function bindingWarnings(b) {
   }
   return w;
 }
-function shippedOptions(envs) {
-  return ["Not shipped", ...envs.slice(0, -1).map((e) => `On ${e}`), ...envs.length > 1 ? ["In release"] : [], `On ${envs[envs.length - 1]}`];
+function shippedOptions(envs, delivery = "release-line") {
+  const inRelease = delivery === "release-line" && envs.length > 1;
+  return ["Not shipped", ...envs.slice(0, -1).map((e) => `On ${e}`), ...inRelease ? ["In release"] : [], `On ${envs[envs.length - 1]}`];
 }
-var import_yaml, BINDING_PATH, ADAPTERS, OPTIONS, REQUIRED, PROOFS, EXECUTORS, EXECUTOR_KEYS, MANAGED_APIS, HUMAN_APPROVAL, SANDBOXES, PROFILES, TIERS, STATUSES;
+var import_yaml, BINDING_PATH, ADAPTERS, OPTIONS, REQUIRED, PROOFS, EXECUTORS, EXECUTOR_KEYS, MANAGED_APIS, HUMAN_APPROVAL, SANDBOXES, PROFILES, DELIVERY, TIERS, STATUSES;
 var init_binding = __esm({
   "src/binding.ts"() {
     "use strict";
@@ -7528,6 +7532,7 @@ var init_binding = __esm({
     HUMAN_APPROVAL = ["full-lane", "always", "never"];
     SANDBOXES = ["cloud", "container", "local"];
     PROFILES = ["individual", "enterprise"];
+    DELIVERY = ["release-line", "continuous"];
     TIERS = ["fast", "balanced", "deep"];
     STATUSES = ["Ideas", "Signals", "Backlog", "Ready", "In progress", "In review", "Done", "Cancelled"];
   }
@@ -9425,7 +9430,10 @@ function deliveryWorkflow(b, root) {
   const br2 = wf?.on?.push?.branches ?? [];
   if (!br2.includes(b.vcs.trunk))
     return `fail delivery workflow: push branches ${br2.join(", ")} do not name trunk ${b.vcs.trunk}; edit its 'set:' lines`;
-  for (const [k, key, v] of [["TRUNK", "vcs.trunk", b.vcs.trunk], ["RELEASE_PREFIX", "vcs.release_prefix", b.vcs.release_prefix]])
+  const delivery = b.product?.delivery ?? "release-line";
+  const want = [["TRUNK", "vcs.trunk", b.vcs.trunk], ["DELIVERY", "product.delivery", delivery]];
+  if (delivery === "release-line") want.push(["RELEASE_PREFIX", "vcs.release_prefix", b.vcs.release_prefix]);
+  for (const [k, key, v] of want)
     if (wf?.env?.[k] !== v) return `fail delivery workflow: env.${k} is '${wf?.env?.[k] ?? ""}', not ${key} '${v}'; edit its 'set:' lines`;
   return `ok   delivery workflow: names trunk ${b.vcs.trunk}`;
 }
@@ -9718,6 +9726,11 @@ async function approval(d, n) {
   await d.forge.status(cr.headSha, { context: "human-approval", state: pass ? "success" : "pending", description });
   return { cr: cr.n, class: klass, need: need3, state: pass ? "success" : "pending", ...by ? { by } : {} };
 }
+function onlyNoProof(b, diff) {
+  const globs = [b.paths?.no_proof ?? []].flat();
+  const paths = diff === void 0 ? void 0 : diffPaths(diff);
+  return globs.length > 0 && !!paths?.length && paths.every((p) => matchesAny(p, globs));
+}
 function proofFiles(diff, isProof) {
   const out = [];
   for (const block of diff.split(/^(?=diff --git )/m)) {
@@ -9735,7 +9748,8 @@ async function proofsOnBase(d, n) {
   const files = cls === "product" && diff !== void 0 ? proofFiles(diff, rule(d.binding, "proof_pattern", PROOF_FILE)) : [];
   const passedOnBase = [];
   let error;
-  if (cls !== "product") error = void 0;
+  const noProof = cls === "product" && !files.length && onlyNoProof(d.binding, diff);
+  if (cls !== "product" || noProof) error = void 0;
   else if (!tpl) error = "commands.proofs_on_base is not set";
   else if (!files.length) error = "no new or changed proof file";
   else if (!d.run) error = "no command runner";
@@ -9750,7 +9764,7 @@ async function proofsOnBase(d, n) {
     }
     if (passedOnBase.length) error = `passes on the merge base: ${passedOnBase.join(", ")}`;
   }
-  const description = cls !== "product" ? `${cls}: no product proof` : error ?? `${files.length} proof file(s) fail on the merge base`;
+  const description = cls !== "product" ? `${cls}: no product proof` : noProof ? "only paths.no_proof changed: no proof needed" : error ?? `${files.length} proof file(s) fail on the merge base`;
   let posted = true;
   try {
     await d.forge.status(cr.headSha, { context: "proofs-on-base", state: error ? "failure" : "success", description: description.slice(0, 140) }, { as: "ci" });
@@ -9761,7 +9775,7 @@ async function proofsOnBase(d, n) {
 }
 async function merged(d, sha2) {
   const b = d.binding.board;
-  const opts = shippedOptions(d.binding.product.environments);
+  const opts = shippedOptions(d.binding.product.environments, d.binding.product.delivery);
   const cr = await d.forge.viewBySha(sha2).catch(() => void 0);
   const none = (reason) => ({ cr: cr?.n, sha: sha2, moved: [], reason });
   if (!cr?.n) return none("no CR merged at this sha");
@@ -9774,12 +9788,12 @@ async function merged(d, sha2) {
   if (!it.fields?.shipped) await d.board.set(id, "shipped", opts[0]);
   return { cr: cr.n, sha: sha2, moved: [id] };
 }
-async function shipped(d, env, sha2, result) {
+async function shipped(d, env, sha2, result, version2) {
   const envs = d.binding.product.environments;
   const i = envs.indexOf(env);
   if (i < 0) throw new UsageError(`unknown environment ${env}; one of ${envs.join(", ")}`);
-  if (result !== "success" && result !== "failure") throw new UsageError("--result must be success|failure");
-  const opts = shippedOptions(envs);
+  if (!["success", "failure", "rolled-back"].includes(result)) throw new UsageError("--result must be success|failure|rolled-back");
+  const opts = shippedOptions(envs, d.binding.product.delivery);
   const rank = (s) => opts.indexOf(s || opts[0]);
   const target = `On ${env}`;
   const last = i === envs.length - 1;
@@ -9812,6 +9826,12 @@ environment: ${env}`,
       if (anc.includes(void 0)) return { env, result, changed: [], tags: [], unknown: true };
       if (anc.every(Boolean)) items.push(x);
     }
+    if (version2) {
+      for (const x of items) if (!x.fields.release_version) {
+        await d.board.set(x.id, "release_version", version2);
+        x.fields.release_version = version2;
+      }
+    }
     const tags = [];
     if (last) {
       const prefix = d.binding.vcs.tag_prefix;
@@ -9827,6 +9847,20 @@ environment: ${env}`,
       changed.push(x.id);
     }
     return { env, result, changed, tags, unmatched };
+  }
+  if (result === "rolled-back") {
+    const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
+    const isAnc = d.isAncestor;
+    if (!isAnc) return { env, result, changed, unknown: true };
+    const merged2 = await d.forge.list({ state: "merged" });
+    for (const x of done.filter((x2) => x2.status === "Done" && rank(x2.fields.shipped) >= rank(target))) {
+      const shas = merged2.filter((c) => c.closes.includes(x.id)).map((c) => c.mergeSha);
+      const anc = shas.map((s) => s ? isAnc(s, sha2) : void 0);
+      if (!shas.length || anc.includes(void 0) || anc.every(Boolean)) continue;
+      await d.board.set(x.id, "shipped", back);
+      changed.push(x.id);
+    }
+    return { env, result, changed };
   }
   if (last) {
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
@@ -9991,7 +10025,7 @@ var init_gates = __esm({
           return merged(deps(), a.need("sha"));
         case "shipped": {
           if (!a.pos[0]) throw new UsageError("shipped <env> is required");
-          return shipped(deps(), a.pos[0], a.need("sha"), a.need("result"));
+          return shipped(deps(), a.pos[0], a.need("sha"), a.need("result"), a.get("version"));
         }
         case "approval": {
           const r = await approval(deps(), a.need("cr"));

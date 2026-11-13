@@ -164,7 +164,7 @@ change line `start` opens.
 | `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base. |
 | `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by `owners.factory`. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
 | `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. Done records a fact: a held ticket moves and keeps its label; a Cancelled ticket stays. A push with no CR changes nothing. It is the only gate that moves a Status; no CR-pipeline gate writes the board. |
-| `shipped <env> --sha <sha> --result success\|failure` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); unknown ancestry ships nothing. A failure in the last environment returns the tickets of the version in flight (Release Version set, not yet On the last environment) to the previous environment, clears the version and opens a held Signal. |
+| `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
 | `signal-on-red --run <id>` | A red trunk or release-line run opens a Signal with a redacted evidence bundle. Other refs are ignored. |
 | `skill-regression` | A change under `paths.factory` keeps the skill pack valid: frontmatter, links, scorers. |
 
@@ -282,11 +282,17 @@ Nothing in the skills assumes a web app or a code product. The binding states wh
 ```yaml
 product:
   environments: [staging, production]   # ordered; the last is where users get value
+  delivery: release-line                 # release-line | continuous
   proofs: [test, eval, visual, data-check, computer-use, manual]
+paths:
+  no_proof: ["docs/**", "*.md"]          # a product CR changing only these needs no proof file
 ```
 
+- `product.delivery: release-line` (the default) deploys the last environment from a release line the
+  Product owner approves. `continuous` deploys every environment from the trunk: no release line, no
+  `release` skill, and the deploy pipeline records the artifact version with `gate shipped --version`.
 - Shipped options are derived: `Not shipped`, `On <env>` per environment, and `In release` before
-  the last one. The `shipped` gate takes any environment name. A product with no deploy uses its
+  the last one (release-line only). The `shipped` gate takes any environment name. A product with no deploy uses its
   publish step as the last environment.
 - A criterion names its proof kind. `commands.verify` runs every kind except `computer-use` and
   `manual`: scripted UI checks are `visual` or `test`. `computer-use` is agent-driven by

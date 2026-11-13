@@ -270,6 +270,7 @@ test('doctor: the delivery workflow must name the trunk and release line', () =>
 env:
   TRUNK: main
   RELEASE_PREFIX: release/
+  DELIVERY: release-line
 `);
   const b = (trunk: string) => ({ forge: { adapter: 'github' }, vcs: { trunk, release_prefix: 'release/' } });
   assert.match(deliveryWorkflow(b('master'), root)!, /^fail delivery workflow:.*trunk master/);
@@ -278,7 +279,7 @@ env:
 
 test('doctor: delivery workflow env.TRUNK and env.RELEASE_PREFIX must match the binding', () => {
   const root = mkdtempSync(join(tmpdir(), 'dwe-'));
-  const wf = (trunk: string) => `on:\n  push:\n    branches: [main, "release/**"]\nenv:\n  TRUNK: ${trunk}\n  RELEASE_PREFIX: release/\n`;
+  const wf = (trunk: string) => `on:\n  push:\n    branches: [main, "release/**"]\nenv:\n  TRUNK: ${trunk}\n  RELEASE_PREFIX: release/\n  DELIVERY: release-line\n`;
   w(join(root, '.github/workflows/agentic-sdlc-delivery.yml'), wf('trunk'));
   const b = { forge: { adapter: 'github' }, vcs: { trunk: 'main', release_prefix: 'release/' } };
   assert.match(deliveryWorkflow(b, root)!, /^fail delivery workflow: env\.TRUNK/);
@@ -292,4 +293,12 @@ test('init on github installs the release-lines ruleset', async () => {
   const { ctx } = fakeCtx(root, {}, () => ({}));
   assert.equal(await quiet(() => cli(['init', '--forge', 'github'], ctx)), 0);
   assert.ok(existsSync(join(root, '.github/rulesets/release.json')));
+});
+
+test('doctor: env.DELIVERY must match product.delivery; continuous needs no release prefix', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dwd-'));
+  w(join(root, '.github/workflows/agentic-sdlc-delivery.yml'), 'on:\n  push:\n    branches: [main]\nenv:\n  TRUNK: main\n  DELIVERY: continuous\n');
+  const b = (delivery?: string) => ({ forge: { adapter: 'github' }, vcs: { trunk: 'main' }, product: { delivery } });
+  assert.match(deliveryWorkflow(b('continuous'), root)!, /^ok   delivery workflow/);
+  assert.match(deliveryWorkflow(b(), root)!, /^fail delivery workflow: env\.DELIVERY/);
 });

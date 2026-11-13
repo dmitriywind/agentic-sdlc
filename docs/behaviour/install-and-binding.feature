@@ -102,3 +102,18 @@ Feature: Install and validate the binding
     When the adopter runs "agentic-sdlc doctor"
     Then doctor prints a "fail delivery workflow" line
     And the command exits with code 1
+
+  # Source: src/binding.ts, "validateBinding" (product.delivery)
+  # Proof: test/binding.test.ts "product.delivery: continuous needs no release prefix; release-line needs two environments"
+  Scenario: The delivery mode decides which release keys are required
+    Given product.delivery is continuous
+    Then vcs.release_prefix is not required
+    When product.delivery is release-line with one environment
+    Then validation fails with "release-line needs two or more environments"
+
+  # Source: src/install.ts, "deliveryWorkflow"
+  # Proof: test/install.test.ts "doctor: env.DELIVERY must match product.delivery; continuous needs no release prefix"
+  Scenario: doctor checks the delivery workflow's mode
+    Given the delivery workflow sets env.DELIVERY
+    When doctor runs
+    Then it fails when env.DELIVERY differs from product.delivery

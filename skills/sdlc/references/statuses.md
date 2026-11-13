@@ -34,5 +34,9 @@ review sends it back. Red CI puts the CR back to draft; the Status stays In revi
   shipped, `On <env>` per environment, and In release before the last one.
 - Gate `shipped` writes `On <env>` after a green deploy (or publish) to that environment. `release`
   writes In release at the cut. Gate `merged` writes Not shipped when the field is empty.
+- `product.delivery: continuous` has no In release: every environment deploys from the trunk.
+- A rollback (`gate shipped <env> --result rolled-back --sha <revision now running>`) steps the
+  tickets not in that revision back one environment. A model pin, a halted phased rollout or a
+  feature-flag kill reports the same way. A later failure never moves the Status.
 - A release failure returns its tickets to On <the environment before the last>, clears the
   Release Version, and opens a Signal held with `needs-human` when the last environment failed.

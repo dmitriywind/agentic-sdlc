@@ -59,3 +59,12 @@ Feature: Gate proofs-on-base
     When the gate runs
     Then the result reports posted as false
     And the exit code is the check
+
+  # Source: src/gates.ts, "proofsOnBase" (paths.no_proof)
+  # Proof: test/gates.test.ts "proofs-on-base: a product CR that changes only paths.no_proof passes with no proof file"
+  Scenario: A docs-only product CR needs no proof file
+    Given paths.no_proof lists "docs/**"
+    And a product CR changes only files under docs/
+    When the gate runs
+    Then the gate passes with "no proof needed"
+    And a CR that also changes code still needs a new proof file

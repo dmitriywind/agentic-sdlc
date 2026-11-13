@@ -66,6 +66,7 @@ vcs:
 
 product:
   environments: [staging, production] # ordered; the last is where users get value; Shipped options derive from it (library: [prerelease, registry]; mobile: [internal, beta, store])
+  delivery: release-line         # release-line: the last environment deploys from a release line the Product owner approves | continuous: every environment deploys from the trunk, no release line (web CD, a model registry, a package published per merge)
   proofs: [test, eval, visual, data-check, computer-use, manual] # kinds a criterion may name; computer-use = verify-ux drives the built product; manual always escalates for a human check
 
 executors:                      # who runs each skill; default is a harness subagent, model by the skill's tier
@@ -114,6 +115,7 @@ paths:
   factory: [".agents/**", ".github/**", ".claude/**"] # a change only here is a factory change: no ticket
   light_verify: ["docs/**", "*.md", ".agents/**"] # a change only here runs commands.light_verify
   lane_areas: []                # paths that force the Full lane, e.g. auth, money, crypto
+  no_proof: ["docs/**", "*.md"] # a product CR that changes only these needs no proof file (proofs-on-base passes)
 
 sizes: [XS, S, M, L, XL]        # smallest to largest
 ready_size_limit: M             # largest Size that may be Ready; above it shape splits

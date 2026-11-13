@@ -98,3 +98,22 @@ Feature: Gate shipped
   Scenario: An unknown environment is refused
     When "gate shipped qa" runs and "qa" is not in product.environments
     Then the gate fails and lists the known environments
+
+  # Source: src/gates.ts, "shipped" (version)
+  # Proof: test/gates.test.ts "shipped: --version records the artifact version and tags it; continuous delivery has no In release"
+  Scenario: A continuous deploy records its artifact version
+    Given product.delivery is continuous
+    And a Done ticket whose CR merged at an ancestor of the deployed sha
+    When "gate shipped <last env> --result success --version 4.1.0" runs
+    Then the ticket shows On <last env> and Release Version 4.1.0
+    And the tag "<vcs.tag_prefix>4.1.0" exists
+
+  # Source: src/gates.ts, "shipped" (rolled-back)
+  # Proof: test/gates.test.ts "shipped: rolled-back steps back only the tickets not in the revision now running"
+  Scenario: A rollback steps back only the tickets not in the running revision
+    Given two tickets On production, one merged before revision R and one after
+    When "gate shipped production --result rolled-back --sha R" runs
+    Then the ticket merged after R shows On <environment before production>
+    And it keeps its Release Version
+    And the ticket merged before R stays On production
+    And no Signal opens

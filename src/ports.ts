@@ -219,7 +219,8 @@ export interface Binding {
   parallel_agents: number;
   cycle: { max_implementations: number; min_ready: number; time_budget_minutes: number; failure_limit: number; dedupe_minutes?: number };
   heartbeat: { ticket: string };
-  product: { environments: string[]; proofs: string[] };
+  /** delivery: release-line (default) cuts release lines for the last environment; continuous ships every environment from the trunk. */
+  product: { environments: string[]; proofs: string[]; delivery?: 'release-line' | 'continuous' };
   executors: { default: Executor; [skill: string]: Executor };
   learning: {
     every_cycles: number;

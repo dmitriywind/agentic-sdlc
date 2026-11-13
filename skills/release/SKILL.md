@@ -66,6 +66,7 @@ The Product owner approves the last environment; this skill never does.
   <env before last>, cut the next version.
 - A P0 fix is Done and On <env before last> before it is cut. The expedited part: release starts
   at once and chooses the newest revision holding the fix. No check is skipped.
-- With one environment there is no release line: release does not run.
+- With `product.delivery: continuous` there is no release line: release is never routed, and the
+  deploy pipeline records the version (`gate shipped --version`).
 - Escalate when the ready check fails and a person must decide, or the
   proposal changes what the Product owner expects to ship.

@@ -79,7 +79,7 @@ Pick the first row that matches. A ticket labelled `needs-human` is held: skip i
 |---|---|
 | Status Ideas | none; humans only |
 | Status Signals | [`triage-signal`](../triage-signal/SKILL.md) |
-| Status Backlog with label `board.labels.release` (a release request) | [`release`](../release/SKILL.md), dispatched with `--ticket <request>` (two or more environments only) |
+| Status Backlog with label `board.labels.release` (a release request) | [`release`](../release/SKILL.md), dispatched with `--ticket <request>` (`product.delivery: release-line` only) |
 | Status Backlog, no Priority; a plan or conversation that must become tickets | [`backlog-grooming`](../backlog-grooming/SKILL.md) |
 | Status Backlog with a Priority, no [open blocker](references/statuses.md#open-blocker), not in `board.later_milestone`, no children (an initiative is never routed) | [`shape`](../shape/SKILL.md) |
 | Status Ready | [`implement-spec`](../implement-spec/SKILL.md) |
@@ -89,7 +89,7 @@ Pick the first row that matches. A ticket labelled `needs-human` is held: skip i
 | Status In review, ready CR whose required check is red, or missing for longer than `stall_minutes` | [`review-pr`](../review-pr/SKILL.md) |
 | Status In review, otherwise | none; approvals and auto-merge act |
 | Draft factory CR (only `paths.factory` changed, change line per `vcs.factory_change_pattern`) | [`review-pr`](../review-pr/SKILL.md), dispatched with `--cr` |
-| Status Done, a P0 ticket with Shipped On <env before last> and no open release request | [`release`](../release/SKILL.md): it opens the request itself (two or more environments only) |
+| Status Done, a P0 ticket with Shipped On <env before last> and no open release request | [`release`](../release/SKILL.md): it opens the request itself (`product.delivery: release-line` only) |
 | Status Done, otherwise | none; gates write Shipped |
 | `ledger summary` shows `learning.due` | [`improve-factory`](../improve-factory/SKILL.md) |
 | Any working status, authority unclear | [`escalate-to-human`](../escalate-to-human/SKILL.md) |

@@ -46,6 +46,19 @@ Warning: on GitLab, Azure and Bitbucket the CR's own pipeline file can read the 
 
 Done when a scheduled cycle writes a heartbeat with no `errors`, and a CR merges through the gates.
 
+## Product types
+
+The skills are the same for every product; the binding says what an environment and a proof are.
+
+| Product | `product.environments` | `product.delivery` | Proofs | How it reports |
+|---|---|---|---|---|
+| Web service with continuous delivery | `[staging, production]` or `[production]` | continuous | test, visual, computer-use | Each deploy runs `gate shipped <env>`; a flag kill or rollback runs `--result rolled-back`. |
+| Web or API product with approved releases | `[staging, production]` | release-line | test, visual, computer-use | `release` cuts; the production deploy from the release line reports. |
+| Mobile app | `[internal, beta, store]` | release-line | test, visual, manual | The store step reports when review approves: `gate shipped store --result success` from the store webhook or by a person; a halted phased rollout reports `rolled-back`. |
+| Library or package | `[registry]` | continuous | test | The publish job runs `gate shipped registry --version <published version>`; the gate tags it. |
+| Data pipeline or ML model | `[staging, production]` (registry stages) | continuous | eval, data-check | A promotion runs `gate shipped <stage> --version <model version>`; a version pin runs `--result rolled-back`. |
+| Docs or content site | `[production]` | continuous | visual, manual | `paths.no_proof` covers the content paths. |
+
 ## Move from a hand-made process
 
 1. List what the old process does that the skills do not. Each item is a binding value, a

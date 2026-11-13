@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
+import { shippedOptions } from '../src/binding.ts';
 import { approval, approvers, merged, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
 import { PROOF_FILE } from '../src/bench.ts';
 
@@ -456,4 +457,34 @@ test('shipped: an existing tag is kept and the board still moves; a tag failure 
   g.d.vcs.tag = async () => { throw new Error('push rejected'); };
   await assert.rejects(shipped(g.d, 'production', 'sha1', 'success'), /push rejected/);
   assert.equal(g.items[0].fields.shipped, 'On staging');
+});
+
+test('proofs-on-base: a product CR that changes only paths.no_proof passes with no proof file', async () => {
+  const f = fakes([], { docs: { headSha: 'dh' }, code: { headSha: 'ch' } }, { docs: 'diff --git a/docs/a.md b/docs/a.md\n', code: 'diff --git a/docs/a.md b/docs/a.md\ndiff --git a/src/a.ts b/src/a.ts\n' });
+  f.d.binding = { ...binding, paths: { ...binding.paths, no_proof: ['docs/**', '**/*.md'] }, commands: { proofs_on_base: 'npx test {files}' } };
+  assert.equal((await proofsOnBase(f.d, 'docs')).ok, true);
+  assert.match((await proofsOnBase(f.d, 'code')).errors[0], /no new or changed proof/);
+});
+
+test('shipped: --version records the artifact version and tags it; continuous delivery has no In release', async () => {
+  const f = fakes([item('20', 'Done', { shipped: 'Not shipped' })], { m20: { state: 'merged', closes: ['20'], mergeSha: 'm20' } });
+  f.d.isAncestor = () => true;
+  f.d.binding = { ...binding, product: { environments: ['production'], delivery: 'continuous' } };
+  await shipped(f.d, 'production', 'x', 'success', '4.1.0');
+  assert.equal(f.items[0].fields.shipped, 'On production');
+  assert.equal(f.items[0].fields.release_version, '4.1.0');
+  assert.deepEqual(f.tags, ['v4.1.0']);
+  assert.deepEqual(shippedOptions(['staging', 'production'], 'continuous'), ['Not shipped', 'On staging', 'On production']);
+  assert.deepEqual(shippedOptions(['staging', 'production']), ['Not shipped', 'On staging', 'In release', 'On production']);
+});
+
+test('shipped: rolled-back steps back only the tickets not in the revision now running', async () => {
+  const f = fakes([item('30', 'Done', { shipped: 'On production', release_version: '5' }), item('31', 'Done', { shipped: 'On production', release_version: '4' })],
+    { m30: { state: 'merged', closes: ['30'], mergeSha: 'new' }, m31: { state: 'merged', closes: ['31'], mergeSha: 'old' } });
+  f.d.isAncestor = (x) => x === 'old';
+  assert.deepEqual((await shipped(f.d, 'production', 'old', 'rolled-back')).changed, ['30']);
+  assert.equal(f.items[0].fields.shipped, 'On staging');
+  assert.equal(f.items[0].fields.release_version, '5');
+  assert.equal(f.items[1].fields.shipped, 'On production');
+  assert.equal(f.created.length, 0);
 });

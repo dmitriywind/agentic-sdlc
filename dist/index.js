@@ -8639,6 +8639,7 @@ var MANAGED_APIS = ["claude", "cursor", "antigravity", "generic"];
 var HUMAN_APPROVAL = ["full-lane", "always", "never"];
 var SANDBOXES = ["cloud", "container", "local"];
 var PROFILES = ["individual", "enterprise"];
+var DELIVERY = ["release-line", "continuous"];
 var TIERS = ["fast", "balanced", "deep"];
 var STATUSES = ["Ideas", "Signals", "Backlog", "Ready", "In progress", "In review", "Done", "Cancelled"];
 function validateBinding(b) {
@@ -8670,7 +8671,8 @@ function validateBinding(b) {
   for (const t of ["fast", "balanced", "deep"]) if (x.models && !x.models[t]) p.push(`models.${t} missing`);
   if (x.vcs && !String(x.vcs.change_pattern ?? "").includes("<ticket>")) p.push("vcs.change_pattern must contain <ticket>");
   if (x.vcs) {
-    for (const [k, what] of [["trunk", "name the trunk branch"], ["release_prefix", "name the release line prefix"], ["factory_change_pattern", "be a branch pattern for factory changes"]])
+    const lines = (x.product?.delivery ?? "release-line") === "release-line";
+    for (const [k, what] of [["trunk", "name the trunk branch"], ...lines ? [["release_prefix", "name the release line prefix"]] : [], ["factory_change_pattern", "be a branch pattern for factory changes"]])
       if (typeof x.vcs[k] !== "string" || !x.vcs[k]) p.push(`vcs.${k} must ${what}`);
     if (typeof x.vcs.tag_prefix !== "string") p.push("vcs.tag_prefix must be a string (empty for none)");
     if (typeof x.vcs.release_prefix === "string" && x.vcs.release_prefix && !x.vcs.release_prefix.endsWith("/")) p.push("vcs.release_prefix must end in '/'");
@@ -8678,6 +8680,8 @@ function validateBinding(b) {
   const pr = x.product;
   if (pr) {
     if (!Array.isArray(pr.environments) || !pr.environments.length) p.push("product.environments must be a non-empty list");
+    if (pr.delivery !== void 0 && !DELIVERY.includes(pr.delivery)) p.push(`product.delivery '${pr.delivery}' is not one of ${DELIVERY.join("|")}`);
+    if (pr.delivery === "release-line" && Array.isArray(pr.environments) && pr.environments.length < 2) p.push("product.delivery release-line needs two or more environments; use continuous");
     const bad = (pr.proofs ?? []).filter((k) => !PROOFS.includes(k));
     if (bad.length) p.push(`product.proofs has unknown kinds: ${bad.join(", ")}`);
   }
@@ -8706,8 +8710,9 @@ function validateBinding(b) {
   if (x.executors && !x.executors.default) p.push("executors.default is missing");
   return p;
 }
-function shippedOptions(envs) {
-  return ["Not shipped", ...envs.slice(0, -1).map((e) => `On ${e}`), ...envs.length > 1 ? ["In release"] : [], `On ${envs[envs.length - 1]}`];
+function shippedOptions(envs, delivery = "release-line") {
+  const inRelease = delivery === "release-line" && envs.length > 1;
+  return ["Not shipped", ...envs.slice(0, -1).map((e) => `On ${e}`), ...inRelease ? ["In release"] : [], `On ${envs[envs.length - 1]}`];
 }
 export {
   MovedError,
