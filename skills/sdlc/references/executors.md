@@ -25,10 +25,12 @@ only these), `secrets` (env var names the stage may receive; nothing else is pas
 (`cloud`, `container` or `local`) and `model` (`{ tier }` or `{ id }`). Secrets reach an executor
 only when listed, and never through a board or CR comment.
 
-`agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one) [--run-model <m>] [--workdir <d>] [--unattended]`
-starts the executor and prints `{ kind, ref, startedAt }`; for `harness` it prints the instruction
-for the orchestrator and starts nothing. The idempotency key is `<ticket or cr>-<skill>-<head
-sha>`: a second dispatch with the same key inside `stall_minutes` prints `{ skipped: true }`. With
+`agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one; none for improve-factory) [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]`
+posts its marker, starts the executor and prints `{ kind, ref, startedAt }`; for `harness` it prints
+the instruction for the orchestrator and starts nothing. The idempotency key is `<ticket, cr or
+factory>-<skill>[-<run>][-<CR head sha>]`: a second dispatch with the same key inside
+`cycle.dedupe_minutes` prints `{ skipped: true }`. The window catches a double fire only; the next
+scheduled run is never skipped. With
 `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses a stage whose sandbox is `local` or unset. The
 ledger row records `executor` and `ref`, so the bench and `improve-factory` compare executors as
 they compare models.

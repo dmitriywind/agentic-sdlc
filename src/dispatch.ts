@@ -138,7 +138,8 @@ export const cli: PortCli = async (argv, ctx) => {
       else pos.push(argv[i]);
     }
     const [skill] = pos;
-    if (!skill || (!f.ticket && !f.cr)) { console.error('usage: agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one) [--workdir <d>] [--run-model <id>] [--unattended]'); return 2; }
+    // improve-factory works on the factory, not a ticket: its marker lives on the heartbeat ticket.
+    if (!skill || (!f.ticket && !f.cr && skill !== 'improve-factory')) { console.error('usage: agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one; none for improve-factory) [--run <id>] [--workdir <d>] [--run-model <id>] [--unattended]'); return 2; }
     const ticket = f.ticket ?? '', cr = f.cr ?? '', workdir = f.workdir ?? ctx.root;
     const b = ctx.binding;
     const ex = Object.hasOwn(b.executors, skill) ? b.executors[skill] : b.executors.default;
@@ -147,34 +148,32 @@ export const cli: PortCli = async (argv, ctx) => {
     const judge = skill === 'judge-run' ? judgeTier(b, f['run-model']) : undefined;
     if (judge && 'skip' in judge) { console.log(JSON.stringify(judge)); return 0; }
 
-    // Idempotency: one marker comment per key on the ticket (a factory CR has no ticket: the heartbeat
-    // ticket holds it). A marker by owners.bots younger than stall_minutes means the run is already going.
+    // Idempotency: one marker comment per key on the ticket (a factory CR or improve-factory has no ticket:
+    // the heartbeat ticket holds it). A marker by owners.bots younger than cycle.dedupe_minutes
+    // means the same dispatch already started: a double fire. The next scheduled run is never skipped.
     let board: Board | undefined;
     const boardOf = () => (board ??= createBoard({ ...ctx, options: b.board.options }));
     const target = ticket || b.heartbeat?.ticket;
-    const stall = Number(b.stall_minutes) || 0; // unset or 0: no check
+    const window = Number(b.cycle?.dedupe_minutes) || 0; // unset or 0: no check (the binding template sets 10)
     let key: string | undefined;
-    if (stall > 0 && target) {
-      let head = 'unknown';
-      try {
-        if (cr) {
+    if (window > 0 && target) {
+      let head = '';
+      if (cr) {
+        try {
           const { createForge } = await import('./forge/index.ts');
-          head = (await createForge({ ...ctx, options: b.forge.options }).view(cr)).headSha || head;
-        } else head = ctx.exec('git', ['rev-parse', 'HEAD'], { cwd: workdir }).trim() || head;
-      } catch { /* no head: the key still separates ticket and skill */ }
-      key = `${ticket || cr}-${skill}-${head}`;
+          head = (await createForge({ ...ctx, options: b.forge.options }).view(cr)).headSha;
+        } catch { /* no head: the key still separates CR and skill */ }
+      }
+      key = [ticket || cr || 'factory', skill, f.run, head].filter(Boolean).join('-');
       const trusted = (b.owners?.bots ?? []).map((a) => a.toLowerCase());
-      const since = Date.now() - stall * 60_000;
+      const since = Date.now() - window * 60_000;
       const seen = (await boardOf().comments(target, { marker: `${DISPATCH_MARKER} ${key} ` }))
         .find((c) => trusted.includes(c.author?.toLowerCase()) && Date.parse(c.createdAt) >= since);
       if (seen) { console.log(JSON.stringify({ skipped: true, key, since: seen.createdAt, comment: seen.id })); return 0; }
     }
-    /** Posts the marker (also the assign executor's hand-off comment), then prints the start record. */
+    /** Prints the start record; the marker was posted before the executor started. */
+    let marker: string | undefined;
     const done = async (kind: string, ref: string | null, extra: object = {}) => {
-      let marker: string | undefined;
-      if (key || kind === 'assign') {
-        marker = (await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->\nagentic-sdlc: run skill ${skill} (${kind})`)).id;
-      }
       console.log(JSON.stringify({ kind, ref: ref ?? (kind === 'assign' ? marker ?? null : null), startedAt, ...(key ? { key } : {}), ...extra }));
       return 0;
     };
@@ -188,6 +187,10 @@ export const cli: PortCli = async (argv, ctx) => {
       throw new Error(`executor for ${skill} uses sandbox ${stage.sandbox ?? 'local (unset)'}; unattended runs refuse it`);
     }
     const info = { ...(judge ?? {}), model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox };
+    // Claim before start: a second fire sees the marker even while this executor is still starting.
+    if (key || ex.kind === 'assign') {
+      marker = (await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->\nagentic-sdlc: run skill ${skill} (${ex.kind})`)).id;
+    }
 
     if (ex.kind === 'harness') {
       return await done('harness', null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });

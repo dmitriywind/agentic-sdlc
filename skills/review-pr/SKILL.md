@@ -45,6 +45,7 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    still pending: stop and review again on the next run; it is not a finding. One still pending,
    or never reported, longer than `stall_minutes` after the head was pushed: call
    [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access) once, naming the check, and stop.
+   A red check on a draft CR is handled as in step 10, without `forge draft`.
    For each `forge.planned_checks` entry the repo does not yet supply, the report names it as
    absent; this is no escalation. Done when each is green, pending (stopped), escalated, or named
    absent.
@@ -88,9 +89,11 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    <n>`, then on the new head repeat steps 4 and 7 once CI has reported. Done when the review
    status is green on the new head.
 10. **Red or stalled gate.** A ready In review CR with a `required_checks` entry red, or missing
-    for longer than `stall_minutes`: read the failing check (`forge runs --failed`) and `forge draft
+    for longer than `stall_minutes` (never `review` or `human-approval`: those wait for this skill
+    and for a person, and are not stalled): read the failing check (`forge runs --failed`) and `forge draft
     <n>` (Status stays In review). Cause in the diff or the ticket's scope: move the ticket to In
-    progress with the cause. Cause elsewhere (a flake, a broken neighbour): file a new Signal and
+    progress with the cause (a CR a person opened: the report names the cause, and the ticket
+    stays In review). Cause elsewhere (a flake, a broken neighbour): file a new Signal and
     state it on the CR. A gate that never ran at all: call
     [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access). Done when the CR is draft and
     the ticket is at In progress, the Signal is filed, or the ask is filed.

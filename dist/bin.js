@@ -9327,7 +9327,6 @@ function init(root, argv, log) {
     doc.setIn(["executors", "default"], { kind: "harness", sandbox: profile === "enterprise" ? "container" : "cloud" });
     if (profile === "enterprise") {
       doc.set("traces", { uri: ".agents/runtime/traces/{run_id}.jsonl" });
-      doc.setIn(["learning", "human_sample"], 5);
     }
     mkdirSync2(dirname2(bindingFile), { recursive: true });
     writeFileSync2(bindingFile, String(doc));
@@ -10174,13 +10173,14 @@ async function readLedger(board, ticket, authors, graders = []) {
 async function readRuns(board, ticket, authors, q = {}, graders = []) {
   return flattenRuns(await readLedger(board, ticket, authors, graders), q);
 }
-function learningState(comments, everyCycles, now = Date.now()) {
+function learningState(comments, everyCycles, now = Date.now(), budgetUsd) {
   const beats = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean);
   const last = beats.findIndex((hb) => (hb.runs ?? []).some((r) => r.skill === "improve-factory"));
   const cyclesSince = last < 0 ? beats.length : last;
   const week = flattenRuns(comments, { sinceDays: 7, now }).filter((r) => LEARNING_SKILLS.includes(r.skill));
   const spentWeekUsd = Math.round(week.reduce((t, r) => t + (r.cost_usd ?? 0), 0) * 100) / 100;
-  return { due: Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles), cyclesSince, spentWeekUsd };
+  const underBudget = !(Number(budgetUsd) > 0) || spentWeekUsd < Number(budgetUsd);
+  return { due: Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles) && underBudget, cyclesSince, spentWeekUsd };
 }
 function scorersFor(root, skill) {
   const dir = join6(root, ".agents", "scorers");
@@ -10341,7 +10341,7 @@ var init_ledger = __esm({
           merged2 = (await (await forge()).list({ state: "merged" })).filter((c) => c.state === "merged").map((c) => c.n);
         } catch {
         }
-        console.log(JSON.stringify({ ...summarise(rows, merged2), learning: learningState(comments, b.learning?.every_cycles) }, null, 2));
+        console.log(JSON.stringify({ ...summarise(rows, merged2), learning: learningState(comments, b.learning?.every_cycles, Date.now(), b.learning?.budget_usd_per_week) }, null, 2));
         return 0;
       } catch (e) {
         console.error(e.message);
@@ -10906,8 +10906,8 @@ var init_dispatch = __esm({
           else pos.push(argv[i]);
         }
         const [skill] = pos;
-        if (!skill || !f.ticket && !f.cr) {
-          console.error("usage: agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one) [--workdir <d>] [--run-model <id>] [--unattended]");
+        if (!skill || !f.ticket && !f.cr && skill !== "improve-factory") {
+          console.error("usage: agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one; none for improve-factory) [--run <id>] [--workdir <d>] [--run-model <id>] [--unattended]");
           return 2;
         }
         const ticket = f.ticket ?? "", cr = f.cr ?? "", workdir = f.workdir ?? ctx.root;
@@ -10922,32 +10922,28 @@ var init_dispatch = __esm({
         let board;
         const boardOf = () => board ??= createBoard({ ...ctx, options: b.board.options });
         const target = ticket || b.heartbeat?.ticket;
-        const stall = Number(b.stall_minutes) || 0;
+        const window = Number(b.cycle?.dedupe_minutes) || 0;
         let key;
-        if (stall > 0 && target) {
-          let head = "unknown";
-          try {
-            if (cr) {
+        if (window > 0 && target) {
+          let head = "";
+          if (cr) {
+            try {
               const { createForge: createForge2 } = await Promise.resolve().then(() => (init_forge(), forge_exports));
-              head = (await createForge2({ ...ctx, options: b.forge.options }).view(cr)).headSha || head;
-            } else head = ctx.exec("git", ["rev-parse", "HEAD"], { cwd: workdir }).trim() || head;
-          } catch {
+              head = (await createForge2({ ...ctx, options: b.forge.options }).view(cr)).headSha;
+            } catch {
+            }
           }
-          key = `${ticket || cr}-${skill}-${head}`;
+          key = [ticket || cr || "factory", skill, f.run, head].filter(Boolean).join("-");
           const trusted = (b.owners?.bots ?? []).map((a) => a.toLowerCase());
-          const since = Date.now() - stall * 6e4;
+          const since = Date.now() - window * 6e4;
           const seen = (await boardOf().comments(target, { marker: `${DISPATCH_MARKER} ${key} ` })).find((c) => trusted.includes(c.author?.toLowerCase()) && Date.parse(c.createdAt) >= since);
           if (seen) {
             console.log(JSON.stringify({ skipped: true, key, since: seen.createdAt, comment: seen.id }));
             return 0;
           }
         }
+        let marker;
         const done = async (kind, ref, extra = {}) => {
-          let marker;
-          if (key || kind === "assign") {
-            marker = (await boardOf().comment(target, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->
-agentic-sdlc: run skill ${skill} (${kind})`)).id;
-          }
           console.log(JSON.stringify({ kind, ref: ref ?? (kind === "assign" ? marker ?? null : null), startedAt, ...key ? { key } : {}, ...extra }));
           return 0;
         };
@@ -10962,6 +10958,10 @@ agentic-sdlc: run skill ${skill} (${kind})`)).id;
           throw new Error(`executor for ${skill} uses sandbox ${stage.sandbox ?? "local (unset)"}; unattended runs refuse it`);
         }
         const info = { ...judge ?? {}, model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox };
+        if (key || ex.kind === "assign") {
+          marker = (await boardOf().comment(target, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->
+agentic-sdlc: run skill ${skill} (${ex.kind})`)).id;
+        }
         if (ex.kind === "harness") {
           return await done("harness", null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
         }

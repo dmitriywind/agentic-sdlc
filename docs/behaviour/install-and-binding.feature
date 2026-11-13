@@ -45,7 +45,7 @@ Feature: Install and validate the binding
   Scenario: The enterprise profile sets traces and a container sandbox
     When the adopter runs "agentic-sdlc init --profile enterprise"
     Then the binding has "profile: enterprise" and a container sandbox
-    And the binding has a traces.uri and learning.human_sample 5
+    And the binding has a traces.uri
     And an unknown profile makes the command exit with code 1
 
   # Source: src/binding.ts, "validateBinding"

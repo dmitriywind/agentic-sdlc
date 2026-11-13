@@ -102,32 +102,39 @@ run `commands.setup` first.
 The orchestrator only routes, waits and writes the heartbeat. Each work item (one signal's
 triage, one shape, one implementation, one judge) goes to its own subagent with its own scratch
 folder, at most `parallel_agents` at once. Each starts with `agentic-sdlc dispatch <skill>
---ticket <id>` (or `--cr <n>` for a factory CR); the binding's `executors` says who runs it (see
-Executors). A second dispatch with the same ticket or CR, skill and head inside `stall_minutes` prints
-`{ skipped: true }`: leave it.
+--ticket <id>` (`--cr <n>` for a factory CR; no subject for `improve-factory`); the binding's
+`executors` says who runs it (see Executors). A second dispatch of the same skill and subject
+inside `cycle.dedupe_minutes` prints `{ skipped: true }`: it is a double fire; leave it.
 
 In order:
 
 1. **Read state.** List the board once (`board list`). Read open CRs (`forge list`), the last
    `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --last <n> --marker
    "<!-- heartbeat -->" --trusted`) and `ledger summary`.
-2. **Triage Signals.** Every ticket at Signals, in the order `triage-signal` names.
-3. **Leave review to the review runtime.** The review runtime runs `review-pr` after the cycle
-   finishes; the cycle never holds the review token and never reviews.
-4. **Implement.** Start at most `cycle.max_implementations` implementations from the top of the
-   Ready queue.
-5. **Keep Ready filled.** While Ready plus the shapes under way hold fewer than `cycle.min_ready`
-   tickets, route the next Backlog ticket (queue order as for Ready) by the Routing table.
-6. **Report.** Write one heartbeat as [`references/heartbeat.md`](references/heartbeat.md) says.
-7. **Judge.** For each run in that heartbeat, `dispatch judge-run --ticket <id>` (or `--cr <n>`)
-   `--run-model <the row's model>`. It prints `{ skip: true }` when no independent model exists:
-   name it in the next heartbeat's `errors`.
-8. **Learn.** When step 1's `ledger summary` showed `learning.due`, dispatch `improve-factory`.
+2. **Judge.** For each run in the previous heartbeat that has no `score` yet, `dispatch judge-run
+   --ticket <id>` (or `--cr <n>`) `--run <run id> --run-model <the row's model>`. It prints
+   `{ skip: true }` when no independent model exists: name it in this heartbeat's `errors`.
+3. **Learn.** When step 1's `ledger summary` shows `learning.due` (due counts cycles and checks
+   the weekly budget), `dispatch improve-factory`. It runs beside the next steps.
+4. **Triage Signals.** Every ticket at Signals, in the order `triage-signal` names.
+5. **Route.** Walk the unheld tickets and dispatch each by the Routing table, in this order:
+   - every release request, and every Done P0 the `release` rows match;
+   - every ticket at In progress (rework, or a resumed implementation);
+   - Ready from the top, at most `cycle.max_implementations` new claims;
+   - Backlog: grooming for items with no Priority; shape while Ready plus the shapes under way hold
+     fewer than `cycle.min_ready` tickets.
+6. **Report.** Write one heartbeat as [`references/heartbeat.md`](references/heartbeat.md) says. Its
+   runs include the judge and learn runs of steps 2 and 3, so every run is in the ledger.
+
+The review runtime runs `review-pr` after the cycle finishes; the cycle never holds the review
+token and never reviews.
 
 Rules for every step:
 
-- Route only by the Routing table.
+- Route only by the Routing table. No cap other than `cycle.max_implementations` and `cycle.min_ready`
+  holds a routed ticket back.
 - After `cycle.time_budget_minutes`, start nothing new: wait for the running subagents, then report.
+  Keep `cycle.time_budget_minutes` below the runner's job timeout, so the heartbeat is always written.
 - A failed step goes into the heartbeat's `errors`, and the cycle goes on with the next step.
 - A step that failed in each of the last `cycle.failure_limit` heartbeats is not retried: call
   `escalate-to-human` on its ticket, or ask `owners.factory` on the heartbeat ticket when it has

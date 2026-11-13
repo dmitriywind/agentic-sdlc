@@ -205,7 +205,7 @@ Keys this contract relies on by name:
 - `learning.every_cycles`, `learning.min_evidence_runs`, `learning.bench_size`,
   `learning.bench_min_cases` (default 20), `learning.bench_trials` (default 3),
   `learning.auto_merge_classes` (template default `[]` until a bench baseline exists),
-  `learning.judge_tier`, `learning.budget_usd_per_week`, `learning.human_sample`.
+  `learning.judge_tier`, `learning.budget_usd_per_week` (`learning.due` is false once the week's learning spend reaches it).
 
 ## 5. Skills
 

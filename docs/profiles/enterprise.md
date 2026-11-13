@@ -9,7 +9,7 @@ and wants traces and full benchmarks on its own storage.
 npx --no agentic-sdlc init --profile enterprise --harness <name> --board jira --forge gitlab --vcs git
 ```
 Init writes the template defaults plus `sandbox: container` for the default executor, a
-placeholder `traces.uri` and `learning.human_sample: 5`. The excerpt adds typical per-stage
+placeholder `traces.uri`. The excerpt adds typical per-stage
 executors.
 
 ## Binding excerpt
@@ -36,7 +36,6 @@ learning:
   auto_merge_classes: []                         # add tuning once a bench baseline exists
   judge_tier: deep
   budget_usd_per_week: 50                        # template default; raise it for org-wide use
-  human_sample: 5                                # runs per week offered to an owner for a human grade
 ```
 All executor kinds are allowed: `managed`, `webhook`, `assign`, `command`, `harness`. See [executors.md](../../skills/sdlc/references/executors.md).
 

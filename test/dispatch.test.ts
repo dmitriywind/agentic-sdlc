@@ -175,13 +175,13 @@ test('managed claude and antigravity refuse a stage that pins a model', () => {
   assert.doesNotThrow(() => managedRequest({ kind: 'managed', api: 'cursor', token_env: 'TOK', repo_url: 'u' }, env, judge, 'm', {}));
 });
 
-test('idempotency: a trusted marker for the same key inside stall_minutes skips; --cr alone uses the heartbeat ticket', async () => {
+test('idempotency: a trusted marker for the same key inside cycle.dedupe_minutes skips; --cr and improve-factory use the heartbeat ticket', async () => {
   const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
   const { createLocalBoard } = await import('../src/board/local.ts');
   const root = mkdtempSync(join(tmpdir(), 'disp-'));
   mkdirSync(join(root, '.agents', 'skills', 'implement-spec'), { recursive: true });
   writeFileSync(join(root, '.agents', 'skills', 'implement-spec', 'SKILL.md'), '---\nname: implement-spec\ndescription: d\nmetadata:\n  tier: deep\n---\nx\n');
-  const b = { ...binding, stall_minutes: 30, owners: { bots: ['local'] }, heartbeat: { ticket: '2' }, forge: { adapter: 'github', options: {} }, models: { fast: 'f', balanced: 'b', deep: 'd' }, executors: { default: { kind: 'harness' } } } as any;
+  const b = { ...binding, cycle: { dedupe_minutes: 10 }, owners: { bots: ['local'] }, heartbeat: { ticket: '2' }, forge: { adapter: 'github', options: {} }, models: { fast: 'f', balanced: 'b', deep: 'd' }, executors: { default: { kind: 'harness' } } } as any;
   const board = createLocalBoard({ root, binding: b, options: {}, env: {}, exec: () => '', http: async () => ({}) });
   await board.create({ title: 't', body: '', status: 'Ready' });
   await board.create({ title: 'heartbeat', body: '', status: 'Backlog' });
@@ -193,7 +193,7 @@ test('idempotency: a trusted marker for the same key inside stall_minutes skips;
     try { return { code: await cli(argv, f.ctx), out: JSON.parse(log[0]) }; } finally { console.log = orig; }
   };
   const first = await go(['implement-spec', '--ticket', '1']);
-  assert.equal(first.out.key, '1-implement-spec-abc123');
+  assert.equal(first.out.key, '1-implement-spec');
   assert.equal(first.out.tier, 'deep'); // metadata.tier
   assert.deepEqual((await go(['implement-spec', '--ticket', '1'])).out.skipped, true);
   assert.equal((await go(['review-pr', '--ticket', '1'])).out.kind, 'harness'); // another skill is another key
@@ -201,6 +201,9 @@ test('idempotency: a trusted marker for the same key inside stall_minutes skips;
   assert.equal(cr.out.key, '9-improve-factory-crsha');
   assert.match((await board.comments('2'))[0].body, /^<!-- agentic-sdlc:dispatch 9-improve-factory-crsha -->/);
   assert.equal((await go(['improve-factory', '--cr', '9'])).out.skipped, true);
+  const factory = await go(['improve-factory']);
+  assert.equal(factory.out.key, 'factory-improve-factory');
+  assert.equal((await go(['improve-factory'])).out.skipped, true);
   // An untrusted author's marker never skips.
   b.owners = { bots: ['someone-else'] };
   assert.equal((await go(['implement-spec', '--ticket', '1'])).out.kind, 'harness');

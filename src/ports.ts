@@ -217,7 +217,7 @@ export interface Binding {
   spec_marker: string;
   stall_minutes: number;
   parallel_agents: number;
-  cycle: { max_implementations: number; min_ready: number; time_budget_minutes: number; failure_limit: number };
+  cycle: { max_implementations: number; min_ready: number; time_budget_minutes: number; failure_limit: number; dedupe_minutes?: number };
   heartbeat: { ticket: string };
   product: { environments: string[]; proofs: string[] };
   executors: { default: Executor; [skill: string]: Executor };
@@ -233,7 +233,6 @@ export interface Binding {
     /** bench run trials per case, and the trials compare needs (default 3). */
     bench_trials?: number;
     /** Runs per week judge-run offers to an owner for a human grade. */
-    human_sample?: number;
   };
 }
 

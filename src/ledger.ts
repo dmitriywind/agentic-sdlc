@@ -237,13 +237,14 @@ export async function readRuns(board: Board, ticket: string, authors: string[], 
  * holding the last improve-factory run (all of them when there is none); due at
  * learning.every_cycles; spentWeekUsd sums judge-run, improve-factory and bench runs of 7 days.
  */
-export function learningState(comments: Comment[], everyCycles: number, now = Date.now()) {
+export function learningState(comments: Comment[], everyCycles: number, now = Date.now(), budgetUsd?: number) {
   const beats = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean); // newest first
   const last = beats.findIndex((hb) => (hb.runs ?? []).some((r: LedgerRun) => r.skill === 'improve-factory'));
   const cyclesSince = last < 0 ? beats.length : last;
   const week = flattenRuns(comments, { sinceDays: 7, now }).filter((r) => LEARNING_SKILLS.includes(r.skill));
   const spentWeekUsd = Math.round(week.reduce((t, r) => t + (r.cost_usd ?? 0), 0) * 100) / 100;
-  return { due: Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles), cyclesSince, spentWeekUsd };
+  const underBudget = !(Number(budgetUsd) > 0) || spentWeekUsd < Number(budgetUsd);
+  return { due: Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles) && underBudget, cyclesSince, spentWeekUsd };
 }
 
 export interface Scorer { name: string; scale: 'pass-fail' | '0-4'; applies_to: '*' | string[] }
@@ -373,7 +374,7 @@ export const cli: PortCli = async (argv, ctx) => {
       // ponytail: the forge list caps merged CRs per call (e.g. 100), so older merged CRs drop out of costPerCR; page the list when the ledger outgrows it
       merged = (await (await forge())!.list({ state: 'merged' })).filter((c) => c.state === 'merged').map((c) => c.n);
     } catch { /* forge unreachable: costPerCR counts every cr */ }
-    console.log(JSON.stringify({ ...summarise(rows, merged), learning: learningState(comments, b.learning?.every_cycles) }, null, 2));
+    console.log(JSON.stringify({ ...summarise(rows, merged), learning: learningState(comments, b.learning?.every_cycles, Date.now(), b.learning?.budget_usd_per_week) }, null, 2));
     return 0;
   } catch (e) {
     console.error((e as Error).message);

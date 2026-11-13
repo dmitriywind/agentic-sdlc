@@ -107,7 +107,6 @@ test('init --profile enterprise writes traces and container sandbox; warnings ke
   assert.match(b, /profile: enterprise/);
   assert.match(b, /sandbox: container/);
   assert.match(b, /\.agents\/runtime\/traces\/\{run_id\}\.jsonl/);
-  assert.match(b, /human_sample: 5/);
   assert.equal(await quiet(() => cli(['init', '--profile', 'bogus', '--force'], ctx)), 1);
 });
 

@@ -70,35 +70,42 @@ Feature: Routing and the unattended cycle
     Given a scheduler starts one unattended run
     When the cycle runs
     Then the orchestrator reads state: the board, the open CRs, the last "cycle.failure_limit" heartbeats and "ledger summary"
+    And then it judges each run of the previous heartbeat that has no score
+    And then it starts improve-factory, when "learning.due" showed in the read-state step
     And then it triages every ticket at Signals
-    And then it reviews drafts
-    And then it implements
-    And then it keeps Ready filled
-    And then it writes one heartbeat
-    And then it judges each run in that heartbeat
-    And then it learns, when "learning.due" showed in the read-state step
+    And then it routes the board
+    And then it writes one heartbeat that holds every run of this cycle, the judge and learn runs too
 
-  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 3
+  # Source: skills/sdlc/SKILL.md, "Run one cycle"
   Scenario: The cycle never reviews
-    When the cycle reaches step 3
+    When the cycle runs
     Then the cycle reviews nothing
     And the review runtime runs "review-pr" after the cycle
     And the cycle never holds the review token
 
-  # Source: skills/sdlc/SKILL.md, "Run one cycle", steps 4 and 5
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 5
   Scenario: The cycle caps implementations and keeps Ready filled
     Given the Ready queue holds tickets
-    When the cycle reaches the implement step
-    Then it starts at most "cycle.max_implementations" implementations from the top of the Ready queue
+    When the cycle routes the board
+    Then it starts at most "cycle.max_implementations" new implementations from the top of the Ready queue
     And at most "parallel_agents" subagents run at once
     When Ready plus the shapes under way hold fewer than "cycle.min_ready" tickets
-    Then the cycle routes the next Backlog ticket by the Routing table
+    Then the cycle routes the next Backlog ticket to shape
+
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 5
+  Scenario: A full Ready queue never starves releases or rework
+    Given Ready holds at least "cycle.min_ready" tickets
+    And a release request is at Backlog
+    And a ticket that review sent back is at In progress
+    When the cycle routes the board
+    Then it dispatches release for the request
+    And it dispatches implement-spec for the ticket at In progress
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle" (dispatch)
-  # Proof: test/dispatch.test.ts "idempotency: a trusted marker for the same key inside stall_minutes skips; --cr alone uses the heartbeat ticket"
-  Scenario: A second dispatch with the same key is skipped
-    Given the cycle dispatched "implement-spec" for ticket "1" at one head
-    When the cycle dispatches "implement-spec" for ticket "1" at the same head inside "stall_minutes"
+  # Proof: test/dispatch.test.ts "idempotency: a trusted marker for the same key inside cycle.dedupe_minutes skips; --cr and improve-factory use the heartbeat ticket"
+  Scenario: A double fire of the same dispatch is skipped
+    Given the cycle dispatched "implement-spec" for ticket "1"
+    When "implement-spec" is dispatched for ticket "1" again inside "cycle.dedupe_minutes"
     Then the dispatch prints "{ skipped: true }"
     And the orchestrator leaves it
 
@@ -121,3 +128,12 @@ Feature: Routing and the unattended cycle
     And it calls "escalate-to-human" on the ticket of the step
     And when the step has no ticket, it asks "owners.factory" on the heartbeat ticket
     And a hold on the heartbeat ticket never stops the heartbeat
+
+  # Source: src/ledger.ts, "learningState"; skills/sdlc/SKILL.md, "Run one cycle", step 3
+  # Proof: test/ledger.test.ts "learningState: cycles since the last improve-factory heartbeat, due at every_cycles, week spend of learning skills"
+  Scenario: Learning is not due over the weekly budget
+    Given "learning.every_cycles" cycles passed since the last improve-factory run
+    And the week's learning spend reached "learning.budget_usd_per_week"
+    When the cycle reads "ledger summary"
+    Then "learning.due" is false
+    And the cycle starts no improve-factory run

@@ -228,7 +228,6 @@ function init(root: string, argv: string[], log: string[]) {
     doc.setIn(['executors', 'default'], { kind: 'harness', sandbox: profile === 'enterprise' ? 'container' : 'cloud' });
     if (profile === 'enterprise') {
       doc.set('traces', { uri: '.agents/runtime/traces/{run_id}.jsonl' }); // placeholder: point it at org storage
-      doc.setIn(['learning', 'human_sample'], 5);
     }
     mkdirSync(dirname(bindingFile), { recursive: true });
     writeFileSync(bindingFile, String(doc));

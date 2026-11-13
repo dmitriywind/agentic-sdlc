@@ -117,3 +117,18 @@ Feature: Review a change request
     Then the reviewer reads no ticket
     And it grades the CR's stated target, cause and proof
     And a finding keeps the CR draft with the report on the CR
+
+  # Source: skills/review-pr/SKILL.md, "Red or stalled gate"
+  Scenario: A pending human approval is not a stalled check
+    Given a ready CR whose "human-approval" status is pending for longer than stall_minutes
+    And every other required check is green
+    When the reviewer checks for red or stalled gates
+    Then the CR stays ready
+    And the reviewer files no Signal and no escalation
+
+  # Source: skills/review-pr/SKILL.md, "CI results" and "Red or stalled gate"
+  Scenario: A red check on a draft CR sends the work back
+    Given a draft CR opened by the factory whose "Required" check is red
+    When the reviewer reads the CI results
+    Then it reads the failing check
+    And with the cause in the diff, the ticket moves to In progress with the cause

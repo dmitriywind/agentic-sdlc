@@ -128,8 +128,9 @@ parallel_agents: 3              # most subagents running at once
 cycle:                          # Run one cycle (sdlc skill)
   max_implementations: 1        # implementations started per cycle
   min_ready: 2                  # keep at least this many tickets Ready or being shaped
-  time_budget_minutes: 60       # start nothing new after this
+  time_budget_minutes: 45       # start nothing new after this; keep it below the runner job timeout (templates: 60)
   failure_limit: 2              # a step failing in this many heartbeats in a row is escalated
+  dedupe_minutes: 10            # a second dispatch of the same skill and subject this soon is a double fire: skipped
 
 heartbeat:
   ticket: "HEARTBEAT-1"         # the ticket that holds heartbeat comments; off the board
@@ -142,6 +143,5 @@ learning:                       # the self-improvement loop
   bench_trials: 3               # trials per case; compare uses the Wilson lower bound of the pass rate
   auto_merge_classes: []        # classes that merge without the factory owner (only tuning may be listed; guardrail never).
                                 #   Keep [] until a bench baseline exists, then [tuning].
-  judge_tier: deep              # tier judge-run scores on (fast | balanced | deep)
+  judge_tier: fast              # tier judge-run scores on (fast | balanced | deep)
   budget_usd_per_week: 50       # learning and bench spend cap
-  # human_sample: 5             # runs per week judge-run offers to an owner for a human grade
