@@ -3,6 +3,11 @@
 All notable changes to this package. Versions follow semver. A release is a `v<version>` Git tag; the package is
 not on npm.
 
+## Unreleased
+
+- Docs: `docs/adoption.md` (choose the setup, one repo, many repos, migration, upgrade), `docs/use-cases.md` (actors, 19 use cases, team shapes), `docs/behaviour/` (20 Gherkin feature files, 174 scenarios, each with its source and, for CLI mechanism, the proving test), `docs/roadmap.md`, and three new flows (routing by status, intake, the needs-human hold).
+- AGENTS.md: a behaviour change updates its feature file, flow and use case in the same change.
+
 ## 2.0.0-alpha.3 (2026-11-11)
 
 - Skills: backlog-grooming discovers an Idea the Product owner moved to Backlog (outcome, user, metric, one plain question when missing), tickets tech debt only with a cost, and files a removal ticket for each flag. New docs/operating-baseline.md (recommendations by team shape, repo and board baseline, 2026-27 operate).

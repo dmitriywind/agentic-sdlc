@@ -2,8 +2,12 @@
 
 | Read | For |
 |---|---|
+| [Adoption](adoption.md) | Choose the setup; adopt on one repo, on many repos; move from a hand-made process; upgrade. |
+| [Use cases](use-cases.md) | Actors, the use-case catalogue, and who does what in each team shape. |
+| [Behaviour specs](behaviour/README.md) | Gherkin scenarios for every skill, gate, the push guard and the binding. |
 | [Components](architecture/components.md) | The parts and how they connect (diagrams). |
-| [Flows](architecture/flows.md) | The cycle, review, release and learning flows (diagrams). |
+| [Flows](architecture/flows.md) | The cycle, review, release, learning, routing, intake and hold flows (diagrams). |
+| [Roadmap](roadmap.md) | What comes next, in order. |
 | [Forges](forges.md) | Checks, approval and what each forge enforces natively, by gate, or approximately. |
 | [Operating baseline](operating-baseline.md) | Team shapes, repo and board baseline, and how a product should operate in 2026-27 (recommendations). |
 | [The contract](../references/architecture.md) | Normative. Section 3 ports and gates, executors in `skills/sdlc/references/executors.md`, section 10 runtimes and profiles. |

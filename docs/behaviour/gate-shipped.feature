@@ -1,0 +1,84 @@
+# Owner: src/gates.ts, skills/sdlc/references/gates.md, docs/forges.md. The source holds the rule; this file states the behaviour a user can observe.
+# Change both in the same commit.
+@gate:shipped
+Feature: Gate shipped
+  As the Product owner
+  I want Shipped to follow the real deploys, with safe tags and rollback
+  So that the board shows what runs in each environment
+
+  # Source: src/gates.ts, "shipped"; skills/sdlc/references/gates.md
+  # Proof: test/gates.test.ts "shipped: only Done tickets whose merge sha is an ancestor; unknown ancestry ships nothing"
+  Scenario: Only Done tickets whose merge is in the deployed revision ship
+    Given a successful deploy to an environment at a revision
+    When "gate shipped <env>" runs
+    Then Shipped is "On <env>" on each Done ticket whose merged CR is an ancestor of the revision
+    And other tickets do not change
+
+  # Source: src/gates.ts, "shipped" (unknown ancestry)
+  # Proof: test/gates.test.ts "shipped: only Done tickets whose merge sha is an ancestor; unknown ancestry ships nothing"
+  Scenario: Unknown ancestry ships nothing
+    Given the VCS cannot tell if a merge is an ancestor
+    When "gate shipped <env>" runs with --result success
+    Then no ticket changes
+    And the output says the ancestry is unknown
+
+  # Source: src/gates.ts, "shipped" (unmatched); skills/sdlc/references/gates.md
+  # Proof: test/gates.test.ts "shipped: a Done ticket with no merged CR is listed as unmatched, unless labelled release"
+  Scenario: A Done ticket with no merged CR is listed as unmatched
+    Given a Done ticket has no merged CR
+    And the ticket has no label board.labels.release
+    When "gate shipped <env>" runs
+    Then the output lists the ticket as unmatched
+    And Shipped does not change
+
+  # Source: src/gates.ts, "shipped" (last environment, tag)
+  # Proof: test/gates.test.ts "shipped: staging, production + tag, failures, unknown env"
+  Scenario: A success in the last environment creates the release tag
+    Given a Done ticket has release_version "2026.1"
+    When "gate shipped" runs for the last environment with --result success
+    Then the tag is vcs.tag_prefix plus "2026.1"
+
+  # Source: src/gates.ts, "shipped" (tags first, idempotent)
+  # Proof: test/gates.test.ts "shipped: an existing tag is kept and the board still moves; a tag failure leaves the board untouched"
+  Scenario: A second run keeps an existing tag
+    Given the release tag already exists
+    When "gate shipped" runs again for the last environment
+    Then the gate keeps the tag
+    And Shipped is "On <last environment>" on the tickets
+
+  # Source: src/gates.ts, "shipped" (tag failure)
+  # Proof: test/gates.test.ts "shipped: an existing tag is kept and the board still moves; a tag failure leaves the board untouched"
+  Scenario: A tag failure leaves the board untouched
+    Given the push of the release tag is rejected
+    When "gate shipped" runs for the last environment
+    Then the gate fails
+    And no ticket changes, so a re-run retries
+
+  # Source: src/gates.ts, "shipped" (rollback); skills/sdlc/references/gates.md
+  # Proof: test/gates.test.ts "shipped: staging, production + tag, failures, unknown env"
+  Scenario: A failure in the last environment returns the tickets and opens a held Signal
+    Given Done tickets show Shipped "In release" with a release_version
+    When "gate shipped" runs for the last environment with --result failure
+    Then Shipped is "On <environment before the last>" on those tickets
+    And release_version is cleared
+    And a Signal with the labels "signal:deploy" and board.labels.human opens
+
+  # Source: src/gates.ts, "shipped" (reset only tickets in the failed revision)
+  # Proof: test/gates.test.ts "shipped: a last-env failure resets only tickets whose CRs are in the failed sha"
+  Scenario: Rollback resets only tickets in the failed revision
+    Given one ticket merged after the failed revision and is In release for a newer version
+    When "gate shipped" runs for the last environment with --result failure
+    Then that ticket keeps Shipped "In release" and its release_version
+
+  # Source: src/gates.ts, "shipped" (failure in another environment)
+  # Proof: test/gates.test.ts "shipped: staging, production + tag, failures, unknown env"
+  Scenario: A failure in an earlier environment opens a Signal that is not held
+    When "gate shipped" runs for an environment that is not the last with --result failure
+    Then a Signal with the label "signal:deploy" opens
+    And the Signal has no board.labels.human label
+
+  # Source: src/gates.ts, "shipped" (unknown environment)
+  # Proof: test/gates.test.ts "shipped: staging, production + tag, failures, unknown env"
+  Scenario: An unknown environment is refused
+    When "gate shipped qa" runs and "qa" is not in product.environments
+    Then the gate fails and lists the known environments
