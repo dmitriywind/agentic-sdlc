@@ -18,7 +18,8 @@ Read from [`sdlc`](../SKILL.md).
 - **Priority** in the order of `priorities`. `triage-signal` sets it on accept; `backlog-grooming`
   sets a missing one and reorders; the Product owner overrides. The first means the last
   environment is impacted, data, money or security is at risk, or a release is blocked; only
-  `p0_setters` set it, with proof, and triage also escalates. Ready queue: priority order, then a
+  `p0_setters` set it, with proof: `triage-signal` on accept, or the Product owner by hand.
+  triage also escalates. Ready queue: priority order, then a
   ticket that unblocks others, then oldest.
 - **Labels** are the binding's and no others: `bug` or `feature` on every open ticket, the hold
   label, `release` on a release request, one `signal:<stream>` per signal, and one of `board.env_labels` on a signal from a

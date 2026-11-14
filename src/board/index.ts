@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { AdapterContext, Binding, Board, Comment, LogicalField, PortCli } from '../ports.ts';
+import { ownersFor } from '../ports.ts';
 import { selectComments } from '../comments.ts';
 import { createGithubBoard } from './github.ts';
 import { createJiraBoard } from './jira.ts';
@@ -73,7 +74,7 @@ export const cli: PortCli = async (argv, base) => {
         need(1);
         // --trusted: the binding's bots and owners, added to any --author.
         out = selectComments(await board.comments(id, { marker: a.one('marker') }), {
-          owners: base.binding.owners, authors: a.flags.author, trusted: a.has('trusted'),
+          owners: ownersFor(base.binding.owners, 'board'), authors: a.flags.author, trusted: a.has('trusted'),
           last: a.one('last') ? Number(a.one('last')) : undefined, marker: a.one('marker'),
         });
         break;

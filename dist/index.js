@@ -1619,9 +1619,9 @@ ${indent}:`;
       if (keyComment || vsb || vcb) {
         ws = vsb ? "\n" : "";
         if (vcb) {
-          const cs4 = commentString(vcb);
+          const cs = commentString(vcb);
           ws += `
-${stringifyComment.indentComment(cs4, ctx.indent)}`;
+${stringifyComment.indentComment(cs, ctx.indent)}`;
         }
         if (valueStr === "" && !ctx.inFlow) {
           if (ws === "\n" && valueComment)
@@ -3336,8 +3336,8 @@ var require_stringifyDocument = __commonJS({
       if (doc.commentBefore) {
         if (lines.length !== 1)
           lines.unshift("");
-        const cs4 = commentString(doc.commentBefore);
-        lines.unshift(stringifyComment.indentComment(cs4, ""));
+        const cs = commentString(doc.commentBefore);
+        lines.unshift(stringifyComment.indentComment(cs, ""));
       }
       let chompKeep = false;
       let contentComment = null;
@@ -3346,8 +3346,8 @@ var require_stringifyDocument = __commonJS({
           if (doc.contents.spaceBefore && hasDirectives)
             lines.push("");
           if (doc.contents.commentBefore) {
-            const cs4 = commentString(doc.contents.commentBefore);
-            lines.push(stringifyComment.indentComment(cs4, ""));
+            const cs = commentString(doc.contents.commentBefore);
+            lines.push(stringifyComment.indentComment(cs, ""));
           }
           ctx.forceBlockIndent = !!doc.comment;
           contentComment = doc.contents.comment;
@@ -3365,12 +3365,12 @@ var require_stringifyDocument = __commonJS({
       }
       if (doc.directives?.docEnd) {
         if (doc.comment) {
-          const cs4 = commentString(doc.comment);
-          if (cs4.includes("\n")) {
+          const cs = commentString(doc.comment);
+          if (cs.includes("\n")) {
             lines.push("...");
-            lines.push(stringifyComment.indentComment(cs4, ""));
+            lines.push(stringifyComment.indentComment(cs, ""));
           } else {
-            lines.push(`... ${cs4}`);
+            lines.push(`... ${cs}`);
           }
         } else {
           lines.push("...");
@@ -4910,8 +4910,8 @@ var require_compose_scalar = __commonJS({
         const compat = schema.compat.find((tag2) => tag2.default && tag2.test?.test(value)) ?? schema[identity.SCALAR];
         if (tag.tag !== compat.tag) {
           const ts = directives.tagString(tag.tag);
-          const cs4 = directives.tagString(compat.tag);
-          const msg = `Value may be parsed as either ${ts} or ${cs4}`;
+          const cs = directives.tagString(compat.tag);
+          const msg = `Value may be parsed as either ${ts} or ${cs}`;
           onError(token, "TAG_RESOLVE_FAILED", msg, true);
         }
       }
@@ -5861,14 +5861,14 @@ var require_lexer = __commonJS({
         }
         if (line[0] === "%") {
           let dirEnd = line.length;
-          let cs4 = line.indexOf("#");
-          while (cs4 !== -1) {
-            const ch = line[cs4 - 1];
+          let cs = line.indexOf("#");
+          while (cs !== -1) {
+            const ch = line[cs - 1];
             if (ch === " " || ch === "	") {
-              dirEnd = cs4 - 1;
+              dirEnd = cs - 1;
               break;
             } else {
-              cs4 = line.indexOf("#", cs4 + 1);
+              cs = line.indexOf("#", cs + 1);
             }
           }
           while (true) {
@@ -6055,10 +6055,10 @@ var require_lexer = __commonJS({
         let nl = qb.indexOf("\n", this.pos);
         if (nl !== -1) {
           while (nl !== -1) {
-            const cs4 = this.continueScalar(nl + 1);
-            if (cs4 === -1)
+            const cs = this.continueScalar(nl + 1);
+            if (cs === -1)
               break;
-            nl = qb.indexOf("\n", cs4);
+            nl = qb.indexOf("\n", cs);
           }
           if (nl !== -1) {
             end = nl - (qb[nl - 1] === "\r" ? 2 : 1);
@@ -6121,10 +6121,10 @@ var require_lexer = __commonJS({
             this.indentNext = this.blockScalarIndent + (this.indentNext === 0 ? 1 : this.indentNext);
           }
           do {
-            const cs4 = this.continueScalar(nl + 1);
-            if (cs4 === -1)
+            const cs = this.continueScalar(nl + 1);
+            if (cs === -1)
               break;
-            nl = this.buffer.indexOf("\n", cs4);
+            nl = this.buffer.indexOf("\n", cs);
           } while (nl !== -1);
           if (nl === -1) {
             if (!this.atEnd)
@@ -6183,10 +6183,10 @@ var require_lexer = __commonJS({
             if (next === "#" || inFlow && flowIndicatorChars.has(next))
               break;
             if (ch === "\n") {
-              const cs4 = this.continueScalar(i + 1);
-              if (cs4 === -1)
+              const cs = this.continueScalar(i + 1);
+              if (cs === -1)
                 break;
-              i = Math.max(i, cs4 - 2);
+              i = Math.max(i, cs - 2);
             }
           } else {
             if (inFlow && flowIndicatorChars.has(ch))
@@ -7368,6 +7368,10 @@ var MovedError = class extends Error {
   }
 };
 var parseCloses = (body) => [...new Set([...body.matchAll(/^[ \t]*Closes[ \t]+#?([A-Za-z0-9_-]+)[ \t]*$/gim)].map((m) => m[1]))];
+function ownersFor(o, side) {
+  const one = (w) => (typeof w === "object" && w ? w[side] : w) || void 0;
+  return { product: one(o?.product), factory: one(o?.factory), bots: (o?.bots ?? []).map(one).filter((x) => !!x) };
+}
 
 // src/board/index.ts
 import { readFileSync as readFileSync2 } from "fs";
@@ -7954,273 +7958,11 @@ function createBoard(ctx) {
 import { readFileSync as readFileSync3 } from "fs";
 
 // src/forge/util.ts
-var MARKER = "<!-- agentic-sdlc:automerge -->";
 function secret(ctx, key) {
   const name = String(ctx.options[key] ?? "");
   const v = name && ctx.env[name];
   if (!v) throw new Error(`env var named by options.${key} (${name || "unset"}) is not set`);
   return v;
-}
-var basic = (user, pass) => `Basic ${Buffer.from(`${user}:${pass}`).toString("base64")}`;
-var localDiff = (ctx, cr) => ctx.exec("git", ["diff", "--no-color", `${cr.baseSha}...${cr.headSha}`], { cwd: ctx.root });
-function allGreen(cr, required) {
-  const names = required.length ? required : cr.checks.map((c) => c.name);
-  return names.every((n) => cr.checks.find((c) => c.name === n)?.state === "success");
-}
-
-// src/forge/azure.ts
-var V = "api-version=7.1";
-var br = (r) => r.replace(/^refs\/heads\//, "");
-var cs = (s) => s === "succeeded" || s === "notApplicable" ? "success" : s === "failed" || s === "error" ? "failure" : "pending";
-function azure(ctx) {
-  const o = ctx.options;
-  const org = o.org_url.replace(/\/$/, "");
-  const proj = `${org}/${encodeURIComponent(o.project)}`;
-  const git2 = `${proj}/_apis/git/repositories/${encodeURIComponent(o.repo)}`;
-  const call = (m, url, body, key = "token_env") => ctx.http(m, url + (url.includes("?") ? "&" : "?") + V, { headers: { authorization: basic("", secret(ctx, key)) }, body });
-  const view = async (n) => {
-    const p = await call("GET", `${git2}/pullrequests/${n}`);
-    const st = await call("GET", `${git2}/pullrequests/${n}/statuses`);
-    return {
-      n: String(p.pullRequestId),
-      url: `${proj}/_git/${o.repo}/pullrequest/${p.pullRequestId}`,
-      title: p.title,
-      source: br(p.sourceRefName),
-      target: br(p.targetRefName),
-      headSha: p.lastMergeSourceCommit?.commitId ?? "",
-      baseSha: p.lastMergeTargetCommit?.commitId ?? "",
-      draft: !!p.isDraft,
-      state: p.status === "active" ? "open" : p.status === "completed" ? "merged" : "closed",
-      mergeSha: p.lastMergeCommit?.commitId,
-      behind: false,
-      // ponytail: Azure DevOps exposes no "behind" flag; sync is unsupported anyway
-      closes: parseCloses(p.description ?? ""),
-      author: p.createdBy?.uniqueName ?? "",
-      // The newest status per context wins: an older iteration's success does not hide a new pending.
-      checks: [...new Map((st.value ?? []).sort((a, b) => a.id - b.id).map((s) => [s.context.name, { name: s.context.name, state: cs(s.state) }])).values()],
-      body: p.description ?? ""
-    };
-  };
-  const patch = async (n, body) => {
-    await call("PATCH", `${git2}/pullrequests/${n}`, body);
-    return view(n);
-  };
-  return {
-    async open(x) {
-      const p = await call("POST", `${git2}/pullrequests`, {
-        sourceRefName: `refs/heads/${x.source}`,
-        targetRefName: `refs/heads/${ctx.binding.vcs.trunk}`,
-        title: x.title,
-        description: x.body,
-        isDraft: x.draft
-      });
-      return view(String(p.pullRequestId));
-    },
-    view,
-    async viewBySha(sha) {
-      const r = await call("GET", `${git2}/pullrequests?searchCriteria.status=completed&$top=100`);
-      const p = r.value.find((x) => x.lastMergeCommit?.commitId === sha);
-      if (!p) throw new Error(`no change request for ${sha}`);
-      return view(String(p.pullRequestId));
-    },
-    // ponytail: no unified-diff endpoint; uses local git objects (fetch first)
-    async diff(n) {
-      return localDiff(ctx, await view(n));
-    },
-    async list(q = {}) {
-      const st = { open: "active", merged: "completed", all: "all" }[q.state ?? "open"];
-      const r = await call("GET", `${git2}/pullrequests?searchCriteria.status=${st}&$top=100`);
-      return Promise.all(r.value.map((p) => view(String(p.pullRequestId))));
-    },
-    ready: (n) => patch(n, { isDraft: false }),
-    draft: (n) => patch(n, { isDraft: true }),
-    async sync() {
-      throw new Error("azure: sync is not supported by Azure DevOps; rebase the source with vcs and push");
-    },
-    async automerge(n) {
-      const me = (await call("GET", `${org}/_apis/connectionData`)).authenticatedUser.id;
-      return patch(n, { autoCompleteSetBy: { id: me }, completionOptions: { mergeStrategy: "squash", deleteSourceBranch: true } });
-    },
-    async comment(n, body) {
-      const t = await call("POST", `${git2}/pullrequests/${n}/threads`, { comments: [{ content: body, commentType: 1 }], status: 1 });
-      return { id: String(t.id) };
-    },
-    async comments(n) {
-      const r = await call("GET", `${git2}/pullrequests/${n}/threads`);
-      return (r.value ?? []).flatMap((t) => t.comments ?? []).filter((c) => c.commentType !== "system" && !c.isDeleted).map((c) => ({ id: String(c.id), author: c.author?.uniqueName ?? c.author?.displayName ?? "", createdAt: c.publishedDate, body: c.content ?? "" })).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    },
-    // Branch status policies read pull request statuses, so post on the PR iteration whose head is sha.
-    async status(sha, s, opts) {
-      const key = opts?.as === "ci" ? "token_env" : "review_token_env";
-      const r = await call("GET", `${git2}/pullrequests?searchCriteria.status=active&$top=100`, void 0, key);
-      const p = r.value.find((x) => x.lastMergeSourceCommit?.commitId === sha);
-      if (!p) throw new Error(`azure: no active pull request has head ${sha}`);
-      const its = await call("GET", `${git2}/pullrequests/${p.pullRequestId}/iterations`, void 0, key);
-      await call("POST", `${git2}/pullrequests/${p.pullRequestId}/statuses`, {
-        state: s.state === "success" ? "succeeded" : s.state === "failure" ? "failed" : "pending",
-        description: s.description,
-        context: { name: s.context, genre: "agentic-sdlc" },
-        targetUrl: s.url,
-        iterationId: its.value?.at(-1)?.id
-      }, key);
-    },
-    async approve(n) {
-      const me = (await call("GET", `${org}/_apis/connectionData`, void 0, "review_token_env")).authenticatedUser.id;
-      await call("PUT", `${git2}/pullrequests/${n}/reviewers/${me}`, { vote: 10 }, "review_token_env");
-    },
-    // ponytail: votes carry no commit; the head stands in, so the branch policy must reset votes on push.
-    async approvals(n) {
-      const p = await call("GET", `${git2}/pullrequests/${n}`);
-      const sha = p.lastMergeSourceCommit?.commitId ?? "";
-      const vote = (v) => v >= 5 ? "approved" : v <= -5 ? "changes_requested" : "pending";
-      return (p.reviewers ?? []).map((x) => ({ user: x.uniqueName ?? x.displayName ?? "", state: vote(x.vote), sha }));
-    },
-    async runs(q = {}) {
-      const qs = new URLSearchParams();
-      if (q.ref) qs.set("branchName", `refs/heads/${q.ref}`);
-      if (q.failed) qs.set("resultFilter", "failed");
-      const r = await call("GET", `${proj}/_apis/build/builds?${qs}`);
-      return r.value.map((b) => ({
-        id: String(b.id),
-        name: b.definition?.name ?? String(b.id),
-        ref: br(b.sourceBranch),
-        sha: b.sourceVersion,
-        url: b._links?.web?.href ?? "",
-        at: b.queueTime,
-        state: b.status !== "completed" ? "pending" : b.result === "succeeded" ? "success" : "failure"
-      }));
-    }
-  };
-}
-
-// src/forge/bitbucket.ts
-var cs2 = (s) => s === "SUCCESSFUL" ? "success" : s === "FAILED" || s === "STOPPED" ? "failure" : "pending";
-function bitbucket(ctx) {
-  const o = ctx.options;
-  const base = `https://api.bitbucket.org/2.0/repositories/${o.workspace}/${o.repo}`;
-  const call = (m, p, body, key = "token_env") => ctx.http(m, base + p, { headers: { authorization: `Bearer ${secret(ctx, key)}` }, body });
-  const view = async (n) => {
-    const p = await call("GET", `/pullrequests/${n}`);
-    const sha = p.source.commit.hash;
-    const st = await call("GET", `/commit/${sha}/statuses`);
-    const tip = await call("GET", `/refs/branches/${encodeURIComponent(p.destination.branch.name)}`);
-    return {
-      n: String(p.id),
-      url: p.links.html.href,
-      title: p.title,
-      source: p.source.branch.name,
-      target: p.destination.branch.name,
-      headSha: sha,
-      baseSha: p.destination.commit.hash,
-      draft: !!p.draft,
-      state: p.state === "OPEN" ? "open" : p.state === "MERGED" ? "merged" : "closed",
-      mergeSha: p.merge_commit?.hash,
-      behind: tip.target.hash !== p.destination.commit.hash,
-      closes: parseCloses(p.description ?? ""),
-      checks: (st.values ?? []).map((s) => ({ name: s.name ?? s.key, state: cs2(s.state) })),
-      body: p.description ?? "",
-      author: p.author?.nickname ?? ""
-    };
-  };
-  const put = async (n, body) => {
-    await call("PUT", `/pullrequests/${n}`, body);
-    return view(n);
-  };
-  const comment = async (n, raw) => {
-    const c = await call("POST", `/pullrequests/${n}/comments`, { content: { raw } });
-    return { id: String(c.id), url: c.links?.html?.href };
-  };
-  return {
-    async open(x) {
-      const p = await call("POST", "/pullrequests", {
-        title: x.title,
-        description: x.body,
-        draft: x.draft,
-        source: { branch: { name: x.source } },
-        destination: { branch: { name: ctx.binding.vcs.trunk } }
-      });
-      return view(String(p.id));
-    },
-    view,
-    async viewBySha(sha) {
-      const r = await call("GET", `/commit/${sha}/pullrequests`);
-      if (!r.values?.length) throw new Error(`no change request for ${sha}`);
-      return view(String(r.values[0].id));
-    },
-    // ponytail: the diff endpoint returns text the JSON http helper cannot read; uses local git objects (fetch first)
-    async diff(n) {
-      return localDiff(ctx, await view(n));
-    },
-    async list(q = {}) {
-      const st = { open: "state=OPEN", merged: "state=MERGED", all: "state=OPEN&state=MERGED&state=DECLINED&state=SUPERSEDED" }[q.state ?? "open"];
-      const r = await call("GET", `/pullrequests?${st}&pagelen=50`);
-      return Promise.all(r.values.map((p) => view(String(p.id))));
-    },
-    async ready(n) {
-      return put(n, { draft: false });
-    },
-    async draft(n) {
-      return put(n, { draft: true });
-    },
-    async sync() {
-      throw new Error("bitbucket: sync is not supported by Bitbucket Cloud; rebase the source with vcs and push");
-    },
-    async automerge(n) {
-      const cr = await view(n);
-      if (allGreen(cr, ctx.binding.forge.required_checks)) {
-        await call("POST", `/pullrequests/${n}/merge`, { merge_strategy: "squash" });
-      } else {
-        const cm = await call("GET", `/pullrequests/${n}/comments?pagelen=100`);
-        if (!(cm.values ?? []).some((c) => c.content?.raw?.includes(MARKER))) await comment(n, `${MARKER}
-Merge when required checks are green.`);
-      }
-      return view(n);
-    },
-    comment,
-    async comments(n) {
-      const out = [];
-      let url = `/pullrequests/${n}/comments?pagelen=100`;
-      while (url) {
-        const r = await call("GET", url);
-        for (const c of r.values ?? []) if (!c.deleted) out.push({ id: String(c.id), author: c.user?.nickname ?? c.user?.display_name ?? "", createdAt: c.created_on, body: c.content?.raw ?? "", url: c.links?.html?.href });
-        url = r.next ? String(r.next).replace(base, "") : void 0;
-      }
-      return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    },
-    async status(sha, s, opts) {
-      await call("POST", `/commit/${sha}/statuses/build`, {
-        key: s.context,
-        name: s.context,
-        description: s.description,
-        state: s.state === "success" ? "SUCCESSFUL" : s.state === "failure" ? "FAILED" : "INPROGRESS",
-        url: s.url ?? `https://bitbucket.org/${o.workspace}/${o.repo}`
-      }, opts?.as === "ci" ? "token_env" : "review_token_env");
-    },
-    async approve(n) {
-      await call("POST", `/pullrequests/${n}/approve`, void 0, "review_token_env");
-    },
-    // ponytail: participants carry no commit; the head stands in, so the repo must reset approvals on push.
-    async approvals(n) {
-      const p = await call("GET", `/pullrequests/${n}`);
-      return (p.participants ?? []).filter((x) => x.role === "REVIEWER" || x.approved || x.state).map((x) => ({
-        user: x.user?.nickname ?? x.user?.display_name ?? "",
-        sha: p.source.commit.hash,
-        state: x.approved || x.state === "approved" ? "approved" : x.state === "changes_requested" ? "changes_requested" : "pending"
-      }));
-    },
-    async runs(q = {}) {
-      const r = await call("GET", "/pipelines/?sort=-created_on&pagelen=50");
-      return (r.values ?? []).map((p) => ({
-        id: String(p.build_number ?? p.uuid),
-        name: `pipeline ${p.build_number}`,
-        ref: p.target?.ref_name ?? "",
-        sha: p.target?.commit?.hash ?? "",
-        at: p.created_on,
-        url: `https://bitbucket.org/${o.workspace}/${o.repo}/pipelines/results/${p.build_number}`,
-        state: p.state?.name !== "COMPLETED" ? "pending" : p.state?.result?.name === "SUCCESSFUL" ? "success" : "failure"
-      })).filter((x) => (!q.ref || x.ref === q.ref) && (!q.failed || x.state === "failure"));
-    }
-  };
 }
 
 // src/forge/github.ts
@@ -8234,6 +7976,12 @@ function github(ctx) {
   const view = async (n) => {
     const p = JSON.parse(gh(["api", `${api}/pulls/${n}`]));
     const roll = JSON.parse(gh(["pr", "view", n, "--json", "statusCheckRollup"])).statusCheckRollup ?? [];
+    let pushedAt;
+    try {
+      pushedAt = gh(["api", `${api}/commits/${p.head.sha}/check-suites`, "--jq", "[.check_suites[].created_at] | min // empty"]).trim() || void 0;
+    } catch {
+    }
+    if (pushedAt && Number.isNaN(Date.parse(pushedAt))) pushedAt = void 0;
     return {
       n: String(p.number),
       url: p.html_url,
@@ -8249,7 +7997,8 @@ function github(ctx) {
       closes: parseCloses(p.body ?? ""),
       checks: roll.map((c) => ({ name: c.name ?? c.context, state: checkState(c) })),
       body: p.body ?? "",
-      author: p.user?.login ?? ""
+      author: p.user?.login ?? "",
+      ...pushedAt ? { pushedAt } : {}
     };
   };
   return {
@@ -8339,129 +8088,8 @@ function github(ctx) {
   };
 }
 
-// src/forge/gitlab.ts
-var DRAFT = /^\s*(draft:|\[draft\]|\(draft\))\s*/i;
-var cs3 = (s) => s === "success" || s === "skipped" ? "success" : s === "failed" || s === "canceled" ? "failure" : "pending";
-function gitlab(ctx) {
-  if (!ctx.options.base_url) throw new Error("gitlab: forge.options.base_url is required (e.g. https://gitlab.com)");
-  const root = String(ctx.options.base_url).replace(/\/$/, "");
-  const base = `${root}/api/v4/projects/${encodeURIComponent(String(ctx.options.project))}`;
-  const call = (m, p, body, key = "token_env") => ctx.http(m, base + p, { headers: { "PRIVATE-TOKEN": secret(ctx, key) }, body });
-  const toCR = async (m) => {
-    const st = await call("GET", `/repository/commits/${m.sha}/statuses?per_page=100&all=false`);
-    return {
-      n: String(m.iid),
-      url: m.web_url,
-      title: m.title.replace(DRAFT, ""),
-      source: m.source_branch,
-      target: m.target_branch,
-      headSha: m.sha,
-      baseSha: m.diff_refs?.base_sha ?? "",
-      draft: DRAFT.test(m.title) || !!m.draft,
-      state: m.state === "opened" ? "open" : m.state === "merged" ? "merged" : "closed",
-      behind: m.detailed_merge_status === "need_rebase",
-      mergeSha: m.merge_commit_sha ?? m.squash_commit_sha ?? void 0,
-      closes: parseCloses(m.description ?? ""),
-      checks: st.map((s) => ({ name: s.name, state: cs3(s.status) })),
-      body: m.description ?? "",
-      author: m.author?.username ?? ""
-    };
-  };
-  const view = async (n) => toCR(await call("GET", `/merge_requests/${n}`));
-  const setTitle = async (n, fn) => {
-    const m = await call("GET", `/merge_requests/${n}`);
-    return toCR(await call("PUT", `/merge_requests/${n}`, { title: fn(m.title.replace(DRAFT, "")) }));
-  };
-  return {
-    async open(o) {
-      return toCR(await call("POST", "/merge_requests", {
-        source_branch: o.source,
-        target_branch: ctx.binding.vcs.trunk,
-        title: o.draft ? `Draft: ${o.title}` : o.title,
-        description: o.body
-      }));
-    },
-    view,
-    async viewBySha(sha) {
-      const ms = await call("GET", `/repository/commits/${sha}/merge_requests`);
-      if (!ms.length) throw new Error(`no change request for ${sha}`);
-      return view(String(ms[0].iid));
-    },
-    async diff(n) {
-      const r = await call("GET", `/merge_requests/${n}/changes`);
-      return r.changes.map((c) => `diff --git a/${c.old_path} b/${c.new_path}
-${c.new_file ? "new file mode 100644\n" : ""}${c.deleted_file ? "deleted file mode 100644\n" : ""}${c.renamed_file ? `rename from ${c.old_path}
-rename to ${c.new_path}
-` : ""}--- a/${c.old_path}
-+++ b/${c.new_path}
-${c.diff}`).join("");
-    },
-    async list(q = {}) {
-      const st = { open: "opened", merged: "merged", all: "all" }[q.state ?? "open"];
-      const ms = await call("GET", `/merge_requests?state=${st}&per_page=100`);
-      return Promise.all(ms.map(toCR));
-    },
-    async closing(id) {
-      const ms = await call("GET", `/merge_requests?state=merged&in=description&search=${encodeURIComponent(`Closes ${id}`)}&per_page=30`);
-      return (await Promise.all(ms.map(toCR))).filter((c) => c.closes.includes(id));
-    },
-    ready: (n) => setTitle(n, (t) => t),
-    draft: (n) => setTitle(n, (t) => `Draft: ${t}`),
-    async sync(n) {
-      await call("PUT", `/merge_requests/${n}/rebase`);
-      return view(n);
-    },
-    async automerge(n) {
-      await call("PUT", `/merge_requests/${n}/merge`, { merge_when_pipeline_succeeds: true, squash: true });
-      return view(n);
-    },
-    async comment(n, body) {
-      const r = await call("POST", `/merge_requests/${n}/notes`, { body });
-      return { id: String(r.id) };
-    },
-    async comments(n) {
-      const out = [];
-      for (let page = 1; ; page++) {
-        const r = await call("GET", `/merge_requests/${n}/notes?sort=asc&order_by=created_at&per_page=100&page=${page}`);
-        for (const c of r) if (!c.system) out.push({ id: String(c.id), author: c.author?.username ?? "", createdAt: c.created_at, body: c.body ?? "" });
-        if (r.length < 100) return out;
-      }
-    },
-    async status(sha, s, opts) {
-      await call("POST", `/statuses/${sha}`, {
-        state: s.state === "failure" ? "failed" : s.state,
-        name: s.context,
-        description: s.description,
-        target_url: s.url
-      }, opts?.as === "ci" ? "token_env" : "review_token_env");
-    },
-    async approve(n) {
-      await call("POST", `/merge_requests/${n}/approve`, {}, "review_token_env");
-    },
-    // ponytail: GitLab lists current approvers without a commit; the MR's head stands in, so the project must reset approvals on push.
-    async approvals(n) {
-      const [m, a] = await Promise.all([call("GET", `/merge_requests/${n}`), call("GET", `/merge_requests/${n}/approvals`)]);
-      return (a.approved_by ?? []).map((x) => ({ user: x.user?.username ?? "", state: "approved", sha: m.sha }));
-    },
-    async runs(q = {}) {
-      const qs = new URLSearchParams({ per_page: "30" });
-      if (q.ref) qs.set("ref", q.ref);
-      if (q.failed) qs.set("status", "failed");
-      return (await call("GET", `/pipelines?${qs}`)).map((p) => ({
-        id: String(p.id),
-        name: `pipeline ${p.id}`,
-        ref: p.ref,
-        sha: p.sha,
-        url: p.web_url,
-        at: p.created_at,
-        state: cs3(p.status)
-      }));
-    }
-  };
-}
-
 // src/forge/index.ts
-var adapters = { github, gitlab, azure, bitbucket };
+var adapters = { github };
 function createForge(ctx) {
   const make = adapters[ctx.binding.forge.adapter];
   if (!make) throw new Error(`unknown forge adapter: ${ctx.binding.forge.adapter}`);
@@ -8611,7 +8239,7 @@ function loadBinding(root) {
 }
 var ADAPTERS = {
   board: ["github", "jira", "linear", "local"],
-  forge: ["github", "gitlab", "azure", "bitbucket"],
+  forge: ["github"],
   vcs: ["git"]
 };
 var OPTIONS = {
@@ -8622,10 +8250,7 @@ var OPTIONS = {
     local: [[], []]
   },
   forge: {
-    github: [[], ["repo", "token_env", "review_token_env"]],
-    gitlab: [["base_url", "project", "token_env"], ["review_token_env"]],
-    azure: [["org_url", "project", "repo", "token_env"], ["review_token_env"]],
-    bitbucket: [["workspace", "repo", "token_env"], ["review_token_env"]]
+    github: [[], ["repo", "token_env", "review_token_env"]]
   },
   vcs: { git: [[], []] }
 };
@@ -8669,7 +8294,10 @@ function validateBinding(b) {
   if (!x || typeof x !== "object") return ["binding is empty"];
   if (x.version !== 2) p.push("version must be 2");
   if (!PROFILES.includes(x.profile)) p.push(`profile '${x.profile}' must be one of ${PROFILES.join("|")}`);
-  if (typeof x.owners?.factory !== "string" || !x.owners.factory) p.push("owners.factory must name the factory owner");
+  const who = (w) => typeof w === "string" && !!w || !!w && typeof w === "object" && typeof w.board === "string" && !!w.board && typeof w.forge === "string" && !!w.forge;
+  if (!who(x.owners?.factory)) p.push("owners.factory must name the factory owner (a name, or { board, forge })");
+  if (x.owners?.product !== void 0 && !who(x.owners.product)) p.push("owners.product must be a name, or { board, forge }");
+  if (Array.isArray(x.owners?.bots) && !x.owners.bots.every(who)) p.push("owners.bots entries must be names, or { board, forge }");
   if (!Array.isArray(x.paths?.factory) || !x.paths.factory.length || x.paths.factory.some((g) => typeof g !== "string")) p.push("paths.factory must list the factory path globs");
   if (!Array.isArray(x.owners?.bots) || !x.owners.bots.length) p.push("owners.bots must list the accounts the factory runs as");
   for (const k of REQUIRED) if (x[k] === void 0 || x[k] === null) p.push(`missing key: ${k}`);
@@ -8732,6 +8360,7 @@ function validateBinding(b) {
   for (const k of ["preview", "proofs_on_base", "evidence_check"]) if (x.commands?.[k] !== void 0 && typeof x.commands[k] !== "string") p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? "").includes("{run_id}")) p.push("traces.uri must contain {run_id}");
   if (x.executors && !x.executors.default) p.push("executors.default is missing");
+  if (x.heartbeat && !String(x.heartbeat.ticket ?? "").trim()) p.push("heartbeat.ticket is empty: create the heartbeat ticket and put its id here");
   return p;
 }
 function shippedOptions(envs, delivery = "release-line") {
@@ -8744,6 +8373,7 @@ export {
   createForge,
   createVcs,
   loadBinding,
+  ownersFor,
   parseCloses,
   shippedOptions,
   validateBinding

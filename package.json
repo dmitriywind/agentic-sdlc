@@ -38,7 +38,6 @@
     "trunk-based",
     "kanban",
     "github",
-    "gitlab",
     "jira",
     "linear",
     "claude-code-plugin"

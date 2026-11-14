@@ -11,7 +11,8 @@ Follow the common contract in [`sdlc`](../sdlc/SKILL.md). The spec is the ticket
 first line is `spec_marker` in the Full lane; in the Fast lane, the ticket's criteria and proof list.
 Read it with `board comments <id> --last 1 --marker <spec_marker> --trusted` (see
 [`sdlc`](../sdlc/SKILL.md) Trusted comments); with no trusted spec, a Full-lane ticket goes back
-to `shape`.
+to `shape`: `board move <id> Backlog --only-from <its status>` with one comment that names the missing
+spec, and stop.
 
 ## Steps
 

@@ -17,8 +17,10 @@ Follow the common contract in [`sdlc`](../sdlc/SKILL.md). What matters most come
 2. **Group.** Items that change the same behaviour or cannot ship apart merge into one surviving
    deliverable; the others are Cancelled with a pointer to it. Separate deliverables toward one
    outcome become sub-issues of an initiative (`board child <parent> <child>`), created or picked,
-   inside one milestone. An open parent whose children are all closed is closed: as not planned when
-   every child was Cancelled, else as completed (see [Sub-issues](../sdlc/references/board.md#sub-issues)). Done
+   inside one milestone. An open parent whose children are all closed is closed as
+   [Sub-issues](../sdlc/references/board.md#sub-issues) says: every child Cancelled, `board move <id> Cancelled`
+   and `board close <id> --reason not_planned`; else `board move <id> Done`, `board set <id> shipped
+   <the lowest Shipped among its Done children>` and `board close <id> --reason completed`. Done
    when every grouping is settled, before any shape.
 3. **Prioritise.** Order by user impact, risk reduction and dependency, blockers first. Set the
    Priority field from `priorities` and the milestone, per `paths.roadmap_doc`. Nice-to-have work

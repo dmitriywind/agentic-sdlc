@@ -9,6 +9,8 @@ owners:
   product: your-product-owner   # rules the product: narrative, priorities, P0, releases, production approval
   factory: your-factory-owner   # rules the factory: skills, binding, gates, guardrail learning proposals
   bots: [your-factory-bot]      # accounts the factory runs as; only their heartbeats and specs are trusted (github login, jira accountId, linear user id, local: local)
+  # When the board and the forge name a person differently (Jira or Linear with GitHub), give both:
+  #   product: { board: 5b10ac8d82e05b22cc7d4ef5, forge: ann }   bots: [{ board: 712020:abc, forge: factory-bot[bot] }]
 
 board:
   adapter: github               # github | jira | linear | local
@@ -37,15 +39,13 @@ board:
   signal_streams: [alert, feedback, owner, security, ci, deploy, maintenance] # label signal:<stream>; maintenance: dependency, advisory, end-of-life and expiry scanners
 
 forge:
-  adapter: github               # github | gitlab | azure | bitbucket
+  adapter: github               # github
   options:                      # adapter-specific; credentials only as env var names; validate rejects unknown keys
     # review_token_env: the review identity's credential. forge status and forge approve use it and nothing else;
     #   the implementer's token_env never posts a status, so an implementer cannot green its own review.
     # github:    { repo: my-org/my-repo, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
-    #            token_env (optional): passed to gh as GH_TOKEN; unset = gh's own login
-    # gitlab:    { project: group/project, base_url: https://gitlab.com, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
-    # azure:     { org_url: https://dev.azure.com/my-org, project: my-project, repo: my-repo, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
-    # bitbucket: { workspace: my-ws, repo: my-repo, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
+    #            token_env (optional): passed to gh as GH_TOKEN; unset = gh's own login. Give it Commit statuses:
+    #            no access (a fine-grained token): doctor warns on a classic token with repo scope
     {}
   review_identity: reviewer-account # the account behind review_token_env: posts the review status and the approving review
   human_approval: full-lane     # full-lane | always | never. Which product CRs need one approving review by a human
@@ -138,7 +138,9 @@ cycle:                          # Run one cycle (sdlc skill)
   dedupe_minutes: 10            # a second dispatch of the same skill and subject this soon is a double fire: skipped
 
 heartbeat:
-  ticket: "HEARTBEAT-1"         # the ticket that holds heartbeat comments; off the board
+  ticket: ""                    # id of the ticket that holds heartbeat comments, kept off the board. init sets it on a local
+                                # board; elsewhere create the ticket (`agentic-sdlc board create`, then remove it from the
+                                # project view) and put its id here
 
 learning:                       # the self-improvement loop
   every_cycles: 20              # run improve-factory every N cycles

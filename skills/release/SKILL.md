@@ -53,9 +53,8 @@ The Product owner approves the last environment; this skill never does.
    appeared since the proposal stops the cut. Then `board set <id> release_version <version>` and
    `board set <id> shipped "In release"` on each selected ticket still On <env before last>, before
    the cut, so a fast deploy can never be overwritten. Done when every ticket shows both.
-7. **Cut.** `agentic-sdlc forge cut <revision> <version>` where the forge runs a release workflow
-   (GitHub: the Product owner approves its Environment); otherwise `agentic-sdlc vcs cut <revision>
-   <version>` under the release credential. Never cut from a moving ref (`vcs.release_prefix` is
+7. **Cut.** `agentic-sdlc forge cut <revision> <version>`. It starts the release workflow, and the
+   Product owner approves its Environment. Never cut from a moving ref (`vcs.release_prefix` is
    applied by the verb). `forge cut` prints the release workflow run; read it with `forge runs` until it ends. When the
    cut fails or the Product owner rejects it, set the tickets back to On <env before last> and clear
    their version. The cut starts release CI. Done when the release line exists at that revision. Then

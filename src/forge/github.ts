@@ -19,12 +19,18 @@ export function github(ctx: AdapterContext): Forge {
   const view = async (n: string): Promise<CR> => {
     const p = JSON.parse(gh(['api', `${api}/pulls/${n}`]));
     const roll = JSON.parse(gh(['pr', 'view', n, '--json', 'statusCheckRollup'])).statusCheckRollup ?? [];
+    // A push starts the check suites for its sha, so the first suite's creation is the push time.
+    let pushedAt: string | undefined;
+    try { pushedAt = gh(['api', `${api}/commits/${p.head.sha}/check-suites`, '--jq', '[.check_suites[].created_at] | min // empty']).trim() || undefined; }
+    catch { /* no suites readable: unknown */ }
+    if (pushedAt && Number.isNaN(Date.parse(pushedAt))) pushedAt = undefined;
     return {
       n: String(p.number), url: p.html_url, title: p.title, source: p.head.ref, target: p.base.ref,
       headSha: p.head.sha, baseSha: p.base.sha, draft: !!p.draft,
       state: p.merged_at ? 'merged' : p.state === 'open' ? 'open' : 'closed',
       behind: p.mergeable_state === 'behind', mergeSha: p.merged_at ? p.merge_commit_sha : undefined, closes: parseCloses(p.body ?? ''),
       checks: roll.map((c: any) => ({ name: c.name ?? c.context, state: checkState(c) })), body: p.body ?? '', author: p.user?.login ?? '',
+      ...(pushedAt ? { pushedAt } : {}),
     };
   };
   return {

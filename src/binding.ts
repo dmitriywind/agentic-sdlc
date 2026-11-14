@@ -14,7 +14,7 @@ export function loadBinding(root: string): Binding {
 
 const ADAPTERS = {
   board: ['github', 'jira', 'linear', 'local'],
-  forge: ['github', 'gitlab', 'azure', 'bitbucket'],
+  forge: ['github'],
   vcs: ['git'],
 };
 /** Option keys each adapter reads: [required, optional]. Anything else is a typo the adapter would ignore. */
@@ -27,9 +27,6 @@ const OPTIONS: Record<string, Record<string, [string[], string[]]>> = {
   },
   forge: {
     github: [[], ['repo', 'token_env', 'review_token_env']],
-    gitlab: [['base_url', 'project', 'token_env'], ['review_token_env']],
-    azure: [['org_url', 'project', 'repo', 'token_env'], ['review_token_env']],
-    bitbucket: [['workspace', 'repo', 'token_env'], ['review_token_env']],
   },
   vcs: { git: [[], []] },
 };
@@ -56,7 +53,10 @@ export function validateBinding(b: Binding): string[] {
   if (!x || typeof x !== 'object') return ['binding is empty'];
   if (x.version !== 2) p.push('version must be 2');
   if (!PROFILES.includes(x.profile)) p.push(`profile '${x.profile}' must be one of ${PROFILES.join('|')}`);
-  if (typeof x.owners?.factory !== 'string' || !x.owners.factory) p.push('owners.factory must name the factory owner');
+  const who = (w: any) => (typeof w === 'string' && !!w) || (!!w && typeof w === 'object' && typeof w.board === 'string' && !!w.board && typeof w.forge === 'string' && !!w.forge);
+  if (!who(x.owners?.factory)) p.push('owners.factory must name the factory owner (a name, or { board, forge })');
+  if (x.owners?.product !== undefined && !who(x.owners.product)) p.push('owners.product must be a name, or { board, forge }');
+  if (Array.isArray(x.owners?.bots) && !x.owners.bots.every(who)) p.push('owners.bots entries must be names, or { board, forge }');
   if (!Array.isArray(x.paths?.factory) || !x.paths.factory.length || x.paths.factory.some((g: unknown) => typeof g !== 'string')) p.push('paths.factory must list the factory path globs');
   if (!Array.isArray(x.owners?.bots) || !x.owners.bots.length) p.push('owners.bots must list the accounts the factory runs as');
   for (const k of REQUIRED) if (x[k] === undefined || x[k] === null) p.push(`missing key: ${k}`);
@@ -119,6 +119,7 @@ export function validateBinding(b: Binding): string[] {
   for (const k of ['preview', 'proofs_on_base', 'evidence_check']) if (x.commands?.[k] !== undefined && typeof x.commands[k] !== 'string') p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? '').includes('{run_id}')) p.push('traces.uri must contain {run_id}');
   if (x.executors && !x.executors.default) p.push('executors.default is missing');
+  if (x.heartbeat && !String(x.heartbeat.ticket ?? '').trim()) p.push('heartbeat.ticket is empty: create the heartbeat ticket and put its id here');
   return p;
 }
 

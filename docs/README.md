@@ -8,7 +8,7 @@
 | [Components](architecture/components.md) | The parts and how they connect (diagrams). |
 | [Flows](architecture/flows.md) | The cycle, review, release, learning, routing, intake and hold flows (diagrams). |
 | [Roadmap](roadmap.md) | What comes next, in order. |
-| [Forges](forges.md) | Checks, approval and what each forge enforces natively, by gate, or approximately. |
+| [Forge](forges.md) | GitHub checks, approval, tokens, secrets and one-time setup. |
 | [Operating baseline](operating-baseline.md) | Team shapes, repo and board baseline, and how a product should operate in 2026-27 (recommendations). |
 | [The contract](../references/architecture.md) | Normative. Section 3 ports and gates, executors in `skills/sdlc/references/executors.md`, section 10 runtimes and profiles. |
 | [Stress test 2026-11-13](audits/2026-11-13-stress-test.md) | Nine journeys traced end to end; who writes each board field; breaks by priority; verdict per automation. |

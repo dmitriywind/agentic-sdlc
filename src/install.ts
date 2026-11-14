@@ -8,7 +8,8 @@ import { BINDING_PATH, bindingWarnings, loadBinding, validateBinding } from './b
 import { createBoard } from './board/index.ts';
 import { createForge } from './forge/index.ts';
 import { createVcs } from './vcs/index.ts';
-import type { PortCli } from './ports.ts';
+import { createLocalBoard } from './board/local.ts';
+import type { AdapterContext, PortCli } from './ports.ts';
 
 const START = '<!-- agentic-sdlc:start -->';
 const END = '<!-- agentic-sdlc:end -->';
@@ -18,7 +19,7 @@ Never duplicate the process here: the skills own it, the binding owns the projec
 ${END}`;
 const SKILLS_LOCK = '.agents/skills.lock.json';
 const TIERS = ['fast', 'balanced', 'deep'];
-const FORGES = ['github', 'gitlab', 'azure', 'bitbucket'];
+const FORGES = ['github'];
 
 /** The folder holding package.json, walking up from this file. AGENTIC_SDLC_PACKAGE overrides it (tests). */
 export function packageRoot(env: NodeJS.ProcessEnv = process.env): string {
@@ -190,7 +191,7 @@ Do not start subagents.
   log.push('headless runs load it from the pinned package: claude -p ... --plugin-dir node_modules/agentic-sdlc');
 }
 
-function init(root: string, argv: string[], log: string[]) {
+async function init(root: string, argv: string[], log: string[]) {
   const f = flagsOf(argv);
   const board = f.board ?? 'github', forge = f.forge ?? 'github', vcs = f.vcs ?? 'git', harness = f.harness ?? 'generic';
   const force = f.force === 'true';
@@ -229,15 +230,20 @@ function init(root: string, argv: string[], log: string[]) {
     if (profile === 'enterprise') {
       doc.set('traces', { uri: '.agents/runtime/traces/{run_id}.jsonl' }); // placeholder: point it at org storage
     }
+    if (board === 'local') {
+      // The local board can hold the heartbeat ticket now; Cancelled keeps it out of every route.
+      const hb = await createLocalBoard({ root } as AdapterContext).create({ title: 'Heartbeat', body: 'agentic-sdlc heartbeat comments. Not a ticket.', status: 'Cancelled' });
+      doc.setIn(['heartbeat', 'ticket'], hb.id);
+      log.push(`created heartbeat ticket ${hb.id} on the local board`);
+    } else log.push('create the heartbeat ticket on the board and put its id in heartbeat.ticket');
     mkdirSync(dirname(bindingFile), { recursive: true });
     writeFileSync(bindingFile, String(doc));
     log.push(`wrote ${BINDING_PATH}`);
   }
 
   const gates = join(pkg, 'templates', 'gates');
-  const first = (dir: string) => join(dir, readdirSync(dir).filter((n) => statSync(join(dir, n)).isFile()).sort()[0]);
   const dir = need(pkg, `templates/gates/${forge}`);
-  if (forge === 'github') {
+  {
     for (const n of readdirSync(dir).filter((n) => n.endsWith('.yml'))) copyFile(join(dir, n), join(root, '.github', 'workflows', n), force, log);
     if (existsSync(join(dir, 'pull_request_template.md'))) copyFile(join(dir, 'pull_request_template.md'), join(root, '.github', 'pull_request_template.md'), force, log);
     if (existsSync(join(dir, 'ruleset.trunk.json'))) {
@@ -249,13 +255,6 @@ function init(root: string, argv: string[], log: string[]) {
       copyFile(join(dir, 'ruleset.release.json'), join(root, '.github', 'rulesets', 'release.json'), force, log);
       log.push('import .github/rulesets/release.json (Rules > Rulesets) and add the release bot (app or role) as a bypass actor; set its include to your vcs.release_prefix');
     }
-  }
-  else if (forge === 'gitlab') copyFile(first(dir), join(root, '.gitlab', 'agentic-sdlc.yml'), force, log);
-  else if (forge === 'azure') copyFile(first(dir), join(root, 'azure-pipelines.agentic-sdlc.yml'), force, log);
-  else {
-    const dest = join(root, 'bitbucket-pipelines.yml');
-    if (existsSync(dest)) log.push(`${dest} exists: merge ${first(dir)} into it by hand`);
-    else copyFile(first(dir), dest, false, log);
   }
   if (existsSync(join(gates, 'hooks', 'pre-push'))) {
     copyFile(join(gates, 'hooks', 'pre-push'), join(root, '.agents', 'hooks', 'pre-push'), force, log);
@@ -307,7 +306,7 @@ const redact = (msg: string, env: NodeJS.ProcessEnv) => {
 export function trunkProtection(b: any, ctx: any): string[] {
   const repo = b.forge.options?.repo;
   const reminder = 'warn: pin each required check to the CI integration that posts it, so no other token can post it';
-  if (b.forge.adapter !== 'github' || !repo) return ['trunk protection: check manually', reminder];
+  if (!repo) return ['trunk protection: check manually', reminder];
   let rules: any[];
   try { rules = JSON.parse(ctx.exec('gh', ['api', `repos/${repo}/rules/branches/${b.vcs.trunk}`])); }
   catch { return ['trunk protection: check manually (cannot read the trunk rules)', reminder]; }
@@ -318,10 +317,24 @@ export function trunkProtection(b: any, ctx: any): string[] {
     ...(loose.length ? [`warn: required checks not pinned to an app (integration_id): ${loose.join(', ')}; any token with status access can post them`] : [])];
 }
 
+/** A classic implementer token with repo scope can post any commit status, so only pinned checks stop it. */
+export function implementerToken(b: any, ctx: { env?: Record<string, string | undefined>; exec: (c: string, a: string[], o?: any) => string }): string | undefined {
+  const name = b.forge.options?.token_env;
+  const token = name ? ctx.env?.[name] : undefined;
+  let head: string;
+  try { head = ctx.exec('gh', ['api', '-i', 'user'], token ? { env: { ...ctx.env, GH_TOKEN: token } } : {}); }
+  catch { return undefined; } // forge.list reports the failure
+  const scopes = /^x-oauth-scopes:(.*)$/im.exec(head)?.[1].split(',').map((s) => s.trim()) ?? [];
+  const wide = scopes.filter((s) => s === 'repo' || s === 'repo:status');
+  return wide.length
+    ? `warn: the implementer token (${name ?? 'gh login'}) has scope ${wide.join(', ')}, so code a cycle runs can post commit statuses; use a fine-grained token with Commit statuses: no access, and pin every required check to its app`
+    : undefined;
+}
+
 /** The stock delivery workflow's push branches must name this project's trunk and release lines. */
 export function deliveryWorkflow(b: any, root: string): string | undefined {
   const f = join(root, '.github', 'workflows', 'agentic-sdlc-delivery.yml');
-  if (b.forge.adapter !== 'github' || !existsSync(f)) return undefined;
+  if (!existsSync(f)) return undefined;
   const wf = parse(readFileSync(f, 'utf8'));
   const br: string[] = wf?.on?.push?.branches ?? [];
   if (!br.includes(b.vcs.trunk))
@@ -341,7 +354,7 @@ export const cli: PortCli = async (argv, ctx) => {
   try {
     if (verb === 'init') {
       const log: string[] = [];
-      init(ctx.root, rest, log);
+      await init(ctx.root, rest, log);
       log.forEach(out);
       return 0;
     }
@@ -363,8 +376,8 @@ export const cli: PortCli = async (argv, ctx) => {
       ];
       let bad = 0;
       trunkProtection(binding, ctx).forEach(out);
-      if (['gitlab', 'azure', 'bitbucket'].includes(binding.forge.adapter))
-        out(`warn: ${binding.forge.adapter} gates run from pipeline YAML a contributor with push access can edit, so review and human-approval statuses can be forged by them; see docs/forges.md (Secret exposure)`);
+      const it = implementerToken(binding, ctx);
+      if (it) out(it);
       const dw = deliveryWorkflow(binding, ctx.root);
       if (dw) { out(dw); if (dw.startsWith('fail')) bad++; }
       for (const [name, run] of probes) {
@@ -373,7 +386,7 @@ export const cli: PortCli = async (argv, ctx) => {
       }
       return bad ? 1 : 0;
     }
-    console.error('usage: agentic-sdlc init [--board ...] [--forge github|gitlab|azure|bitbucket] [--vcs git] [--harness ...] [--profile individual|enterprise] [--force] | validate | doctor');
+    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|enterprise] [--force] | validate | doctor');
     return 2;
   } catch (e) {
     console.error(redact((e as Error).message, ctx.env));

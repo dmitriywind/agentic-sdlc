@@ -13,7 +13,7 @@ const good = {
   forge: { adapter: 'github' }, vcs: { adapter: 'git', change_pattern: 'ticket/<ticket>', trunk: 'main', release_prefix: 'release/', factory_change_pattern: 'factory/<name>', tag_prefix: 'v' },
   models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: { factory: ['.agents/**'] }, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
   priorities: [], p0_setters: [], max_subissue_depth: 1, spec_marker: 'spec.md', stall_minutes: 60, parallel_agents: 1,
-  cycle: {}, heartbeat: {}, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
+  cycle: {}, heartbeat: { ticket: '1' }, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
   executors: { default: { kind: 'harness' } },
 };
 
@@ -44,12 +44,12 @@ test('validateBinding requires the factory owner and factory path globs', () => 
 test('validateBinding rejects unknown option keys and missing required ones per adapter', () => {
   const b = structuredClone(good) as any;
   b.board = { ...b.board, adapter: 'jira', options: { base_url: 'u', project: 'P', email_env: 'E', token_env: 'T' } };
-  b.forge = { adapter: 'gitlab', options: { project: 'g/p', host: 'h', token_env: 'T' } };
+  b.forge = { adapter: 'github', options: { repo: 'o/r', host: 'h' } };
   b.vcs.options = { remote: 'origin' };
   const p = validateBinding(b as Binding).join('\n');
-  for (const s of ['board.options.project_key is required', 'board.options.project is not read', 'forge.options.base_url is required', 'forge.options.host is not read', 'vcs.options.remote is not read']) assert.match(p, new RegExp(s));
+  for (const s of ['board.options.project_key is required', 'board.options.project is not read', 'forge.options.host is not read', 'vcs.options.remote is not read']) assert.match(p, new RegExp(s));
   b.board.options = { base_url: 'u', project_key: 'P', email_env: 'E', token_env: 'T' };
-  b.forge.options = { project: 'g/p', base_url: 'https://gl', token_env: 'T', review_token_env: 'R' };
+  b.forge.options = { repo: 'o/r', token_env: 'T', review_token_env: 'R' };
   delete b.vcs.options;
   assert.deepEqual(validateBinding(b as Binding), []);
 });
@@ -136,7 +136,7 @@ test('v2 is Git only: hg, p4 and swarm adapters are rejected', () => {
   b.vcs.adapter = 'hg'; b.forge.adapter = 'swarm';
   const p = validateBinding(b).join('\n');
   assert.match(p, /vcs.adapter 'hg' is not one of git/);
-  assert.match(p, /forge.adapter 'swarm' is not one of github\|gitlab\|azure\|bitbucket/);
+  assert.match(p, /forge.adapter 'swarm' is not one of github$/m);
 });
 
 test('validateBinding requires the vcs keys the gates and hook dereference', () => {
@@ -183,4 +183,19 @@ test('bindingWarnings: a GitHub heartbeat ticket must be a number; env labels mu
   assert.doesNotMatch(w, /env:staging/);
   b.vcs.release_prefix = '';
   assert.match(validateBinding(b).join('\n'), /release_prefix must not be empty/);
+});
+
+test('validateBinding: an owner is a name or { board, forge }', () => {
+  const b = structuredClone(good) as any;
+  b.owners = { product: { board: 'acc-1', forge: 'ann' }, factory: { board: 'acc-2', forge: 'fo' }, bots: ['bot', { board: 'acc-3', forge: 'bot[bot]' }] };
+  assert.deepEqual(validateBinding(b as Binding), []);
+  b.owners = { product: { board: 'acc-1' }, factory: { forge: 'fo' }, bots: [{ board: '', forge: 'x' }] };
+  const p = validateBinding(b as Binding).join(String.fromCharCode(10));
+  for (const k of ['owners.factory', 'owners.product', 'owners.bots']) assert.match(p, new RegExp(k));
+});
+
+test('validateBinding: an empty heartbeat.ticket is a problem', () => {
+  const b = structuredClone(good) as any;
+  b.heartbeat = { ticket: '' };
+  assert.match(validateBinding(b as Binding).join(String.fromCharCode(10)), /heartbeat.ticket is empty/);
 });

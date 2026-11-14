@@ -11,13 +11,12 @@ Setup step everywhere: `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_
 |---|---|---|
 | GitHub Actions + Claude Code CLI | `github-actions-claude.yml` | individual (OAuth token) or enterprise (API key) |
 | GitHub Actions + Codex CLI | `github-actions-codex.yml` | enterprise |
-| GitLab scheduled pipeline + Claude Code CLI | `gitlab-ci-cycle.yml` | individual or enterprise |
 | Claude cloud scheduled task (routine) | `claude-routine.md` | individual |
 | Claude Managed Agents scheduled deployment | `claude-managed-deployment.json` (below) | enterprise |
 | Cursor automation | `cursor-automation.md` | individual or enterprise |
 | Antigravity remote agent / Gemini API | `antigravity-remote-agent.md` | individual or enterprise |
 | Grok | `grok.md` | individual or enterprise |
-| Other (Azure, Bitbucket, cron) | any of the above, adapted | either |
+| Other (cron on your own host) | any of the above, adapted | either |
 
 Secrets: the agent's own credential plus `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN` (or the names the binding gives); `AGENTIC_REVIEW_TOKEN` in the review run only.
 Every `learning.every_cycles` cycles the sdlc skill runs `improve-factory`; the schedule does nothing extra.

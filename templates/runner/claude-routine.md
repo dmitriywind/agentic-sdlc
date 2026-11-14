@@ -16,4 +16,4 @@ Plugin: the prompts start with `/agentic-sdlc:sdlc`. Enable the plugin for the r
    `Authorization: Bearer <per-task token>`, `anthropic-beta: experimental-cc-routine-2026-04-01`, optional body `text`.
    Limit: 30 fires per hour per task.
 6. Branches pushed by a routine carry a `claude/` prefix: allow that prefix in the forge rules and trunk gate.
-7. Cloud sessions run only against GitHub; for GitLab or Bitbucket use `gitlab-ci-cycle.yml` instead.
+7. Cloud sessions run against GitHub, the one forge agentic-sdlc supports.

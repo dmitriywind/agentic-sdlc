@@ -77,3 +77,29 @@ test('sees through command substitution', () => {
   assert.equal(run('echo `git push origin main`'), 2);
   assert.equal(run('echo $(agentic-sdlc forge approve 1)'), 2);
 });
+
+test('a push from a checkout of the trunk with at most one argument is blocked', () => {
+  const d = repo('main', 'vcs:\n  trunk: main\n');
+  spawnSync('git', ['checkout', 'main'], { cwd: d });
+  for (const c of ['git push', 'git push origin', 'git push -u origin']) assert.equal(run(c, {}, d), 2, c);
+  assert.equal(run('git push origin feat', {}, d), 0);
+});
+
+test('input that is not JSON is let through', () => {
+  const r = spawnSync('node', [guard], { input: 'not json {', encoding: 'utf8' });
+  assert.equal(r.status, 0);
+});
+
+test('pre-push: branch-names --stdin-prepush checks pushed branches and skips deletes', () => {
+  const bin = fileURLToPath(new URL('../src/bin.ts', import.meta.url));
+  const d = mkdtempSync(join(tmpdir(), 'prepush-'));
+  mkdirSync(join(d, '.agents'));
+  writeFileSync(join(d, '.agents', 'binding.yml'), 'vcs:\n  trunk: main\n  release_prefix: release/\n  change_pattern: "<ticket>-<name>"\n  factory_change_pattern: "factory/<name>"\n');
+  const gate = (lines: string) => spawnSync('node', [bin, '--root', d, 'gate', 'branch-names', '--stdin-prepush'], { input: lines, encoding: 'utf8' });
+  const sha = 'a'.repeat(40), zero = '0'.repeat(40);
+  assert.equal(gate(`refs/heads/12-fix-x ${sha} refs/heads/12-fix-x ${zero}\n`).status, 0);
+  const bad = gate(`refs/heads/wip ${sha} refs/heads/wip ${zero}\n`);
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /branch name not allowed: wip/);
+  assert.equal(gate(`(delete) ${zero} refs/heads/wip ${sha}\n`).status, 0, 'a delete is not checked');
+});

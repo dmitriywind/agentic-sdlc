@@ -63,6 +63,12 @@ Feature: Gate shipped
     And release_version is cleared
     And a Signal with the labels "signal:deploy" and board.labels.human opens
 
+  # Source: src/gates.ts, "shipped" (back is opts[0] when there is one environment)
+  Scenario: A failure with one environment returns the tickets to Not shipped
+    Given product.environments names one environment
+    When "gate shipped" runs for it with --result failure
+    Then Shipped is "Not shipped" on the tickets of the failed revision
+
   # Source: src/gates.ts, "shipped" (reset only tickets in the failed revision)
   # Proof: test/gates.test.ts "shipped: a last-env failure resets only tickets whose CRs are in the failed sha"
   Scenario: Rollback resets only tickets in the failed revision
@@ -146,3 +152,12 @@ Feature: Gate shipped
     Given a ticket On production and a ticket On staging
     When "gate shipped staging --result rolled-back --sha <older>" runs
     Then only the ticket On staging steps back
+
+  # Source: src/gates.ts, "mergeShas"
+  # Proof: test/gates.test.ts "shipped: a merge the search index does not show yet is found in the merged list"
+  Scenario: A merge the search index does not show yet still ships
+    Given a Done ticket whose CR merged seconds ago
+    And the forge search finds no merged CR that closes the ticket
+    When "gate shipped staging --result success --sha <sha>" runs
+    Then the gate finds the merge in the newest merged CRs
+    And the ticket is On staging

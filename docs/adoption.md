@@ -15,16 +15,13 @@ flowchart TD
   HC --> B["Where do tickets live?"]
   B --> BC["--board github | jira | linear | local"]
   BC --> F["Where do CRs live?"]
-  F -->|"GitHub"| FG["--forge github<br/>(every gate holds its secret safely)"]
-  F -->|"GitLab, Azure, Bitbucket"| FO["--forge gitlab | azure | bitbucket<br/>(read the secret warning below)"]
+  F --> FG["--forge github<br/>(the one supported forge)"]
   FG --> S["Which scheduler?"]
-  FO --> S
   S --> SC["templates/runner/routine.md<br/>picks the template"]
 ```
 
-Warning: on GitLab, Azure and Bitbucket the CR's own pipeline file can read the gate secrets.
-`doctor` warns about it, and [forges.md](forges.md) states what each forge enforces. Until the
-[roadmap](roadmap.md) item lands, give those gates a token with the least scope that works.
+The forge is GitHub only. GitLab, Azure DevOps and Bitbucket were removed in 2.0.0-alpha.5: their
+gates ran from a pipeline file the CR could change. See [forges.md](forges.md).
 
 ## Adopt on one repo
 

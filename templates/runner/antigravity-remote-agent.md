@@ -17,4 +17,4 @@ Enterprise (Gemini API Antigravity agent, preview):
 3. Triggers: a cron schedule (defaults: 5 consecutive failures, 600 s timeout). Cap spend with `max_total_tokens`. No webhooks are documented.
 4. Prompt: the text of `cycle-prompt.md` below the `---` line; a second interaction, started by the cycle when it ends, sends `review-prompt.md` with the review token as its only extra secret. Unknown: the request fields for repo access and secrets (set: per the Gemini API docs).
 
-Not found: GitHub or GitLab issue/PR triggers for Antigravity.
+Not found: GitHub issue/PR triggers for Antigravity.

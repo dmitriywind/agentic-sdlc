@@ -6,7 +6,7 @@ Secrets (cloud agent environment secrets; set: where, per cursor.com/agents; no 
 - cycle environment: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_SDLC_UNATTENDED=1. Never AGENTIC_REVIEW_TOKEN.
 - review environment: the same plus AGENTIC_REVIEW_TOKEN.
 
-1. Connect the repo (GitHub, GitLab, Bitbucket Cloud or Azure DevOps are supported).
+1. Connect the GitHub repo.
 2. Environment: `.cursor/environment.json` (Dockerfile or snapshot); run `sh .agents/runner-setup.sh` as its setup step.
 3. MCP: `init --harness cursor` writes the project `.cursor/mcp.json`; cloud agents use HTTP and stdio MCP configured on cursor.com/agents (set: confirm the stdio server is picked up there).
 4. Skills: `.agents/skills/` is a project skill path, but only `~/.cursor/skills/` is documented as syncing to cloud agents. Unknown whether repo skills load in the cloud: test one cycle.

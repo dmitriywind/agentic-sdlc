@@ -13,7 +13,7 @@ stays off the board and outside these rules.
 | Ready | The implementation queue. One deliverable within the size limit, criteria and lane set, spec attached in the Full lane. | Shape checklist passed, no open blocker. | An implementer claims it. | shape |
 | In progress | Implementing on one short-lived change line. | Claimed, change line started from the trunk. | Draft CR open and closing its ticket, fast check green. | implement-spec; review-pr when it sends a CR back |
 | In review | A CR is open, draft or ready. A draft is checked against the requirements; a ready CR waits on CI, approvals and auto-merge. | CR opened, linked to the ticket. | Merged to the trunk. | implement-spec after it opens the CR or pushes rework; implement-spec for a CR a person opened |
-| Done | Merged to the trunk. Where the code runs is the Shipped field. | Merge on the trunk. | End. A later failure never moves it. | gate `merged` on the trunk push; gate `shipped` when a deploy reports first |
+| Done | Merged to the trunk. Where the code runs is the Shipped field. | Merge on the trunk. | End. A later failure never moves it. | gate `merged` on the trunk push; gate `shipped` when a deploy reports first; backlog-grooming for an initiative whose children are all closed (it has no CR) |
 | Cancelled | Rejected, superseded, will not fix. | A reason comment. | End; closed as not planned. | triage-signal, backlog-grooming, shape (failure that does not reproduce, with evidence), Product owner |
 
 ## Open blocker
@@ -38,5 +38,6 @@ review sends it back. Red CI puts the CR back to draft; the Status stays In revi
 - A rollback (`gate shipped <env> --result rolled-back --sha <revision now running>`) steps the
   tickets not in that revision back one environment. A model pin, a halted phased rollout or a
   feature-flag kill reports the same way. A later failure never moves the Status.
-- A release failure returns its tickets to On <the environment before the last>, clears the
+- A release failure returns its tickets to On <the environment before the last> (Not shipped when
+  there is one environment), clears the
   Release Version, and opens a Signal held with `needs-human` when the last environment failed.

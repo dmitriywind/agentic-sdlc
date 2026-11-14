@@ -39,7 +39,6 @@ Template: [`templates/runner/github-actions-codex.yml`](../../templates/runner/g
 - `openai/codex-action@v1` with `openai-api-key`: wraps `codex exec`; inputs `prompt`, `sandbox`, `model`, `effort`, `safety-strategy` (default drops sudo), `allow-users`; output `final-message`. [docs](https://learn.chatgpt.com/docs/github-action)
 - `codex exec` in any job runner with `CODEX_API_KEY` for the run. [docs](https://learn.chatgpt.com/docs/non-interactive-mode)
 - Team Tasks run in the cloud through a team service account ([docs](https://learn.chatgpt.com/docs/automations)).
-- GitLab, Azure and Bitbucket: run `codex exec` in the forge's CI, same as [`templates/runner/gitlab-ci-cycle.yml`](../../templates/runner/gitlab-ci-cycle.yml) with the Codex command.
 
 How `executors` kinds map:
 

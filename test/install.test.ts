@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, wri
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cli, deliveryWorkflow, trunkProtection, validate } from '../src/install.ts';
+import { cli, deliveryWorkflow, implementerToken, trunkProtection, validate } from '../src/install.ts';
 import { fakeCtx } from './helpers.ts';
 
 const w = (p: string, s: string) => { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, s); };
@@ -121,7 +121,7 @@ test('validate prints warn: lines and exits 0 when only warnings exist', async (
     forge: { adapter: 'github' }, vcs: { adapter: 'git', change_pattern: 'ticket/<ticket>', trunk: 'main', release_prefix: 'release/', factory_change_pattern: 'factory/<name>', tag_prefix: 'v' },
     models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: { factory: ['.agents/**'] }, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
     priorities: [], p0_setters: [], max_subissue_depth: 1, spec_marker: 'spec.md', stall_minutes: 60, parallel_agents: 1,
-    cycle: {}, heartbeat: {}, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
+    cycle: {}, heartbeat: { ticket: '1' }, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
     executors: { default: { kind: 'harness' }, bot: { kind: 'assign', user: 'coding-bot' } },
   };
   writeFileSync(join(root, '.agents/binding.yml'), stringify(good));
@@ -221,13 +221,13 @@ test('init --harness cursor writes .cursor/mcp.json; unknown harness fails', asy
   assert.equal(await quiet(() => cli(['init', '--harness', 'nope'], ctx)), 1);
 });
 
-test('doctor: unpinned required checks warn; non-GitHub gets a reminder', () => {
+test('doctor: unpinned required checks warn; no repo gets a reminder', () => {
   const b = { forge: { adapter: 'github', options: { repo: 'o/r' } }, vcs: { trunk: 'main' } };
   const rules = [{ type: 'required_status_checks', parameters: { required_status_checks: [{ context: 'Required', integration_id: 15368 }, { context: 'review' }] } }];
   const out = trunkProtection(b, { exec: () => JSON.stringify(rules) });
   assert.match(out[0], /^ok/);
   assert.match(out[1], /not pinned.*: review;/);
-  assert.ok(trunkProtection({ ...b, forge: { adapter: 'gitlab', options: {} } }, {}).some((m) => m.startsWith('warn: pin')));
+  assert.ok(trunkProtection({ ...b, forge: { adapter: 'github', options: {} } }, {}).some((m) => m.startsWith('warn: pin')));
 });
 
 test('plugin guard hook blocks trunk pushes and forge approve outside the review role', () => {
@@ -301,4 +301,25 @@ test('doctor: env.DELIVERY must match product.delivery; continuous needs no rele
   const b = (delivery?: string) => ({ forge: { adapter: 'github' }, vcs: { trunk: 'main' }, product: { delivery } });
   assert.match(deliveryWorkflow(b('continuous'), root)!, /^ok   delivery workflow/);
   assert.match(deliveryWorkflow(b(), root)!, /^fail delivery workflow: env\.DELIVERY/);
+});
+
+test('init --board local creates the heartbeat ticket off every route and sets heartbeat.ticket', async () => {
+  const root = fixture();
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  assert.equal(await quiet(() => cli(['init', '--board', 'local'], ctx)), 0);
+  const db = JSON.parse(readFileSync(join(root, '.agents/board.json'), 'utf8'));
+  assert.deepEqual(db.items.map((i: any) => [i.id, i.title, i.status]), [['1', 'Heartbeat', 'Cancelled']]);
+  assert.match(readFileSync(join(root, '.agents/binding.yml'), 'utf8'), /ticket: "?1"?/);
+});
+
+test('doctor: a classic implementer token with repo scope warns; a fine-grained one is quiet', () => {
+  const b = { forge: { adapter: 'github', options: { token_env: 'IMPL' } } };
+  const seen: any[] = [];
+  const exec = (scopes?: string) => (_c: string, a: string[], o: any = {}) => { seen.push([a, o.env?.GH_TOKEN]); return `HTTP/2.0 200 OK\n${scopes !== undefined ? `X-Oauth-Scopes: ${scopes}\n` : ''}\n{}`; };
+  assert.match(implementerToken(b, { env: { IMPL: 'x' }, exec: exec('read:org, repo, workflow') })!, /^warn: the implementer token \(IMPL\) has scope repo/);
+  assert.deepEqual(seen[0], [['api', '-i', 'user'], 'x']);
+  assert.match(implementerToken(b, { env: {}, exec: exec('repo:status') })!, /repo:status/);
+  assert.equal(implementerToken(b, { env: {}, exec: exec('read:org') }), undefined);
+  assert.equal(implementerToken(b, { env: {}, exec: exec() }), undefined);
+  assert.equal(implementerToken(b, { env: {}, exec: () => { throw new Error('401'); } }), undefined);
 });

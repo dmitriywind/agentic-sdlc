@@ -82,6 +82,7 @@ Feature: Push guard
     Then the hook exits with code 2
 
   # Source: hooks/guard.mjs, trunk check (no refspec)
+  # Proof: test/guard.test.ts "a push from a checkout of the trunk with at most one argument is blocked"
   Scenario: A push from a checkout of the trunk is blocked
     Given the current branch is the trunk
     When the agent runs "git push" with at most one argument
@@ -89,12 +90,14 @@ Feature: Push guard
     And the agent sees a message to start a change line and open a CR
 
   # Source: hooks/guard.mjs, input parse
+  # Proof: test/guard.test.ts "input that is not JSON is let through"
   Scenario: Input that is not JSON is let through
     Given the hook receives input that is not valid JSON
     When the hook starts
     Then the hook exits with code 0
 
   # Source: templates/gates/hooks/pre-push
+  # Proof: test/guard.test.ts "pre-push: branch-names --stdin-prepush checks pushed branches and skips deletes"
   Scenario: The pre-push hook runs the branch-names gate
     Given the project enabled the hook with "git config core.hooksPath .agents/hooks"
     When a developer pushes a branch

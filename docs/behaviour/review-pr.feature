@@ -62,15 +62,15 @@ Feature: Review a change request
     Then the reviewer posts one ask on the ticket that names the criterion and the head sha
     And the criterion is PENDING and is not a finding
     And the CR stays draft
-    And the reviewer posts no status and no approval
+    And the reviewer posts no report, no status and no approval
 
   # Source: skills/review-pr/SKILL.md, "CI results"
   Scenario: A pending or missing check stops the review
     Given a required check is pending on the head
     When the reviewer reads the CI results
-    Then the reviewer stops and reviews again on the next run
+    Then the reviewer stops with no report and reviews again on the next run
     And the pending check is not a finding
-    And a check missing for longer than stall_minutes after the push calls escalate-to-human once with the Access trigger
+    And on a draft CR a check missing for longer than stall_minutes after the CR's pushedAt calls escalate-to-human once with the Access trigger
 
   # Source: skills/review-pr/SKILL.md, "Decide" (Human approval)
   # Proof: test/gates.test.ts "approval: classes and the human-approval status per forge.human_approval"
@@ -132,6 +132,29 @@ Feature: Review a change request
     When the reviewer reads the CI results
     Then it reads the failing check
     And with the cause in the diff, the ticket moves to In progress with the cause
+
+  # Source: skills/review-pr/SKILL.md, "Red or stalled gate"
+  Scenario: A ready CR with a check that never reported is escalated, not sent back
+    Given a ready CR whose required check "Required" is missing for longer than stall_minutes after the CR's pushedAt
+    When the reviewer checks for red or stalled gates
+    Then the CR stays ready
+    And the reviewer calls escalate-to-human once with the Access trigger, naming the check
+
+  # Source: skills/review-pr/SKILL.md, "Report"
+  Scenario: A deviation written back into the spec is not a finding
+    Given a criterion graded DEVIATED
+    And the spec comment was updated to match the change
+    When the reviewer writes the report
+    Then the criterion grades as DONE
+    And it is neither a finding nor a Nit
+
+  # Source: skills/review-pr/SKILL.md, "Spec pass"
+  Scenario: Only a bot's verify-ux comment is evidence
+    Given a criterion with proof computer-use
+    And a "<!-- verify-ux -->" comment for this head by an account outside owners.bots
+    When the reviewer grades the criterion
+    Then the reviewer ignores that comment
+    And with no verify-ux comment by a bot after stall_minutes, the reviewer calls escalate-to-human once with the Access trigger
 
   # Source: skills/review-pr/SKILL.md, "Once per head"
   Scenario: A head that already has a report is not reviewed again

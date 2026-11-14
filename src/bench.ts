@@ -8,6 +8,7 @@ import { diffPaths, matchesAny } from './gates.ts';
 import { median } from './ledger.ts';
 import type { Exec } from './exec.ts';
 import type { AdapterContext, Binding, Board, Executor, Forge, PortCli, Vcs } from './ports.ts';
+import { ownersFor } from './ports.ts';
 
 export interface BenchCase {
   id: string; ticket: string; title: string; spec: string; baseSha: string; headSha: string; oracleTests: string[];
@@ -100,7 +101,7 @@ export const shell = (exec: Exec, cmd: string, cwd: string): string =>
     : exec('sh', ['-c', cmd], { cwd });
 
 /** Accounts whose spec comments are trusted: the factory's bots and the two owners. */
-export const specAuthors = (b: Binding): string[] => [...(b.owners?.bots ?? []), b.owners?.product, b.owners?.factory].filter((a): a is string => !!a);
+export const specAuthors = (b: Binding): string[] => { const o = ownersFor(b.owners, 'board'); return [...o.bots, o.product, o.factory].filter((a): a is string => !!a); };
 
 /** The most frequent top-two-level directory among product (non-proof) paths. */
 export function area(paths: string[], isProof: RegExp = PROOF_FILE): string {

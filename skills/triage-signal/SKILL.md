@@ -37,8 +37,9 @@ questions; a part missing is written as "none" when triaged.
    - Backlog: accept. Real and accepted. Add label `bug` or `feature`, set the Priority (see
      [Board](../sdlc/references/board.md#board)), and set the milestone: the earliest open one, unless the
      signal says otherwise.
-   - Cancelled: decline (already fixed: name the change; or noise) or duplicate. Move the links and
-     evidence to the first ticket, then `board close <id> --reason not_planned`.
+   - Cancelled: decline or duplicate, then `board close <id> --reason not_planned`. Duplicate: move
+     the links and evidence to the first ticket. Already fixed: the comment names the change; the
+     evidence stays. Noise: the comment says why; the evidence stays.
    - Ideas: a concept or a snooze, plausible but unbacked. Place it and stop; a human works it.
    A request asking "why can't I do X" means X is wanted. Done when the board shows the new Status.
 

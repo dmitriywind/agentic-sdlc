@@ -23,9 +23,9 @@ meaning of each verb is unchanged. Write bodies to a file and pass `--body-file`
 | Start a change line from the trunk | `vcs start <name>` (name per `vcs.change_pattern`) |
 | Where am I, what changed, merge base | `vcs head`, `vcs changed [--since <rev>]`, `vcs base` |
 | Publish the change line | `vcs push` |
-| Cut a release line at a revision | `vcs cut <rev> <release>` |
+| Cut a release line at a revision | `forge cut <revision> <version>` (the release workflow runs `vcs cut`) |
 | Open the draft CR | `forge open --source <b> --title <t> --body-file <f> --draft` |
-| Read a CR (head, `closes`, checks, behind, `mergeSha`, `author`) | `forge view <n>` |
+| Read a CR (head, `closes`, checks, behind, `mergeSha`, `author`, `pushedAt`) | `forge view <n>` |
 | Find the CR of a revision | `forge view --sha <sha>` |
 | Last release tag | `vcs tags --prefix <vcs.tag_prefix>` (first row) |
 | Read the diff | `forge diff <n>` |

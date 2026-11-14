@@ -254,6 +254,13 @@ test('approval: classes and the human-approval status per forge.human_approval',
   assert.equal(await st('tune'), 'tuning:success');
   assert.equal(await st('guard'), 'guardrail:pending'); // a human, but not owners.factory
   assert.equal(await st('guardok'), 'guardrail:success');
+  // An owner with { board, forge } approves with the forge name; the board name approves nothing.
+  f.d.binding = { ...f.d.binding, owners: { factory: { board: 'acc-7', forge: 'fo' }, bots: [{ board: 'acc-bot', forge: 'factory-bot' }] } } as any;
+  assert.equal(await st('guardok'), 'guardrail:success');
+  assert.equal(await st('full'), 'product-full:pending');
+  f.d.binding = { ...f.d.binding, owners: { factory: { board: 'fo', forge: 'fo-gh' }, bots: ['factory-bot'] } } as any;
+  assert.equal(await st('guardok'), 'guardrail:pending');
+  f.d.binding = { ...f.d.binding, owners: { factory: 'fo', bots: ['factory-bot'] } } as any;
   // A path in paths.lane_areas forces Full, whatever the ticket's Lane says.
   f.d.binding = { ...f.d.binding, paths: { ...f.d.binding.paths, lane_areas: ['src/**'] } } as any;
   assert.equal(await st('fast'), 'product-full:pending');
@@ -497,6 +504,13 @@ test('shipped: a forge that searches by ticket is asked per candidate ticket, no
   f.d.isAncestor = () => true;
   assert.deepEqual((await shipped(f.d, 'staging', 'x', 'success')).changed, ['40']);
   assert.deepEqual(asked, ['40']);
+});
+
+test('shipped: a merge the search index does not show yet is found in the merged list', async () => {
+  const f = fakes([item('42', 'Done', { shipped: 'Not shipped' })], { m42: { state: 'merged', closes: ['42'], mergeSha: 'm42' } });
+  f.d.forge.closing = async () => []; // the index trails the merge
+  f.d.isAncestor = () => true;
+  assert.deepEqual((await shipped(f.d, 'staging', 'x', 'success')).changed, ['42']);
 });
 
 test('shipped: a slower earlier-environment deploy never lowers a newer Shipped; a re-run failure opens one Signal', async () => {

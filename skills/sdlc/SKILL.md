@@ -21,7 +21,7 @@ There are three layers:
 
 ## Words
 
-- **CR** (change request) means a GitHub PR, a GitLab MR or the forge's equivalent. Names such as
+- **CR** (change request) means a GitHub pull request. Names such as
   `review-pr` and `paths.pr_template` keep the old word.
 - **Change line**: the short-lived Git branch `vcs start` creates. "Branch" in a skill means it.
 - **Proof** is the kind a criterion names (`product.proofs`); a **test** is one kind of proof.
@@ -148,12 +148,14 @@ Rules for every step:
 
 - Route only by the Routing table. No cap other than `cycle.max_implementations` and `cycle.min_ready`
   holds a routed ticket back.
-- After `cycle.time_budget_minutes`, start nothing new: wait for the running subagents, then report.
+- After `cycle.time_budget_minutes`, start nothing new, judge and learn included: wait for the running
+  subagents, then report. The next cycle judges the runs that have no score.
   Keep `cycle.time_budget_minutes` below the runner's job timeout, so the heartbeat is always written.
 - A failed step goes into the heartbeat's `errors`, and the cycle goes on with the next step.
 - A step that failed in each of the last `cycle.failure_limit` heartbeats is not retried: call
-  `escalate-to-human` on its ticket, or ask `owners.factory` on the heartbeat ticket when it has
-  none. A hold on the heartbeat ticket never stops the heartbeat.
+  `escalate-to-human` on the step's ticket. A step with no ticket (read state, judge, learn) asks
+  `owners.factory` with one comment on the heartbeat ticket, as escalate-to-human step 4 does for a
+  run with no ticket: no label, no hold. The heartbeat is always written.
 
 ## Executors
 

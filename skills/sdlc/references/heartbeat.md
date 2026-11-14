@@ -62,7 +62,7 @@ the rows back.
 | `delivered` | Items moved into Done in the last day and the last 7 days. |
 | `measures` | The measures below, each over the last 7 days; one the runner cannot read is left out and named in `errors`. |
 | `signals` | Open tickets at Signals; of those, the ones with each of `board.env_labels`. |
-| `stalled` | Ready CRs not merged after `stall_minutes`: number, the red or missing required check names, minutes waiting. |
+| `stalled` | Ready CRs not merged `stall_minutes` after `pushedAt` (`forge view`): number, the red or missing required check names, minutes since `pushedAt`. |
 | `openCRs` | Count of `crs`. |
 | `milestones` | Open and closed tickets per milestone. |
 | `runs` | One row per run that ended in this cycle; see Runs. A run appears in exactly one heartbeat. |

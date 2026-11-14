@@ -3,7 +3,7 @@
 ## What you get
 - Cursor CLI (`agent`) for headless runs.
 - Cloud Agents that run in Cursor's cloud, started from the web, Slack, GitHub, Linear or an API.
-- Automations: cloud agents on triggers (schedule, GitHub, GitLab, webhook and others).
+- Automations: cloud agents on triggers (schedule, GitHub, webhook and others).
 - Bugbot for PR review.
 
 ## Install

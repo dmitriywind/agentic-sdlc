@@ -4,7 +4,7 @@
 - Claude Code CLI: skills, MCP, headless `claude -p`.
 - Cloud sessions and scheduled tasks (formerly routines) that run on Anthropic's cloud with your laptop closed.
 - Managed Agents API (API-key billed): hosted agents, cloud sandboxes, cron deployments.
-- A GitHub Action and a GitLab CI job that run the same prompt on your runners.
+- A GitHub Action that runs the same prompt on your runners.
 
 ## Install
 The skills, hooks and MCP server ship as a Claude Code plugin named `agentic-sdlc`, so skills are
@@ -68,7 +68,6 @@ Use API keys, not a person's login.
 | Path | How |
 |---|---|
 | GitHub Action | `anthropics/claude-code-action@v1` with `ANTHROPIC_API_KEY` (recommended for org-wide use). [`templates/runner/github-actions-claude.yml`](../../templates/runner/github-actions-claude.yml), [docs](https://code.claude.com/docs/en/github-actions) |
-| GitLab CI | A job running `claude -p` with a masked `ANTHROPIC_API_KEY` (or Bedrock/Vertex OIDC); beta. [`templates/runner/gitlab-ci-cycle.yml`](../../templates/runner/gitlab-ci-cycle.yml), [docs](https://code.claude.com/docs/en/gitlab-ci-cd) |
 | Managed Agents | Create an agent (model, system, tools, MCP servers, skills) and an environment. Start with `POST /v1/sessions`, or schedule with `POST /v1/deployments` (cron `schedule`, per-run `budget`). Beta header `anthropic-beta: managed-agents-2026-04-01`. Not ZDR or HIPAA eligible. Self-hosted sandboxes exist. [overview](https://platform.claude.com/docs/en/managed-agents/overview), [sessions](https://platform.claude.com/docs/en/managed-agents/sessions), [deployments](https://platform.claude.com/docs/en/managed-agents/scheduled-deployments). Template: [`templates/runner/claude-managed-deployment.json`](../../templates/runner/claude-managed-deployment.json) |
 
 How `executors` kinds map:

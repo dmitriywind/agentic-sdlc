@@ -31,7 +31,8 @@ Feature: Implement a spec
     Given a Full-lane ticket at Status Ready
     And no trusted comment starts with the spec marker
     When the factory runs implement-spec
-    Then the ticket goes back to shape
+    Then the ticket moves to Backlog with "--only-from Ready"
+    And one comment names the missing spec
     And the factory writes no code
 
   # Source: skills/implement-spec/SKILL.md, "Test first"

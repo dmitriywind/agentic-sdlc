@@ -76,6 +76,20 @@ Feature: Escalate to a human
     When escalate-to-human runs again
     Then it posts no new comment
 
+  # Source: skills/escalate-to-human/SKILL.md, "Classify" (P0)
+  Scenario: An owner reply settles P0 without naming it
+    Given a ticket is held for the P0 trigger
+    When owners.product posts a trusted reply after the hold comment
+    And no new facts appeared
+    Then the P0 trigger is settled
+    And the reply need not name P0
+
+  # Source: skills/escalate-to-human/SKILL.md, "Record"
+  Scenario: A run with no ticket records proceed on its CR
+    Given review-pr runs on a factory CR with no ticket
+    When escalate-to-human returns proceed
+    Then the line "escalate-to-human: proceed" goes in the review-pr report on the CR
+
   # Source: skills/escalate-to-human/SKILL.md, "Hold"
   Scenario: A factory CR with no ticket is held on the CR
     Given a run dispatched with only --cr

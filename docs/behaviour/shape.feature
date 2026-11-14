@@ -11,7 +11,7 @@ Feature: Shape a ticket
     Given a ticket at Status Backlog has children
     When the skill starts
     Then it stops
-    And it writes no comment
+    And its only comment is the closing comment, which names the ticket as an initiative
 
   # Source: skills/shape/SKILL.md, "Steps" 1 "Diagnose (failure-born tickets only)"
   Scenario: A failure-born ticket needs a confirmed cause
@@ -60,7 +60,7 @@ Feature: Shape a ticket
     And each child is created with "board create ... --parent <id>"
     And each child takes the milestone of the original
     And each child goes on the board at Backlog
-    And the original becomes the initiative and stays at Backlog
+    And the original becomes the initiative, keeps its Priority and stays at Backlog
 
   # Source: skills/shape/SKILL.md, "Steps" 5 "Criteria"
   Scenario: Each acceptance criterion names its proof

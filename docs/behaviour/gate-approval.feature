@@ -90,3 +90,12 @@ Feature: Gate human-approval
     Given a CR changes only the models map in the binding
     When the approval gate classifies the CR
     Then the class is tuning
+
+  # Source: src/gates.ts, "approval"; src/ports.ts, "ownersFor"
+  # Proof: test/gates.test.ts "approval: classes and the human-approval status per forge.human_approval"
+  Scenario: An owner with a board name and a forge name approves with the forge name
+    Given owners.factory is { board: "acc-7", forge: "fo" }
+    And a guardrail CR
+    When "fo" approves the head
+    Then the human-approval status is success
+    And an approval by the board name "acc-7" does not count

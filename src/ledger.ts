@@ -5,6 +5,7 @@ import { join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { parse } from 'yaml';
 import type { Binding, Board, Comment, CR, Forge, PortCli } from './ports.ts';
+import { ownersFor } from './ports.ts';
 
 export const HEARTBEAT_MARKER = '<!-- heartbeat -->';
 
@@ -352,7 +353,7 @@ export const cli: PortCli = async (argv, ctx) => {
     const b = ctx.binding;
     const { createBoard } = await import('./board/index.ts');
     const board: Board = await createBoard({ ...ctx, options: b.board.options });
-    const comments = await readLedger(board, b.heartbeat.ticket, b.owners?.bots ?? [], [b.owners?.product, b.owners?.factory]);
+    const comments = await readLedger(board, b.heartbeat.ticket, ownersFor(b.owners, 'board').bots, [ownersFor(b.owners, 'board').product, ownersFor(b.owners, 'board').factory].filter((x): x is string => !!x));
     const forge = async (): Promise<Forge | undefined> => {
       try { const { createForge } = await import('./forge/index.ts'); return createForge({ ...ctx, options: b.forge.options }); }
       catch { return undefined; }

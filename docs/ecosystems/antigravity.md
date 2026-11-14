@@ -44,7 +44,7 @@ How `executors` kinds map:
 | `harness` | The `agy` or remote agent run that executes the cycle. |
 | `managed` | An Interactions API call with the Antigravity agent. `endpoint_env` the API URL, `token_env` the Gemini key. |
 | `webhook` | Your service calls the Interactions API (the API itself has no inbound webhook). |
-| `assign` | GitHub or GitLab issue or PR triggers for Antigravity: not found at the time of writing. |
+| `assign` | GitHub issue or PR triggers for Antigravity: not found at the time of writing. |
 | `command` | `agy -p ...` as `run`, with the terms caveat above. |
 
 ## Use it as a stage executor
@@ -59,5 +59,5 @@ Expose the board to it with `agentic-sdlc mcp --http` behind TLS (see [generic.m
 ## Limits and unknowns
 - Where `/schedule` runs: not documented at the time of writing.
 - Official answer on subscription-based `agy -p` orchestration: not documented at the time of writing.
-- GitHub and GitLab triggers: not found.
+- GitHub triggers: not found.
 - Gemini API agent limits and pricing are preview and not fully documented at the time of writing.

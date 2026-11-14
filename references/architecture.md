@@ -49,9 +49,6 @@ scorers/                     the shipped scorer rubrics, copied to .agents/score
 templates/
   binding.yml                the binding template with every key documented
   gates/github/              GitHub Actions workflows and the trunk ruleset
-  gates/gitlab/              .gitlab-ci.yml include
-  gates/azure/               azure-pipelines.yml
-  gates/bitbucket/           bitbucket-pipelines.yml
   gates/hooks/               pre-push
   mcp/                       the MCP server entry per harness
   runner/                    scheduler templates and the cycle and review prompts
@@ -62,7 +59,7 @@ src/
   binding.ts                 load and validate the binding
   install.ts                 init / validate / doctor
   board/   github.ts jira.ts linear.ts local.ts index.ts
-  forge/   github.ts gitlab.ts azure.ts bitbucket.ts index.ts
+  forge/   github.ts index.ts
   vcs/     git.ts index.ts
   gates.ts                   repo gates shared by every CI template
   dispatch.ts                start a stage on its executor
@@ -111,7 +108,7 @@ Adapters: `github` (Projects v2 via `gh`), `jira` (Cloud REST v3, transitions fo
 (GraphQL API, workflow states for Status), `local` (`.agents/board.json`, for tests and solo
 projects). Credentials only from env vars the binding names; never from a file in the repo.
 
-### 3.2 Forge (`agentic-sdlc forge <verb>`): the change request (CR) host
+### 3.2 Forge (`agentic-sdlc forge <verb>`): the change request (CR) host, GitHub
 
 | Verb | Effect | Output |
 |---|---|---|
@@ -124,18 +121,18 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `automerge <n>` | Merge when every required check is green | `CR` |
 | `comment <n> --body-file <f>` | CR comment | `{ id, url }` |
 | `comments <n> [--last <k>] [--marker <text>] [--author <a>]… [--trusted]` | CR comments (review report, owner reply on a factory CR), newest first, system notes dropped; same filters as `board comments` (`--last` counts after them) | `Comment[]` |
-| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted only with `options.review_token_env`. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`). The `proofs-on-base` gate alone posts with `options.token_env` (the CI job's token); the CLI verb never does. Azure DevOps posts on the PR iteration whose head is `<sha>`, since branch policies read PR statuses | `{}` |
+| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted only with `options.review_token_env`. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`). The `proofs-on-base` and `linkage` gates post with `options.token_env` (the CI job's token); the CLI verb never does. | `{}` |
 | `approve <n>` | Approving review as `review_identity`, with `options.review_token_env` | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
 | `runs [--ref <r>] [--failed]` | CI runs | `Run[]` |
+| `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
 
-The forge may implement `closing(id)`: the merged CRs whose body closes ticket `id` (GitHub and GitLab search the body). Gates use it to look up a ticket's merges without listing every merged CR.
-`CR = { n, url, title, source, target, headSha, baseSha, mergeSha?, draft, state: 'open'|'merged'|'closed', behind, closes: string[], checks: {name, state}[], body, author }`.
-`closes` is parsed from the body by the shared rule: exactly the lines `Closes <id>`. `author` is the forge login that opened the CR, in the form comment authors use.
+The forge may implement `closing(id)`: the merged CRs whose body closes ticket `id` (GitHub searches the body). Gates use it to look up a ticket's merges without listing every merged CR. The search index can trail a merge, so a ticket the search finds no merge for is also looked up in `list({ state: 'merged' })`.
+`CR = { n, url, title, source, target, headSha, baseSha, mergeSha?, draft, state: 'open'|'merged'|'closed', behind, closes: string[], checks: {name, state}[], body, author, pushedAt? }`.
+`closes` is parsed from the body by the shared rule: exactly the lines `Closes <id>`. `author` is the forge login that opened the CR, in the form comment authors use. `pushedAt` is when the head reached the forge: the creation time of the first check suite on `headSha` (absent before CI starts). Stall clocks after a push (`stall_minutes`) count from it.
 
-Adapters: `github` (`gh`), `gitlab` (`glab` / REST v4, merge requests, "merge when pipeline
-succeeds"), `azure` (Azure DevOps REST, PR policies, auto-complete), `bitbucket` (Cloud REST 2.0,
-merge checks; auto-merge = the gate merges when green).
+Adapter: `github` (`gh`), the one forge. GitLab, Azure DevOps and Bitbucket were removed in 2.0.0-alpha.5: a CR there
+could change the pipeline file that ran its own gates.
 
 ### 3.3 VCS (`agentic-sdlc vcs <verb>`): Git
 
@@ -160,10 +157,10 @@ change line `start` opens.
 
 | Gate | Guarantee |
 |---|---|
-| `branch-names` | A change line outside the binding's patterns is refused. |
+| `branch-names` | A change line outside the binding's patterns, the dependency lines `dependabot/` and `renovate/`, and the trunk is refused. |
 | `linkage` | Posts check `ticket-linkage`: a product CR closes exactly one open ticket and names it in its source. |
 | `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base, or when a product CR changes only `paths.no_proof`. |
-| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`; with `--fail-pending` it also exits 1 while approval waits (for forges where the job result is the merge gate). Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by `owners.factory`. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
+| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by `owners.factory`. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
 | `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. Done records a fact: a held ticket moves and keeps its label; a Cancelled ticket stays. A push with no CR changes nothing. No CR-pipeline gate writes the board; besides this gate only `shipped` moves a ticket (In review to Done, when a deploy reports first). |
 | `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
 | `signal-on-red --run <id>` | A red trunk or release-line run opens a Signal with a redacted evidence bundle. Other refs are ignored. |
@@ -195,6 +192,11 @@ groups are `version`, `profile`, `owners`, `board`, `forge`, `vcs`, `product`, `
 
 Keys this contract relies on by name:
 
+- `owners.product`, `owners.factory` and each entry of `owners.bots`: one account name, or `{ board, forge }`
+  when the board and the forge name the person differently. Board reads (ledger, dispatch, `board comments
+  --trusted`, spec authors) use `board`; forge reads (the approval gate, `forge comments --trusted`) use `forge`.
+- `heartbeat.ticket`: the id of the ticket that holds heartbeat comments; `validate` fails when it is empty.
+  `init --board local` creates it (status Cancelled, so no route reads it) and sets it.
 - `forge.human_approval: full-lane | always | never` (default `full-lane`), `forge.review_identity`,
   `forge.options.review_token_env`,
   `forge.required_checks`.
@@ -239,7 +241,9 @@ executors and factory versions.
    `trace` (a reference into `traces.uri` when the executor stored its transcript). `ledger
    summary` adds `learning: { due, judge, cyclesSince, spentWeekUsd }` (`judge`: the weekly budget is not spent), computed from heartbeats and run
    rows, so no skill keeps a counter. `ledger stale --max-hours <h>` exits 1 when the newest
-   heartbeat is older.
+   heartbeat is older. The heartbeat's `learning` object carries `lastProposal` and
+   `benchBaseline`; only `improve-factory` changes them and every heartbeat copies them forward
+   (fields in `skills/sdlc/references/heartbeat.md`).
 2. **Scorers.** A scorer is a file `.agents/scorers/<name>.md`: frontmatter `name`, `applies_to`
    (skills, or `*`) and `scale` (`pass-fail` or `0-4`), and a body that is the rubric question.
    The package ships `done-conditions` (the 0–4 `score`), `redundant-tests`, `scope-creep`,
@@ -361,8 +365,9 @@ when `ANTHROPIC_API_KEY` is set, since it outranks the subscription token.
 review token, and the review (`templates/runner/review-prompt.md`), which runs after the cycle
 finishes (a job dependency, never its own clock), holds `forge.options.review_token_env` and runs
 only `review-pr`, for product and factory CRs. `forge status` refuses the contexts the gates own
-(`human-approval`, `ticket-linkage`, `proofs-on-base`), and `gate approval --fail-pending` fails the job
-while approval waits, for forges where the job result is the merge gate. The review runtime **never runs CR code**: it reads
+(`human-approval`, `ticket-linkage`, `proofs-on-base`). The implementer's `token_env` has no commit-status
+write (a fine-grained token with Commit statuses: no access; `doctor` warns on a classic token with scope
+`repo` or `repo:status`), and every required check is pinned to the app that posts it. The review runtime **never runs CR code**: it reads
 `Required` and `proofs-on-base` from CI and runs no install or test command. So an implementer can
 never post the `review` status or the approving review for its own CR, and a CR's code never sees
 the review token. Unattended jobs set

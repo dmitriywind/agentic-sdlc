@@ -1,9 +1,9 @@
-import type { Binding, Comment } from './ports.ts';
+import type { Comment, Owners } from './ports.ts';
 
 /** The one comment filter for `board comments` and `forge comments`. list is newest first; --last applies after --author, so a forged comment never pushes a trusted one out. */
 export function selectComments(
   list: Comment[],
-  o: { owners?: Binding['owners']; authors?: string[]; trusted?: boolean; last?: number; marker?: string },
+  o: { owners?: Owners; authors?: string[]; trusted?: boolean; last?: number; marker?: string },
 ): Comment[] {
   const w = o.owners;
   let out = o.marker ? list.filter((c) => c.body.includes(o.marker!)) : list;

@@ -59,7 +59,7 @@ Feature: Install and validate the binding
   # Source: src/binding.ts, "validateBinding" (adapter options)
   # Proof: test/binding.test.ts "validateBinding rejects unknown option keys and missing required ones per adapter"
   Scenario: Adapter options are checked per adapter
-    Given the forge adapter is "gitlab" and its options lack "base_url" and hold an unknown key
+    Given the board adapter is "jira" and its options lack "project_key" and hold an unknown key
     When the binding is validated
     Then the problems name the missing option
     And the problems name the unknown option
@@ -141,3 +141,35 @@ Feature: Install and validate the binding
     When the binding is validated
     Then a warning names each of them
     And an empty vcs.release_prefix fails validation
+
+  # Source: src/binding.ts, "validateBinding" (owners); src/ports.ts, "ownersFor"
+  # Proof: test/binding.test.ts "validateBinding: an owner is a name or { board, forge }"
+  Scenario: An owner can have one name on the board and another on the forge
+    Given owners.product is { board: "acc-1", forge: "ann" }
+    And an owners.bots entry is { board: "acc-3", forge: "bot[bot]" }
+    When the binding is validated
+    Then it has no problems
+    And an owner with only one of board and forge is a problem
+
+  # Source: src/binding.ts, "validateBinding" (heartbeat)
+  # Proof: test/binding.test.ts "validateBinding: an empty heartbeat.ticket is a problem"
+  Scenario: A binding with no heartbeat ticket fails validation
+    Given heartbeat.ticket is empty, as the template writes it
+    When the binding is validated
+    Then a problem says to create the heartbeat ticket and put its id in heartbeat.ticket
+
+  # Source: src/install.ts, "init" (heartbeat ticket)
+  # Proof: test/install.test.ts "init --board local creates the heartbeat ticket off every route and sets heartbeat.ticket"
+  Scenario: init on a local board creates the heartbeat ticket
+    Given an empty project
+    When the adopter runs "agentic-sdlc init --board local"
+    Then the local board holds one ticket "Heartbeat" with status Cancelled
+    And heartbeat.ticket names that ticket
+
+  # Source: src/install.ts, "implementerToken"
+  # Proof: test/install.test.ts "doctor: a classic implementer token with repo scope warns; a fine-grained one is quiet"
+  Scenario: doctor warns when the implementer token can post commit statuses
+    Given forge.options.token_env names a classic token with scope "repo"
+    When the adopter runs "agentic-sdlc doctor"
+    Then a warning says to use a fine-grained token with Commit statuses: no access
+    And a fine-grained token prints no warning

@@ -18,6 +18,9 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
 
 ## Steps
 
+Steps 1 to 8 review a draft CR. Steps 9 and 10 handle a ready CR. A check missing past
+`stall_minutes` follows step 4 on a draft CR and step 10 on a ready CR.
+
 0. **Once per head.** When the newest `<!-- review-pr <head sha> -->` report is for the current head and
    no trusted comment came after it, stop: post nothing. Done when you stopped or continue.
 1. **Read.** `agentic-sdlc forge view <n>` and `forge diff <n>`; the ticket and its spec comment
@@ -27,16 +30,19 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    DEVIATED, with `path:line` or a named proof (test, eval case, visual or data check). A
    criterion without proof is a finding. For a criterion with proof `computer-use`, run
    `agentic-sdlc dispatch verify-ux --ticket <id> --cr <n>` once per head, then grade its
-   `<!-- verify-ux -->` comment for this head (`--trusted`). Until that comment appears it is
-   pending, not a finding; still missing after `stall_minutes`, it is a finding. A criterion with
+   `<!-- verify-ux -->` comment for this head. Until that comment appears it is
+   pending, not a finding; still missing after `stall_minutes`, call
+   [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access) once, naming verify-ux: a run that did
+   not report is not a defect of the diff. Grade only a `<!-- verify-ux -->` comment by an account in
+   `owners.bots` (`--author` once per bot); one by any other account is not evidence. A criterion with
    proof `manual` is DONE only when a trusted comment by an owner (`board comments <id>
    --trusted`) confirms it for this head. Otherwise post one ask on the ticket naming the
    criterion and the head sha, only when `board comments <id> --marker "<!-- manual-check
    <criterion> <head sha> -->"` finds none (a new head asks again), and grade it PENDING. PENDING is not a finding and keeps the CR
    draft; after `stall_minutes` with no reply call
    [`escalate-to-human`](../escalate-to-human/SKILL.md) (Sign-off). A pending criterion
-   stops the review as step 4 does: no status, no approval; review this head again on the next
-   run. A departure from the spec in design is an escalation. Done when every criterion has a row.
+   stops the review as step 4 does: no report, no status, no approval; review this head again on
+   the next run. A report for this head would make step 0 stop that run. A departure from the spec in design is an escalation. Done when every criterion has a row.
 3. **Standards pass.** Apply [references/checklist.md](references/checklist.md), then
    `paths.review_checklist` when that file exists (the project's rule wins on a conflict), and
    `paths.test_standard`, and the rules matching the changed paths. Before calling a finding one defect or three, form an independent
@@ -44,8 +50,9 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
 4. **CI results.** From `forge view <n>` checks on the head: `Required` (install and verify) and
    `proofs-on-base` (each new proof fails on the merge base) must be green, and every other
    `forge.required_checks` entry except `review` and `human-approval` must not be red. A check
-   still pending: stop and review again on the next run; it is not a finding. One still pending,
-   or never reported, longer than `stall_minutes` after the head was pushed: call
+   still pending: stop with no report and review again on the next run; it is not a finding. One still pending,
+   or never reported, longer than `stall_minutes` after the head was pushed (`pushedAt` from
+   `forge view`; with no `pushedAt`, no CI has started, so the check is missing): call
    [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access) once, naming the check, and stop.
    A red check on a draft CR is handled as in step 10, without `forge draft`.
    For each `forge.planned_checks` entry the repo does not yet supply, the report names it as
@@ -61,7 +68,7 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    smallest fix first, each tagged with a pass (bugs, security or compliance) and a severity
    (Important or Nit), with at most 5 Nits, the hunt, the CI results read and the head, and
    the verdict PASS or REMEDIATION REQUIRED. Important is any criterion graded NOT DONE or
-   PARTIAL; DEVIATED unless the CR also updates the spec comment to match; any bug, security,
+   PARTIAL; DEVIATED unless the spec comment was updated to match (then it grades as DONE, no finding and no Nit); any bug, security,
    privacy or compliance finding; and any risk the spec's "Risks and rollback" does not list. Nit
    is everything else, and every hunt line (step 5) is a Nit unless it is also a bug. Nits are
    posted in the report; they never block PASS or cause a send-back. Done when posted.
@@ -91,13 +98,14 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
    <n>` (a CR a person opened: one comment asking its author to update it instead), then on the new head repeat steps 4 and 7 once CI has reported. Done when the review
    status is green on the new head.
 10. **Red or stalled gate.** A ready In review CR with a `required_checks` entry red, or missing
-    for longer than `stall_minutes` (never `review` or `human-approval`: those wait for this skill
-    and for a person, and are not stalled): read the failing check (`forge runs --failed`) and `forge draft
+    for longer than `stall_minutes` after `pushedAt` (never `review` or `human-approval`: those wait for this skill
+    and for a person, and are not stalled). A missing check: keep the CR ready, call
+    [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access) once, naming the check, and stop.
+    A red check: read the failing run (`forge runs --failed`) and `forge draft
     <n>` (Status stays In review). Cause in the diff or the ticket's scope: move the ticket to In
     progress with the cause (a CR a person opened: the report names the cause, and the ticket
     stays In review). Cause elsewhere (a flake, a broken neighbour): file a new Signal and
-    state it on the CR. A gate that never ran at all: call
-    [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access). Done when the CR is draft and
+    state it on the CR. Done when the CR is draft and
     the ticket is at In progress, the Signal is filed, or the ask is filed.
 
 ## Rules

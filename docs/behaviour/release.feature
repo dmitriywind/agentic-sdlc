@@ -92,8 +92,9 @@ Feature: Release to the last environment
     Given a trusted Product owner approved the proposal
     When the release skill continues
     Then it sets release_version on each selected ticket
-    And it runs "agentic-sdlc vcs cut <revision> <version>" from the chosen revision
     And it sets Shipped "In release" on each selected ticket
+    And it runs "agentic-sdlc forge cut <revision> <version>" from the chosen revision
+    And the Product owner approves the release workflow run in Environment "agentic-release"
     And it closes the request as completed
 
   # Source: skills/release/SKILL.md, "Rules"
@@ -124,4 +125,4 @@ Feature: Release to the last environment
     When the release skill marks and cuts
     Then it runs the ready check again on the same revision
     And it sets release_version and Shipped "In release" before the cut
-    And on GitHub it runs "forge cut <revision> <version>", whose Environment the Product owner approves
+    And it runs "forge cut <revision> <version>", whose Environment the Product owner approves

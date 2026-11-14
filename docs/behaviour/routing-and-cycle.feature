@@ -113,9 +113,10 @@ Feature: Routing and the unattended cycle
   Scenario: The time budget stops new work
     Given "cycle.time_budget_minutes" has passed since the cycle started
     When the cycle has more work to start
-    Then it starts nothing new
+    Then it starts nothing new, judge and learn included
     And it waits for the running subagents
     And it reports
+    And the next cycle judges the runs that have no score
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle" (rules for every step)
   Scenario: A step that keeps failing is escalated, not retried
@@ -126,8 +127,8 @@ Feature: Routing and the unattended cycle
     When the next cycle reaches that step
     Then the cycle does not retry it
     And it calls "escalate-to-human" on the ticket of the step
-    And when the step has no ticket, it asks "owners.factory" on the heartbeat ticket
-    And a hold on the heartbeat ticket never stops the heartbeat
+    And when the step has no ticket, it posts one comment to "owners.factory" on the heartbeat ticket, with no label
+    And the heartbeat is always written
 
   # Source: src/ledger.ts, "learningState"; skills/sdlc/SKILL.md, "Run one cycle", step 3
   # Proof: test/ledger.test.ts "learningState: cycles since the last improve-factory heartbeat, due at every_cycles, week spend of learning skills"

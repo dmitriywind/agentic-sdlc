@@ -3,6 +3,16 @@
 All notable changes to this package. Versions follow semver. A release is a `v<version>` Git tag; the package is
 not on npm.
 
+## Unreleased
+
+- Breaking: GitHub is the one forge. The GitLab, Azure DevOps and Bitbucket adapters, their gate templates and `gitlab-ci-cycle.yml` are removed, because a CR there could change the pipeline file that ran its own gates. `gate approval --fail-pending` is removed; `forge cut` is a required port verb and the release skill always cuts through it.
+- Breaking: `templates/binding.yml` writes `heartbeat.ticket: ""`, and `validate` fails on an empty heartbeat ticket. `init --board local` creates the heartbeat ticket (status Cancelled) and sets its id.
+- `owners.product`, `owners.factory` and each `owners.bots` entry take a name or `{ board, forge }`. Board reads use the board name; the approval gate and `forge comments --trusted` use the forge name.
+- `CR.pushedAt`: when the head reached the forge (the first check suite on the head). review-pr and the heartbeat's `stalled` count `stall_minutes` from it.
+- `doctor` warns when the implementer token is a classic token with scope `repo` or `repo:status`, since cycle code could post commit statuses with it.
+- `gate shipped` also reads the newest merged CRs for a ticket the search finds no merge for, so a merge the search index does not show yet still ships.
+- Skill rules made exact: implement-spec sends a Full-lane ticket with no trusted spec to Backlog; review-pr posts no report while anything is pending, grades a DEVIATED criterion with an updated spec as DONE, grades only a bot's verify-ux comment, escalates (Access) a missing verify-ux run or a check that never reported on a ready CR, and sends back only a red one; any owner reply settles a P0 hold; a run with no ticket records proceed on its CR; shape keeps the initiative's Priority and posts only the closing comment on an initiative; backlog-grooming moves a closed parent to Done or Cancelled before it closes it; triage-signal or the Product owner writes P0; after the time budget the cycle starts no judge or learn; a step with no ticket asks owners.factory with one comment on the heartbeat ticket; triage moves evidence only for a duplicate; branch-names allows dependabot/ and renovate/ lines; a failure with one environment returns tickets to Not shipped; the contract names learning.lastProposal and learning.benchBaseline. Tests cover the trunk-checkout push, non-JSON hook input and --stdin-prepush.
+
 ## 2.0.0-alpha.4 (2026-11-14)
 
 - Round 5 review fixes: a run ends only with its own done line (no other comment counts; the assign hand-off names the line, and the assignee may post it); a command start counts only once the child has a pid; a refused (4xx) or unreachable request still writes the done line; dependency bots match exact logins; the failure reset leaves a ticket whose version changed; `forge cut` finds its run by run id, not by clock.

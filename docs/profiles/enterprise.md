@@ -6,7 +6,7 @@ and wants traces and full benchmarks on its own storage.
 
 ## Set it up
 ```bash
-npx --no agentic-sdlc init --profile enterprise --harness <name> --board jira --forge gitlab --vcs git
+npx --no agentic-sdlc init --profile enterprise --harness <name> --board jira --forge github --vcs git
 ```
 Init writes the template defaults plus `sandbox: container` for the default executor, a
 placeholder `traces.uri`. The excerpt adds typical per-stage
@@ -42,7 +42,7 @@ All executor kinds are allowed: `managed`, `webhook`, `assign`, `command`, `harn
 ## Recommended runtime per ecosystem
 | Ecosystem | Runtime | Guide |
 |---|---|---|
-| Claude | Managed Agents deployments (cron) or the GitHub Action / GitLab job with an API key | [claude.md](../ecosystems/claude-code.md) |
+| Claude | Managed Agents deployments (cron) or the GitHub Action with an API key | [claude.md](../ecosystems/claude-code.md) |
 | Codex | `openai/codex-action` with an API key, or `codex exec` with `CODEX_API_KEY` | [codex.md](../ecosystems/codex.md) |
 | Cursor | Cloud Agents API and Automations run as a service account | [cursor.md](../ecosystems/cursor.md) |
 | Antigravity | Gemini API Antigravity agent (preview) | [antigravity.md](../ecosystems/antigravity.md) |

@@ -11,7 +11,7 @@ be trusted to keep. Your agent harness and scheduler run the skills. The package
 runner of its own.
 
 - **Boards:** GitHub Projects, Jira, Linear, or a local JSON file.
-- **Forges:** GitHub, GitLab, Azure DevOps, Bitbucket. **VCS:** Git, trunk-based.
+- **Forge:** GitHub. **VCS:** Git, trunk-based.
 - **Harnesses:** Claude Code (as a plugin), Codex, Cursor, Antigravity, Grok, or any agent with a
   shell or MCP.
 - **Executors per stage:** a harness subagent, a command bot, a webhook bot, a managed agent, or
@@ -25,7 +25,7 @@ runner of its own.
 | [Components](docs/architecture/components.md) and [flows](docs/architecture/flows.md) | Diagrams of the parts, trust boundaries, the cycle, review, release and learning. |
 | [Claude](docs/ecosystems/claude-code.md), [Codex](docs/ecosystems/codex.md), [Cursor](docs/ecosystems/cursor.md), [Antigravity](docs/ecosystems/antigravity.md), [Grok](docs/ecosystems/grok.md), [any other](docs/ecosystems/generic.md) | Install and run in each ecosystem. |
 | [Individual](docs/profiles/individual.md) and [enterprise](docs/profiles/enterprise.md) | Pick a profile. |
-| [Forges](docs/forges.md) | Checks, approval and what each forge keeps natively. |
+| [Forge](docs/forges.md) | GitHub checks, approval, tokens and one-time setup. |
 | [The contract](references/architecture.md) | Normative: ports, gates, binding, executors, runtimes. |
 
 ## How it fits together
@@ -82,7 +82,7 @@ The CLI installs from Git only. Warning: the npm package `agentic-sdlc` is a dif
 | `--profile` | `individual`, `enterprise` | `individual` |
 | `--harness` | `claude`, `codex`, `cursor`, `antigravity`, `grok`, `generic` | `generic` |
 | `--board` | `github`, `jira`, `linear`, `local` | `github` |
-| `--forge` | `github`, `gitlab`, `azure`, `bitbucket` | `github` |
+| `--forge` | `github` | `github` |
 | `--vcs` | `git` | `git` |
 | `--force` | overwrite files `init` would keep | off |
 | `--no-plugin` | with `--harness claude`: copy skills to `.claude/skills` and write `.mcp.json` instead of using the plugin | off |
@@ -133,7 +133,7 @@ npx --no agentic-sdlc init --board local --forge github --harness generic
 printf 'Show a greeting on the home page.\n' > body.md
 npx --no agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog
 npx --no agentic-sdlc board list
-npx --no agentic-sdlc dispatch shape --ticket 1
+npx --no agentic-sdlc dispatch shape --ticket 2
 ```
 
 `dispatch` with the default `harness` executor prints the instruction your agent would follow; it

@@ -40,12 +40,12 @@ Feature: Groom the backlog
     And all children are closed
     And <children state>
     When the skill groups
-    Then the skill closes the parent as "<close>"
+    Then the skill moves the parent to <status> and closes it as "<close>"
 
     Examples:
-      | children state                | close       |
-      | every child was Cancelled     | not planned |
-      | not every child was Cancelled | completed   |
+      | children state                | status                                                | close       |
+      | every child was Cancelled     | Cancelled                                             | not planned |
+      | not every child was Cancelled | Done, with Shipped the lowest among its Done children | completed   |
 
   # Source: skills/backlog-grooming/SKILL.md, "Steps" 3 "Prioritise"
   Scenario: Backlog items get a Priority and a milestone

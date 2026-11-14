@@ -1,16 +1,13 @@
 import { readFileSync } from 'node:fs';
-import type { AdapterContext, Forge, PortCli } from '../ports.ts';
+import { ownersFor, type AdapterContext, type Forge, type PortCli } from '../ports.ts';
 import { selectComments } from '../comments.ts';
 import { UsageError, guard, parseArgs } from './util.ts';
-import { azure } from './azure.ts';
-import { bitbucket } from './bitbucket.ts';
 import { github } from './github.ts';
-import { gitlab } from './gitlab.ts';
 
 /** Status contexts only a gate posts. */
 export const GATE_CONTEXTS = ['human-approval', 'ticket-linkage', 'proofs-on-base'];
 
-const adapters = { github, gitlab, azure, bitbucket };
+const adapters = { github };
 
 export function createForge(ctx: AdapterContext): Forge {
   const make = adapters[ctx.binding.forge.adapter];
@@ -38,7 +35,6 @@ export const cli: PortCli = (argv, ctx) =>
       case 'sync': return f.sync(n());
       case 'automerge': return f.automerge(n());
       case 'cut': {
-        if (!f.cut) throw new Error(`forge ${ctx.binding.forge.adapter} has no release workflow: cut with \`vcs cut\` under the release credential`);
         if (!a.pos[1]) throw new UsageError('forge cut <revision> <version>');
         return f.cut(a.pos[0] ?? '', a.pos[1]);
       }
@@ -46,7 +42,7 @@ export const cli: PortCli = (argv, ctx) =>
       case 'comments':
         // Adapters return oldest first; the CLI answers newest first, as `board comments` does.
         return selectComments((await f.comments(n())).reverse(), {
-          owners: ctx.binding.owners, authors: a.all('author'), trusted: a.has('trusted'),
+          owners: ownersFor(ctx.binding.owners, 'forge'), authors: a.all('author'), trusted: a.has('trusted'),
           last: a.get('last') ? Number(a.get('last')) : undefined, marker: a.get('marker'),
         });
       case 'status': {

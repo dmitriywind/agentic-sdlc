@@ -7,6 +7,7 @@ import { parse } from 'yaml';
 import { createBoard } from './board/index.ts';
 import { fill } from './bench.ts';
 import type { Binding, Board, Executor, McpServer, PortCli } from './ports.ts';
+import { ownersFor } from './ports.ts';
 
 const envOf = (env: NodeJS.ProcessEnv, name: string) => {
   const v = env[name];
@@ -171,7 +172,7 @@ export const cli: PortCli = async (argv, ctx) => {
         } catch { /* no head: the key still separates CR and skill */ }
       }
       key = [ticket || cr || 'factory', skill, f.run, head].filter(Boolean).join('-');
-      const trusted = (b.owners?.bots ?? []).map((a) => a.toLowerCase());
+      const trusted = ownersFor(b.owners, 'board').bots.map((a) => a.toLowerCase());
       const closer = ex.kind === 'assign' ? String((ex as { user?: string }).user ?? '').toLowerCase() : '';
       const bot = (c: { author?: string }) => trusted.includes(String(c.author).toLowerCase()) || (!!closer && String(c.author).toLowerCase() === closer);
       const all = (await boardOf().comments(target)).filter(bot);

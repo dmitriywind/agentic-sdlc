@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse } from 'yaml';
 import type { AdapterContext, Binding, Board, CR, Forge, PortCli, Review, Vcs } from './ports.ts';
+import { ownersFor } from './ports.ts';
 import { BINDING_PATH, shippedOptions } from './binding.ts';
 import { PROOF_FILE, fill, rule, shell } from './bench.ts';
 import { UsageError, guard, parseArgs } from './forge/util.ts';
@@ -152,10 +153,9 @@ export function proofRunner(run: (cmd: string) => unknown): (cmd: string) => boo
   };
 }
 
-/** Posts status ticket-linkage with the CI job's own token; a forge that refuses leaves the job result as the check. */
+/** Posts status ticket-linkage with the CI job's own token; the ruleset requires it, so a failed post fails the job. */
 async function post(d: Deps, sha: string, description: string, ok: boolean) {
-  try { await d.forge.status(sha, { context: 'ticket-linkage', state: ok ? 'success' : 'failure', description: description.slice(0, 140) }, { as: 'ci' }); }
-  catch (e) { if (d.binding.forge.adapter === 'github') throw e; /* elsewhere the job result is the check */ }
+  await d.forge.status(sha, { context: 'ticket-linkage', state: ok ? 'success' : 'failure', description: description.slice(0, 140) }, { as: 'ci' });
 }
 
 /** Change lines of dependency bots: product changes with no ticket, reviewed like any CR. */
@@ -214,8 +214,9 @@ export async function approval(d: Deps, n: string) {
     klass = !inArea && String(item?.fields?.lane ?? '').toLowerCase() === 'fast' ? 'product-fast' : 'product-full';
   }
   const mode = b.forge.human_approval ?? 'full-lane';
-  const bots = [...(b.owners?.bots ?? []), b.forge.review_identity].filter(Boolean).map((u) => u.toLowerCase());
-  const owner = String(b.owners?.factory ?? '').toLowerCase();
+  const o = ownersFor(b.owners, 'forge');
+  const bots = [...o.bots, b.forge.review_identity].filter(Boolean).map((u) => u!.toLowerCase());
+  const owner = String(o.factory ?? '').toLowerCase();
   let need: 'none' | 'human' | 'owner';
   if (klass === 'guardrail') need = 'owner';
   else if (klass === 'tuning') need = (b.learning?.auto_merge_classes ?? []).includes('tuning') ? 'none' : 'owner';
@@ -319,12 +320,14 @@ export async function merged(d: Deps, sha: string): Promise<{ cr?: string; sha: 
  * running) step back one environment and keep their version. failure: a Signal, and in the last
  * environment the version in flight is reset.
  */
-/** Merge shas of the merged CRs that close each ticket; per ticket when the forge can search, else one list. */
+/** Merge shas of the merged CRs that close each ticket; per ticket when the forge can search, else one list.
+ * The search index trails a merge by seconds to minutes, so a ticket search finds nothing for also reads the list. */
 async function mergeShas(d: Deps, ids: string[]): Promise<Map<string, (string | undefined)[]>> {
   const out = new Map<string, (string | undefined)[]>();
-  if (d.forge.closing) { for (const id of ids) out.set(id, (await d.forge.closing(id)).map((c) => c.mergeSha)); return out; }
-  const merged = ids.length ? await d.forge.list({ state: 'merged' }) : [];
-  for (const id of ids) out.set(id, merged.filter((c) => c.closes.includes(id)).map((c) => c.mergeSha));
+  if (d.forge.closing) for (const id of ids) { const s = (await d.forge.closing(id)).map((c) => c.mergeSha); if (s.length) out.set(id, s); }
+  const rest = ids.filter((id) => !out.has(id));
+  const merged = rest.length ? await d.forge.list({ state: 'merged' }) : [];
+  for (const id of rest) out.set(id, merged.filter((c) => c.closes.includes(id)).map((c) => c.mergeSha));
   return out;
 }
 
@@ -538,7 +541,6 @@ export const cli: PortCli = (argv, base) =>
       }
       case 'approval': {
         const r = await approval(deps(), a.need('cr'));
-        if (a.has('fail-pending') && r.state === 'pending') throw new Error(`human-approval pending: ${r.class} needs ${r.need}`);
         return r;
       }
       case 'proofs-on-base': return fail(await proofsOnBase(deps(), a.need('cr')));

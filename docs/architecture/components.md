@@ -69,9 +69,6 @@ flowchart TB
     end
     subgraph FA["forge adapters"]
       f1["github"]
-      f2["gitlab"]
-      f3["azure"]
-      f4["bitbucket"]
     end
     subgraph VA["vcs adapters"]
       v1["git"]
@@ -208,7 +205,7 @@ flowchart LR
   R --> A["AGENTS.md<br/>(agent card)"]
   R --> CL["CLAUDE.md<br/>(@AGENTS.md import, Claude only)"]
   R --> AG[".agents/"]
-  R --> CIF["CI files<br/>(workflows, .gitlab-ci.yml, ...)"]
+  R --> CIF["CI files<br/>(.github/workflows)"]
   AG --> SK["skills/<br/>(not for Claude: the plugin has them)"]
   AG --> BI["binding.yml"]
   AG --> SC["scorers/<br/>(done-conditions, ...)"]

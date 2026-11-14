@@ -37,13 +37,15 @@ calls another skill. Read the binding (`.agents/binding.yml`) and the hold rules
    - Ruling: the sources are silent or conflict on a product question.
    - Regression: delivered behaviour would be removed or weakened.
    - Repeat: the same step failed twice for the same reason.
-   - P0: a P0 is set and no owner reply has settled it (step 1).
+   - P0: a P0 is set and no owner reply has settled it (step 1). Any owner reply after the hold
+     comment settles it; the reply need not name P0, since the hold comment did.
    A feature counts as important only when the importance doc says so; carry no list of your own.
    A routine step (sync, retry, cosmetic choice) is never escalated. An item above the size
    limit is not escalated; it goes back to shape (see [Board](../sdlc/references/board.md#board)).
 3. **Record.** On `proceed`: one line in the calling skill's ticket comment,
    `escalate-to-human: proceed`, naming the sources that settled it
-   (an owner reply is cited by its comment url). On `escalate`: the comment below. Done when the result is on the ticket.
+   (an owner reply is cited by its comment url). A run with no ticket puts the line in its CR
+   comment (for review-pr, the report). On `escalate`: the comment below. Done when the result is on the ticket.
 4. **Hold.** On `escalate`: if you are on a change line with unpushed commits, publish them (`vcs push`); then post the comment below once
    (`board comment`), `board label <id> add <board.labels.human>`, `board assign <id> --none`, and
    stop. The Status stays. The ask goes to `owners.product`, or `owners.factory` for a factory

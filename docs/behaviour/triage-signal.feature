@@ -79,8 +79,8 @@ Feature: Triage a signal
 
     Examples:
       | case                              | decision                                                    |
-      | already fixed                     | Cancelled, naming the change                                |
-      | noise                             | Cancelled                                                   |
+      | already fixed                     | Cancelled, naming the change; the evidence stays            |
+      | noise                             | Cancelled, saying why; the evidence stays                   |
       | a concept, plausible but unbacked | Ideas; the skill places it and stops, and a human works it  |
       | a snooze                          | Ideas; the skill places it and stops, and a human works it  |
 

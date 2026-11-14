@@ -57,6 +57,8 @@ export interface CR {
   body: string;
   /** The forge login that opened the CR, in the form comment authors use. */
   author: string;
+  /** When the head reached the forge (ISO time): the first CI suite on headSha. Absent before CI starts. */
+  pushedAt?: string;
 }
 
 /** One review of a CR, oldest first. state is lower case: approved, changes_requested, commented, dismissed, pending. sha: the commit reviewed. */
@@ -73,7 +75,7 @@ export interface Forge {
   /** Merged CRs whose body closes ticket `id`. Optional: without it, callers filter list({ state: 'merged' }). */
   closing?(id: string): Promise<CR[]>;
   /** Asks the forge to cut a release line through its release workflow, which the Product owner approves. Optional. */
-  cut?(revision: string, version: string): Promise<{ requested: true; run?: string; url?: string }>;
+  cut(revision: string, version: string): Promise<{ requested: true; run?: string; url?: string }>;
   ready(n: string): Promise<CR>;
   draft(n: string): Promise<CR>;
   sync(n: string): Promise<CR>;
@@ -157,13 +159,23 @@ export type Executor = StageDef &
 
 export interface McpServer { url?: string; command?: string; token_env?: string }
 
+/** An account: one name on both ports, or one name per port. */
+export type Who = string | { board: string; forge: string };
+export type Owners = { product?: string; factory?: string; bots: string[] };
+/** The owners as the board or the forge names them. */
+export function ownersFor(o: Binding['owners'] | undefined, side: 'board' | 'forge'): Owners {
+  const one = (w: Who | undefined) => (typeof w === 'object' && w ? w[side] : w) || undefined;
+  return { product: one(o?.product), factory: one(o?.factory), bots: (o?.bots ?? []).map(one).filter((x): x is string => !!x) };
+}
+
 /** The parsed binding. src/binding.ts validates it; keys follow references/architecture.md section 4. */
 export interface Binding {
   version: 2;
   /** individual: subscriptions only; enterprise: APIs and managed agents (architecture.md section 10). */
   profile: 'individual' | 'enterprise';
-  /** bots: the accounts the factory runs as; only their heartbeat comments are trusted. */
-  owners: { product: string; factory: string; bots: string[] };
+  /** bots: the accounts the factory runs as; only their heartbeat comments are trusted. Each account is one
+   * name, or `{ board, forge }` when the board and the forge know the person by different names. */
+  owners: { product: Who; factory: Who; bots: Who[] };
   board: {
     adapter: 'github' | 'jira' | 'linear' | 'local';
     options: Record<string, unknown>;
@@ -178,7 +190,7 @@ export interface Binding {
     signal_streams: string[];
   };
   forge: {
-    adapter: 'github' | 'gitlab' | 'azure' | 'bitbucket';
+    adapter: 'github';
     options: Record<string, unknown>;
     review_identity: string;
     /** Who must approve besides the agent review (status human-approval). Absent: full-lane. */
