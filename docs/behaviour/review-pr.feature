@@ -119,7 +119,7 @@ Feature: Review a change request
     And it repeats the CI check and the decision on the new head once CI has reported
 
   # Source: skills/review-pr/SKILL.md, "Red or stalled gate"
-  # Proof: test/forge.test.ts "github: draft = ready --undo outside the cloud, checks from REST, status via api"
+  # Proof: test/forge.test.ts "github: draft = ready --undo outside the cloud, checks from REST (the newest run per name), status via api"
   Scenario: A red check caused by the diff sends the ticket back
     Given a ready CR at In review
     And a required check is red
@@ -127,6 +127,13 @@ Feature: Review a change request
     When the reviewer reads the failing check with "forge runs --failed"
     Then it runs "forge draft <n>"
     And the ticket moves to In progress with the cause
+
+  # Source: src/forge/github.ts, "view"
+  # Proof: test/forge.test.ts "github: draft = ready --undo outside the cloud, checks from REST (the newest run per name), status via api"
+  Scenario: A re-run check counts by its newest run
+    Given a check failed and a re-run of the same check passed on the head
+    When the reviewer reads the CR with "forge view <n>"
+    Then the check shows once, with the state of the newest run
 
   # Source: skills/review-pr/SKILL.md, intro paragraph and "Send back"
   Scenario: A factory CR is graded without a ticket

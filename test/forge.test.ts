@@ -31,7 +31,7 @@ test('parseCloses never reads an id from the next line and dedupes', () => {
 const pull = { number: 5, html_url: 'u', title: 'T', head: { ref: 'b', sha: 'h' }, base: { ref: 'main', sha: 'm' }, draft: false, state: 'open', body: 'Closes 1', mergeable_state: 'behind' };
 const restExec = (a: string[]) => {
   const path = a.find((x) => x.startsWith('repos/')) ?? '';
-  if (path.includes('/check-runs')) return JSON.stringify({ check_runs: [{ name: 'ci', status: 'completed', conclusion: 'success' }, { name: 'e2e', status: 'in_progress', conclusion: null }] });
+  if (path.includes('/check-runs')) return JSON.stringify({ check_runs: [{ id: 3, name: 'ci', status: 'completed', conclusion: 'success' }, { id: 2, name: 'e2e', status: 'in_progress', conclusion: null }, { id: 1, name: 'ci', status: 'completed', conclusion: 'failure' }] });
   if (path.endsWith('/status')) return JSON.stringify({ statuses: [{ context: 'review', state: 'error' }] });
   if (path.includes('/check-suites') || a.includes('--paginate')) return '';
   if (path.includes('/pulls?')) return JSON.stringify([{ number: 5, merged_at: 'x' }, { number: 6, merged_at: null }]);
@@ -39,7 +39,7 @@ const restExec = (a: string[]) => {
   return JSON.stringify(pull);
 };
 
-test('github: draft = ready --undo outside the cloud, checks from REST, status via api', async () => {
+test('github: draft = ready --undo outside the cloud, checks from REST (the newest run per name), status via api', async () => {
   const { ctx, execs, envs } = mk('github', { repo: 'o/r', token_env: 'TOK', review_token_env: 'REV' }, () => ({}), restExec);
   const f = createForge(ctx);
   const cr = await f.draft('5');

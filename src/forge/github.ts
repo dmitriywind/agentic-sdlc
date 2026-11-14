@@ -45,7 +45,9 @@ export function github(ctx: AdapterContext): Forge {
       state: p.merged_at ? 'merged' : p.state === 'open' ? 'open' : 'closed',
       behind: p.mergeable_state === 'behind', mergeSha: p.merged_at ? p.merge_commit_sha : undefined, closes: parseCloses(p.body ?? ''),
       checks: [
-        ...runs.map((c: any) => ({ name: c.name, state: runState(c) })),
+        // A re-run adds a check run with the same name: only the newest (highest id) counts.
+        ...Object.values(Object.fromEntries([...runs].sort((x: any, y: any) => x.id - y.id).map((c: any) => [c.name, c])))
+          .map((c: any) => ({ name: c.name, state: runState(c) })),
         ...statuses.map((s: any) => ({ name: s.context, state: statusState(s) })),
       ],
       body: p.body ?? '', author: p.user?.login ?? '',

@@ -8560,7 +8560,8 @@ function github(ctx) {
       mergeSha: p.merged_at ? p.merge_commit_sha : void 0,
       closes: parseCloses(p.body ?? ""),
       checks: [
-        ...runs.map((c) => ({ name: c.name, state: runState(c) })),
+        // A re-run adds a check run with the same name: only the newest (highest id) counts.
+        ...Object.values(Object.fromEntries([...runs].sort((x, y) => x.id - y.id).map((c) => [c.name, c]))).map((c) => ({ name: c.name, state: runState(c) })),
         ...statuses.map((s) => ({ name: s.context, state: statusState(s) }))
       ],
       body: p.body ?? "",
