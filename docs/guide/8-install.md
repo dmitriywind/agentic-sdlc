@@ -9,7 +9,7 @@ The `local` board is a file, `.agents/board.json`. No board account and no forge
 
 ```bash
 mkdir try-agentic && cd try-agentic && git init -b main && npm init -y
-npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.5
+npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0
 npx --no agentic-sdlc init --board local --forge github --harness generic
 printf 'Show a greeting on the home page.\n' > body.md
 npx --no agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog
@@ -17,7 +17,8 @@ npx --no agentic-sdlc dispatch shape --ticket 2
 ```
 
 `dispatch` prints the instruction your agent would follow and starts nothing. Open the folder in your
-agent and ask it to run the `sdlc` skill for one cycle.
+agent and ask it to run the `sdlc` skill for one cycle. `doctor` also probes Git and GitHub, so it needs a
+first commit and a GitHub remote: run it on a real repo.
 
 <div class="callout warn">
 
@@ -29,10 +30,11 @@ install it.
 ## Install on a real repo
 
 1. **Install the CLI**, pinned to a tag:
-   `npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.5`
+   `npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0`
 2. **Run `init`** with the command from [7. Choose your setup](7-choose.md). It lists every file it writes.
-3. **Fill in `.agents/binding.yml`**. The file documents every key. Set at least the owners,
-   `commands.*`, `product.environments`, `product.delivery` and `models`.
+3. **Fill in `.agents/binding.yml`**. The file documents every key. Set at least the owners, the board
+   options (`init` reads the repo from `git remote origin`), `commands.*`, `product.environments`,
+   `product.delivery` and `models`. `npx --no agentic-sdlc validate` names every key still missing.
 4. **Write the two docs** the skills judge every ticket against: `paths.importance_doc` (what
    matters) and `paths.guiding_narrative` (where the product goes). Without them, product questions
    become holds.

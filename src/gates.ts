@@ -198,7 +198,7 @@ export function approvers(reviews: Review[], sha: string): string[] {
  * Status `human-approval`. product-fast passes; product-full needs a human approval on the head
  * (forge.human_approval full-lane or always; always holds product-fast too; never passes both);
  * tuning passes when auto-mergeable, else waits for owners.factory like guardrail. A human is
- * anyone outside owners.bots and forge.review_identity. The lane is the closing ticket's Lane
+ * an owner, member or collaborator of the repo outside owners.bots and forge.review_identity. The lane is the closing ticket's Lane
  * field; anything but Fast (unset, unreadable, several tickets) counts as Full.
  */
 export async function approval(d: Deps, n: string) {
@@ -225,7 +225,10 @@ export async function approval(d: Deps, n: string) {
   else need = mode === 'always' || (mode === 'full-lane' && klass === 'product-full') ? 'human' : 'none';
   let by: string | undefined;
   if (need !== 'none') {
-    const ok = approvers(await d.forge.approvals(n), cr.headSha);
+    const reviews = await d.forge.approvals(n);
+    // On a public repo anyone can submit a review: only an owner, member or collaborator counts as a human approval.
+    const member = new Set(reviews.filter((r) => !r.assoc || ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(r.assoc)).map((r) => r.user.toLowerCase()));
+    const ok = approvers(reviews, cr.headSha).filter((u) => member.has(u));
     by = need === 'owner' ? ok.find((u) => !!owner && u === owner) : ok.find((u) => !bots.includes(u));
   }
   const pass = need === 'none' || !!by;
@@ -319,6 +322,7 @@ export async function merged(d: Deps, sha: string): Promise<{ cr?: string; sha: 
   const cr = await d.forge.viewBySha(sha).catch((e: Error) => { if (/no change request for/.test(e.message)) return undefined; throw e; });
   const none = (reason: string) => ({ cr: cr?.n, sha, moved: [] as string[], reason });
   if (!cr?.n) return none('no CR merged at this sha');
+  if (cr.state !== 'merged') return none(`CR ${cr.n} is not merged`);
   if (cr.target !== d.binding.vcs.trunk) return none(`target ${cr.target} is not trunk ${d.binding.vcs.trunk}`);
   if (cr.closes.length !== 1) return none(`CR closes ${cr.closes.length} tickets, not exactly one`);
   const id = cr.closes[0];
@@ -570,7 +574,7 @@ export const cli: PortCli = (argv, base) =>
         if (!kinds.length) return { ok: true, kinds, reason: 'product.evidence is empty' };
         const cmd = base.binding.commands?.evidence_check;
         if (!cmd) throw new Error('product.evidence is set but commands.evidence_check is unset');
-        shell(base.exec, cmd.replaceAll('{sha}', sha), base.root);
+        shell(base.exec, fill(cmd, { sha }), base.root);
         return { ok: true, kinds, sha };
       }
       case 'signal-on-red': return signalOnRed(deps(), a.need('run'));

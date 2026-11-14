@@ -32,7 +32,7 @@ function fakes(items: Item[], crs: Record<string, Partial<CR>> = {}, diffs: Reco
     set: async (id: string, f: string, v: string | null) => { if (v === null) delete (get(id).fields as any)[f]; else (get(id).fields as any)[f] = v; return get(id); },
     create: async (t: any) => { created.push(t); const i = item(`n${created.length}`, t.status, {}, { title: t.title }); i.labels = t.labels ?? []; items.push(i); return i; },
   };
-  const cr = (n: string): CR => ({ n, url: '', title: '', source: '', target: 'main', headSha: '', baseSha: '', draft: false, state: 'open', behind: false, closes: [], checks: [], body: '', author: 'bot', ...crs[n] });
+  const cr = (n: string): CR => ({ n, url: '', title: '', source: '', target: 'main', headSha: '', baseSha: '', draft: false, state: crs[n]?.mergeSha ? 'merged' : 'open', behind: false, closes: [], checks: [], body: '', author: 'bot', ...crs[n] });
   const forge: any = {
     view: async (n: string) => cr(n),
     viewBySha: async (sha: string) => cr(Object.keys(crs).find((k) => crs[k].mergeSha === sha)!),
@@ -235,11 +235,12 @@ test('approval: classes and the human-approval status per forge.human_approval',
   };
   const reviews: Record<string, { user: string; state: string; sha: string }[]> = {
     full: [{ user: 'factory-bot', state: 'approved', sha: 'hfull' }],
-    fullok: [{ user: 'Dana', state: 'approved', sha: 'hfullok' }],
+    fullok: [{ user: 'Dana', state: 'approved', sha: 'hfullok', assoc: 'COLLABORATOR' } as any],
+    stranger: [{ user: 'mallory', state: 'approved', sha: 'hstranger', assoc: 'NONE' } as any],
     guard: [{ user: 'dana', state: 'approved', sha: 'guard' }],
     guardok: [{ user: 'fo', state: 'approved', sha: 'guard' }],
   };
-  const crs: Record<string, Partial<CR>> = { fast: prod('fast', 'Fast'), full: prod('full', 'Full'), fullok: prod('fullok', 'Full'), nolane: prod('nolane') };
+  const crs: Record<string, Partial<CR>> = { fast: prod('fast', 'Fast'), full: prod('full', 'Full'), fullok: prod('fullok', 'Full'), stranger: prod('stranger', 'Full'), nolane: prod('nolane') };
   const view = f.d.forge.view;
   f.d.forge.view = async (n: string) => (crs[n] ? { ...(await view(n)), ...crs[n] } : n === 'guardok' ? view('guard') : view(n));
   const diff = f.d.forge.diff;
@@ -250,6 +251,7 @@ test('approval: classes and the human-approval status per forge.human_approval',
   assert.equal(await st('fast'), 'product-fast:success');
   assert.equal(await st('full'), 'product-full:pending'); // a bot's approval is not a human's
   assert.equal(await st('fullok'), 'product-full:success');
+  assert.equal(await st('stranger'), 'product-full:pending'); // an outsider's approval on a public repo is not a human approval
   assert.equal(await st('nolane'), 'product-full:pending'); // no lane fails closed to Full
   assert.equal(await st('tune'), 'tuning:success');
   assert.equal(await st('guard'), 'guardrail:pending'); // a human, but not owners.factory
@@ -590,7 +592,7 @@ test('gate evidence: runs commands.evidence_check with the sha; empty product.ev
   const b = { ...binding, product: { ...binding.product, evidence: ['report'] } };
   assert.equal((await run({ ...b, commands: {} })).code, 1);
   assert.equal((await run({ ...b, commands: { evidence_check: 'check {sha}' } })).code, 0);
-  assert.ok((ran as string[]).some((c) => c.includes('check abc123')), ran.join('|'));
+  assert.ok((ran as string[]).some((c) => /check "?abc123"?/.test(c)), ran.join('|'));
 });
 
 test('shipped: a failure with one environment returns the tickets of the failed revision to Not shipped', async () => {
@@ -599,4 +601,11 @@ test('shipped: a failure with one environment returns the tickets of the failed 
   f.d.isAncestor = () => true;
   await shipped(f.d, 'production', 'sha1', 'failure');
   assert.equal(f.items[0].fields.shipped, 'Not shipped');
+});
+
+test('merged: a CR that is not merged moves nothing', async () => {
+  const f = fakes([item('12', 'In review')], { open1: { n: 'open1', closes: ['12'], state: 'open' } });
+  f.d.forge.viewBySha = async () => ({ ...(await f.d.forge.view('open1')), state: 'open' });
+  assert.match((await merged(f.d, 'x')).reason!, /not merged/);
+  assert.equal(f.items[0].status, 'In review');
 });

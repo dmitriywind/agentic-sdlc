@@ -62,7 +62,8 @@ export interface CR {
 }
 
 /** One review of a CR, oldest first. state is lower case: approved, changes_requested, commented, dismissed, pending. sha: the commit reviewed. */
-export interface Review { user: string; state: string; sha: string }
+/** assoc: the reviewer's relation to the repo (OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE ...), when the forge reports it. */
+export interface Review { user: string; state: string; sha: string; assoc?: string }
 
 export interface Run { id: string; name: string; ref: string; sha: string; state: 'pending' | 'success' | 'failure'; url: string; at: string }
 

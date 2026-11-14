@@ -5,7 +5,7 @@ Optional. Off until you set `learning.enabled: true` and an `agent_command` for 
 factory then improves its own skills, one proven change at a time.
 
 ```mermaid
-flowchart LR
+flowchart TB
   runs["Runs<br/>(heartbeats)"]:::board --> judge["judge-run:<br/>grade each run"]:::agent
   judge --> prop["improve-factory:<br/>one change"]:::agent
   prop --> bench["Bench: replay<br/>your merged work"]:::ci

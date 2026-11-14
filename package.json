@@ -1,6 +1,6 @@
 {
   "name": "agentic-sdlc",
-  "version": "2.0.0-alpha.5",
+  "version": "0.1.0",
   "private": true,
   "description": "Software factory / agentic SDLC: any board, any forge, trunk-based Git; ships as a Claude Code plugin",
   "type": "module",
@@ -42,7 +42,7 @@
   "bugs": {
     "url": "https://github.com/dmitriywind/agentic-sdlc/issues"
   },
-  "homepage": "https://github.com/dmitriywind/agentic-sdlc#readme",
+  "homepage": "https://dmitriywind.github.io/agentic-sdlc/guide.html",
   "engines": {
     "node": ">=22.18"
   },

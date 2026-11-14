@@ -160,6 +160,14 @@ VIZ.setup = (el) => {
       steward: ['owner-login', 'steward-login', 'your-factory-bot'],
     }[p.team];
     const shared = p.repos === 'many';
+    const ship = {
+      webcd: ['[staging, production]', 'continuous', '[test, visual, computer-use]'],
+      webrel: ['[staging, production]', 'release-line', '[test, visual, computer-use]'],
+      mobile: ['[internal, beta, store]', 'release-line', '[test, visual, manual]'],
+      lib: ['[registry]', 'continuous', '[test]'],
+      data: ['[staging, production]', 'continuous', '[eval, data-check]'],
+      docs: ['[production]', 'continuous', '[visual, manual]'],
+    }[p.ship];
     const y = ['profile: ' + prof, 'owners:', '  product: ' + owners[0], '  factory: ' + owners[1], '  bots: [' + owners[2] + ']'];
     if (p.board === 'jira' || p.board === 'linear') y.push('  # names differ? product: { board: <account id>, forge: <login> }');
     // forge: token_env only where gh has no login of its own, or to keep the implementer off commit statuses.
@@ -179,16 +187,10 @@ VIZ.setup = (el) => {
     }[p.board];
     if (bo.length) y.push('  options:', ...bo.map((l) => '    ' + l)); else y.push('  options: {}');
     if (shared && p.board !== 'project' && p.board !== 'local') y.push('  scope:', '    label: repo:your-repo', '    home: true   # only in the home repo', '    repos: [repo:your-repo, repo:other-repo]   # only in the home repo');
-    const ship = {
-      webcd: ['[staging, production]', 'continuous', '[test, visual, computer-use]'],
-      webrel: ['[staging, production]', 'release-line', '[test, visual, computer-use]'],
-      mobile: ['[internal, beta, store]', 'release-line', '[test, visual, manual]'],
-      lib: ['[registry]', 'continuous', '[test]'],
-      data: ['[staging, production]', 'continuous', '[eval, data-check]'],
-      docs: ['[production]', 'continuous', '[visual, manual]'],
-    }[p.ship];
+    y.push('  env_labels: [' + ship[0].slice(1, -1).split(', ').map((e) => 'env:' + e).join(', ') + ']   # one per product.environments');
     y.push('product:', '  environments: ' + ship[0], '  delivery: ' + ship[1], '  proofs: ' + ship[2]);
     y.push('executors:', '  default:', '    kind: harness', '    sandbox: ' + (p.runs === 'local' ? 'local' : prof === 'organization' ? 'container' : 'cloud'));
+    if (prof === 'organization') y.push('  # validate warns until one stage runs on a managed agent, for example:', '  # implement-spec: { kind: managed, api: claude, agent_env: IMPL_AGENT_ID, environment_env: IMPL_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }');
 
     const tpl = p.runs === 'local' ? 'local.md' : p.runs === 'actions' ? (p.agent === 'codex' ? 'github-actions-codex.yml' : 'github-actions-claude.yml')
       : p.runs === 'claude' ? 'claude-routine.md' : p.runs === 'vendor' && p.agent === 'cursor' ? 'cursor-automation.md' : 'routine.md';
@@ -211,6 +213,7 @@ VIZ.setup = (el) => {
       + '<pre tabindex="0" aria-label="' + id + '"><code id="su-' + id + '">' + esc(text) + '</code></pre></div>';
     return block('cmd', 'Run', cmd.join(' \\\n  '))
       + block('yaml', 'Set in <code>.agents/binding.yml</code>', y.join('\n'))
+      + '<p class="su-after">Then set <code>heartbeat.ticket</code> to the id of a ticket that holds heartbeat comments (validate fails while it is empty).</p>'
       + '<div class="su-blk"><h4>Schedule</h4><p>Follow <a id="su-tpl" href="' + RUNNER + tpl + '">templates/runner/' + tpl + '</a>.</p></div>'
       + '<div class="su-blk"><h4>Notes</h4><div class="su-notes">'
       + warn.map((t) => '<div class="callout warn">' + esc(t) + '</div>').join('')

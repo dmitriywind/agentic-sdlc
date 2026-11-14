@@ -107,7 +107,8 @@
       $('#sh-deploy', el).disabled = ne < 0 || blocked();
       $('#sh-fail', el).disabled = ne < 0 || blocked();
       $('#sh-next', el).textContent = !s.merged ? 'Next: merge the change request.'
-        : s.failed !== null ? 'Next: triage-signal turns the Signal into a new ticket with a regression case. Reset to start over.'
+        : s.failed === 1 ? 'Next: the Signal waits on hold for you; after an owner replies, triage-signal turns it into a new ticket with a regression case. Reset to start over.'
+        : s.failed === 0 ? 'Next: the Signal is not held; triage-signal turns it into a new ticket with a regression case in the next cycle. Reset to start over.'
         : ne < 0 ? 'Shipped to every environment.'
         : blocked() ? (s.rel === 0 ? 'Next: production ships only from a release line. Open a release request.' : 'Next: the Product owner approves the release.')
         : 'Next: deploy ' + ENVS[ne] + '.';

@@ -208,3 +208,10 @@ test('board reads on jira, linear and github follow every page, and fail instead
   await assert.rejects(full.get('1'), /archive/);
   assert.equal((await mk('github', gh, answer(4999)).board.list()).length, 4999);
 });
+
+test('github-issues get refuses a pull request or an issue with no status label: it is not on the board', async () => {
+  const { board } = issuesRepo([iss(1, ['status:Ready']), iss(2, []), iss(3, ['status:Ready'], { pull_request: {} })]);
+  assert.equal((await board.get('1')).status, 'Ready');
+  await assert.rejects(board.get('2'), /not on the board/);
+  await assert.rejects(board.get('3'), /not on the board/);
+});

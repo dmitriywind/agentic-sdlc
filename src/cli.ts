@@ -17,6 +17,8 @@ const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, string]>
   mcp: [() => import('./mcp.ts'), true, 'serve the port verbs as MCP tools over stdio; --allow approve,status'],
 };
 
+const INIT_FLAGS = '[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github|github-issues|jira|linear|local] [--forge github] [--vcs git] [--no-plugin] [--force]';
+
 const help = () =>
   ['usage: agentic-sdlc [--root <dir>] <group> <verb> ...', ...Object.entries(GROUPS).map(([g, v]) => `  ${g.padEnd(9)} ${v[2]}`)].join('\n');
 
@@ -29,6 +31,10 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv = process.env)
   if (!group || group === '--help' || group === '-h') { console.log(help()); return group ? 0 : 2; }
   const entry = GROUPS[group];
   if (!entry) { console.error(`unknown group '${group}'\n${help()}`); return 2; }
+  // `<group> --help` (or -h) prints that group's usage; a group that needs a verb and has none is a usage error.
+  const usage = `usage: agentic-sdlc ${group} ${group === 'init' ? INIT_FLAGS : entry[1] ? '<verb> ...' : ''}\n  ${entry[2]}`;
+  if (rest.includes('--help') || rest[0] === '-h') { console.log(usage); return 0; }
+  if (!rest.length && entry[1] && group !== 'mcp') { console.error(usage); return 2; }
   const ctx = { root, env, exec, http } as Omit<AdapterContext, 'options'>;
   // The binding loads on first read of ctx.binding; init, validate and doctor never use this getter.
   if (entry[1]) {

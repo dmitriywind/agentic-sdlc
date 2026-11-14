@@ -7829,7 +7829,9 @@ function createGithubIssuesBoard(ctx) {
     api("PATCH", `issues/${i.number}`, { ...extra, labels });
   };
   const get = async (id) => {
-    const out = toItem(issue(id));
+    const raw = issue(id);
+    if (raw.pull_request || statusOf(raw) === void 0) throw new Error(`#${id} is not on the board`);
+    const out = toItem(raw);
     try {
       out.children = all(`issues/${id}/sub_issues`).map((s) => String(s.number));
       const p = api("GET", `issues/${id}/parent`);
@@ -8628,7 +8630,7 @@ function github(ctx) {
     },
     async list(q = {}) {
       const state = q.state === "merged" ? "closed" : q.state ?? "open";
-      const rows = JSON.parse(gh(["api", `${api}/pulls?state=${state}&per_page=100`]));
+      const rows = JSON.parse(gh(["api", `${api}/pulls?state=${state}&per_page=100`, "--paginate", "--slurp"])).flat();
       return Promise.all(rows.filter((p) => q.state !== "merged" || p.merged_at).map((p) => view(String(p.number))));
     },
     async closing(id) {
@@ -8696,7 +8698,7 @@ function github(ctx) {
       post2(`pulls/${n}/reviews`, { event: "APPROVE", body: "agentic-sdlc review: PASS" }, withToken("review_token_env"));
     },
     async approvals(n) {
-      const out = gh(["api", "--paginate", `${api}/pulls/${n}/reviews`, "--jq", ".[] | {user: .user.login, state: (.state | ascii_downcase), sha: .commit_id}"]);
+      const out = gh(["api", "--paginate", `${api}/pulls/${n}/reviews`, "--jq", ".[] | {user: .user.login, state: (.state | ascii_downcase), sha: .commit_id, assoc: .author_association}"]);
       return out.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     },
     async runs(q = {}) {
@@ -8819,8 +8821,13 @@ function git(ctx) {
   const g = (...a) => ctx.exec("git", a, { cwd: ctx.root }).trim();
   const lines = (s) => s.split("\n").map((l) => l.trim()).filter(Boolean);
   const base = () => g("merge-base", "HEAD", `origin/${trunk}`);
+  const safeName = (name) => {
+    if (!name || name.startsWith("-") || name.includes("..") || /[\s\\~^:?*[]/.test(name)) throw new Error(`change line name not allowed: ${name}`);
+    g("check-ref-format", "--branch", name);
+  };
   return {
     async start(name) {
+      safeName(name);
       g("fetch", "origin", trunk);
       const workdir = join3(ctx.root, ".agents", "work", name);
       const fetchBranch = () => {
@@ -8893,6 +8900,7 @@ function git(ctx) {
       });
     },
     async drop(name) {
+      safeName(name);
       g("worktree", "remove", "--force", join3(ctx.root, ".agents", "work", name));
       try {
         g("branch", "-D", name);
@@ -9680,7 +9688,9 @@ async function approval(d, n) {
   else need3 = mode === "always" || mode === "full-lane" && klass === "product-full" ? "human" : "none";
   let by;
   if (need3 !== "none") {
-    const ok = approvers(await d.forge.approvals(n), cr.headSha);
+    const reviews = await d.forge.approvals(n);
+    const member = new Set(reviews.filter((r) => !r.assoc || ["OWNER", "MEMBER", "COLLABORATOR"].includes(r.assoc)).map((r) => r.user.toLowerCase()));
+    const ok = approvers(reviews, cr.headSha).filter((u) => member.has(u));
     by = need3 === "owner" ? ok.find((u) => !!owner && u === owner) : ok.find((u) => !bots.includes(u));
   }
   const pass = need3 === "none" || !!by;
@@ -9755,6 +9765,7 @@ async function merged(d, sha2) {
   });
   const none = (reason) => ({ cr: cr?.n, sha: sha2, moved: [], reason });
   if (!cr?.n) return none("no CR merged at this sha");
+  if (cr.state !== "merged") return none(`CR ${cr.n} is not merged`);
   if (cr.target !== d.binding.vcs.trunk) return none(`target ${cr.target} is not trunk ${d.binding.vcs.trunk}`);
   if (cr.closes.length !== 1) return none(`CR closes ${cr.closes.length} tickets, not exactly one`);
   const id = cr.closes[0];
@@ -10056,7 +10067,7 @@ var init_gates = __esm({
           if (!kinds.length) return { ok: true, kinds, reason: "product.evidence is empty" };
           const cmd = base.binding.commands?.evidence_check;
           if (!cmd) throw new Error("product.evidence is set but commands.evidence_check is unset");
-          shell(base.exec, cmd.replaceAll("{sha}", sha2), base.root);
+          shell(base.exec, fill(cmd, { sha: sha2 }), base.root);
           return { ok: true, kinds, sha: sha2 };
         }
         case "signal-on-red":
@@ -11306,6 +11317,7 @@ var GROUPS = {
   bench: [() => Promise.resolve().then(() => (init_bench(), bench_exports)), true, "build propose run report compare"],
   mcp: [() => Promise.resolve().then(() => (init_mcp(), mcp_exports)), true, "serve the port verbs as MCP tools over stdio; --allow approve,status"]
 };
+var INIT_FLAGS = "[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github|github-issues|jira|linear|local] [--forge github] [--vcs git] [--no-plugin] [--force]";
 var help = () => ["usage: agentic-sdlc [--root <dir>] <group> <verb> ...", ...Object.entries(GROUPS).map(([g, v]) => `  ${g.padEnd(9)} ${v[2]}`)].join("\n");
 async function main(argv, env = process.env) {
   let root = process.cwd();
@@ -11324,6 +11336,16 @@ async function main(argv, env = process.env) {
   if (!entry) {
     console.error(`unknown group '${group}'
 ${help()}`);
+    return 2;
+  }
+  const usage = `usage: agentic-sdlc ${group} ${group === "init" ? INIT_FLAGS : entry[1] ? "<verb> ..." : ""}
+  ${entry[2]}`;
+  if (rest.includes("--help") || rest[0] === "-h") {
+    console.log(usage);
+    return 0;
+  }
+  if (!rest.length && entry[1] && group !== "mcp") {
+    console.error(usage);
     return 2;
   }
   const ctx = { root, env, exec, http };

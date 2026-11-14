@@ -1,6 +1,6 @@
 # agentic-sdlc
 
-> **Alpha (2.0.0-alpha).** The interfaces still change between alphas. Try it on a sandbox repo
+> **0.1 (early).** Interfaces may still change before 1.0. Try it on a sandbox repo
 > before you point it at one that matters.
 
 agentic-sdlc runs software delivery with agents. You put work on a board. A scheduled agent run,
@@ -10,6 +10,24 @@ and no agent can skip them. You act only when the factory asks you.
 It is a skill pack (the process), a binding (your project's values) and the `agentic-sdlc` CLI (the
 board, forge and Git verbs, and the gates). It runs on Claude Code, Codex, Cursor or any agent with
 a shell, on your subscription or on API keys, in the cloud, in CI or on your own machine.
+
+**Read the guide online:** [dmitriywind.github.io/agentic-sdlc](https://dmitriywind.github.io/agentic-sdlc/guide.html):
+step through a ticket in six scenarios, and get your setup command.
+
+## Quick start
+
+```bash
+npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0
+npx --no agentic-sdlc init --profile individual --harness claude --board github-issues
+npx --no agentic-sdlc doctor
+```
+
+Needs Node 22.18 or later. npm 12 refuses Git dependencies without `--allow-git`; older npm versions
+that do not know the flag can drop it. The CLI installs from Git only. Warning: the npm package
+`agentic-sdlc` is a different project; do not install it. Before `doctor` passes, set `heartbeat.ticket` in `.agents/binding.yml` (and the board options for Jira,
+Linear or a GitHub Project; `init` reads the repo from `git remote origin`). `npx --no agentic-sdlc` lists
+every group and `npx --no agentic-sdlc <group> --help` its verbs; every verb prints JSON. Exit 0 is
+success, 1 is a refused or failed action, 2 is a usage error.
 
 ## Read the guide
 
@@ -32,18 +50,6 @@ The same guide, with every diagram drawn, as one page: [docs/guide.html](docs/gu
 Reference: [the contract](references/architecture.md), [behaviour specs](docs/behaviour/README.md),
 [GitHub setup](docs/forges.md), per-vendor setup in [docs/ecosystems](docs/ecosystems/claude-code.md),
 [the binding template](templates/binding.yml), [the roadmap](docs/roadmap.md).
-
-## Quick start
-
-```bash
-npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.5
-npx --no agentic-sdlc init --profile individual --harness claude --board github-issues
-npx --no agentic-sdlc doctor
-```
-
-The CLI installs from Git only. Warning: the npm package `agentic-sdlc` is a different project; do
-not install it. `npx --no agentic-sdlc --help` lists every verb; every verb prints JSON. Exit 0 is
-success, 1 is a refused or failed action, 2 is a usage error.
 
 ## This repository
 

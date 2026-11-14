@@ -34,6 +34,11 @@ test('blocks pushes that reach the trunk', () => {
     "git push 'refs/heads/*:refs/heads/*'",
     'git push origin main',
     'git push origin HEAD:main',
+    'git push --repo=origin main',
+    'git push origin feat:"main"',
+    'git push origin feat:main>/dev/null',
+    'git push origin feat:main#',
+    'git push origin {feat,main}',
   ]) assert.equal(run(c), 2, c);
 });
 
@@ -44,6 +49,7 @@ test('allows pushing a named change line', () => {
 test('forge approve is for the review role only', () => {
   assert.equal(run('agentic-sdlc forge approve 3'), 2);
   assert.equal(run('agentic-sdlc forge approve 3', { AGENTIC_SDLC_ROLE: 'review' }), 0);
+  for (const c of ['node dist/bin.js forge approve 3', 'agentic-sdlc.cmd forge approve 3']) assert.equal(run(c), 2, c);
 });
 
 const repo = (trunk: string, binding?: string) => {

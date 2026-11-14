@@ -8,8 +8,14 @@ export function git(ctx: AdapterContext): Vcs {
   const g = (...a: string[]) => ctx.exec('git', a, { cwd: ctx.root }).trim();
   const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean);
   const base = () => g('merge-base', 'HEAD', `origin/${trunk}`);
+  // A change line name reaches git argv and a path under .agents/work: no option, no path escape.
+  const safeName = (name: string) => {
+    if (!name || name.startsWith('-') || name.includes('..') || /[\s\\~^:?*[]/.test(name)) throw new Error(`change line name not allowed: ${name}`);
+    g('check-ref-format', '--branch', name);
+  };
   return {
     async start(name) {
+      safeName(name);
       g('fetch', 'origin', trunk);
       const workdir = join(ctx.root, '.agents', 'work', name);
       // Only a missing remote branch means 'start from trunk'; a network or auth error is not.
@@ -58,6 +64,7 @@ export function git(ctx: AdapterContext): Vcs {
       return out.split('\n').filter(Boolean).map((l) => { const [name, a, b] = l.split(' '); return { name, sha: a || b }; });
     },
     async drop(name) {
+      safeName(name);
       g('worktree', 'remove', '--force', join(ctx.root, '.agents', 'work', name));
       try { g('branch', '-D', name); } catch { /* branch already gone */ }
     },

@@ -8,7 +8,7 @@ says a person must decide. Together, the skills, your settings, the CLI and the 
 **factory**.
 
 ```mermaid
-flowchart LR
+flowchart TB
   you(["You"]):::you -->|"ideas, priorities,<br/>answers"| board[("Board")]:::board
   board --> cycle["Cycle:<br/>agents"]:::agent
   cycle -->|"pull request"| gates["CI checks"]:::ci
@@ -38,7 +38,7 @@ subscription (Claude, Codex or Cursor) or API keys.
 <div class="callout warn">
 
 **Not a fit yet:** a forge other than GitHub; a team that cannot let agents open pull requests; work
-with no automated checks. It is alpha: the interfaces still change between versions.
+with no automated checks. It is early (0.1): interfaces may still change before 1.0.
 
 </div>
 

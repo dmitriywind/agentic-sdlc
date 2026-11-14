@@ -111,3 +111,9 @@ Feature: Push guard
     When a skill runs "agentic-sdlc vcs push"
     Then the command fails and names the trunk or the detached HEAD
     And a push from a change line succeeds
+
+  # Source: src/vcs/git.ts, "start" and "drop"
+  # Proof: test/vcs.test.ts "git start and drop refuse a change line name that is an option or leaves .agents/work"
+  Scenario: A change line name cannot be an option or a path out of the work folder
+    When an agent starts or drops a change line named "--upload-pack=x", "../../x" or "a b"
+    Then the vcs port refuses it before it runs git

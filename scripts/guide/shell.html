@@ -111,7 +111,9 @@ h3 { font-size: 17px; margin: 24px 0 6px; }
 .btn { font: 500 14px var(--font); border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); border-radius: 8px; padding: 7px 12px; cursor: pointer; min-height: 36px; }
 .btn:hover { border-color: var(--accent); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn:disabled { opacity: .45; cursor: default; }
+.btn:disabled { opacity: .55; border-style: dashed; cursor: default; }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; }
+.cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
 .actor { display: inline-flex; align-items: center; gap: 6px; font: 500 13px var(--mono); padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 .actor.you { background: var(--you-soft); color: var(--you); }
 .actor.agent { background: var(--agent-soft); color: var(--agent); }
@@ -146,21 +148,21 @@ h3 { font-size: 17px; margin: 24px 0 6px; }
 .section-h { margin: 8px 0 0; }
 @media (max-width: 1200px) { .shell { grid-template-columns: 236px minmax(0, 1fr); } .otp { display: none; } }
 @media (max-width: 960px) {
-  html { scroll-padding-top: 72px; }
+  html { scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 64px); } /* the one-row sticky header is 56px */
   .shell { grid-template-columns: 1fr; gap: 18px; padding-block: 8px 56px; }
-  .rail { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); padding-block: 8px; grid-template-columns: auto minmax(0, 1fr); align-items: center; max-height: none; overflow: visible; }
-  .rail .grp { display: none; }
+  .rail { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); padding-block: 8px; grid-template-columns: auto minmax(0, 1fr); align-items: center; max-height: none; overflow: visible; border-bottom: 1px solid var(--rule); }
+  #toc { display: none; }
   .brand { padding: 0; }
   .rail select { display: block; width: 100%; font: 15px var(--font); padding: 8px; border-radius: 8px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); }
 }
-@media (max-width: 600px) { .prose td code { white-space: normal; } .prose table { min-width: 520px; } }
+@media (max-width: 600px) { .prose td code { white-space: normal; } .prose table:has(th:nth-child(3)) { min-width: 520px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 </style>
 </head>
 <body>
 <div class="shell">
   <nav class="rail" aria-label="Guide">
-    <a class="brand" href="#overview"><b>agentic-sdlc</b><span class="pill">alpha</span></a>
+    <a class="brand" href="#overview"><b>agentic-sdlc</b><span class="pill">v0.1</span></a>
     <div id="toc"></div>
     <select id="pick" aria-label="Chapter"></select>
   </nav>
@@ -206,7 +208,7 @@ marked.use({ renderer: {
 } });
 // Diagram colours come from the tokens, so they follow the theme: the chapters name a class (:::you, :::agent, :::ci, :::board) and no colour.
 function initMermaid() {
-  const role = (k, fill, stroke) => '.' + k + '>rect,.' + k + '>polygon,.' + k + '>circle,.' + k + '>path,.' + k + ' .basic.label-container{fill:' + fill + '!important;stroke:' + stroke + '!important}';
+  const role = (k, fill, stroke) => '.' + k + '>rect,.' + k + '>polygon,.' + k + '>circle,.' + k + '>path,.' + k + ' .basic.label-container,.' + k + ' .basic.label-container>path{fill:' + fill + '!important;stroke:' + stroke + '!important}';
   mermaid.initialize({
     startOnLoad: false, securityLevel: 'strict', theme: 'base',
     themeVariables: { fontFamily: css('--font'), fontSize: '15px', primaryColor: css('--sheet'), primaryTextColor: css('--ink'),
@@ -225,7 +227,7 @@ function initMermaid() {
 function glossaryTerms(root) {
   const left = new Map(glossary.map((g) => [g.term.toLowerCase(), g]));
   const re = new RegExp('\\b(' + glossary.map((g) => g.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).sort((a, b) => b.length - a.length).join('|') + ')\\b', 'i');
-  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement.closest('code,pre,a,h1,h2,h3,th,.panel,.diagram,.term,button') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement.closest('code,pre,a,h1,h2,h3,th,td,.panel,.diagram,.term,button') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
   const nodes = []; while (walk.nextNode()) nodes.push(walk.currentNode);
   for (const n of nodes) {
     const m = re.exec(n.nodeValue);
@@ -255,14 +257,15 @@ document.addEventListener('click', (e) => {
   const id = a.getAttribute('href').slice(1);
   if (id === 'overview' || chapters.some((c) => c.id === id)) { e.preventDefault(); go(id); }
 });
-function go(id) { try { history.pushState(null, '', '#' + id); } catch {} show(id); }
+async function go(id) { try { history.pushState(null, '', '#' + id); } catch {} await show(id); main.focus({ preventScroll: true }); }
 function overview() {
-  return '<header class="hero"><span class="eyebrow">agentic-sdlc · alpha</span><h1>Software delivery run by agents, with gates they cannot skip</h1>'
-    + '<p class="lead">You put work on a board. Every hour an agent run moves each ticket one step: it shapes it, builds it, reviews it and merges it. CI decides what merges. You answer when a rule says a person must decide.</p></header>'
+  return '<header class="hero"><span class="eyebrow">agentic-sdlc · v0.1</span><h1>Software delivery run by agents, with gates they cannot skip</h1>'
+    + '<p class="lead">You put work on a board. Every hour an agent run moves each ticket one step: it shapes it, builds it, reviews it and merges it. CI decides what merges. You answer when a rule says a person must decide.</p>'
+    + '<div class="cta"><a class="btn primary" href="#1-what-it-is">Start reading</a><a class="btn" href="#7-choose">Choose your setup</a></div></header>'
     + '<div class="tiles"><div class="tile"><b>Agents cannot skip the gates</b><span>Six required CI checks decide every merge.</span></div>'
     + '<div class="tile"><b>You act on asks, not on every step</b><span>Holds, approvals and releases come to you as one comment each.</span></div>'
     + '<div class="tile"><b>Every run leaves a record</b><span>Each cycle writes a heartbeat: what ran, on which model, what failed.</span></div></div>'
-    + '<div data-viz="journey"></div>'
+    + '<h2 class="section-h">Watch one ticket go from a request to production</h2><div data-viz="journey"></div>'
     + groups.map((g) => '<section><h2 class="section-h">' + esc(g) + '</h2><div class="cards">' + chapters.filter((x) => x.group === g).map((x) =>
       '<a class="card" href="#' + x.id + '"><small>' + String(x.n).padStart(2, '0') + '</small><b>' + esc(x.short) + '</b><span>' + esc(x.lead) + '</span></a>').join('') + '</div></section>').join('');
 }
@@ -272,6 +275,7 @@ async function show(id = location.hash.slice(1)) {
   current = c ? c.id : 'overview';
   for (const a of toc.querySelectorAll('a')) { if (a.getAttribute('href') === '#' + current) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
   select.value = current;
+  document.title = (c ? c.title : 'Overview') + ' · agentic-sdlc Guide';
   if (!c) { main.innerHTML = overview(); otp.innerHTML = ''; }
   else {
     const i = chapters.indexOf(c), prev = chapters[i - 1], next = chapters[i + 1];
@@ -282,21 +286,32 @@ async function show(id = location.hash.slice(1)) {
       + '<p class="source">Source: <a href="' + blob + c.file + '">' + c.file + '</a></p>';
     const heads = [...main.querySelectorAll('.prose h2')];
     for (const h of heads) h.id = slug(h.textContent);
-    otp.innerHTML = heads.length ? '<b>On this page</b>' + heads.map((h) => '<a href="javascript:void 0" data-to="' + h.id + '">' + esc(h.textContent) + '</a>').join('') : '';
+    otp.innerHTML = heads.length ? '<b>On this page</b>' + heads.map((h) => '<a href="#' + h.id + '" data-to="' + h.id + '">' + esc(h.textContent) + '</a>').join('') : '';
     if (!c.id.endsWith('glossary')) glossaryTerms($('.prose', main));
   }
   for (const el of main.querySelectorAll('[data-viz]')) {
     const f = VIZ[el.dataset.viz];
     if (f) { try { f(el); } catch (e) { el.textContent = 'This part did not load: ' + e.message; } }
   }
-  initMermaid();
-  await mermaid.run({ nodes: main.querySelectorAll('pre.mermaid') });
+  for (const p of main.querySelectorAll('pre.mermaid')) p.dataset.src = p.textContent;
+  await drawDiagrams();
   scrollTo(0, 0);
+}
+// Diagrams take their colours from the tokens at render time, so a theme change redraws only them from the kept source.
+// Runs are queued, so a theme change during a page change never draws into a replaced page.
+let drawing = Promise.resolve();
+function drawDiagrams() {
+  return (drawing = drawing.then(async () => {
+    const nodes = main.querySelectorAll('pre.mermaid');
+    for (const p of nodes) { p.removeAttribute('data-processed'); p.textContent = p.dataset.src; }
+    initMermaid();
+    await mermaid.run({ nodes, suppressErrors: true });
+  }).catch(() => {}));
 }
 otp.addEventListener('click', (e) => { const a = e.target.closest('[data-to]'); if (a) { e.preventDefault(); document.getElementById(a.dataset.to)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }); } });
 addEventListener('popstate', () => show());
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => show(current));
-new MutationObserver(() => show(current)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawDiagrams);
+new MutationObserver(drawDiagrams).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 show();
 </script>
 </body>

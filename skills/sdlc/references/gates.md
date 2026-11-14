@@ -32,7 +32,7 @@ The `review` status is posted by `review-pr` as `forge.review_identity`; with on
 | Class | `human-approval` passes when |
 |---|---|
 | `product-fast` | Always; it merges on the agent review. When `forge.human_approval` is `always`, as `product-full`. |
-| `product-full` | `forge.human_approval` is `never`, or an approving review on the head by a human: not in `owners.bots`, not `forge.review_identity`. |
+| `product-full` | `forge.human_approval` is `never`, or an approving review on the head by a human: an owner, member or collaborator of the repo, not in `owners.bots`, not `forge.review_identity`. |
 | `tuning` | `tuning` is in `learning.auto_merge_classes`; otherwise as `guardrail`. |
 | `guardrail` | An approving review on the head by `owners.factory`. |
 

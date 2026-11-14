@@ -5,7 +5,10 @@
 Please do not open a public issue. Report it privately through the repository host's private
 vulnerability reporting ("Report a vulnerability" on the Security tab). Include the version, the
 binding settings involved (no secret values), and the steps to reproduce. We aim to acknowledge
-within five working days. Only the latest alpha receives fixes while v2 is in alpha.
+within five working days. Only the latest 0.x release receives fixes.
+
+If the "Report a vulnerability" button is missing, open an issue titled "security contact request"
+with no details, and the maintainer will reply with a private channel.
 
 ## Trust model
 
@@ -14,8 +17,9 @@ the contract (`references/architecture.md`, sections 3.4 and 10) is the full sta
 
 - **A separate review identity (two identities; required for `organization`).** `forge status` and
   `forge approve` use only `forge.options.review_token_env`, the `forge.review_identity` account. With
-  one identity the review is a separate agent context, not a separate account (contract section 10). Only the review job holds that token; the cycle
-  and every implementer never do, so an implementer cannot approve its own CR. Give the factory's
+  one identity the review is a separate agent context, not a separate account (contract section 10).
+  Only the review job holds that token; the cycle and every implementer never do, so an implementer
+  cannot approve its own CR. Give the factory's
   accounts no admin or bypass right on the trunk.
 - **Gate statuses only from gates.** `forge status` refuses the contexts `human-approval`,
   `ticket-linkage` and `proofs-on-base`, so an agent with the review token cannot forge a gate.

@@ -55,7 +55,10 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
     api('PATCH', `issues/${i.number}`, { ...extra, labels });
   };
   const get = async (id: string): Promise<Item> => {
-    const out = toItem(issue(id));
+    const raw = issue(id);
+    // A pull request, or an issue with no status label, is not a ticket on this board.
+    if (raw.pull_request || statusOf(raw) === undefined) throw new Error(`#${id} is not on the board`);
+    const out = toItem(raw);
     try {
       out.children = all(`issues/${id}/sub_issues`).map((s) => String(s.number));
       const p = api('GET', `issues/${id}/parent`);

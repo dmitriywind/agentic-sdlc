@@ -1,5 +1,5 @@
 /* ---------- A ticket's journey: one ticket, six scenarios you step through ---------- */
-// The facts come from docs/guide/4-a-ticket.md to 8-when-you-are-needed.md; the times are an example.
+// The facts come from docs/guide/2-a-ticket.md, 3-your-part.md, 5-review-and-merge.md and 6-shipping.md; the times are an example.
 {
 const COLS = ['Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done'];
 const CHECKS = ['Required', 'proofs-on-base', 'ticket-linkage', 'review', 'human-approval', 'skill-regression'];
@@ -70,8 +70,8 @@ const SCENARIOS = [
     { ...review(c3), set: { verdict: 'PASS', finding: null, cr: 'ready' }, say: 'review-pr grades the new head in a fresh context: every criterion is DONE, Verdict PASS. It marks the change ready.' },
     merge(), done()]],
   ['red', 'Red CI', [...upToCi(), review(c2), ready(c2),
-    { t: 'CI', who: [['ci', 'CI gates']], label: 'Red', ck: { Required: C.red, review: C.revPass }, art: 'cr',
-      say: 'The trunk moved, so the change is synced and CI runs on the new head. Required goes red: a test fails. A red required check blocks the merge.' },
+    { t: 'CI', who: [['ci', 'CI gates']], label: 'Red', ck: { Required: C.red, review: C.revNew }, art: 'cr',
+      say: 'The trunk moved, so the change is synced and CI runs on the new head. The review status does not carry over to a new head. Required goes red: a test fails. A red required check blocks the merge.' },
     { t: c3, who: [['agent', 'review-pr']], label: 'Back to draft', col: 'In progress', set: { cr: 'draft' }, art: 'cr',
       say: 'review-pr moves the change request back to draft. The cause is in the code, so the ticket goes to In progress. A cause outside the code would become a new Signal instead.' },
     { t: c3, who: [['agent', 'implement-spec']], label: 'Fix', col: 'In review', commit: [['e2b7f40', 'fix: goodbye after the trunk sync', 'makes Required green']], art: 'branch',
@@ -97,14 +97,14 @@ const SCENARIOS = [
     { ...review(c2), set: { verdict: 'PASS', finding: null, cr: 'ready' }, say: 'review-pr grades each criterion in a fresh context: Verdict PASS. It marks the change ready.' },
     { t: 'CI', who: [['ci', 'CI gates']], label: 'Waits', ck: { review: C.revPass }, art: 'cr',
       say: 'CI turns the report into the review status. Five checks are green; human-approval still waits, so nothing merges.' },
-    { t: 'Any time', who: [['you', 'You']], label: 'You approve', art: 'cr',
-      say: 'You approve the head. With one identity the forge refuses an approval from the change’s author, so a collaborator approves it, or you merge it as admin.' },
+    { t: 'Any time', who: [['you', 'A collaborator']], label: 'Approve', art: 'cr',
+      say: 'A collaborator approves the head (with one identity you cannot approve your own change; an admin merge is the fallback).' },
     { t: 'CI', who: [['ci', 'CI gates']], label: 'Merge', ck: { 'human-approval': C.humPass }, set: { cr: 'merged' }, art: 'cr',
-      say: 'human-approval finds the approval on this head and passes. All six checks are green: the change merges.' },
+      say: 'human-approval finds the collaborator’s approval on this head and passes. All six checks are green: the change merges.' },
     done()]],
   ['deploy', 'Deploy fails', [...upToCi(), review(c2), ready(c2), merge(), done(), staging(),
     { t: 'Deploy', who: [['world', 'production deploy'], ['ci', 'shipped gate']], label: 'Deploy fails', focus: 'Signals', set: { shipped: 'On staging', sig2: true }, art: 'signal2',
-      say: 'The production deploy fails. The shipped gate keeps Shipped at the last good environment, On staging, and opens Signal #4 with the evidence. Ticket #2 stays Done: a later failure never reopens it.' }]],
+      say: 'The production deploy fails. The shipped gate keeps Shipped at the last good environment, On staging, and opens Signal #4 with the evidence and needs-human. Ticket #2 stays Done: a later failure never reopens it. #4 waits on hold for you; after an owner replies, triage-signal turns it into a new ticket with a regression case.' }]],
 ];
 
 function stateAt(steps, i) {
@@ -159,7 +159,7 @@ const ART = {
     + '<p class="jr-verdict ' + (s.finding ? 'jr-bad' : 'jr-ok') + '">Verdict: ' + s.verdict + '</p>' + (s.finding ? '<p class="jr-find">' + esc(s.finding) + '</p>' : '')),
   ticket: (s) => head('Ticket #2', 'Fields') + '<dl class="jr-fields"><dt>Status</dt><dd>' + s.col + '</dd><dt>Lane</dt><dd>' + s.lane + '</dd><dt>Change request</dt><dd>#3 · ' + s.cr + '</dd><dt>Shipped</dt><dd><b>' + esc(s.shipped ?? '—') + '</b></dd></dl>',
   signal2: (s) => head('Issue #4 · a new Signal', 'Production deploy failed') + comment('factory bot · shipped gate', 'The production deploy of the merge of #3 failed its health check on <code>/signout</code> (HTTP 500). Ticket #2 is back at its last good environment: On staging. Evidence: the deploy run log.')
-    + '<div class="jr-tags">' + tags(['signal:deploy', 'env:production', 'needs-human']) + '</div><p class="muted jr-p">Ticket #2 stays Done. triage-signal turns #4 into a new ticket with a regression case.</p>',
+    + '<div class="jr-tags">' + tags(['signal:deploy', 'env:production', 'needs-human']) + '</div><p class="muted jr-p">Ticket #2 stays Done. It waits on hold for you; after an owner replies, triage-signal turns #4 into a new ticket with a regression case.</p>',
 };
 
 addStyle('journey', `
@@ -266,7 +266,7 @@ VIZ.journey = function journey(el) {
     + '<div class="jr-clock"><div class="jr-clockh"><span>The clock</span><i>example times</i></div><ol class="jr-ticks"></ol><p class="jr-cap"></p></div>'
     + '<div class="jr-board">' + COLS.map((c) => '<section class="jr-col" data-col="' + c + '"><h4>' + c + '</h4><div class="jr-cell"></div></section>').join('') + '</div>'
     + '<div class="jr-detail"><div class="jr-now" aria-live="polite"></div><div class="jr-art"></div></div>'
-    + '<div class="legend"><span>Who acts:</span><span class="actor world">the world</span><span class="actor agent">an agent skill</span><span class="actor ci">a CI gate</span><span class="actor you">you</span><span>· Example ticket #2 of a pilot run.</span></div>';
+    + '<div class="legend"><span>Who acts:</span><span class="actor world">the world</span><span class="actor agent">an agent skill</span><span class="actor ci">a CI gate</span><span class="actor you">you</span><span>Example ticket #2 of a pilot run.</span></div>';
   const card = document.createElement('article'), card2 = document.createElement('article');
   card.className = 'jr-card';
   card2.className = 'jr-card new';
@@ -302,8 +302,12 @@ VIZ.journey = function journey(el) {
       + '<p>' + esc(st.say) + '</p>';
     $('.jr-art', el).innerHTML = ART[st.art](s);
     el.querySelectorAll('.jr-chip').forEach((b, k) => { b.classList.toggle('done', k < i); if (k === i) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current'); });
-    $('[data-go="-1"]', el).disabled = i === 0;
-    $('[data-go="1"]', el).disabled = i === steps.length - 1;
+    const prevB = $('[data-go="-1"]', el), nextB = $('[data-go="1"]', el);
+    // A button that turns disabled while focused would drop focus to the page: hand it to the other one first.
+    if (i === 0 && document.activeElement === prevB) nextB.focus({ preventScroll: true });
+    if (i === steps.length - 1 && document.activeElement === nextB) prevB.focus({ preventScroll: true });
+    prevB.disabled = i === 0;
+    nextB.disabled = i === steps.length - 1;
   }
   const go = (n) => { const m = Math.max(0, Math.min(steps.length - 1, n)); if (m !== i) { i = m; render(); } };
   function stop() { clearInterval(timer); timer = null; const p = $('[data-play]', el); p.textContent = 'Play'; p.setAttribute('aria-pressed', 'false'); }

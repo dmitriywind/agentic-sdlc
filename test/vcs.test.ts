@@ -170,3 +170,11 @@ test('git start: no remote branch starts from trunk; a reused branch or workdir 
   git(root, 'remote', 'set-url', 'origin', join(tmp, 'gone.git'));
   await assert.rejects(vcs.start('t-3-y'));
 });
+
+test('git start and drop refuse a change line name that is an option or leaves .agents/work', async () => {
+  const vcs = createVcs({ root: '.', binding: binding('git'), options: {}, env: process.env, exec, http: async () => ({}) });
+  for (const n of ['--upload-pack=x', '../../x', 'a b']) {
+    await assert.rejects(vcs.start(n), /not allowed/, n);
+    await assert.rejects(vcs.drop(n), /not allowed/, n);
+  }
+});

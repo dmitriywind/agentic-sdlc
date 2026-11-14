@@ -103,7 +103,7 @@ VIZ.hold = function hold(el) {
       + '<span>Labels ' + (held ? '<span class="tag hold">needs-human</span>' : '<span class="tag">feature</span>') + '</span>'
       + '<span>Assignee ' + (held ? '<i>none</i>' : 'shape') + '</span></div>';
     if (flash && !reduced) { card.classList.remove('hd-flash'); void card.offsetWidth; card.classList.add('hd-flash'); }
-    el.querySelectorAll('.hd-track li').forEach((li, i) => { const at = Math.min(step, 4); li.className = i < at ? 'done' : i === at ? 'now' : ''; if (i === at) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current'); });
+    el.querySelectorAll('.hd-track li').forEach((li, i) => { const at = [0, 1, 2, 2, 3, 4][step]; li.className = i < at ? 'done' : i === at ? 'now' : ''; if (i === at) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current'); });
     el.querySelectorAll('#hd-chips li').forEach((li) => li.classList.toggle('on', step >= 1 && (li.dataset.k === 'ruling' || li.dataset.k === 'data')));
 
     const say = (who, role, p) => '<div><span class="actor ' + role + '">' + who + '</span></div><p>' + p + '</p>';

@@ -22,9 +22,10 @@
     if (ids === 'one') {
       s.push(['post', 'rev', 'gh', 'Posts its report with Verdict: PASS, and no status, no approval',
         'GitHub refuses an approval from the change\'s author; a cloud session cannot write statuses.']);
+      s.push(['ready', 'rev', 'gh', 'Marks the change request ready']);
       s.push(['gate', 'gh', 'ci', 'The review gate reads the report']);
       s.push(['status', 'ci', 'gh', 'Posts review = success']);
-      s.push(['ready', 'rev', 'gh', 'Marks the change request ready']);
+      s.push(['auto', 'rev', 'gh', 'Sees review green on this head and turns on auto-merge', 'It waits up to 5 minutes; if still missing, a later cycle merges it.']);
     } else {
       s.push(['post', 'rev', 'gh', 'Posts the review status and an approving review, as the review app']);
       s.push(['ready', 'rev', 'gh', 'Marks ready and turns on auto-merge']);
@@ -38,7 +39,7 @@
     } else {
       s.push(['ha', 'ci', 'gh', 'human-approval passes with no human']);
     }
-    s.push(['merge', 'gh', 'gh', ids === 'one' ? 'Merges when all six checks are green' : 'Auto-merges when all six checks are green']);
+    s.push(['merge', 'gh', 'gh', 'Auto-merges when all six checks are green']);
     return s;
   }
   function checks(ids, lane) {

@@ -23,6 +23,7 @@ Feature: Gate human-approval
     When the approval gate runs
     Then the class is product-full
     And the status "human-approval" is pending
+    And an approving review by an account that is not an owner, member or collaborator of the repo also leaves it pending
 
   # Source: src/gates.ts, "approval"
   # Proof: test/gates.test.ts "approval: classes and the human-approval status per forge.human_approval"

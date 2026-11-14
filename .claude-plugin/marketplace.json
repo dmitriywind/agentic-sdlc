@@ -1,6 +1,6 @@
 {
   "name": "agentic-sdlc",
-  "description": "The agentic-sdlc software factory plugin.",
+  "description": "Run software delivery with agents: board, forge and trunk-based Git, gated by CI.",
   "owner": { "name": "dmitriywind", "url": "https://github.com/dmitriywind" },
   "plugins": [
     {

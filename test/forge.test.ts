@@ -33,8 +33,9 @@ const restExec = (a: string[]) => {
   const path = a.find((x) => x.startsWith('repos/')) ?? '';
   if (path.includes('/check-runs')) return JSON.stringify({ check_runs: [{ id: 3, name: 'ci', status: 'completed', conclusion: 'success' }, { id: 2, name: 'e2e', status: 'in_progress', conclusion: null }, { id: 1, name: 'ci', status: 'completed', conclusion: 'failure' }] });
   if (path.endsWith('/status')) return JSON.stringify({ statuses: [{ context: 'review', state: 'error' }] });
+  // gh --paginate --slurp returns one array per page.
+  if (path.includes('/pulls?')) return JSON.stringify([[{ number: 5, merged_at: 'x' }, { number: 6, merged_at: null }]]);
   if (path.includes('/check-suites') || a.includes('--paginate')) return '';
-  if (path.includes('/pulls?')) return JSON.stringify([{ number: 5, merged_at: 'x' }, { number: 6, merged_at: null }]);
   if (path.endsWith('/comments')) return JSON.stringify({ id: 9, html_url: 'cu' });
   return JSON.stringify(pull);
 };

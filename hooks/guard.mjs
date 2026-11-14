@@ -40,13 +40,13 @@ for (const c of [gitOut(dir, 'rev-parse', '--show-toplevel'), common && dirname(
   if (m) { trunks.clear(); trunks.add(m[1]); }
   break;
 }
-const CLI = /(^|[/\\])agentic-sdlc$|agentic-sdlc[/\\]dist[/\\]bin\.js$/;
+const CLI = /(^|[/\\])agentic-sdlc(\.(cmd|exe|ps1))?$|(^|[/\\])(dist[/\\])?bin\.js$/;
 const GIT = /(^|[/\\])git(\.exe)?$/;
 const WITH_VALUE = ['-C', '-c', '--git-dir', '--work-tree', '--namespace'];
 
-for (const seg of command.split(/&&|\|\||[;|&\n]/)) {
+for (const seg of command.split(/&&|\|\||[;|&\n<>#]/)) {
   // Quotes, parentheses, `$(` and backticks dropped, so `bash -c 'git push ...'`, `(git push ...)`, `$(git push ...)` and `` `git push ...` `` are scanned too.
-  const t = seg.trim().split(/\s+/).map((x) => x.replace(/^['"(`$]+|['")`]+$/g, '')).filter(Boolean);
+  const t = seg.trim().split(/\s+/).map((x) => x.replace(/^[(`$]+|[)`]+$/g, '').replace(/["'\\]/g, '')).filter(Boolean);
   const cli = t.findIndex((x) => CLI.test(x));
   if (cli >= 0) {
     const rest = t.slice(cli + 1).filter((x, i, a) => !(x === '--root' || a[i - 1] === '--root'));
@@ -63,8 +63,9 @@ for (const seg of command.split(/&&|\|\||[;|&\n]/)) {
   if (t[i] !== 'push') continue;
   const args = t.slice(i + 1);
   if (args.some((x) => x === '--all' || x === '--mirror' || x === '--branches')) block('push of all branches is not allowed: push your change line by name.');
-  const refs = args.filter((x) => !x.startsWith('-'));
-  if (refs.some((r) => r.includes('*'))) block('glob refspecs are not allowed: push your change line by name.');
+  // With --repo=<remote> every non-flag argument is a refspec.
+  const refs = [...(args.some((x) => x.startsWith('--repo=')) ? ['<repo>'] : []), ...args.filter((x) => !x.startsWith('-'))];
+  if (refs.some((r) => /[*{}]/.test(r))) block('glob or brace refspecs are not allowed: push your change line by name.');
   const head = headOf(cwd);
   const dst = (r) => {
     const d = r.replace(/^\+/, '').split(':').pop().replace(/^refs\/heads\//, '');

@@ -76,7 +76,7 @@ export function github(ctx: AdapterContext): Forge {
     async diff(n) { return gh(['api', `${api}/pulls/${n}`, '-H', 'Accept: application/vnd.github.diff']); },
     async list(q = {}) {
       const state = q.state === 'merged' ? 'closed' : q.state ?? 'open';
-      const rows: any[] = JSON.parse(gh(['api', `${api}/pulls?state=${state}&per_page=100`]));
+      const rows: any[] = JSON.parse(gh(['api', `${api}/pulls?state=${state}&per_page=100`, '--paginate', '--slurp'])).flat();
       return Promise.all(rows.filter((p) => q.state !== 'merged' || p.merged_at).map((p) => view(String(p.number))));
     },
     async closing(id) {
@@ -142,7 +142,7 @@ export function github(ctx: AdapterContext): Forge {
       post(`pulls/${n}/reviews`, { event: 'APPROVE', body: 'agentic-sdlc review: PASS' }, withToken('review_token_env'));
     },
     async approvals(n) {
-      const out = gh(['api', '--paginate', `${api}/pulls/${n}/reviews`, '--jq', '.[] | {user: .user.login, state: (.state | ascii_downcase), sha: .commit_id}']);
+      const out = gh(['api', '--paginate', `${api}/pulls/${n}/reviews`, '--jq', '.[] | {user: .user.login, state: (.state | ascii_downcase), sha: .commit_id, assoc: .author_association}']);
       return out.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
     },
     async runs(q = {}) {

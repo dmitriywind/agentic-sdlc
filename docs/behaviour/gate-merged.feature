@@ -68,3 +68,10 @@ Feature: Gate merged
     Given the delivery run for a trunk commit failed before "gate merged" moved its ticket
     When the factory owner starts the delivery workflow by hand with that commit's sha
     Then "gate merged" runs for that sha and moves the merged CR's ticket to Done
+
+  # Source: src/gates.ts, "merged"
+  # Proof: test/gates.test.ts "merged: a CR that is not merged moves nothing"
+  Scenario: A trunk commit that is only on an open change request moves nothing
+    Given the change request found for a trunk commit is still open
+    When the merged gate runs for that commit
+    Then no ticket moves, and the gate reports that the change request is not merged
