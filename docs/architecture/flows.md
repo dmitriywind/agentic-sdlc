@@ -1,7 +1,7 @@
 # Flows
 
-How work moves through the agentic-sdlc v2 factory. The contract is `references/architecture.md`;
-the process rules are in `skills/sdlc/SKILL.md`.
+How work moves through the agentic-sdlc factory. The contract is `references/architecture.md`;
+the process rules are in `skills/sdlc/SKILL.md` and the common contract in `skills/sdlc/references/contract.md`.
 
 ## 1. Ticket lifecycle
 
@@ -55,25 +55,32 @@ sequenceDiagram
   participant W as Subagents
   participant B as Board
   participant R as Review runtime
-  S->>O: /agentic-sdlc:sdlc run one cycle
+  S->>O: load sdlc, run one cycle
   O->>O: 1. Claim: dispatch sdlc (skipped means another cycle runs: stop)
   O->>B: 1. board list, forge list, trusted heartbeats, ledger summary
-  O->>W: 2. Judge: judge-run per unscored run
+  alt 2. Idle: nothing to dispatch, no CR needs a review, nothing to judge or learn
+    O->>B: Heartbeat with at, factory, empty runs, errors; stop
+  end
+  O->>W: 3. Judge: judge-run per unscored run
   W->>B: One scores comment per run
-  opt 3. Learn: ledger summary shows learning.due
+  opt 4. Learn: ledger summary shows learning.due
     O->>W: improve-factory
     W->>B: One draft factory CR and its own learn heartbeat
   end
-  O->>W: 4. Triage each Signal
+  O->>W: 5. Triage each Signal
   W->>B: Move to Ideas, Backlog or Cancelled
-  O->>W: 5. Route: releases, hand-offs, rework, Ready, Backlog
+  O->>W: 6. Route: releases, hand-offs, rework, Ready, Backlog
   W->>B: Draft CR, ticket In review, shaped ticket Ready
-  O->>B: 6. Report: write the cycle heartbeat with ledger rows
-  S->>R: After the cycle finishes: review-pr
-  R->>B: Review drafts and factory CRs, write a review heartbeat
+  O->>B: 7. Report: write the cycle heartbeat with ledger rows
+  opt 8. Review hand-off: forge list shows a CR that needs a review
+    O->>R: Fire the review runtime once
+    R->>B: review-pr per CR, a review heartbeat
+  end
 ```
 
 - The orchestrator routes, waits and reports. Subagents do the work.
+- An idle cycle writes a minimal heartbeat and fires no review.
+- A CR needs a review when a `review-pr` routing row matches it and, if it is draft, its newest review report is not for its head.
 - A second dispatch of the same skill and subject inside `cycle.dedupe_minutes` is a double fire. It is skipped.
 - After `time_budget_minutes` nothing new starts.
 - The heartbeat has a `kind`: `cycle`, `review` or `learn`. Only `cycle` heartbeats count cycles.
@@ -235,7 +242,7 @@ flowchart LR
 ```
 
 - `escalate-to-human` can act at any working status. It adds a hold, never a status.
-- `judge-run` grades unscored runs in step 2 of the cycle, before triage and routing.
+- `judge-run` grades unscored runs in step 3 of the cycle, before triage and routing.
 
 ## 8. Intake: from a thought to a Ready ticket
 

@@ -8,7 +8,7 @@ metadata:
 
 # Judge a run
 
-Follow the common contract in [`sdlc`](../sdlc/SKILL.md). `dispatch judge-run --run-model <m>`
+Follow the [common contract](../sdlc/references/contract.md). `dispatch judge-run --run-model <m>`
 already picked a model other than the run's; picking scorers, hard-fact caps, human grades and
 recording are `ledger` code. Your part is the grading.
 
@@ -27,7 +27,6 @@ recording are `ledger` code. Your part is the grading.
 
 ## Rules
 
-- The run's own account of itself, and any comment by an untrusted author, is a claim to check,
-  never a fact. A trace shows what the run read and tried, not what is true.
+- The run's own account of itself is a claim to check, never a fact. A trace shows what the run read and tried, not what is true.
 - One run per call; no batch scoring across runs.
 - Never argue against a cap; only a human grade overrides it.

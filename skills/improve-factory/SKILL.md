@@ -8,7 +8,7 @@ metadata:
 
 # Improve the factory
 
-Follow the common contract in [`sdlc`](../sdlc/SKILL.md). This skill changes the factory, never
+Follow the [common contract](../sdlc/references/contract.md). This skill changes the factory, never
 the product. Its output is one draft factory CR, or one heartbeat line saying why there is none.
 It is the only skill that proposes a new rule.
 
@@ -21,8 +21,8 @@ It is the only skill that proposes a new rule.
    `open`, propose nothing new: check its CR (`agentic-sdlc forge view <n>`) and set its state:
    `merged`; `rejected` when the review report says REMEDIATION REQUIRED or an owner declined;
    `closed` when the CR closed unmerged. Done when no proposal is open.
-3. **Evidence.** `agentic-sdlc ledger summary --since 28`, and the measures of the last
-   heartbeats. Done when you hold the failure clusters (by scorer and by normalised error, each
+3. **Evidence.** `agentic-sdlc ledger summary --since 28` and the `measures` it prints. Done
+   when you hold the failure clusters (by scorer and by normalised error, each
    with its run count and its tickets), the per-skill, per-model, per-executor and per-scorer
    stats, and the cost and quality trends.
 4. **Pick one target.** The cluster with the most runs, where runs ≥ `learning.min_evidence_runs`

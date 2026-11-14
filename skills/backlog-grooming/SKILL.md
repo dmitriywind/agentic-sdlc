@@ -7,7 +7,7 @@ metadata:
 
 # Groom the backlog
 
-Follow the common contract in [`sdlc`](../sdlc/SKILL.md). What matters most comes from
+Follow the [common contract](../sdlc/references/contract.md). What matters most comes from
 `paths.importance_doc` and the docs it routes to.
 
 ## Steps
@@ -43,7 +43,5 @@ Follow the common contract in [`sdlc`](../sdlc/SKILL.md). What matters most come
   evidence; without one it stays a comment.
 - A change shipped behind a flag or toggle gets a child removal ticket naming the flag and a due
   milestone.
-- A decided duplicate or superseded item is Cancelled with a reason comment and closed as not
-  planned.
-- Escalate when a priority cannot be derived from the docs or two items conflict, plus the triggers
-  of [`escalate-to-human`](../escalate-to-human/SKILL.md).
+- A decided duplicate or superseded item is Cancelled with a reason comment.
+- Escalate when a priority cannot be derived from the docs or two items conflict.

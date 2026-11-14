@@ -8,7 +8,7 @@ metadata:
 
 # Release
 
-Follow the common contract in [`sdlc`](../sdlc/SKILL.md). It runs on a release request: a Backlog ticket labelled
+Follow the [common contract](../sdlc/references/contract.md). It runs on a release request: a Backlog ticket labelled
 board.labels.release, opened by the Product owner, or opened by this skill for a P0 fix (title
 'Release for P0 #<id>'). All of this skill's comments go on that ticket, so a re-dispatch resumes
 from what it shows. The request ticket is never release content.

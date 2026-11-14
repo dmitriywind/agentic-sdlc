@@ -7,7 +7,7 @@ metadata:
 
 # Review a change request
 
-Follow the common contract in [`sdlc`](../sdlc/SKILL.md). The orchestrator starts a separate
+Follow the [common contract](../sdlc/references/contract.md). The orchestrator starts a separate
 reviewer agent; the implementer never reviews its own CR. Read the diff, the ticket and its spec,
 not the implementer's notes. You never run the CR's code: no install, test or build command. CI
 runs it without secrets and posts `Required` and `proofs-on-base`; you read those.
@@ -117,5 +117,4 @@ Steps 1 to 8 review a draft CR. Steps 9 and 10 handle a ready CR. A check missin
 - Mark a CR ready once per review. The one exception: a corrected CR body reaches the checks only
   through draft then ready again, since a rerun keeps the old body.
 - Auto-merge on green required checks is the only merge path; never merge by hand.
-- Escalate when a risk stays open, plus the triggers of
-  [`escalate-to-human`](../escalate-to-human/SKILL.md).
+- Escalate when a risk stays open.

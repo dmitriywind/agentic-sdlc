@@ -75,15 +75,58 @@ Feature: Routing and the unattended cycle
     And then it triages every ticket at Signals
     And then it routes the board
     And then it writes one heartbeat that holds every run of this cycle, the judge and learn runs too
+    And then it fires the review runtime only when a CR needs a review
+
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 2
+  Scenario: An idle cycle exits with a minimal heartbeat
+    Given no unheld ticket routes to a skill the cycle dispatches
+    And no held ticket has a trusted owner reply after its hold
+    And no open CR needs a review
+    And "ledger summary" shows neither "learning.due" nor a run to judge
+    When the cycle runs
+    Then it writes one heartbeat with only "at", "factory", an empty "runs" and "errors"
+    And it dispatches nothing
+    And it does not fire the review runtime
+
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 8
+  Scenario Outline: The review runtime fires only for a CR that needs a review
+    Given the cycle has written its heartbeat
+    And "forge list" shows <cr>
+    When the cycle reaches the review hand-off
+    Then the review runtime <fired>
+
+    Examples:
+      | cr                                                                   | fired           |
+      | a draft CR at In review with no review-pr report for its head        | is fired once   |
+      | a ready CR at In review behind the trunk                             | is fired once   |
+      | a draft factory CR whose newest review-pr report is for its head     | is not fired    |
+      | a ready CR at In review with a green review status and no red check  | is not fired    |
+      | no open CR                                                           | is not fired    |
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle"
   Scenario: The cycle never reviews
     When the cycle runs
     Then the cycle reviews nothing
-    And the review runtime runs "review-pr" after the cycle
+    And the review runtime runs "review-pr"
     And the cycle never holds the review token
 
-  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 5
+  # Source: skills/sdlc/references/heartbeat.md, "Shape"
+  # Proof: test/ledger.test.ts "flattenRuns filters by age and skill and applies the newest rescore" (heartbeats of only "at" and "runs")
+  Scenario: A heartbeat holds only the required fields by default
+    When the cycle writes its heartbeat
+    Then it holds "at", "factory", "runs" and "errors"
+    And it holds "learning" only when learning is on
+    And it holds no measures unless the runner prompt asks for them
+    And "ledger runs" reads its rows
+
+  # Source: templates/runner/review-prompt.md
+  Scenario: A review run with nothing to review writes nothing
+    Given no open CR needs a review
+    When the review runtime runs
+    Then it dispatches nothing
+    And it writes no heartbeat
+
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 6
   Scenario: The cycle caps implementations and keeps Ready filled
     Given the Ready queue holds tickets
     When the cycle routes the board
@@ -92,7 +135,7 @@ Feature: Routing and the unattended cycle
     When Ready plus the shapes under way hold fewer than "cycle.min_ready" tickets
     Then the cycle routes the next Backlog ticket to shape
 
-  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 5
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 6
   Scenario: A full Ready queue never starves releases or rework
     Given Ready holds at least "cycle.min_ready" tickets
     And a release request is at Backlog
@@ -130,7 +173,7 @@ Feature: Routing and the unattended cycle
     And when the step has no ticket, it posts one comment to "owners.factory" on the heartbeat ticket, with no label
     And the heartbeat is always written
 
-  # Source: src/ledger.ts, "learningState"; skills/sdlc/SKILL.md, "Run one cycle", step 3
+  # Source: src/ledger.ts, "learningState"; skills/sdlc/SKILL.md, "Run one cycle", step 4
   # Proof: test/ledger.test.ts "learningState: cycles since the last improve-factory heartbeat, due at every_cycles, week spend of learning skills"
   Scenario: Learning is not due over the weekly budget
     Given "learning.every_cycles" cycles passed since the last improve-factory run
@@ -174,7 +217,7 @@ Feature: Routing and the unattended cycle
     When implement-spec is dispatched again for the ticket inside stall_minutes
     Then the dispatch prints "{ skipped: true }" with "the previous run has not finished"
 
-  # Source: src/dispatch.ts, "idempotency"; skills/sdlc/SKILL.md, "Common contract"
+  # Source: src/dispatch.ts, "idempotency"; skills/sdlc/references/contract.md
   # Proof: test/dispatch.test.ts "dispatch: an unfinished run blocks until stall_minutes; only its own done line ends it; sdlc only claims; a failed start writes the done line"
   Scenario: A run ends with its done marker, and a failed start writes one
     Given dispatch printed a done line for a run

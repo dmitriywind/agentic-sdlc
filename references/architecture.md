@@ -223,8 +223,9 @@ Keys this contract relies on by name:
 Each skill has frontmatter `name`, `description` and `metadata: { tier }`, plus
 `disable-model-invocation: true` for skills only a person or the cycle starts (`release`,
 `improve-factory`) and `user-invocable: false` for skills only another skill starts
-(`triage-signal`, `shape`, `judge-run`, `verify-ux`, `escalate-to-human`). The body is a contract
-pointer to `sdlc`, numbered steps each ending on a checkable **Done when**, then Rules. `tier` is
+(`triage-signal`, `shape`, `judge-run`, `verify-ux`, `escalate-to-human`). The body is a pointer to
+the common contract (`sdlc/references/contract.md`; a step skill never loads the whole `sdlc`
+navigator), numbered steps each ending on a checkable **Done when**, then Rules. `tier` is
 `fast`, `balanced` or `deep`; the binding's `models` maps it to a model. Board, forge and VCS steps
 name the port verb, never a vendor CLI. Every process rule has one home in the skills; this
 contract defines mechanism only.
