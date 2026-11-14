@@ -30,8 +30,6 @@ network access runs one cycle. Gates always run in the forge's CI.
 | Claude (Code, scheduled tasks, Managed Agents) | [ecosystems/claude-code.md](ecosystems/claude-code.md) |
 | OpenAI Codex | [ecosystems/codex.md](ecosystems/codex.md) |
 | Cursor | [ecosystems/cursor.md](ecosystems/cursor.md) |
-| Google Antigravity | [ecosystems/antigravity.md](ecosystems/antigravity.md) |
-| xAI Grok | [ecosystems/grok.md](ecosystems/grok.md) |
 | Anything else (shell, MCP only, vendor MCP tools only) | [ecosystems/generic.md](ecosystems/generic.md) |
 
 Each vendor fact carries its source link. Re-check it before you depend on a limit.

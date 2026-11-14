@@ -14,7 +14,7 @@ const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, string]>
   gate: [() => import('./gates.ts'), true, 'branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red skill-regression'],
   ledger: [() => import('./ledger.ts'), true, 'runs summary plan record stale hash: the run ledger from heartbeats'],
   bench: [() => import('./bench.ts'), true, 'build propose run report compare'],
-  mcp: [() => import('./mcp.ts'), true, 'serve the port verbs as MCP tools: stdio, or --http --port <p> with AGENTIC_SDLC_MCP_TOKEN; --allow approve,status'],
+  mcp: [() => import('./mcp.ts'), true, 'serve the port verbs as MCP tools over stdio; --allow approve,status'],
 };
 
 const help = () =>

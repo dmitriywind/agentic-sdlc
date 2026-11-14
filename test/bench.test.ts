@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import type { Dirent } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { addedFiles, agentCommand, buildCases, compare, wilsonLower, diverse, fill, parseCost, PROOF_FILE, quote, report, resolveExecutor, runBench, shell, stratify, cli } from '../src/bench.ts';
+import { addedFiles, agentCommand, buildCases, compare, wilsonLower, diverse, fill, PROOF_FILE, quote, report, resolveExecutor, runBench, shell, stratify, cli } from '../src/bench.ts';
 import { exec } from '../src/exec.ts';
 import type { BenchCase, BenchResult } from '../src/bench.ts';
 import type { Board, CR, Forge, Item, Vcs } from '../src/ports.ts';
@@ -15,7 +15,7 @@ const binding = {
   spec_marker: '<!-- spec -->',
   agent_command: 'agent --model {model} --prompt {prompt_file} --cwd {workdir}',
   commands: { fast_check: 'npm run check', verify: 'npm test' },
-  learning: { budget_usd_per_week: 5, bench_size: 10 },
+  learning: { bench_size: 10 },
   owners: { product: 'po', factory: 'fo', bots: ['factory-bot'] },
   vcs: { adapter: 'git' },
 } as any;
@@ -26,10 +26,8 @@ const diff = [
   'diff --git a/src/new.ts b/src/new.ts', '--- /dev/null', '+++ b/src/new.ts',
 ].join('\n');
 
-test('addedFiles, parseCost, fill', () => {
+test('addedFiles, fill', () => {
   assert.deepEqual(addedFiles(diff), ['test/a.test.ts', 'src/new.ts']);
-  assert.equal(parseCost('working\n{"cost_usd": 0.42, "tokens": 9}\ndone'), 0.42);
-  assert.equal(parseCost('{"cost_usd": "x"}'), undefined);
   assert.equal(fill('{a} {b} {c}', { a: '1', b: '2' }, false), "'1' '2' {c}");
 });
 
@@ -138,7 +136,7 @@ test('runBench: the agent never sees the oracle; verify runs in a fresh tree wit
       writeFileSync(join(cwd, 'test/a.test.ts'), 'gamed');
       writeFileSync(join(cwd, 'package.json'), 'gamed');
       t += 120000;
-      return '{"cost_usd": 3}';
+      return '';
     }
     assert.notEqual(cwd, agentDir, 'verify ran in the agent tree');
     const read = (p: string) => readFileSync(join(cwd, p), 'utf8');
@@ -147,14 +145,13 @@ test('runBench: the agent never sees the oracle; verify runs in a fresh tree wit
     if (line === 'npm test' && ++verifies === 2) throw new Error('red');
     return '';
   };
-  const r = await runBench([kase, { ...kase, id: '2' }, { ...kase, id: '3' }], { model: 'm1', root, binding: benchBinding, scorerDir: join(root, 'si') }, { exec, vcs, now: () => t });
+  const r = await runBench([kase, { ...kase, id: '2' }], { model: 'm1', root, binding: benchBinding, scorerDir: join(root, 'si') }, { exec, vcs, now: () => t });
   assert.ok('cases' in r);
-  assert.deepEqual(r.cases.map((c) => [c.id, c.pass, c.minutes, c.cost_usd]), [['1', true, 2, 3], ['2', false, 2, 3]]);
-  assert.equal(r.stopped, 'budget');
+  assert.deepEqual(r.cases.map((c) => [c.id, c.pass, c.minutes]), [['1', true, 2], ['2', false, 2]]);
   assert.equal(r.cases[0].scorerInput, 'si/1.md');
   assert.match(readFileSync(join(root, 'si/1.md'), 'utf8'), /do it[\s\S]*### src\/a\.ts\s+Before:\s+`{4}\s+old[\s\S]*After:\s+`{4}\s+agent/);
   assert.equal(r.passRate, 0.5);
-  assert.equal(r.cost_usd, 6);
+  assert.equal(r.minutes, 4);
   assert.match(calls[0], /^agent --model .m1. --prompt .+ --cwd .+agentic-bench-/);
   assert.deepEqual(calls.slice(1, 3), ['npm ci', 'npm test']);
   assert.deepEqual(made.filter((d) => existsSync(d)), [], 'case trees left behind');
@@ -192,7 +189,7 @@ test('runBench --dry-run starts nothing', async () => {
 });
 
 const result = (model: string, cases: [string, boolean, number][]): BenchResult =>
-  ({ model, executor: 'harness', at: '', passRate: 0, cost_usd: 0, minutes: 0, cases: cases.map(([id, pass, cost_usd]) => ({ id, pass, cost_usd, minutes: 1 })) });
+  ({ model, executor: 'harness', at: '', passRate: 0, minutes: 0, cases: cases.map(([id, pass, minutes]) => ({ id, pass, minutes })) });
 
 test('report groups by executor name, not kind', () => {
   const r = (executor: string, pass: boolean): BenchResult => ({ ...result('m', [['1', pass, 1]]), executor, executorKind: 'command' });
@@ -263,7 +260,7 @@ test('report groups per model, marks the Pareto front; cli report reads only the
     res('other', 'x', [['1', true, 0.1]]),
   ];
   const rows = report(rs.slice(0, 3));
-  assert.deepEqual(rows.map((r) => [r.model, r.passRate, r.medianCost, r.n, r.pareto]), [['best', 1, 5, 2, true], ['cheap', 0.5, 1, 2, true], ['worse', 0.5, 6, 2, false]]);
+  assert.deepEqual(rows.map((r) => [r.model, r.passRate, r.medianMinutes, r.n, r.pareto]), [['best', 1, 5, 2, true], ['cheap', 0.5, 1, 2, true], ['worse', 0.5, 6, 2, false]]);
   const root = mkdtempSync(join(tmpdir(), 'rep-'));
   mkdirSync(join(root, '.agents/bench/results'), { recursive: true });
   rs.forEach((r, i) => writeFileSync(join(root, `.agents/bench/results/${i}.json`), JSON.stringify(r)));
@@ -292,7 +289,7 @@ test('runBench --trials: one row per trial, each in fresh trees', async () => {
 });
 
 test('compare: no common cases or fewer cases in b is a regression', () => {
-  const r = (ids: string[]) => ({ model: 'm', executor: 'harness', at: '', passRate: 1, cost_usd: 0, minutes: 0, cases: ids.map((id) => ({ id, pass: true, minutes: 1 })) }) as any;
+  const r = (ids: string[]) => ({ model: 'm', executor: 'harness', at: '', passRate: 1, minutes: 0, cases: ids.map((id) => ({ id, pass: true, minutes: 1 })) }) as any;
   const o = { minCases: 1, trials: 1 };
   assert.equal(compare(r(['1']), r(['2']), o).regressed, true);
   assert.equal(compare(r(['1', '2']), r(['1']), o).regressed, true);

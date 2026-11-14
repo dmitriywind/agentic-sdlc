@@ -47,13 +47,13 @@ test('median handles even, odd and empty', () => {
 
 test('summarise groups by skill and model; clusters need two hits', () => {
   const rows = [
-    run({ id: '1', score: 4, cost_usd: 1, minutes: 10 }),
-    run({ id: '2', score: 2, cost_usd: 2, minutes: 5, outcome: 'failed', error: 'fast_check red in src/x.ts', ticket: '7' }),
-    run({ id: '3', score: 1, cost_usd: 0.5, model: 'm2', outcome: 'failed', error: 'fast_check red in src/y.ts', ticket: '8' }),
+    run({ id: '1', score: 4, minutes: 10 }),
+    run({ id: '2', score: 2, minutes: 5, outcome: 'failed', error: 'fast_check red in src/x.ts', ticket: '7' }),
+    run({ id: '3', score: 1, model: 'm2', outcome: 'failed', error: 'fast_check red in src/y.ts', ticket: '8' }),
     run({ id: '4', skill: 'shape', executor: 'command', ref: 'bot-1', outcome: 'failed', error: 'once only' }),
   ] as any[];
   const s = summarise(rows);
-  assert.deepEqual(s.bySkill['implement-spec'], { runs: 3, medianScore: 2, failureRate: 2 / 3, cost_usd: 3.5, minutes: 15 });
+  assert.deepEqual(s.bySkill['implement-spec'], { runs: 3, medianScore: 2, failureRate: 2 / 3, minutes: 15 });
   assert.equal(s.byModel.m2.runs, 1);
   assert.equal(s.byExecutor.harness.runs, 3);
   assert.equal(s.byExecutor.command.runs, 1);
@@ -113,20 +113,17 @@ test('rescores apply per scorer: human beats a newer judge, else newest; v5 resc
   assert.deepEqual(a.scores, { 'done-conditions': 0, 'redundant-tests': 'pass', 'scope-creep': 'pass' });
 });
 
-test('summarise: byScorer, scorer-fail clusters across tickets, measures from rows', () => {
+test('summarise: byScorer, scorer-fail clusters across tickets', () => {
   const rows = [
-    run({ id: '1', ticket: '7', cr: '70', cost_usd: 2, scores: { 'done-conditions': 4, 'redundant-tests': 'fail' } }),
-    run({ id: '2', ticket: '8', cr: '80', cost_usd: 2, scores: { 'done-conditions': 1, 'redundant-tests': 'fail' } }),
-    run({ id: '3', ticket: '8', cr: '81', cost_usd: 2, scores: { 'redundant-tests': 'pass' } }),
-    run({ id: '4', skill: 'judge-run', cost_usd: 2 }),
+    run({ id: '1', ticket: '7', cr: '70', scores: { 'done-conditions': 4, 'redundant-tests': 'fail' } }),
+    run({ id: '2', ticket: '8', cr: '80', scores: { 'done-conditions': 1, 'redundant-tests': 'fail' } }),
+    run({ id: '3', ticket: '8', cr: '81', scores: { 'redundant-tests': 'pass' } }),
+    run({ id: '4', skill: 'judge-run' }),
   ] as any[];
-  const s = summarise(rows, ['70', '80']);
+  const s = summarise(rows);
   assert.deepEqual(s.byScorer['redundant-tests'], { runs: 3, failRate: 2 / 3, median: null });
   assert.deepEqual(s.byScorer['done-conditions'], { runs: 2, failRate: 0.5, median: 2.5 });
   assert.deepEqual(s.failureClusters, [{ skill: 'implement-spec', scorer: 'redundant-tests', count: 2, tickets: ['7', '8'] }]);
-  // only runs on merged CRs 70 and 80 count: 4 / 2, not 6 / 2
-  assert.deepEqual(s.measures, { costPerCR: 2, learningSpendShare: 0.25 });
-  assert.equal(summarise(rows).measures.costPerCR, 2); // no merged list: every cr, 6 / 3
 });
 
 const scoresC = (o: object, author = 'bot', createdAt = '2026-11-08T12:00:00Z'): Comment =>
@@ -145,20 +142,17 @@ test('readRuns: scores comments by bots and grade comments by owners apply; othe
   assert.deepEqual(a.scores, { 'done-conditions': 2, 'redundant-tests': 'pass' }); // the owner's grade beats the judge
 });
 
-test('learningState: cycles since the last improve-factory heartbeat, due at every_cycles, week spend of learning skills', () => {
-  const now = Date.parse('2026-11-09T00:00:00Z');
+test('learningState: cycles since the last improve-factory heartbeat, due at every_cycles, off unless enabled', () => {
   const comments = [
-    beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: '5', skill: 'judge-run', cost_usd: 0.5 })] }),
-    beat({ at: '2026-11-07T00:00:00Z', runs: [run({ id: '4', cost_usd: 9 })] }),
-    beat({ at: '2026-11-06T00:00:00Z', runs: [run({ id: '3', skill: 'improve-factory', cost_usd: 2 })] }),
-    beat({ at: '2026-10-01T00:00:00Z', runs: [run({ id: '1', skill: 'bench', cost_usd: 7 })] }),
+    beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: '5', skill: 'judge-run' })] }),
+    beat({ at: '2026-11-07T00:00:00Z', runs: [run({ id: '4' })] }),
+    beat({ at: '2026-11-06T00:00:00Z', runs: [run({ id: '3', skill: 'improve-factory' })] }),
+    beat({ at: '2026-10-01T00:00:00Z', runs: [run({ id: '1', skill: 'bench' })] }),
   ];
-  assert.deepEqual(learningState(comments, 2, now), { due: true, judge: true, cyclesSince: 2, spentWeekUsd: 2.5 });
-  assert.equal(learningState(comments, 3, now).due, false);
-  assert.equal(learningState(comments, 2, now, 2.5).due, false); // the week's learning spend reached the budget
-  assert.equal(learningState(comments, 2, now, 10).due, true);
-  assert.equal(learningState(comments, 2, now, 0).due, false); // a budget of 0 turns learning off
-  assert.equal(learningState(comments.slice(0, 2), 3, now).cyclesSince, 2); // no improve-factory yet: every heartbeat
+  assert.deepEqual(learningState(comments, 2, true), { due: true, judge: true, cyclesSince: 2 });
+  assert.equal(learningState(comments, 3, true).due, false);
+  assert.deepEqual(learningState(comments, 2), { due: false, judge: false, cyclesSince: 2 }); // learning.enabled unset: off
+  assert.equal(learningState(comments.slice(0, 2), 3, true).cyclesSince, 2); // no improve-factory yet: every heartbeat
 });
 
 test('plan scorers and caps; record validates names and scales and applies the cap', () => {
@@ -183,7 +177,7 @@ test('plan scorers and caps; record validates names and scales and applies the c
 test('cli: plan, record and stale on a local board', async () => {
   const root = mkdtempSync(join(tmpdir(), 'led-'));
   const { createLocalBoard } = await import('../src/board/local.ts');
-  const binding = { board: { adapter: 'local', options: {} }, forge: { adapter: 'github', options: {} }, heartbeat: { ticket: '1' }, owners: { bots: ['local'] }, learning: { every_cycles: 1 } } as any;
+  const binding = { board: { adapter: 'local', options: {} }, forge: { adapter: 'github', options: {} }, heartbeat: { ticket: '1' }, owners: { bots: ['local'] }, learning: { enabled: true, every_cycles: 1 } } as any;
   const ctx = { root, binding, env: {}, exec: () => { throw new Error('no forge'); }, http: async () => ({}) };
   const board = createLocalBoard({ ...ctx, options: {} });
   await board.create({ title: 'heartbeat', body: '', status: 'Backlog' });
@@ -202,7 +196,7 @@ test('cli: plan, record and stale on a local board', async () => {
     assert.equal(await cli(['runs'], ctx), 0);
     assert.equal(JSON.parse(out.at(-1)!)[0].score, 1);
     assert.equal(await cli(['summary'], ctx), 0);
-    assert.deepEqual(JSON.parse(out.at(-1)!).learning, { due: true, judge: true, cyclesSince: 1, spentWeekUsd: 0 });
+    assert.deepEqual(JSON.parse(out.at(-1)!).learning, { due: true, judge: true, cyclesSince: 1 });
     assert.equal(await cli(['record', '--run', 'r9'], ctx), 2);
     assert.equal(await cli(['plan', '--run', 'nope'], ctx), 1);
   } finally {
@@ -211,13 +205,12 @@ test('cli: plan, record and stale on a local board', async () => {
 });
 
 test('learningState: review and learn heartbeats count no cycle; a learn heartbeat with improve-factory resets the count', () => {
-  const now = Date.parse('2026-11-09T00:00:00Z');
   const comments = [
     beat({ at: '2026-11-08T03:00:00Z', kind: 'review', runs: [run({ id: 'r', skill: 'review-pr' })] }),
     beat({ at: '2026-11-08T02:00:00Z', runs: [] }),
-    beat({ at: '2026-11-08T01:00:00Z', kind: 'learn', runs: [run({ id: 'l', skill: 'improve-factory', cost_usd: 1 })] }),
+    beat({ at: '2026-11-08T01:00:00Z', kind: 'learn', runs: [run({ id: 'l', skill: 'improve-factory' })] }),
     beat({ at: '2026-11-08T00:00:00Z', runs: [] }),
     beat({ at: '2026-11-07T00:00:00Z', runs: [] }),
   ];
-  assert.deepEqual(learningState(comments, 2, now), { due: false, judge: true, cyclesSince: 1, spentWeekUsd: 1 });
+  assert.deepEqual(learningState(comments, 2, true), { due: false, judge: true, cyclesSince: 1 });
 });

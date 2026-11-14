@@ -31,17 +31,12 @@ Feature: Judge runs and improve the factory
     And the judge does not argue against the cap
     And a human grade by owners.product or owners.factory wins over the judge
 
-  # Source: skills/improve-factory/SKILL.md, "Steps 1. Due and budget"
-  Scenario Outline: The loop stops when it is not due or over budget
-    Given "ledger summary" shows <state>
+  # Source: skills/improve-factory/SKILL.md, "Steps 1. Due"
+  Scenario: The loop stops when it is not due
+    Given "ledger summary" shows learning.due is false, which it always is unless learning.enabled is true
     When improve-factory runs
-    Then it writes "<line>" in the heartbeat "did"
+    Then it writes "learning: not due" in the heartbeat "did"
     And it stops
-
-    Examples:
-      | state                                                 | line                  |
-      | learning.due is false                                 | learning: not due     |
-      | learning.spentWeekUsd at learning.budget_usd_per_week | learning: over budget |
 
   # Source: skills/improve-factory/SKILL.md, "Steps 2. Last proposal"
   Scenario: An open proposal blocks a new one
@@ -67,7 +62,7 @@ Feature: Judge runs and improve the factory
 
   # Source: skills/improve-factory/SKILL.md, "Steps 7. Prove on the bench"
   Scenario: A change that is not proven is not proposed
-    Given the bench compare does not exit 0, or the cost delta is larger than the gain
+    Given the bench compare does not exit 0
     When improve-factory checks the proof
     Then it writes "learning: not proven" with the compare JSON
     And it opens no CR

@@ -232,14 +232,15 @@ contract defines mechanism only.
 ## 6. The self-improvement loop
 
 Visibility into every run, scored runs, a loop that proposes fixes to the factory itself, and
-benchmarks built from the project's own past tasks to compare cost and quality across models,
-executors and factory versions.
+benchmarks built from the project's own past tasks to compare quality and time across models,
+executors and factory versions. The loop is off unless `learning.enabled` is `true`; the bench
+needs `agent_command`.
 
 1. **Ledger.** Every run the cycle starts is one row in the heartbeat's `runs`: skill, skill
-   version (content hash), ticket or CR, tier, model, executor, tokens, cost, minutes, outcome and
+   version (content hash), ticket or CR, tier, model, executor, tokens, minutes, outcome and
    `trace` (a reference into `traces.uri` when the executor stored its transcript). `ledger
-   summary` adds `learning: { due, judge, cyclesSince, spentWeekUsd }` (`judge`: the weekly budget is not spent), computed from heartbeats and run
-   rows, so no skill keeps a counter. `ledger stale --max-hours <h>` exits 1 when the newest
+   summary` adds `learning: { due, judge, cyclesSince }` (`judge` and `due` are false unless
+   `learning.enabled`), computed from heartbeats and run rows, so no skill keeps a counter. `ledger stale --max-hours <h>` exits 1 when the newest
    heartbeat is older. The heartbeat's `learning` object carries `lastProposal` and
    `benchBaseline`; only `improve-factory` changes them and every heartbeat copies them forward
    (fields in `skills/sdlc/references/heartbeat.md`).
@@ -268,20 +269,18 @@ executors and factory versions.
 6. **Prove.** The change runs on the bench against the current factory. `bench compare` needs at
    least `learning.bench_min_cases` shared cases and `learning.bench_trials` trials per case and
    compares the Wilson lower bound of the pass rate; fewer is `regressed`. The change must not
-   lower it and must not raise cost by more than its gain.
+   lower it.
 7. **Bench.** `bench build` turns merged tickets into cases: the ticket and spec, the merge base,
    and the CR's own new proofs as the hidden oracle. Cases belong to **suites**
    (`.agents/bench/suites/<suite>.json`): `bench build --suite <name> [--paths <glob>]…
    [--per-size <n>]` picks a stratified set by Size and touched area; `bench propose --suite
    <name>` nominates past tickets, which a factory CR adds. `bench run --suite <s> (--model <id> |
    --executor <e>) [--factory <rev>]` replays cases in fresh worktrees outside the root and
-   records pass rate, cost and minutes per case. `bench report --suite <s>` marks the Pareto front
-   of quality against cost. Only `harness` and `command` executors run on the bench.
-8. **Measures.** The heartbeat and `ledger summary` report what the board and ledger hold:
-   cost per merged CR, learning spend share, and the heartbeat's measures (automation rate, DORA,
-   cycle time, first-pass rate) as the cycle read them.
-9. **Budget.** Judge, improve and bench spend stay under `learning.budget_usd_per_week`; over
-   budget the loop reports and stops.
+   records pass and minutes per case. `bench report --suite <s>` marks the Pareto front
+   of pass rate against median minutes. Only `harness` and `command` executors run on the bench.
+8. **Measures.** `ledger summary` reports runs, median score, failure rate and minutes by skill,
+   model, executor and scorer, and the failure clusters. The heartbeat's measures (automation
+   rate, DORA, cycle time, first-pass rate) are as the cycle read them from the board.
 
 ## 7. Executors: who runs each stage
 

@@ -143,7 +143,8 @@ heartbeat:
                                 # project view) and put its id here
 
 learning:                       # the self-improvement loop
-  every_cycles: 20              # run improve-factory every N cycles
+  enabled: false                # judge-run and improve-factory run only when true; set it with agent_command
+  every_cycles: 20             # run improve-factory every N cycles
   min_evidence_runs: 5          # runs of evidence a failure needs before a change is proposed
   bench_size: 20                # cases per bench run; at least bench_min_cases
   bench_min_cases: 20           # bench compare needs at least this many shared cases, else regressed
@@ -151,4 +152,3 @@ learning:                       # the self-improvement loop
   auto_merge_classes: []        # classes that merge without the factory owner (only tuning may be listed; guardrail never).
                                 #   Keep [] until a bench baseline exists, then [tuning].
   judge_tier: fast              # tier judge-run scores on (fast | balanced | deep)
-  budget_usd_per_week: 0        # learning and bench spend cap; 0 turns learning off. Set it (e.g. 50) with agent_command

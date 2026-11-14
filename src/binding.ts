@@ -116,6 +116,7 @@ export function validateBinding(b: Binding): string[] {
     const v = x.learning?.[k];
     if (v !== undefined && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
   }
+  if (x.learning?.enabled !== undefined && typeof x.learning.enabled !== 'boolean') p.push('learning.enabled must be true or false');
   for (const k of ['preview', 'proofs_on_base', 'evidence_check']) if (x.commands?.[k] !== undefined && typeof x.commands[k] !== 'string') p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? '').includes('{run_id}')) p.push('traces.uri must contain {run_id}');
   if (x.executors && !x.executors.default) p.push('executors.default is missing');
@@ -137,13 +138,13 @@ export function bindingWarnings(b: Binding): string[] {
   if (x?.forge?.review_runtime !== undefined) w.push('forge.review_runtime is unused: review-pr always runs in its own runtime; remove it');
   const size = x?.learning?.bench_size, min = x?.learning?.bench_min_cases ?? 20;
   if (size !== undefined && Number(size) < min) w.push(`learning.bench_size ${size} is below bench_min_cases ${min}: bench compare reports regressed for every change`);
+  if (x?.learning?.enabled === true && !x.agent_command) w.push('learning.enabled is true but agent_command is unset: bench cannot run');
+  if (x?.learning?.budget_usd_per_week !== undefined) w.push('learning.budget_usd_per_week is unused; learning.enabled turns learning on; remove it');
   if (x?.profile === 'individual') {
     for (const [k, e] of Object.entries<any>(x.executors ?? {}))
       if (['managed', 'webhook', 'assign'].includes(e?.kind)) w.push(`executors.${k}: kind ${e.kind} needs an API or hosted agent; individual profile expects harness or a subscription CLI command`);
     const uri = x.traces?.uri;
-    if (uri !== undefined && !['./', '.agents/', '/'].some((q) => String(uri).startsWith(q)) && !/^[A-Za-z]:[\\/]/.test(String(uri))) w.push(`traces.uri '${uri}' is not a local path (./, .agents/ or absolute); individual profile has no org storage`);
-    if (Number(x.learning?.budget_usd_per_week) > 0 && !x.agent_command) w.push('learning.budget_usd_per_week > 0 but agent_command is unset: bench cannot run');
-  } else if (x?.profile === 'enterprise') {
+    if (uri !== undefined && !['./', '.agents/', '/'].some((q) => String(uri).startsWith(q)) && !/^[A-Za-z]:[\\/]/.test(String(uri))) w.push(`traces.uri '${uri}' is not a local path (./, .agents/ or absolute); individual profile has no org storage`);  } else if (x?.profile === 'enterprise') {
     const rt = x.forge?.options?.review_token_env;
     if (rt && rt === x.forge?.options?.token_env) w.push('forge.options.review_token_env equals token_env: the reviewer and implementer share one identity');
     const sb = x.executors?.default?.sandbox;

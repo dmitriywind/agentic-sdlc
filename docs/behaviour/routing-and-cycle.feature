@@ -131,13 +131,13 @@ Feature: Routing and the unattended cycle
     And the heartbeat is always written
 
   # Source: src/ledger.ts, "learningState"; skills/sdlc/SKILL.md, "Run one cycle", step 3
-  # Proof: test/ledger.test.ts "learningState: cycles since the last improve-factory heartbeat, due at every_cycles, week spend of learning skills"
-  Scenario: Learning is not due over the weekly budget
+  # Proof: test/ledger.test.ts "learningState: cycles since the last improve-factory heartbeat, due at every_cycles, off unless enabled"
+  Scenario: Learning is off unless enabled
     Given "learning.every_cycles" cycles passed since the last improve-factory run
-    And the week's learning spend reached "learning.budget_usd_per_week"
+    And "learning.enabled" is not true
     When the cycle reads "ledger summary"
-    Then "learning.due" is false
-    And the cycle starts no improve-factory run
+    Then "learning.due" and "learning.judge" are false
+    And the cycle starts no judge-run and no improve-factory run
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 1
   Scenario: A second cycle that starts while one runs writes nothing

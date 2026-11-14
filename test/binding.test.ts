@@ -90,6 +90,11 @@ test('bindingWarnings: bench_size below bench_min_cases can never pass bench com
   assert.deepEqual(bindingWarnings({ ...good, learning: { bench_size: 5, bench_min_cases: 5 } } as any), []);
 });
 
+test('learning.enabled must be a boolean', () => {
+  assert.match(validateBinding({ ...good, learning: { enabled: 'yes' } } as any).join('\n'), /learning\.enabled must be true or false/);
+  assert.deepEqual(validateBinding({ ...good, learning: { enabled: true } } as any), []);
+});
+
 test('bindingWarnings accepts Windows trace paths with either slash', () => {
   for (const uri of ['C:\\traces\\{run_id}.jsonl', 'C:/traces/{run_id}.jsonl']) assert.deepEqual(bindingWarnings({ ...good, traces: { uri } } as any), []);
   assert.equal(bindingWarnings({ ...good, traces: { uri: 's3://b/{run_id}' } } as any).length, 1);
@@ -105,7 +110,7 @@ test('profile is required and must be known', () => {
 
 test('bindingWarnings flags profile mismatches without failing validation', () => {
   const ind = structuredClone(good) as any;
-  ind.executors.triage = { kind: 'managed', token_env: 'T' }; ind.traces = { uri: 's3://b/{run_id}.jsonl' }; ind.learning = { budget_usd_per_week: 5 };
+  ind.executors.triage = { kind: 'managed', token_env: 'T' }; ind.traces = { uri: 's3://b/{run_id}.jsonl' }; ind.learning = { enabled: true };
   const w = bindingWarnings(ind).join('\n');
   for (const s of ['executors.triage', 'traces.uri', 'agent_command']) assert.match(w, new RegExp(s));
   assert.deepEqual(validateBinding(ind), []);

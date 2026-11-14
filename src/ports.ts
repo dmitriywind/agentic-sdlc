@@ -240,12 +240,13 @@ export interface Binding {
   product: { environments: string[]; proofs: string[]; delivery?: 'release-line' | 'continuous'; evidence?: ('sbom' | 'provenance' | 'signature')[] };
   executors: { default: Executor; [skill: string]: Executor };
   learning: {
+    /** The self-improvement loop runs only when true (default false). */
+    enabled?: boolean;
     every_cycles: number;
     min_evidence_runs: number;
     bench_size: number;
     auto_merge_classes: ('tuning' | 'guardrail')[];
     judge_tier: 'fast' | 'balanced' | 'deep';
-    budget_usd_per_week: number;
     /** bench compare needs this many shared cases (default 20). */
     bench_min_cases?: number;
     /** bench run trials per case, and the trials compare needs (default 3). */

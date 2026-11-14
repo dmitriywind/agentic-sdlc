@@ -1,7 +1,5 @@
-// MCP server: every port verb as a tool, over stdio or a minimal HTTP endpoint (references/architecture.md section 10).
-import { createHash, timingSafeEqual } from 'node:crypto';
+// MCP server: every port verb as a tool, over stdio (references/architecture.md section 10).
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -158,50 +156,16 @@ export async function handle(msg: any, ctx: Ctx, allow: Set<string> = new Set())
   }
 }
 
-const digest = (s: string) => createHash('sha256').update(s).digest();
-
-export function startHttp(ctx: Ctx, port: number, host = '127.0.0.1', allow: Set<string> = new Set()): Promise<Server> {
-  const token = ctx.env.AGENTIC_SDLC_MCP_TOKEN;
-  if (!token) return Promise.reject(new Error('AGENTIC_SDLC_MCP_TOKEN is required for --http'));
-  const server = createServer(async (req, res) => {
-    const send = (code: number, body?: object) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(body ? JSON.stringify(body) : undefined); };
-    const given = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1] ?? '';
-    if (!timingSafeEqual(digest(given), digest(token))) return send(401, { error: 'unauthorized' });
-    if (req.method !== 'POST' || req.url !== '/mcp') return send(404, { error: 'POST /mcp only' });
-    const chunks: Buffer[] = [];
-    let size = 0;
-    for await (const c of req as AsyncIterable<Buffer>) { size += c.byteLength; if (size > 4_000_000) return send(413); chunks.push(c); }
-    const raw = Buffer.concat(chunks).toString('utf8');
-    let msg: unknown;
-    try { msg = JSON.parse(raw); } catch { return send(400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); }
-    let r: object | null;
-    try { r = await handle(msg, ctx, allow); }
-    catch (e) { r = { jsonrpc: '2.0', id: (msg as any)?.id ?? null, error: { code: -32603, message: (e as Error).message } }; }
-    r ? send(200, r) : send(202);
-  });
-  return new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, () => resolve(server)); });
-}
-
 export const cli: PortCli = async (argv, ctx) => {
   if (argv.includes('--help') || argv.includes('-h')) {
-    console.log(`usage: agentic-sdlc mcp [--http [--port 8787] [--host 127.0.0.1]] [--allow approve,status]
-  default: JSON-RPC over stdio, one message per line.
-  --http: POST /mcp, JSON responses only (no SSE); requires Authorization: Bearer $AGENTIC_SDLC_MCP_TOKEN.
+    console.log(`usage: agentic-sdlc mcp [--allow approve,status]
+  JSON-RPC over stdio, one message per line.
   --allow: also serve forge_approve and/or forge_status (review identity only).`);
     return 0;
   }
   const val = (flag: string) => { const i = argv.indexOf(flag); return i >= 0 ? argv[i + 1] : undefined; };
   let allow: Set<string>;
   try { allow = allowList(val('--allow')); } catch (e) { console.error((e as Error).message); return 2; }
-  if (argv.includes('--http')) {
-    try {
-      const host = val('--host') ?? '127.0.0.1';
-      const server = await startHttp(ctx, Number(val('--port') ?? 8787), host, allow);
-      console.error(`agentic-sdlc mcp listening on http://${host}:${(server.address() as { port: number }).port}/mcp`);
-      await new Promise((r) => server.once('close', r));
-      return 0;
-    } catch (e) { console.error((e as Error).message); return 1; }
-  }
   for await (const line of createInterface({ input: process.stdin })) {
     if (!line.trim()) continue;
     let msg: any, r: object | null;
