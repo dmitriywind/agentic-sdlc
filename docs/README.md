@@ -1,38 +1,27 @@
 # agentic-sdlc documentation
 
+Start with the guide: ten short chapters, in order. [guide.html](guide.html) shows all of them on one
+page with the diagrams drawn.
+
+1. [What it is](guide/1-what-it-is.md)
+2. [Choose your setup](guide/2-choose.md)
+3. [Install](guide/3-install.md)
+4. [A ticket's journey](guide/4-a-ticket.md)
+5. [The cycle](guide/5-the-cycle.md)
+6. [Review and merge](guide/6-review-and-merge.md)
+7. [Shipping](guide/7-shipping.md)
+8. [When you are needed](guide/8-when-you-are-needed.md)
+9. [Learning](guide/9-learning.md)
+10. [The parts](guide/10-parts.md)
+
+## Reference
+
 | Read | For |
 |---|---|
-| [Guide page](guide.html) | All of the below on one HTML page, with the diagrams drawn. |
-| [Adoption](adoption.md) | Choose the setup; adopt on one repo, on many repos; move from a hand-made process; upgrade. |
-| [Use cases](use-cases.md) | Actors, the use-case catalogue, and who does what in each team shape. |
-| [Behaviour specs](behaviour/README.md) | Gherkin scenarios for every skill, gate, the push guard and the binding. |
-| [Components](architecture/components.md) | The parts and how they connect (diagrams). |
-| [Flows](architecture/flows.md) | The cycle, review, release, learning, routing, intake and hold flows (diagrams). |
-| [Roadmap](roadmap.md) | What comes next, in order. |
-| [Forge](forges.md) | GitHub checks, approval, tokens, secrets and one-time setup. |
-| [Operating baseline](operating-baseline.md) | Team shapes, repo and board baseline, and how a product should operate in 2026-27 (recommendations). |
-| [The contract](../references/architecture.md) | Normative. Section 3 ports and gates, executors in `skills/sdlc/references/executors.md`, section 10 runtimes and profiles. |
+| [The contract](../references/architecture.md) | Normative: ports, gates, binding keys, executors, runtimes, profiles. |
 | [Binding template](../templates/binding.yml) | Every project value, documented. |
-
-## Pick a profile
-
-| Profile | Guide | Pays with |
-|---|---|---|
-| individual, individual-api | [profiles/individual.md](profiles/individual.md) | Subscriptions; individual-api adds API keys for some stages. One identity by default. |
-| organization | [profiles/organization.md](profiles/organization.md) | API keys and managed agents. Two identities required. |
-
-## Pick an ecosystem (where the cycle runs)
-
-The factory needs no developer machine. Any scheduler that starts an agent with the repo and
-network access runs one cycle. Gates always run in the forge's CI.
-
-| Ecosystem | Guide |
-|---|---|
-| Claude (Code, scheduled tasks, Managed Agents) | [ecosystems/claude-code.md](ecosystems/claude-code.md) |
-| OpenAI Codex | [ecosystems/codex.md](ecosystems/codex.md) |
-| Cursor | [ecosystems/cursor.md](ecosystems/cursor.md) |
-| Anything else (shell, MCP only, vendor MCP tools only) | [ecosystems/generic.md](ecosystems/generic.md) |
-
-Each vendor fact carries its source link. Re-check it before you depend on a limit.
-
-Runner templates live in [`templates/runner/`](../templates/runner/); [local.md](../templates/runner/local.md) runs the cycle on your own machine.
+| [Behaviour specs](behaviour/README.md) | Every skill, gate and CLI rule as scenarios, each with its proof. |
+| [GitHub](forges.md) | Checks, approval, tokens, secrets and one-time setup on GitHub. |
+| [Claude](ecosystems/claude-code.md), [Codex](ecosystems/codex.md), [Cursor](ecosystems/cursor.md), [any other agent](ecosystems/generic.md) | Per-vendor setup and limits, each fact with its source. |
+| [Runner templates](../templates/runner/routine.md) | One template per scheduler; [local.md](../templates/runner/local.md) for your own machine. |
+| [Roadmap](roadmap.md) | What comes next, in order. |

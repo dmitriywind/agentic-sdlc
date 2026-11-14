@@ -10,7 +10,7 @@ A portable software factory: a Claude Code plugin and a CLI, shipped from Git (n
 - `src/` the CLI (`agentic-sdlc`): board, forge and VCS ports, gates, dispatch, ledger, bench, MCP server, init/validate/doctor.
 - `templates/` what `init` installs: `binding.yml`, `gates/` (CI per forge, the pre-push hook), `runner/` (schedulers, prompts, setup), `mcp/`.
 - `.claude-plugin/` the plugin and marketplace manifests; `hooks/` the plugin's guard hook and MCP launcher.
-- `references/`, `docs/` the contract and the guides. `docs/guide.html` is generated from the README and the docs by `scripts/guide.mjs` (`npm run build`): edit the Markdown, never the page. `test/` node:test suites (`*.test.ts`).
+- `references/`, `docs/` the contract and the guides. `docs/guide.html` is generated from `docs/guide/*.md` by `scripts/guide.mjs` (`npm run build`): edit the Markdown, never the page. `test/` node:test suites (`*.test.ts`).
 
 ## Commands
 
@@ -25,7 +25,7 @@ A portable software factory: a Claude Code plugin and a CLI, shipped from Git (n
 - A process rule lives only in `skills/`. A project value lives only in the binding. `src/` holds mechanism only.
 - A skill calls `agentic-sdlc board|forge|vcs <verb>`, never a vendor CLI.
 - A change to a port, a binding key or a skill's interface changes `references/architecture.md` in the same change.
-- A change to what a skill, gate, hook or `init` does changes its `docs/behaviour/*.feature` in the same change, and `docs/architecture/flows.md` or `docs/use-cases.md` when a flow or a use case changes. The source holds the rule; the docs state the behaviour and point to the source.
+- A change to what a skill, gate, hook or `init` does changes its `docs/behaviour/*.feature` in the same change, and the guide chapter in `docs/guide/` that tells that part of the story. The source holds the rule; the docs state the behaviour and point to the source.
 - `docs/roadmap.md` is this repo's backlog. A finished item leaves it; the git log and the release tags are the history. Keep no audit, changelog or history file: a rule lives in the source, a plan in the roadmap.
 - Keep `.claude-plugin/plugin.json` `version` equal to `package.json` `version`.
 - Git only, no npm: the npm name `agentic-sdlc` is another project. `dist/` is committed (the plugin and `github:` installs run it), so run `npm run build` and commit `dist/` with every `src/` change. A release is a `v<version>` tag.

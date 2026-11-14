@@ -1,7 +1,7 @@
 # Behaviour specs
 
 Gherkin scenarios that state what each skill, gate, hook and `init` does, as a user can observe
-it. They are the acceptance view of the [use cases](../use-cases.md).
+it. They are the acceptance view of the [guide](../guide/1-what-it-is.md).
 
 ## How to read a scenario
 
