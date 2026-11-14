@@ -19,6 +19,14 @@ Feature: Review a change request
     And it runs "forge ready <n>" and "forge automerge <n>"
     And the ticket still shows In review
 
+  # Source: src/forge/github.ts; references/architecture.md §3.2, "Adapter"
+  # Proof: test/forge.test.ts "github: in a cloud session every verb is REST under repos/ and ready, draft, automerge use the ccr routes"
+  Scenario: The forge verbs work in a Claude cloud session
+    Given the runtime is a Claude cloud session (CLAUDE_CODE_REMOTE=true)
+    When the reviewer runs "forge ready <n>", "forge draft <n>" or "forge automerge <n>"
+    Then the adapter calls the proxy's pulls/<n>/ccr route for it
+    And no forge verb calls GraphQL or a path outside repos/<owner>/<repo>
+
   # Source: references/architecture.md, "Two runtimes, two identities"; src/forge/index.ts, "status"
   # Proof: test/forge.test.ts "cli: status refuses the contexts only a gate posts"
   Scenario: The reviewer cannot post a gate's status
@@ -100,7 +108,7 @@ Feature: Review a change request
     And it repeats the CI check and the decision on the new head once CI has reported
 
   # Source: skills/review-pr/SKILL.md, "Red or stalled gate"
-  # Proof: test/forge.test.ts "github: uses gh with body on stdin, draft = ready --undo, status via api"
+  # Proof: test/forge.test.ts "github: draft = ready --undo outside the cloud, checks from REST, status via api"
   Scenario: A red check caused by the diff sends the ticket back
     Given a ready CR at In review
     And a required check is red
