@@ -11,8 +11,9 @@ In a cloud session the adapter calls only REST under `repos/{owner}/{repo}/…`,
 `closing` works behind a Claude cloud session's GitHub proxy, which refuses GraphQL (`gh pr`,
 `gh issue`). `closing` uses `search/issues`, which the proxy refuses; the gates that use it run in CI. With
 `CLAUDE_CODE_REMOTE=true`, `forge ready`, `forge draft` and `forge automerge` use the proxy's
-`pulls/{n}/ccr/…` routes; those routes exist only in the cloud. The proxy injects the token, so a
-cloud session needs no `token_env`.
+`pulls/{n}/ccr/…` routes; those routes exist only in the cloud. The proxy injects the token: when the
+env var that `token_env` names is unset in a cloud session, the adapter uses the proxy's token, so one
+binding serves CI and the cloud. `review_token_env` never falls back.
 
 A private repo on GitHub Free has no draft pull requests and no trunk protection. There a draft CR
 is a ready PR with the `draft` label, and `forge automerge` merges directly once the CR is ready and

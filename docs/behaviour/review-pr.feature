@@ -20,13 +20,14 @@ Feature: Review a change request
     And the ticket still shows In review
 
   # Source: src/forge/github.ts; references/architecture.md §3.2, "Adapter"
-  # Proof: test/forge.test.ts "github: in a cloud session every verb is REST under repos/ and ready, draft, automerge use the ccr routes"
+  # Proof: test/forge.test.ts "github: in a cloud session every verb is REST under repos/ and ready, draft, automerge use the ccr routes; an unset token_env falls back to the proxy"
   Scenario: The forge verbs work in a Claude cloud session
     Given the runtime is a Claude cloud session (CLAUDE_CODE_REMOTE=true)
     When the reviewer runs "forge ready <n>", "forge draft <n>" or "forge automerge <n>"
     Then the adapter calls the proxy's pulls/<n>/ccr route for it
     And no forge verb calls GraphQL
     And only "closing" calls a path outside repos/<owner>/<repo> (search/issues), which the session refuses
+    And when the env var that forge.options.token_env names is unset, the verbs use the proxy's token
 
   # Source: src/forge/github.ts; references/architecture.md §3.2, "Adapter"
   # Proof: test/forge.test.ts "github: a repo without draft PRs marks drafts with the draft label; an unprotected trunk merges once required checks are green"

@@ -12,7 +12,14 @@ export function github(ctx: AdapterContext): Forge {
   const api = `repos/${repo ?? '{owner}/{repo}'}`;
   // GH_TOKEN from the env var named by options[key]; status and approve use review_token_env, never the implementer's.
   const withToken = (key: string) => ({ ...ctx.env, GH_TOKEN: secret(ctx, key) });
-  const gh = (a: string[], input?: string, env: NodeJS.ProcessEnv | undefined = ctx.options.token_env ? withToken('token_env') : undefined) =>
+  // In a Claude cloud session the proxy injects the token, so an unset token_env falls back to it: one binding
+  // serves CI (token_env set) and the cloud. The review token never falls back.
+  const implementer = () => {
+    const name = ctx.options.token_env as string | undefined;
+    if (!name || (!ctx.env[name] && ctx.env.CLAUDE_CODE_REMOTE === 'true')) return undefined;
+    return withToken('token_env');
+  };
+  const gh = (a: string[], input?: string, env: NodeJS.ProcessEnv | undefined = implementer()) =>
     ctx.exec('gh', repo && a[0] !== 'api' ? [...a, '-R', repo] : a, { cwd: ctx.root, input, env });
   // JSON body on stdin, so a long CR body never meets the argument length limit.
   const post = (path: string, data: unknown, env?: NodeJS.ProcessEnv) =>

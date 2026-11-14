@@ -56,9 +56,9 @@ test('github: draft = ready --undo outside the cloud, checks from REST, status v
   assert.equal(envs.at(-1), 'r');
 });
 
-test('github: in a cloud session every verb is REST under repos/ and ready, draft, automerge use the ccr routes', async () => {
+test('github: in a cloud session every verb is REST under repos/ and ready, draft, automerge use the ccr routes; an unset token_env falls back to the proxy', async () => {
   const inputs: (string | undefined)[] = [];
-  const { ctx, execs } = mk('github', { review_token_env: 'REV' }, () => ({}), restExec);
+  const { ctx, execs } = mk('github', { review_token_env: 'REV', token_env: 'UNSET_IN_CLOUD' }, () => ({}), restExec);
   ctx.env.CLAUDE_CODE_REMOTE = 'true';
   const exec = ctx.exec;
   ctx.exec = (c, a, o: any = {}) => (inputs.push(o.input), exec(c, a, o));

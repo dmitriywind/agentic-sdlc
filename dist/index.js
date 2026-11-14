@@ -8106,7 +8106,12 @@ function github(ctx) {
   const repo = ctx.options.repo;
   const api = `repos/${repo ?? "{owner}/{repo}"}`;
   const withToken = (key) => ({ ...ctx.env, GH_TOKEN: secret(ctx, key) });
-  const gh = (a, input, env = ctx.options.token_env ? withToken("token_env") : void 0) => ctx.exec("gh", repo && a[0] !== "api" ? [...a, "-R", repo] : a, { cwd: ctx.root, input, env });
+  const implementer = () => {
+    const name = ctx.options.token_env;
+    if (!name || !ctx.env[name] && ctx.env.CLAUDE_CODE_REMOTE === "true") return void 0;
+    return withToken("token_env");
+  };
+  const gh = (a, input, env = implementer()) => ctx.exec("gh", repo && a[0] !== "api" ? [...a, "-R", repo] : a, { cwd: ctx.root, input, env });
   const post = (path, data, env) => JSON.parse(gh(["api", "-X", "POST", `${api}/${path}`, "--input", "-"], JSON.stringify(data), env));
   const cloud = ctx.env.CLAUDE_CODE_REMOTE === "true";
   const ccr = (method, n, route, ...f) => gh(["api", "-X", method, `${api}/pulls/${n}/ccr/${route}`, ...f]);
