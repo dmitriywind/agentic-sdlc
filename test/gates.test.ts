@@ -592,7 +592,7 @@ test('gate evidence: runs commands.evidence_check with the sha; empty product.ev
   const b = { ...binding, product: { ...binding.product, evidence: ['report'] } };
   assert.equal((await run({ ...b, commands: {} })).code, 1);
   assert.equal((await run({ ...b, commands: { evidence_check: 'check {sha}' } })).code, 0);
-  assert.ok((ran as string[]).some((c) => /check "?abc123"?/.test(c)), ran.join('|'));
+  assert.ok((ran as string[]).some((c) => /check ["']?abc123["']?/.test(c)), ran.join('|'));
 });
 
 test('shipped: a failure with one environment returns the tickets of the failed revision to Not shipped', async () => {
