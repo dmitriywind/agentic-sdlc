@@ -3,12 +3,13 @@ import type { AdapterContext, Binding, Board, Comment, LogicalField, PortCli } f
 import { ownersFor } from '../ports.ts';
 import { selectComments } from '../comments.ts';
 import { createGithubBoard } from './github.ts';
+import { createGithubIssuesBoard } from './github-issues.ts';
 import { createJiraBoard } from './jira.ts';
 import { createLinearBoard } from './linear.ts';
 import { createLocalBoard } from './local.ts';
 
 export function createBoard(ctx: AdapterContext): Board {
-  const make = { github: createGithubBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
+  const make = { github: createGithubBoard, 'github-issues': createGithubIssuesBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
   if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
   return make(ctx);
 }

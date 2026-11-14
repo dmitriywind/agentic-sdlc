@@ -13,10 +13,12 @@ owners:
   #   product: { board: 5b10ac8d82e05b22cc7d4ef5, forge: ann }   bots: [{ board: 712020:abc, forge: factory-bot[bot] }]
 
 board:
-  adapter: github               # github | jira | linear | local
+  adapter: github               # github | github-issues | jira | linear | local
   options:                      # adapter-specific; credentials only as env var names; validate rejects unknown keys
     # github:  { owner: my-org, project_number: 1, repo: my-org/my-repo, token_env: AGENTIC_BOARD_TOKEN }
     #          token_env (optional): env var holding a PAT with project scope, passed to gh as GH_TOKEN; Projects v2 needs it
+    # github-issues: { repo: my-org/my-repo }   # the repo's issues, REST only: the board a Claude cloud session reaches.
+    #          Status and the fields are labels status:<s> and <field name, lower case>:<value> (size:S, release version:1.2)
     # jira:    { base_url: https://example.atlassian.net, project_key: PROJ, email_env: JIRA_EMAIL, token_env: JIRA_TOKEN }
     # linear:  { team_key: ENG, token_env: LINEAR_API_KEY }
     # local:   {}                 # always .agents/board.json

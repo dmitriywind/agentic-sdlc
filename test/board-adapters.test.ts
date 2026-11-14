@@ -155,3 +155,92 @@ test('jira list throws on a repeated token; linear list throws on an unchanged c
   const lin = mk('linear', { team_key: 'LIN', token_env: 'LT' }, () => ({ data: { issues: { nodes: [{ id: 'x' }], pageInfo: { hasNextPage: true, endCursor: 'c1' } } } }), { LT: 'k' });
   await assert.rejects(lin.board.list(), /linear: list does not advance/);
 });
+
+// github-issues: a fake REST repo behind `gh api`; every call is recorded with its JSON input.
+const issuesRepo = (issues: any[], labels: string[] = []) => {
+  const calls: { args: string[]; input?: any }[] = [];
+  const f = fakeCtx('.', { repo: 'o/r' }, () => ({}));
+  f.ctx.binding = { ...binding, board: { ...binding.board, adapter: 'github-issues', fields: { size: 'Size', release_version: 'Release Version' } } } as any;
+  f.ctx.exec = (cmd, args, o) => {
+    const input = o?.input ? JSON.parse(o.input) : undefined;
+    calls.push({ args: [cmd, ...args], input });
+    const [method, url] = [args[2], args[3]];
+    const [path, qs] = url.replace('repos/o/r/', '').split('?');
+    const page = Number(new URLSearchParams(qs).get('page') ?? 1);
+    const pageOf = (xs: any[]) => JSON.stringify(xs.slice((page - 1) * 100, page * 100));
+    const it = issues.find((i) => i.number === Number(path.split('/')[1]));
+    const named = (ls: string[]) => ls.map((name) => ({ name }));
+    if (path === 'issues' && method === 'GET') return pageOf(issues);
+    if (path === 'issues') { const i = { number: 100 + issues.length, id: 9000, ...input, labels: named(input.labels) }; issues.push(i); return JSON.stringify(i); }
+    if (path === 'labels') { if (method === 'POST') labels.push(input.name); return method === 'GET' ? pageOf(named(labels)) : '{}'; }
+    if (path === 'milestones') return pageOf([{ number: 3, title: 'M1' }]);
+    if (/^issues\/\d+$/.test(path)) {
+      if (method === 'PATCH') Object.assign(it, input, input.labels ? { labels: named(input.labels) } : {});
+      return JSON.stringify(it);
+    }
+    if (path.endsWith('/comments')) return method === 'POST' ? JSON.stringify({ id: 5, html_url: 'c5' }) : pageOf(it.comments ?? []);
+    if (path.endsWith('/sub_issues')) return '[]';
+    if (path.endsWith('/parent')) throw new Error('404');
+    return '{}';
+  };
+  return { board: createBoard(f.ctx), calls, issues, labels };
+};
+const iss = (number: number, labels: string[], extra = {}) => ({ number, id: number * 10, title: `t${number}`, body: '', html_url: `u${number}`, labels: labels.map((name) => ({ name })), assignees: [], ...extra });
+/** Every call is `gh api -X <method> repos/o/r/...`: no GraphQL, no `gh issue`, no `gh project`. */
+const onlyRepoRest = (calls: { args: string[] }[]) => {
+  for (const { args } of calls) {
+    assert.deepEqual(args.slice(0, 3), ['gh', 'api', '-X'], args.join(' '));
+    assert.ok(args[4].startsWith('repos/o/r/'), args.join(' '));
+    assert.ok(!args.some((a) => /graphql|^issue$|^project$/.test(a)), args.join(' '));
+  }
+};
+
+test('github-issues list reads status and fields from labels, pages by 100, skips PRs and unlabelled issues', async () => {
+  const many = Array.from({ length: 150 }, (_, k) => iss(k + 1, k === 120 ? ['status:Ready', 'size:S', 'release version:1.2', 'bug'] : ['status:Backlog']));
+  const { board, calls } = issuesRepo([...many, iss(200, []), iss(201, ['status:Ready'], { pull_request: {} })]);
+  assert.equal((await board.list()).length, 150);
+  const ready = await board.list({ status: ['Ready'] });
+  assert.deepEqual(ready.map((i) => [i.id, i.status, i.fields, i.labels]), [['121', 'Ready', { size: 'S', release_version: '1.2' }, ['bug']]]);
+  assert.ok(calls.some((c) => c.args[4].includes('per_page=100&page=2')));
+  onlyRepoRest(calls);
+});
+
+test('github-issues move swaps the status label, and refuses with --only-from when the status differs', async () => {
+  const { board, calls, issues } = issuesRepo([iss(7, ['status:Backlog', 'size:M'])], ['status:Backlog', 'size:M']);
+  await assert.rejects(board.move('7', 'In progress', 'Ready'), MovedError);
+  assert.ok(!calls.some((c) => c.args[3] === 'PATCH'));
+  assert.equal((await board.move('7', 'In progress', 'Backlog')).status, 'In progress');
+  assert.deepEqual(issues[0].labels.map((l: any) => l.name), ['size:M', 'status:In progress']);
+  onlyRepoRest(calls);
+});
+
+test('github-issues create ensures every label exists, then sets the milestone and the parent', async () => {
+  const { board, calls, labels } = issuesRepo([iss(1, ['status:Backlog'])], ['bug']);
+  const it = await board.create({ title: 'n', body: 'b', status: 'Ready', labels: ['bug', 'feature'], milestone: 'M1', parent: '1' });
+  assert.deepEqual(labels, ['bug', 'feature', 'status:Ready']);
+  assert.equal(it.status, 'Ready');
+  assert.equal(calls.find((c) => c.args[4] === 'repos/o/r/issues' && c.args[3] === 'POST')!.input.milestone, 3);
+  assert.ok(calls.some((c) => c.args[4] === 'repos/o/r/issues/1/sub_issues' && c.input?.sub_issue_id === 9000));
+  onlyRepoRest(calls);
+});
+
+test('github-issues set and label edit labels; close sets the state reason and Cancelled', async () => {
+  const { board, calls, issues } = issuesRepo([iss(7, ['status:In review', 'size:M', 'bug'])]);
+  assert.deepEqual((await board.set('7', 'size', 'L')).fields, { size: 'L' });
+  assert.deepEqual((await board.set('7', 'size', null)).fields, {});
+  assert.deepEqual((await board.label('7', 'remove', 'bug')).labels, []);
+  assert.equal((await board.close('7', 'not_planned')).status, 'Cancelled');
+  assert.equal(issues[0].state, 'closed');
+  assert.equal(issues[0].state_reason, 'not_planned');
+  onlyRepoRest(calls);
+});
+
+test('github-issues comments page, newest first, and filter by marker', async () => {
+  const comments = Array.from({ length: 120 }, (_, k) => ({ id: k, user: { login: 'bot' }, created_at: String(k), body: k === 110 ? 'hb\nx' : 'hi', html_url: '' }));
+  const { board, calls } = issuesRepo([iss(7, ['status:Ready'], { comments })]);
+  const all = await board.comments('7');
+  assert.equal(all.length, 120);
+  assert.equal(all[0].id, '119');
+  assert.deepEqual((await board.comments('7', { marker: 'hb' })).map((c) => c.id), ['110']);
+  onlyRepoRest(calls);
+});
