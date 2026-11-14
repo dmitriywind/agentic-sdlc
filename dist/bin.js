@@ -8962,6 +8962,7 @@ __export(install_exports, {
   trunkProtection: () => trunkProtection,
   validate: () => validate
 });
+import { execFileSync as execFileSync2 } from "child_process";
 import { createHash } from "crypto";
 import { chmodSync, cpSync, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync5, readdirSync, statSync, writeFileSync as writeFileSync2 } from "fs";
 import { dirname as dirname2, join as join4, relative, resolve } from "path";
@@ -9085,7 +9086,7 @@ function pinCli(root, version2, force, log) {
   log.push(`set devDependencies.agentic-sdlc=${gitSpec(version2)} in package.json: run npm install`);
   return true;
 }
-function claudeSetup(root, force, log) {
+function claudeSetup(root, force, log, noPlugin) {
   let models = {};
   try {
     models = (0, import_yaml2.parse)(readFileSync5(join4(root, BINDING_PATH), "utf8"))?.models ?? {};
@@ -9113,8 +9114,17 @@ Do not start subagents.
     writeFileSync2(file, (cur ? cur.replace(/\n*$/, "\n\n") : "") + "@AGENTS.md\n");
     log.push(cur ? "appended @AGENTS.md to CLAUDE.md" : "wrote CLAUDE.md (@AGENTS.md)");
   }
+  if (noPlugin) return;
   log.push("install the Claude Code plugin (skills, guard hook, MCP server): /plugin marketplace add dmitriywind/agentic-sdlc, then /plugin install agentic-sdlc@agentic-sdlc");
   log.push("headless runs load it from the pinned package: claude -p ... --plugin-dir node_modules/agentic-sdlc");
+}
+function originRepo(root) {
+  try {
+    const url = execFileSync2("git", ["remote", "get-url", "origin"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(url)?.[1];
+  } catch {
+    return void 0;
+  }
 }
 async function init(root, argv, log) {
   const f = flagsOf(argv);
@@ -9150,6 +9160,12 @@ async function init(root, argv, log) {
     doc.setIn(["executors", "default"], { kind: "harness", sandbox: profile === "enterprise" ? "container" : "cloud" });
     if (profile === "enterprise") {
       doc.set("traces", { uri: ".agents/runtime/traces/{run_id}.jsonl" });
+    }
+    const repo = forge === "github" ? originRepo(root) : void 0;
+    if (repo) {
+      doc.setIn(["forge", "options", "repo"], repo);
+      if (board === "github-issues") doc.setIn(["board", "options", "repo"], repo);
+      log.push(`set the repo ${repo} from git remote origin`);
     }
     if (board === "local") {
       const hb = await createLocalBoard({ root }).create({ title: "Heartbeat", body: "agentic-sdlc heartbeat comments. Not a ticket.", status: "Cancelled" });
@@ -9192,7 +9208,7 @@ async function init(root, argv, log) {
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, "\n\n") : "") + POINTER + "\n";
   if (next !== cur) writeFileSync2(agents, next);
   log.push("updated AGENTS.md");
-  if (harness === "claude") claudeSetup(root, force, log);
+  if (harness === "claude") claudeSetup(root, force, log, noPlugin);
 }
 function validate(root, warnings = []) {
   const problems = [];

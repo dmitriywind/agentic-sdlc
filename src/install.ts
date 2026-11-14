@@ -1,4 +1,5 @@
 // init / validate / doctor.
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -161,7 +162,7 @@ function pinCli(root: string, version: string, force: boolean, log: string[]): b
 }
 
 /** Claude Code: tier subagents from binding.models, and CLAUDE.md importing AGENTS.md. Skills come from the plugin. */
-function claudeSetup(root: string, force: boolean, log: string[]) {
+function claudeSetup(root: string, force: boolean, log: string[], noPlugin: boolean) {
   let models: Record<string, string> = {};
   try { models = parse(readFileSync(join(root, BINDING_PATH), 'utf8'))?.models ?? {}; } catch { /* reported by validate */ }
   for (const tier of TIERS) {
@@ -186,8 +187,17 @@ Do not start subagents.
     writeFileSync(file, (cur ? cur.replace(/\n*$/, '\n\n') : '') + '@AGENTS.md\n');
     log.push(cur ? 'appended @AGENTS.md to CLAUDE.md' : 'wrote CLAUDE.md (@AGENTS.md)');
   }
+  if (noPlugin) return;
   log.push('install the Claude Code plugin (skills, guard hook, MCP server): /plugin marketplace add dmitriywind/agentic-sdlc, then /plugin install agentic-sdlc@agentic-sdlc');
   log.push('headless runs load it from the pinned package: claude -p ... --plugin-dir node_modules/agentic-sdlc');
+}
+
+/** owner/name of a GitHub origin remote, or undefined. */
+function originRepo(root: string): string | undefined {
+  try {
+    const url = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(url)?.[1];
+  } catch { return undefined; }
 }
 
 async function init(root: string, argv: string[], log: string[]) {
@@ -229,6 +239,12 @@ async function init(root: string, argv: string[], log: string[]) {
     doc.setIn(['executors', 'default'], { kind: 'harness', sandbox: profile === 'enterprise' ? 'container' : 'cloud' });
     if (profile === 'enterprise') {
       doc.set('traces', { uri: '.agents/runtime/traces/{run_id}.jsonl' }); // placeholder: point it at org storage
+    }
+    const repo = forge === 'github' ? originRepo(root) : undefined;
+    if (repo) {
+      doc.setIn(['forge', 'options', 'repo'], repo);
+      if (board === 'github-issues') doc.setIn(['board', 'options', 'repo'], repo);
+      log.push(`set the repo ${repo} from git remote origin`);
     }
     if (board === 'local') {
       // The local board can hold the heartbeat ticket now; Cancelled keeps it out of every route.
@@ -275,7 +291,7 @@ async function init(root: string, argv: string[], log: string[]) {
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, '\n\n') : '') + POINTER + '\n';
   if (next !== cur) writeFileSync(agents, next);
   log.push('updated AGENTS.md');
-  if (harness === 'claude') claudeSetup(root, force, log);
+  if (harness === 'claude') claudeSetup(root, force, log, noPlugin);
 }
 
 /** Binding problems plus skill frontmatter problems; skill warnings go into `warnings`. */

@@ -110,6 +110,14 @@ Feature: Install and validate the binding
     And .mcp.json holds the agentic-sdlc server
     And without --no-plugin init writes no .claude/skills
 
+  # Source: src/install.ts, "init" and "originRepo"
+  # Proof: test/install.test.ts "init reads the repo from a GitHub origin, and --no-plugin prints no plugin install hint"
+  Scenario: Init reads the repo from the GitHub origin remote
+    Given the project's git remote origin is a GitHub repo
+    When the adopter runs "agentic-sdlc init --harness claude --no-plugin --board github-issues"
+    Then the binding's forge.options.repo and board.options.repo name that repo
+    And the init log does not ask to install the plugin
+
   # Source: src/install.ts, "doctor" and "deliveryWorkflow"
   # Proof: test/install.test.ts "doctor: the delivery workflow must name the trunk and release line"
   Scenario: Doctor fails when the delivery workflow does not name the trunk

@@ -168,6 +168,20 @@ test('init --harness claude writes no .mcp.json (the plugin serves MCP); --no-pl
   assert.equal(m['agentic-sdlc'].type, 'stdio');
 });
 
+test('init reads the repo from a GitHub origin, and --no-plugin prints no plugin install hint', async () => {
+  const root = fixture();
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/acme/shop.git'], { cwd: root });
+  const out: string[] = [];
+  const l = console.log, e = console.error;
+  console.log = console.error = (s: unknown) => { out.push(String(s)); };
+  try { await cli(['init', '--harness', 'claude', '--no-plugin', '--board', 'github-issues'], fakeCtx(root, {}, () => ({})).ctx); }
+  finally { console.log = l; console.error = e; }
+  const binding = readFileSync(join(root, '.agents/binding.yml'), 'utf8');
+  assert.match(binding, /board:[\s\S]*repo: acme\/shop[\s\S]*forge:[\s\S]*repo: acme\/shop/);
+  assert.doesNotMatch(out.join('\n'), /install the Claude Code plugin/);
+});
+
 test('init pins the CLI as a devDependency when package.json exists, and the MCP entry follows', async () => {
   const root = fixture();
   w(join(root, 'package.json'), '{\n    "name": "p"\n}\n');
