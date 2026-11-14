@@ -58,7 +58,12 @@ jobs:
           if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
             npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           else
-            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-0.1.0}"   # set: AGENTIC_SDLC_VERSION to an exact version
+            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
+            v="$AGENTIC_SDLC_VERSION"
+            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
+            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
+            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
+            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
           fi
       - name: Git identity for tags
         run: |
@@ -105,4 +110,7 @@ jobs:
         if: (github.event_name == 'push' && github.ref_name == env.TRUNK) || github.event_name == 'workflow_dispatch'
         env:
           MERGED_SHA: ${{ inputs.sha || github.sha }}
-        run: agentic-sdlc gate merged --sha "$MERGED_SHA"
+        run: |
+          # A dispatch input: a sha only, never something that starts with - .
+          case "$MERGED_SHA" in ""|*[!0-9a-f]*) echo "::error::sha must be hex"; exit 1 ;; esac
+          agentic-sdlc gate merged --sha "$MERGED_SHA"

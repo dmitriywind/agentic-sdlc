@@ -77,7 +77,7 @@ Feature: Review a change request
     Then the report starts with "<!-- review-pr <head sha> -->"
     And the verdict is REMEDIATION REQUIRED
     And the reviewer posts no approval
-    And the ticket moves to In progress for implement-spec
+    And, below "cycle.max_rework" such reports on the CR, the ticket moves to In progress for implement-spec
 
   # Source: skills/review-pr/SKILL.md, "Report"
   # Proof: skill text only
@@ -212,7 +212,23 @@ Feature: Review a change request
     Given the newest review-pr report is for the current head
     And no trusted comment came after it
     When review-pr runs
+    And the CR is a draft
+    When review-pr runs
     Then it posts nothing and stops
+    Given that report is a red-gate note whose "Signal: <id>" ticket is now closed
+    Then review-pr reviews the draft CR from step 1
+    Given the CR is ready
+    Then review-pr is not stopped by the report: it continues at the step for the CR's state
+
+  # Source: skills/review-pr/SKILL.md, "Send back"
+  # Proof: skill text only
+  Scenario: The rework cap sends the ticket to a human
+    Given a product CR opened by the factory has findings
+    And the trusted REMEDIATION REQUIRED reports on it, this one included, number "cycle.max_rework" or more
+    When the reviewer decides
+    Then the ticket does not move to In progress
+    And the CR is draft
+    And the reviewer calls escalate-to-human with the Repeat trigger and the count
 
   # Source: skills/review-pr/SKILL.md, "Behind the trunk"
   # Proof: skill text only

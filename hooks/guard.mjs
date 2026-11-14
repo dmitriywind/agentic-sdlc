@@ -3,10 +3,12 @@
 // - `git push` to the trunk (vcs.trunk in .agents/binding.yml, default main): delivery goes through a CR;
 // - `agentic-sdlc forge approve` (Bash or the MCP tool) unless AGENTIC_SDLC_ROLE=review: only the review runtime approves.
 // No dependencies: a plugin installed from git has no node_modules.
-// ponytail: a token scan, not a shell parser; the ruleset and the token split are the real defence.
+// ponytail: a token scan, not a shell parser, and it fails closed on what it cannot resolve (a variable, a cd to a computed path).
+// The trunk ruleset and the absence of the review token are the real boundary; this hook is a second line of defence.
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 const block = (why) => { process.stderr.write(`agentic-sdlc guard: ${why}\n`); process.exit(2); };
 
@@ -27,7 +29,7 @@ const gitOut = (cwd, ...args) => {
   try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
   catch { return ''; }
 };
-const headOf = (cwd) => gitOut(cwd, 'rev-parse', '--abbrev-ref', 'HEAD');
+const headOf = (cwd, extra = []) => gitOut(cwd, ...extra, 'rev-parse', '--abbrev-ref', 'HEAD');
 
 // The binding lives at the project root: the repo top, the main checkout of a linked worktree, the plugin's project dir, or cwd.
 const common = gitOut(dir, 'rev-parse', '--path-format=absolute', '--git-common-dir');
@@ -40,39 +42,94 @@ for (const c of [gitOut(dir, 'rev-parse', '--show-toplevel'), common && dirname(
   if (m) { trunks.clear(); trunks.add(m[1]); }
   break;
 }
-const CLI = /(^|[/\\])agentic-sdlc(\.(cmd|exe|ps1))?$|(^|[/\\])(dist[/\\])?bin\.js$/;
+const CLI = /[^/\\]*agentic-sdlc[^/\\]*$|(^|[/\\])bin\.js$|agentic-sdlc[/\\](.*[/\\])?dist[/\\](bin|cli)\.js$/;
 const GIT = /(^|[/\\])git(\.exe)?$/;
 const WITH_VALUE = ['-C', '-c', '--git-dir', '--work-tree', '--namespace'];
+const WRAP = /(^|[/\\])(eval|sh|bash|zsh|dash|ksh)$/;
+const PUSH_WORD = /(^|[^\w-])push([^\w-]|$)/;
+const NOCD = 'cannot tell which checkout this push runs in: run the push from the change worktree without cd, -C, --git-dir or --work-tree on a computed path.';
 
-for (const seg of command.split(/&&|\|\||[;|&\n<>#]/)) {
-  // Quotes, parentheses, `$(` and backticks dropped, so `bash -c 'git push ...'`, `(git push ...)`, `$(git push ...)` and `` `git push ...` `` are scanned too.
-  const t = seg.trim().split(/\s+/).map((x) => x.replace(/^[(`$]+|[)`]+$/g, '').replace(/["'\\]/g, '')).filter(Boolean);
+// Split into segments of tokens. Quotes are dropped and not respected for splitting (so `bash -c 'a && git push'` is scanned);
+// `#` starts a comment only at the start of an unquoted word. `$(` and backticks open a new segment and mark the one they leave.
+const scan = (cmd) => {
+  const segs = [];
+  let seg = { t: [], subst: false }, tok = '', started = false, q = '', bt = false;
+  const endTok = () => { if (tok) seg.t.push({ s: tok, dyn: tok.includes('$') }); tok = ''; started = false; };
+  const endSeg = (mark) => { endTok(); if (mark) seg.subst = true; segs.push(seg); seg = { t: [], subst: false }; };
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i];
+    if (q === "'") { if (c === "'") q = ''; else if (/\s/.test(c)) endTok(); else if (/[;|&<>()]/.test(c)) endSeg(); else tok += c; continue; }
+    if (c === '\\') { const n = cmd[++i]; if (n && n !== '\n') { tok += n; started = true; } continue; }
+    if (c === '"' || c === "'") { q = q === '"' && c === '"' ? '' : q || c; started = true; continue; }
+    if (c === '$' && cmd[i + 1] === '(') { endSeg(true); i++; continue; }
+    if (c === '`') { const open = !bt; bt = !bt; endSeg(open); continue; }
+    if (/\s/.test(c) && c !== '\n') { endTok(); continue; }
+    if (c === '#' && !q && !started && !tok) { while (i < cmd.length && cmd[i] !== '\n') i++; i--; continue; }
+    if (c === '\n' || /[;|&<>()]/.test(c)) { endSeg(); continue; }
+    tok += c; started = true;
+  }
+  endSeg();
+  return segs;
+};
+
+const lit = (p, base) => (p.startsWith('~') ? join(homedir(), p.slice(1)) : resolve(base, p));
+const pushy = PUSH_WORD.test(command);
+let cwd = dir; // where the next command runs; null when a cd went to a path that is not a literal, existing directory
+for (const seg of scan(command)) {
+  const tt = seg.t, t = tt.map((x) => x.s);
+  let ci = 0;
+  while (ci < t.length && /^[A-Za-z_]\w*=/.test(t[ci])) ci++;
+  const envMoved = t.slice(0, ci).some((x) => /^GIT_(DIR|WORK_TREE)=/.test(x));
+  if (t[ci] === 'builtin') ci++;
+  const cmd = t[ci] ?? '';
+  if (tt[ci]?.dyn && pushy) block('a command word built from a variable in a command that pushes is not allowed: write the git push out literally.');
+  if (WRAP.test(cmd) && pushy && (seg.subst || tt.some((x) => x.dyn))) block('a shell expansion inside eval or sh -c in a command that pushes is not allowed: write the git push out literally.');
+  if (cmd === 'cd' || cmd === 'pushd' || cmd === 'popd') {
+    const a = t.slice(ci + 1).map((x, k) => [x, tt[ci + 1 + k].dyn]).filter(([x]) => x === '-' || !x.startsWith('-'));
+    const [x, dyn] = a[0] ?? [cmd === 'cd' ? '~' : '', false];
+    const next = !x || dyn || x === '-' || seg.subst || cmd === 'popd' ? null : lit(x, cwd ?? '/');
+    cwd = next && (cwd !== null || isAbsolute(next)) && existsSync(next) ? next : null;
+    continue;
+  }
   const cli = t.findIndex((x) => CLI.test(x));
   if (cli >= 0) {
-    const rest = t.slice(cli + 1).filter((x, i, a) => !(x === '--root' || a[i - 1] === '--root'));
-    if (rest[0] === 'forge' && rest[1] === 'approve' && !review) block(APPROVE);
+    const rest = tt.slice(cli + 1).filter((x, i, a) => !(x.s === '--root' || a[i - 1]?.s === '--root'));
+    if (rest[0]?.s === 'forge' && (rest[1]?.s === 'approve' || seg.subst || /[$`]/.test(rest[1]?.s ?? '')) && !review) block(APPROVE);
   }
   const g = t.findIndex((x) => GIT.test(x));
   if (g < 0) continue;
   // Skip git's global options (-C <dir>, -c <k=v>, --git-dir <d> ...) to reach the subcommand.
-  let i = g + 1, cwd = dir;
+  let i = g + 1, unresolved = cwd === null || envMoved;
+  let bases = [...new Set([cwd, dir].filter((x) => x !== null))], gitDir = '';
   while (t[i]?.startsWith('-')) {
-    if (t[i] === '-C') cwd = resolve(cwd, t[i + 1] ?? '');
-    i += WITH_VALUE.includes(t[i]) ? 2 : 1;
+    const o = t[i], v = t[i + 1] ?? '', vd = tt[i + 1]?.dyn;
+    const eq = /^--(git-dir|work-tree)=(.*)$/.exec(o);
+    if (o === '-c' && /^alias\./i.test(v)) block('git -c alias.* can hide a push: write the git push out literally.');
+    if (o === '-C' || o === '--work-tree' || o === '--git-dir' || eq) {
+      const name = eq ? '--' + eq[1] : o, val = eq ? eq[2] : v, d = eq ? tt[i].dyn : vd;
+      if (d || !val) unresolved = true;
+      else if (name === '--git-dir') gitDir = bases.length ? resolve(bases[0], val) : '';
+      else bases = bases.map((b) => resolve(b, val));
+    }
+    i += WITH_VALUE.includes(o) ? 2 : 1;
   }
+  if (tt[i]?.dyn && pushy) block('a git subcommand built from a variable in a command that pushes is not allowed: write the git push out literally.');
   if (t[i] !== 'push') continue;
-  const args = t.slice(i + 1);
+  if (unresolved) block(NOCD);
+  const targs = tt.slice(i + 1), args = targs.map((x) => x.s);
+  if (seg.subst || targs.some((x) => x.dyn && (!x.s.startsWith('-') || x.s.startsWith('--repo')))) block('a push whose remote or refspec uses a shell expansion is not allowed: name the remote and the change line literally.');
   if (args.some((x) => x === '--all' || x === '--mirror' || x === '--branches')) block('push of all branches is not allowed: push your change line by name.');
   // With --repo=<remote> every non-flag argument is a refspec.
   const refs = [...(args.some((x) => x.startsWith('--repo=')) ? ['<repo>'] : []), ...args.filter((x) => !x.startsWith('-'))];
   if (refs.some((r) => /[*{}]/.test(r))) block('glob or brace refspecs are not allowed: push your change line by name.');
-  const head = headOf(cwd);
-  const dst = (r) => {
-    const d = r.replace(/^\+/, '').split(':').pop().replace(/^refs\/heads\//, '');
-    return d === 'HEAD' || d === '@' ? head : d;
-  };
-  const hit = refs.slice(1).map(dst).find((d) => trunks.has(d));
-  if (hit) block(`push to the trunk '${hit}' is not allowed: open a CR.`);
-  if (refs.length <= 1 && trunks.has(head)) block(`push from the trunk '${head}' is not allowed: start a change line and open a CR.`);
+  for (const head of new Set(bases.map((b) => headOf(b, gitDir ? [`--git-dir=${gitDir}`] : [])))) {
+    const dst = (r) => {
+      const d = r.replace(/^\+/, '').split(':').pop().replace(/#.*$/, '').replace(/^refs\/heads\//, '');
+      return d === 'HEAD' || d === '@' ? head : d;
+    };
+    const hit = refs.slice(1).map(dst).find((d) => trunks.has(d));
+    if (hit) block(`push to the trunk '${hit}' is not allowed: open a CR.`);
+    if (refs.length <= 1 && trunks.has(head)) block(`push from the trunk '${head}' is not allowed: start a change line and open a CR.`);
+  }
 }
 process.exit(0);

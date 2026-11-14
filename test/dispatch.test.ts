@@ -233,3 +233,32 @@ test('dispatch: an unfinished run blocks until stall_minutes; only its own done 
   assert.equal((await go(['triage', '--ticket', '1'])).code, 1); // webhook env var unset: the start fails
   assert.ok((await board.comments('1')).some((c) => c.body.startsWith('<!-- agentic-sdlc:done 1-triage -->')));
 });
+
+test('dispatch: overlapping cycles on one key start one run; flags are checked; an unreadable time fails closed; the log dir is private', async () => {
+  const { mkdtempSync, statSync } = await import('node:fs');
+  const { createLocalBoard } = await import('../src/board/local.ts');
+  const root = mkdtempSync(join(tmpdir(), 'disp3-'));
+  const b = { ...binding, cycle: { dedupe_minutes: 10 }, owners: { bots: ['local'] }, heartbeat: { ticket: '2' }, models: { fast: 'f', balanced: 'b', deep: 'd' }, executors: { default: { kind: 'harness' } } } as any;
+  const board = createLocalBoard({ root, binding: b, options: {}, env: {}, exec: () => '', http: async () => ({}) });
+  await board.create({ title: 't', body: '', status: 'Ready' });
+  await board.create({ title: 'heartbeat', body: '', status: 'Backlog' });
+  const log: string[] = [];
+  const orig = console.log, err = console.error; console.log = (s: string) => log.push(s); console.error = (s: string) => log.push(s);
+  const go = (argv: string[]) => { const f = fakeCtx(root, {}, () => '{}'); f.ctx.binding = b; return cli(argv, f.ctx); };
+  try {
+    await Promise.all([go(['review-pr', '--ticket', '1']), go(['review-pr', '--ticket=1'])]);
+    const outs = log.map((l) => JSON.parse(l));
+    assert.equal(outs.filter((o) => o.skipped).length, 1, log.join('\n'));
+    assert.equal(outs.filter((o) => o.kind === 'harness').length, 1);
+    log.length = 0;
+    assert.equal(await go(['review-pr', '--ticket', '1', '--bogus', 'x']), 2);
+    assert.match(log.join(), /unknown flag --bogus/);
+    assert.equal(await go(['review-pr', '--ticket']), 2);
+  } finally { console.log = orig; console.error = err; }
+  const r = await run({ default: { kind: 'command', run: 'bot' } }, ['release', '--ticket', '5']);
+  const mode = (p: string) => statSync(p).mode & 0o777;
+  if (process.platform !== 'win32') {
+    assert.equal(mode(join(tmpdir(), 'agentic-sdlc-runs')), 0o700);
+    assert.equal(mode(r.out.log), 0o600);
+  }
+});

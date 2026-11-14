@@ -44,6 +44,7 @@ repo, queued, not dropped) and give both the same cadence; never pick fixed offs
 
 A dead-man check runs `npx --no agentic-sdlc ledger stale --max-hours <h>` (exit 1 when the newest heartbeat is older).
 The CI templates have it as a job; elsewhere schedule it anywhere that alerts on failure.
+GitHub disables scheduled workflows after 60 days without repo activity, so the CI templates' dead-man job stops with the cycle; keep a check that runs elsewhere if the repo can go quiet.
 
 ## Claude Managed Agents deployment
 

@@ -97,7 +97,7 @@ Feature: Shape a ticket
       | at or below "fast_lane_max_size" | fires     | is not touched | Full |
       | at or below "fast_lane_max_size" | fires not | is touched     | Full |
 
-  # Source: skills/shape/SKILL.md, "Steps" 6 "Lane" and 7 "Spec (Full lane only)"
+  # Source: skills/shape/SKILL.md, "Steps" 6 "Lane" and 7 "Spec"
   # Proof: skill text only
   Scenario: A Full-lane ticket gets one spec comment and a Fast-lane ticket gets a proof list
     Given the Lane is Full
@@ -108,7 +108,8 @@ Feature: Shape a ticket
     And a later pass edits that comment in place
     And the ticket has one spec
     Given the Lane is Fast
-    Then the criteria and a proof list in the ticket are the spec
+    Then the spec is the criteria and a proof list
+    And the skill restates them in a trusted comment whose first line is "spec_marker"
     And each listed proof names its tier, file and rule as "paths.test_standard" defines them
 
   # Source: skills/shape/SKILL.md, "Steps" 8 "Pass the checklist"

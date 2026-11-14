@@ -425,3 +425,96 @@ Feature: Install and validate the binding
     Then it lists every group and exits with code 2
     When the adopter runs "agentic-sdlc <group> --help"
     Then it prints that group's usage and exits with code 0
+
+  # Source: src/cli.ts, "main"
+  # Proof: test/cli.test.ts "cli: --version and help print and exit 0; --root needs a directory; --help is read only at the verb position; groups are own properties"
+  Scenario: The CLI reads its own options strictly
+    When the adopter runs "agentic-sdlc --version" or "agentic-sdlc help"
+    Then it prints the version or the group list and exits with code 0
+    When "--root" has no directory, or is followed by a group name
+    Then it is a usage error with exit code 2
+    And "--help" counts as help only as the first argument after the group or its verb
+
+  # Source: src/board/index.ts, "createBoard"
+  # Proof: test/board-adapters.test.ts "a board verb with a missing required option fails naming the binding key and validate, not a raw gh call"
+  Scenario: A board verb fails clearly when the adapter's required option is missing
+    Given "board.options.project_number" is unset for the github board adapter
+    When a skill runs any "agentic-sdlc board" verb
+    Then the command fails naming "board.options.project_number" and "agentic-sdlc validate"
+    And no vendor CLI runs
+
+  # Source: src/board/index.ts, "checked"
+  # Proof: test/board-local.test.ts "create and move refuse a status the binding does not list"
+  Scenario: A board refuses a status that board.statuses does not list
+    When a skill runs "board create" or "board move" with a status outside "board.statuses"
+    Then the command fails and the ticket does not change
+
+  # Source: src/board/index.ts, "checked"
+  # Proof: test/board-adapters.test.ts "the GitHub boards refuse an id that is not an issue number before calling gh"
+  Scenario: The GitHub boards take only issue numbers as ids
+    When a skill runs a "board" verb with an id that is not a number on the github or github-issues adapter
+    Then the command fails before any request is sent
+
+  # Source: src/board/github.ts and src/board/github-issues.ts, "assign"
+  # Proof: test/board-adapters.test.ts "assign sets or clears the one assignee on github and github-issues: it replaces, never adds"
+  Scenario: Assign replaces the assignee
+    Given a ticket assigned to "old"
+    When a skill runs "board assign <id> new"
+    Then "new" is the only assignee
+    When a skill runs "board assign <id> --none"
+    Then the ticket has no assignee
+
+  # Source: src/forge/github.ts, "view" and "viewBySha"
+  # Proof: test/forge.test.ts "github view reads every page of check runs and commit statuses"
+  Scenario: A CR view reads every page of checks and statuses
+    Given a head commit with more than 100 check runs or 30 statuses
+    When a skill runs "forge view <n>"
+    Then every check run and status is in the checks, so a failing one cannot fall off
+
+  # Source: src/forge/github.ts, "viewBySha"
+  # Proof: test/forge.test.ts "github viewBySha prefers the merge commit, then the head, then the first pull"
+  Scenario: A commit with several pulls resolves to the pull it merged, or else the one it heads
+    Given a commit is listed under several pulls
+    When a skill runs "forge view --sha <sha>"
+    Then the pull whose merge commit is the sha wins, then the pull whose head is the sha, then the first
+
+  # Source: src/forge/github.ts
+  # Proof: test/forge.test.ts "github refuses a change request number or sha that is not an id before calling gh"
+  Scenario: The github forge takes only numbers and hex shas as ids
+    When a skill runs a "forge" verb with a CR number that is not a number or a sha that is not hex
+    Then the command fails before gh runs
+
+  # Source: src/board/jira.ts, "quote"
+  # Proof: test/board-adapters.test.ts "jira escapes a backslash before a quote in JQL"
+  Scenario: A Jira search text with a backslash or quote cannot break out of its JQL string
+    When a skill lists with a search text holding a backslash and a quote
+    Then both are escaped in the JQL
+
+  # Source: src/board/linear.ts, "withLabels"
+  # Proof: test/board-adapters.test.ts "linear reads up to 250 labels, states and children, and keeps the ids of the issue's own labels"
+  Scenario: Linear reads up to 250 labels, states and children and keeps an issue's own label ids
+    When a skill adds a label the issue already carries, such as a workspace label
+    Then the issue keeps that label's id and no label is created
+
+  # Source: src/install.ts, "init"
+  # Proof: test/install.test.ts "init refuses an unknown board, an unknown flag and a package.json that is not JSON, before it writes anything"
+  Scenario: Init refuses a bad command line or a broken package.json and writes nothing
+    When the adopter runs "agentic-sdlc init" with a board that is no adapter, a flag init does not know, or a package.json that is not JSON
+    Then init fails and names the problem
+    And no file is written
+
+  # Source: src/install.ts, "pinCli"
+  # Proof: test/install.test.ts "init moves its own older CLI pin to the package version and keeps a pin the project chose"
+  Scenario: Init after an upgrade moves the CLI pin it wrote
+    Given package.json pins the CLI at an older release tag
+    When the adopter runs "agentic-sdlc init" from a newer package
+    Then the pin names the new release tag
+    And a pin to a commit, a fork or a path stays as the project wrote it
+
+  # Source: src/install.ts, "probeFailure"
+  # Proof: test/install.test.ts "doctor: a failed probe shows the command's first stderr line and hides the value of every env var the binding names"
+  Scenario: Doctor says why a probe failed and shows no secret
+    Given a board or forge probe fails
+    When the adopter runs "agentic-sdlc doctor"
+    Then the fail line holds the command and the first line of its error output
+    And the value of every env var the binding names under a "_env" key is masked

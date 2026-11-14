@@ -3,4 +3,4 @@
 # Enable: git config core.hooksPath .agents/hooks
 # Refuses a push of a branch outside the binding's patterns. Server-side CI repeats the check.
 # Runs the project's pinned agentic-sdlc devDependency.
-exec npx --no-install agentic-sdlc gate branch-names --stdin-prepush
+exec npx --no agentic-sdlc gate branch-names --stdin-prepush

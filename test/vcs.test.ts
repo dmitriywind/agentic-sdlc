@@ -178,3 +178,33 @@ test('git start and drop refuse a change line name that is an option or leaves .
     await assert.rejects(vcs.drop(n), /not allowed/, n);
   }
 });
+
+test('git refuses a revision, tag name or path that is an option, and lists non-ASCII paths unquoted', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'inj-'));
+  git(root, 'init', '-b', 'main');
+  git(root, 'config', 'user.email', 'a@b.c');
+  git(root, 'config', 'user.name', 'a');
+  writeFileSync(join(root, 'a.txt'), '1');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'one');
+  const base = git(root, 'rev-parse', 'HEAD');
+  writeFileSync(join(root, 'café.txt'), 'x');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'two');
+  const vcs = createVcs({ root, binding: binding('git'), options: {}, env: process.env, exec, http: async () => ({}) });
+  const out = join(root, 'pwned');
+  await assert.rejects(vcs.changed(`--output=${out}`), /not allowed/);
+  assert.ok(!existsSync(out));
+  await assert.rejects(vcs.tag('-x', 'HEAD'), /not allowed/);
+  await assert.rejects(vcs.tag('v1', '--x'), /not allowed/);
+  await assert.rejects(vcs.cut('--x', '1'), /not allowed/);
+  await assert.rejects(vcs.snapshot!('--x'), /not allowed/);
+  await assert.rejects(vcs.checkoutTests('--x', []), /not allowed/);
+  await assert.rejects(vcs.checkoutTests('HEAD', ['-f']), /not allowed/);
+  const s = await vcs.snapshot!(base);
+  writeFileSync(join(s.workdir, 'né.txt'), 'n');
+  assert.deepEqual(await s.changed(), ['né.txt']);
+  await s.drop();
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  assert.deepEqual(await vcs.changed(base), ['café.txt']);
+});

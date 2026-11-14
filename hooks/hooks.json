@@ -3,11 +3,11 @@
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs\"" }]
+        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs\"", "onFailure": "block" }]
       },
       {
         "matcher": "mcp__.*agentic-sdlc.*__forge_approve",
-        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs\"" }]
+        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs\"", "onFailure": "block" }]
       }
     ]
   }

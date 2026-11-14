@@ -44,7 +44,10 @@ install it.
 7. **Run one cycle by hand** with two or three real tickets in Backlog. Read every comment it writes.
    Repeat until three cycles in a row need no correction.
 8. **Schedule the cycle** from [`templates/runner/`](../../templates/runner/routine.md), and the
-   dead-man check (`agentic-sdlc ledger stale --max-hours <h>`).
+   dead-man check (`agentic-sdlc ledger stale --max-hours <h>`). On GitHub, set the repo variables
+   `AGENTIC_SDLC_VERSION` (an exact version or a commit SHA; a SHA cannot move) and, for the runner
+   workflows, `AGENTIC_AGENT_CLI_VERSION`; the workflows fail when one is unset
+   ([GitHub forges](../forges.md)).
 
 <div class="callout ok">
 

@@ -12,7 +12,7 @@ export function loadBinding(root: string): Binding {
   return parse(text) as Binding;
 }
 
-const ADAPTERS = {
+export const ADAPTERS = {
   board: ['github', 'github-issues', 'jira', 'linear', 'local'],
   forge: ['github'],
   vcs: ['git'],

@@ -137,7 +137,8 @@ priorities: [P0, High, Default, Low] # first is the highest
 p0_setters: [owner, triage-signal] # who may set the first priority
 max_subissue_depth: 1           # sub-issues of sub-issues are not allowed beyond this
 spec_marker: "spec.md"          # first line of the spec comment
-stall_minutes: 60               # a ready CR with a required check red or missing this long returns to review-pr
+stall_minutes: 60               # a ready CR with a required check red or missing this long returns to review-pr; also how long an unfinished
+                                # run blocks a second dispatch: keep it above the longest stage run
 parallel_agents: 3              # most subagents running at once
 
 cycle:                          # Run one cycle (sdlc skill)
@@ -145,7 +146,8 @@ cycle:                          # Run one cycle (sdlc skill)
   min_ready: 2                  # keep at least this many tickets Ready or being shaped
   time_budget_minutes: 45       # start nothing new after this; keep it below the runner job timeout (templates: 60)
   failure_limit: 2              # a step failing in this many heartbeats in a row is escalated
-  dedupe_minutes: 10            # a second dispatch of the same skill and subject this soon is a double fire: skipped
+  dedupe_minutes: 10            # a second dispatch of the same skill and subject this soon is a double fire: skipped (0: no dispatch lock at all)
+  max_rework: 3                 # review-pr sends a CR back this many times at most; the next REMEDIATION REQUIRED goes to escalate-to-human
 
 heartbeat:
   ticket: ""                    # id of the ticket that holds heartbeat comments, kept off the board. init sets it on a local

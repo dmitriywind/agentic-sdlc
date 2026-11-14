@@ -23,7 +23,7 @@ test('http retries 429 and 5xx up to 3 tries honouring Retry-After (seconds or d
   assert.equal(ok.calls.length, 3);
 
   const fail = await withFetch([[500], [502], [503], [200]], () => http('GET', 'https://h/x'));
-  assert.match((fail.result as Error).message, /GET \/x -> 503/);
+  assert.match((fail.result as Error).message, /GET h -> 503/);
   assert.equal(fail.calls.length, 3);
 
   assert.equal((await withFetch([[404], [200]], () => http('GET', 'https://h/x'))).calls.length, 1);
@@ -45,4 +45,11 @@ test('http aborts a request that never gets a response', async () => {
   try {
     await assert.rejects(http('GET', `http://127.0.0.1:${(srv.address() as any).port}/x`));
   } finally { setHttpTimeout(prev); srv.closeAllConnections(); srv.close(); }
+});
+
+test('http returns the raw text of a 2xx that is not JSON, and keeps the URL path out of an error', async () => {
+  const ok = await withFetch([[200, {}, 'accepted']], () => http('POST', 'https://h/hooks/secret-token', { body: {} }));
+  assert.deepEqual(ok.result, { raw: 'accepted' });
+  const bad = await withFetch([[400, {}, 'no']], () => http('POST', 'https://h/hooks/secret-token', { body: {} }));
+  assert.match((bad.result as Error).message, /^POST h -> 400: no$/);
 });

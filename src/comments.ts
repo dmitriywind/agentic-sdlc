@@ -6,7 +6,7 @@ export function selectComments(
   o: { owners?: Owners; authors?: string[]; trusted?: boolean; last?: number; marker?: string },
 ): Comment[] {
   const w = o.owners;
-  let out = o.marker ? list.filter((c) => c.body.includes(o.marker!)) : list;
+  let out = o.marker ? list.filter((c) => c.body.split('\n')[0].includes(o.marker!)) : list;
   if (o.authors?.length || o.trusted) {
     const by = [...(o.authors ?? []), ...(o.trusted ? [...(w?.bots ?? []), w?.product, w?.factory] : [])]
       .filter((x): x is string => !!x).map((s) => s.toLowerCase());

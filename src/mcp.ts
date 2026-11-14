@@ -78,6 +78,26 @@ export function allowList(arg: string | undefined): Set<string> {
   return out;
 }
 
+/** Protocol versions this server speaks, newest first; it uses only features common to all. */
+export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
+
+// Tool annotations come from these sets, keyed by tool name; no per-tool boilerplate.
+const READ = new Set(['board_list', 'board_get', 'board_comments', 'forge_view', 'forge_diff', 'forge_list', 'forge_approvals', 'forge_comments', 'forge_runs',
+  'vcs_head', 'vcs_changed', 'vcs_base', 'vcs_tags', 'ledger_runs', 'ledger_summary', 'ledger_plan', 'ledger_hash', 'ledger_stale']);
+const DESTRUCTIVE = new Set(['board_close', 'vcs_drop']);
+const IDEMPOTENT = new Set(['board_move', 'board_set', 'board_label', 'board_assign', 'board_close', 'forge_ready', 'forge_draft', 'forge_sync', 'forge_automerge',
+  'forge_approve', 'forge_status', 'vcs_push', 'vcs_drop', 'ledger_record']);
+const LOCAL = new Set(['vcs_start', 'vcs_head', 'vcs_changed', 'vcs_base', 'vcs_tags', 'vcs_drop', 'ledger_hash']); // never reach an external system
+const annotations = (name: string) => {
+  const readOnlyHint = READ.has(name);
+  return {
+    title: name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' '),
+    readOnlyHint,
+    ...(readOnlyHint ? {} : { destructiveHint: DESTRUCTIVE.has(name), idempotentHint: IDEMPOTENT.has(name) }),
+    openWorldHint: !LOCAL.has(name),
+  };
+};
+
 const schema = (s: Spec) => {
   const properties: Record<string, object> = {};
   for (const p of s.pos) properties[p] = { type: 'string' };
@@ -85,6 +105,26 @@ const schema = (s: Spec) => {
   if (s.body) properties.body = { type: 'string' };
   return { type: 'object', properties, required: [...s.pos, ...s.req, ...(s.body ? ['body'] : [])], additionalProperties: false };
 };
+
+/** The first argument that breaks the published inputSchema, as a message; undefined when all is well. */
+function badArgument(s: Spec, args: unknown): string | undefined {
+  if (args === null || typeof args !== 'object' || Array.isArray(args)) return 'arguments must be an object';
+  const a = args as Record<string, unknown>;
+  const sch = schema(s);
+  for (const k of sch.required) if (a[k] === undefined || a[k] === null) return `missing required argument '${k}'`;
+  for (const [k, v] of Object.entries(a)) {
+    const p = (sch.properties as Record<string, any>)[k];
+    if (!p) return `unknown argument '${k}'`;
+    if (v === null) continue;
+    const okType = p.type === 'string' ? typeof v === 'string'
+      : p.type === 'boolean' ? typeof v === 'boolean'
+      : p.type === 'integer' ? Number.isInteger(v)
+      : p.type === 'number' ? typeof v === 'number' && Number.isFinite(v)
+      : Array.isArray(v) && v.every((x) => typeof x === 'string');
+    if (!okType) return `argument '${k}' must be ${p.type === 'array' ? 'an array of strings' : `a ${p.type}`}`;
+  }
+  return undefined;
+}
 
 const wire = (k: string) => '--' + k.replace(/_/g, '-');
 
@@ -134,7 +174,13 @@ async function callTool(name: string, args: Record<string, unknown>, ctx: Ctx, a
   try {
     const { cli } = await MODULES[s.group]();
     const r = await capture(() => cli(argv, ctx));
-    return r.code === 0 ? { content: [{ type: 'text', text: r.out }] } : fail((r.err || r.out).trim() || `exit ${r.code}`);
+    if (r.code === 0) {
+      let structured: unknown;
+      try { structured = JSON.parse(r.out); } catch { /* text only */ }
+      const obj = structured && typeof structured === 'object' && !Array.isArray(structured);
+      return { content: [{ type: 'text', text: r.out }], ...(obj ? { structuredContent: structured } : {}) };
+    }
+    return fail((r.err || r.out).trim() || `exit ${r.code}`);
   } finally {
     if (dir) rmSync(dir, { recursive: true, force: true });
   }
@@ -151,12 +197,18 @@ export async function handle(msg: any, ctx: Ctx, allow: Set<string> = new Set())
   if (id === undefined) return null; // notifications/initialized and any other notification
   switch (msg.method) {
     case 'initialize':
-      return ok({ protocolVersion: '2025-06-18', serverInfo: { name: 'agentic-sdlc', version: version() }, capabilities: { tools: {} } });
+      return ok({ protocolVersion: PROTOCOL_VERSIONS.includes(msg.params?.protocolVersion) ? msg.params.protocolVersion : PROTOCOL_VERSIONS[0], serverInfo: { name: 'agentic-sdlc', version: version() }, capabilities: { tools: {} } });
     case 'ping': return ok({});
     case 'tools/list':
-      return ok({ tools: served(allow).map((name) => ({ name, description: TOOLS[name].doc, inputSchema: schema(TOOLS[name]) })) });
-    case 'tools/call':
-      return ok(await callTool(String(msg.params?.name), msg.params?.arguments ?? {}, ctx, allow));
+      return ok({ tools: served(allow).map((name) => ({ name, description: TOOLS[name].doc, title: annotations(name).title, inputSchema: schema(TOOLS[name]), annotations: annotations(name) })) });
+    case 'tools/call': {
+      const name = msg.params?.name;
+      const s = typeof name === 'string' && served(allow).includes(name) ? TOOLS[name] : undefined;
+      if (!s) return err(-32602, `unknown tool '${String(name)}'`);
+      const bad = badArgument(s, msg.params?.arguments ?? {});
+      if (bad) return err(-32602, `${name}: ${bad}`);
+      return ok(await callTool(name, msg.params?.arguments ?? {}, ctx, allow));
+    }
     default: return err(-32601, `method not found: ${msg.method}`);
   }
 }

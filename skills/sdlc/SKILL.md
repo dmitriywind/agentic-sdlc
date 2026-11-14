@@ -65,8 +65,8 @@ triage, one shape, one implementation, one judge) goes to its own subagent with 
 folder, at most `parallel_agents` at once. Each starts with `agentic-sdlc dispatch <skill>
 --ticket <id>` (`--cr <n>` for a factory CR; no subject for `improve-factory`); the binding's
 `executors` says who runs it (see Executors). A second dispatch of the same skill and subject
-inside `cycle.dedupe_minutes`, while the first has not finished, prints `{ skipped: true }`: it is a
-double fire; leave it.
+while the first has not finished, prints `{ skipped: true }`: it is a double fire, or the first still
+runs; leave it ([Executors](references/executors.md) says how long).
 
 A CR **needs a review** when it is open, a `review-pr` row of the Routing table matches it, and,
 for a draft CR, the newest `<!-- review-pr` report on it (`forge comments <n> --last 1 --marker
@@ -80,9 +80,14 @@ In order:
    another cycle is running; stop and write nothing. List the board once (`board list`). Read open CRs (`forge list`), the last
    `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --last <n> --marker
    "<!-- heartbeat -->" --trusted`) and `ledger summary`.
+1a. **Release holds.** For each held ticket in the listing (label `board.labels.human`): read its last
+   ask (`board comments <id> --last 1 --marker "### Needs human" --trusted`) and the replies after it
+   (`board comments <id> --author <owners.product> --author <owners.factory>`). When one reply is newer than
+   the ask, `board label <id> remove <board.labels.human>`; the ticket routes in step 6 at the same
+   Status. A held ticket with no such reply stays held. Done when no held ticket has an owner reply
+   after its last ask, and the ids released are in the heartbeat's `did`.
 2. **Idle exit.** When no unheld ticket matches a Routing row the cycle dispatches (any skill but
-   `review-pr` when `forge.review_identity` is set), no held ticket has a trusted owner reply after its last `### Needs human`
-   comment, no CR needs a review, and `ledger summary` shows neither `learning.due` nor
+   `review-pr` when `forge.review_identity` is set), no CR needs a review, and `ledger summary` shows neither `learning.due` nor
    `learning.judge` with an unscored run: write the idle heartbeat (`at`, `factory`, `runs: []`,
    `errors: []`, and `learning` copied forward when `learning.enabled` is true), fire no review, and stop. Done when it is posted.
 3. **Judge.** When `ledger summary` shows `learning.judge` (true only when `learning.enabled`): for
@@ -145,9 +150,8 @@ obeys the same skills and gates; a reviewer is never the implementer of the same
 - A held ticket keeps its Status. No automation moves it, except gate `merged` when its CR merges:
   Done records the merge and the label stays.
 - Removing the label is the only release; the next run resumes at the same Status. A trusted owner
-  reply after the ticket's last `### Needs human` comment is a release too: the cycle removes the
-  label (`board label <id> remove <board.labels.human>`) and routes the ticket, so an owner who only
-  comments is never stuck.
+  reply after the ticket's last `### Needs human` comment is a release too: step 1a of the cycle
+  removes the label and step 6 routes the ticket, so an owner who only comments is never stuck.
 
 ## Statuses, board, lanes, gates
 

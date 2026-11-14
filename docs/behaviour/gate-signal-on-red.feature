@@ -36,3 +36,18 @@ Feature: Gate signal-on-red
     When the gate runs
     Then it creates no Signal
     And it does not throw
+
+  # Source: src/gates.ts, "signalOnRed" (state)
+  # Proof: test/gates.test.ts "signal-on-red: a run that did not fail opens no Signal; an unset release_prefix matches no ref or branch"
+  Scenario: A run that did not fail opens no Signal
+    Given the run on the trunk succeeded or is pending
+    When the gate runs
+    Then it creates no Signal
+    And the output says the run did not fail
+
+  # Source: src/gates.ts, "signalOnRed" (release_prefix)
+  # Proof: test/gates.test.ts "signal-on-red: a run that did not fail opens no Signal; an unset release_prefix matches no ref or branch"
+  Scenario: Without a release prefix only the trunk counts
+    Given vcs.release_prefix is unset
+    When a failed run is on the ref "undefined/x"
+    Then it creates no Signal

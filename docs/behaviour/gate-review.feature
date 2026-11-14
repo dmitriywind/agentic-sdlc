@@ -23,3 +23,17 @@ Feature: Gate review (one identity)
     Given forge.review_identity is set
     When the gate runs
     Then it posts no status, since review-pr posts it as the review identity
+
+  # Source: src/gates.ts, "review"
+  # Proof: test/gates.test.ts "gate review: a report holding both verdicts fails; one repeated verdict is fine; the marker must open the comment"
+  Scenario: A report with disagreeing verdicts fails
+    Given the newest trusted report on the head holds both "Verdict: PASS" and "Verdict: REMEDIATION REQUIRED" lines
+    When the gate runs
+    Then the status is failure
+
+  # Source: src/comments.ts, "selectComments"
+  # Proof: test/gates.test.ts "gate review: a report holding both verdicts fails; one repeated verdict is fine; the marker must open the comment"
+  Scenario: The report marker must be on the first line
+    Given a trusted comment holds "<!-- review-pr <head sha> -->" on a later line
+    When the gate runs
+    Then the comment is not a report and the status is pending

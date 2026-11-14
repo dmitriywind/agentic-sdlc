@@ -20,3 +20,23 @@ test('help: every group answers --help with its usage and exit 0; a group with n
   assert.equal(all.code, 2);
   assert.match(all.out, /init[\s\S]*mcp/);
 });
+
+test('cli: --version and help print and exit 0; --root needs a directory; --help is read only at the verb position; groups are own properties', async () => {
+  const v = await quiet(() => main(['--version']));
+  assert.equal(v.code, 0);
+  assert.match(v.out, /^\d+\.\d+\.\d+/);
+  assert.equal((await quiet(() => main(['-v']))).out, v.out);
+  const h = await quiet(() => main(['help']));
+  assert.equal(h.code, 0);
+  assert.match(h.out, /usage: agentic-sdlc/);
+  assert.match(h.out, /gate .*skill-regression review/);
+  assert.match((await quiet(() => main(['gate', '--help']))).out, /usage: agentic-sdlc gate/);
+  assert.equal((await quiet(() => main(['--root']))).code, 2);
+  assert.match((await quiet(() => main(['--root', 'board', 'list']))).out, /--root needs a directory/);
+  assert.equal((await quiet(() => main(['--root', 'board', 'list']))).code, 2);
+  assert.equal((await quiet(() => main(['constructor']))).code, 2);
+  assert.match((await quiet(() => main(['constructor']))).out, /unknown group 'constructor'/);
+  // A flag value of --help is the verb's business, not a request for help.
+  const r = await quiet(() => main(['--root', '/nonexistent-agentic-sdlc', 'board', 'comment', '1', '--body-file', '--help']));
+  assert.doesNotMatch(r.out, /^usage: agentic-sdlc board/);
+});

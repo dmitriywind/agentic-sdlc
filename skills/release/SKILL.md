@@ -19,7 +19,8 @@ The Product owner approves the last environment; this skill never does.
 0. **Resume.** `board comments <request> --trusted`. When the newest comment carrying
    `<!-- release-proposal` has no Product owner reply after it (`board comments <request> --author
    <owners.product>`; a bot or Factory owner comment is never a go-ahead), stop: no comment, no
-   further reads. A reply that approves goes to step 6; one that changes contents, to step 3; one
+   further reads. A reply that approves goes to step 6, or to step 7 when a `<!-- release-cut`
+   comment of this run's account follows it; one that changes contents, to step 3; one
    asking to refresh, to step 1. Done when the run stopped or knows its entry step.
 0a. **P0 entry.** Dispatched for a Done P0 ticket instead of a request: `board list --label
    <board.labels.release> --search "Release for P0 #<id>"`. When none is open, `board create` it
@@ -53,12 +54,17 @@ The Product owner approves the last environment; this skill never does.
    appeared since the proposal stops the cut. Then `board set <id> release_version <version>` and
    `board set <id> shipped "In release"` on each selected ticket still On <env before last>, before
    the cut, so a fast deploy can never be overwritten. Done when every ticket shows both.
-7. **Cut.** `agentic-sdlc forge cut <revision> <version>`. It starts the release workflow, and the
-   Product owner approves its Environment. Never cut from a moving ref (`vcs.release_prefix` is
-   applied by the verb). `forge cut` prints the release workflow run; read it with `forge runs` until it ends. When the
-   cut fails or the Product owner rejects it, set the tickets back to On <env before last> and clear
-   their version. The cut starts release CI. Done when the release line exists at that revision. Then
-   close the request (`board close <request> completed`), report, with progress per milestone
+7. **Cut.** First look for an earlier cut of this version: `vcs tags --prefix <vcs.tag_prefix>` and
+   `forge runs --ref <vcs.release_prefix><version>`. A tag or a run of this version means the cut was
+   made: do not cut again; read that run. Otherwise `agentic-sdlc forge cut <revision> <version>`. It
+   starts the release workflow, and the Product owner approves its Environment. Never cut from a
+   moving ref (`vcs.release_prefix` is applied by the verb). Read the run with `forge runs --ref
+   <vcs.release_prefix><version>` once a minute, at most 15 minutes. Still running or awaiting the
+   Environment approval then: post one comment on the request starting `<!-- release-cut <version> -->`
+   naming the run, and stop; the next cycle resumes at this step. When the cut fails or the Product
+   owner rejects it, set the tickets back to On <env before last> and clear their version. The cut
+   starts release CI. Done when the release line exists at that revision, or the wait comment is posted.
+   Then, once the line exists, close the request (`board close <request> --reason completed`), report, with progress per milestone
    read from the board (progress only; versions do not follow milestones), and let the pipelines
    run.
 

@@ -121,8 +121,10 @@ export function createGithubBoard(ctx: AdapterContext): Board {
       return get(id);
     },
     async assign(id, user) {
-      if (user) gh(['issue', 'edit', id, '--repo', o.repo, '--add-assignee', user]);
-      else for (const a of (await get(id)).assignees) gh(['issue', 'edit', id, '--repo', o.repo, '--remove-assignee', a]);
+      // Set or clear: the one assignee replaces any other.
+      const drop = (await get(id)).assignees.filter((a) => a !== user).flatMap((a) => ['--remove-assignee', a]);
+      const args = ['issue', 'edit', id, '--repo', o.repo, ...(user ? ['--add-assignee', user] : []), ...drop];
+      if (args.length > 5) gh(args);
       return get(id);
     },
     async comment(id, body) {

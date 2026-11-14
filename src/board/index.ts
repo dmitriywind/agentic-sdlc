@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { AdapterContext, Binding, Board, Comment, Item, LogicalField, PortCli } from '../ports.ts';
 import { ownersFor } from '../ports.ts';
+import { validateBinding } from '../binding.ts';
 import { selectComments } from '../comments.ts';
 import { createGithubBoard } from './github.ts';
 import { createGithubIssuesBoard } from './github-issues.ts';
@@ -11,7 +12,11 @@ import { createLocalBoard } from './local.ts';
 export function createBoard(ctx: AdapterContext): Board {
   const make = { github: createGithubBoard, 'github-issues': createGithubIssuesBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
   if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
-  const board = make(ctx);
+  // The same required-option check `validate` runs: a missing key fails here, not as `gh ... undefined`.
+  const missing = validateBinding({ ...ctx.binding, board: { ...ctx.binding.board, options: ctx.options } } as Binding)
+    .map((m) => /^board\.options\.(\w+) is required/.exec(m)?.[1]).filter(Boolean).map((k) => `board.options.${k}`);
+  if (missing.length) throw new Error(`board adapter '${ctx.binding.board.adapter}' needs binding keys: ${missing.join(', ')}; run: agentic-sdlc validate`);
+  const board = checked(make(ctx), ctx);
   const scope = ctx.binding.board.scope;
   if (!scope?.label) return board;
   // Many repos, one board: a repo lists only tickets with its scope label; the home repo also lists
@@ -22,6 +27,33 @@ export function createBoard(ctx: AdapterContext): Board {
     ...board,
     list: async (q) => (await board.list(q)).filter(mine),
     create: (t) => board.create({ ...t, labels: [...new Set([...(t.labels ?? []), scope.label])] }),
+  };
+}
+
+/** Refuses what no adapter should see: a status the binding does not list, and, on the GitHub boards, an id that is not an issue number. */
+function checked(b: Board, ctx: AdapterContext): Board {
+  const numeric = ctx.binding.board.adapter === 'github' || ctx.binding.board.adapter === 'github-issues';
+  const statuses = ctx.binding.board.statuses;
+  const id = (v: string | undefined) => {
+    if (numeric && v !== undefined && !/^\d+$/.test(String(v))) throw new Error(`board: not an issue number: ${v}`);
+    return v as string;
+  };
+  const status = (s: string) => {
+    if (Array.isArray(statuses) && statuses.length && !statuses.includes(s)) throw new Error(`board: status '${s}' is not in board.statuses (${statuses.join(', ')})`);
+    return s;
+  };
+  return {
+    ...b,
+    get: async (i) => b.get(id(i)),
+    create: async (t) => { id(t.parent); status(t.status); return b.create(t); },
+    move: async (i, s, from) => b.move(id(i), status(s), from),
+    set: async (i, f, v) => b.set(id(i), f, v),
+    label: async (i, op, l) => b.label(id(i), op, l),
+    assign: async (i, u) => b.assign(id(i), u),
+    comment: async (i, body) => b.comment(id(i), body),
+    comments: async (i, q) => b.comments(id(i), q),
+    close: async (i, r) => b.close(id(i), r),
+    child: async (p, c) => b.child(id(p), id(c)),
   };
 }
 

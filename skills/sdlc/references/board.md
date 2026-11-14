@@ -37,9 +37,9 @@ Read from [`sdlc`](../SKILL.md).
 ## Lanes
 
 - **Fast:** Size at or below `fast_lane_max_size`, no escalation trigger fires, and no path in
-  `paths.lane_areas` is touched. The ticket's criteria and a proof list are the spec; there is no
-  spec comment. Merges on the agent review.
-- **Full:** everything else. It carries a spec comment. It also needs a human approval when
+  `paths.lane_areas` is touched. The spec is the criteria and a proof list only: `shape` restates
+  them in a trusted spec comment, since a ticket body can be written by anyone. Merges on the agent review.
+- **Full:** everything else. Its spec comment holds the full design. It also needs a human approval when
   `forge.human_approval` is `full-lane` or `always`.
 - [`shape`](../../shape/SKILL.md) writes the Lane field. `implement-spec` or `review-pr` promotes
   Fast to Full when a deviation, a trigger, a second failed fix or an unlisted risk shows up.

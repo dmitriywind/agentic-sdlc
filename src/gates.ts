@@ -137,7 +137,7 @@ const patternRe = (p: string) =>
 export function branchNames(b: Binding, names: string[]): string[] {
   const v = b.vcs;
   const ok = (n: string) =>
-    n === v.trunk || n.startsWith(v.release_prefix) || n.startsWith('dependabot/') || n.startsWith('renovate/') ||
+    n === v.trunk || (!!v.release_prefix && n.startsWith(v.release_prefix)) || n.startsWith('dependabot/') || n.startsWith('renovate/') ||
     patternRe(v.change_pattern).test(n) || patternRe(v.factory_change_pattern).test(n);
   return names.filter((n) => !ok(n));
 }
@@ -207,7 +207,8 @@ export async function approval(d: Deps, n: string) {
   const diff = await readDiff(d, n);
   const cls = await classify(d, cr, diff);
   let klass: ApprovalClass;
-  if (cls !== 'product') klass = cls;
+  if (!factoryGlobs(b).length) klass = 'guardrail'; // no paths.factory: every CR waits for the owner
+  else if (cls !== 'product') klass = cls;
   else {
     const item = cr.closes.length === 1 ? await d.board.get(cr.closes[0]).catch(() => undefined) : undefined;
     // The Lane field is agent-written: a path in paths.lane_areas forces Full whatever it says.
@@ -227,7 +228,7 @@ export async function approval(d: Deps, n: string) {
   if (need !== 'none') {
     const reviews = await d.forge.approvals(n);
     // On a public repo anyone can submit a review: only an owner, member or collaborator counts as a human approval.
-    const member = new Set(reviews.filter((r) => !r.assoc || ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(r.assoc)).map((r) => r.user.toLowerCase()));
+    const member = new Set(reviews.filter((r) => !!r.assoc && ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(r.assoc)).map((r) => r.user.toLowerCase()));
     const ok = approvers(reviews, cr.headSha).filter((u) => member.has(u));
     by = need === 'owner' ? ok.find((u) => !!owner && u === owner) : ok.find((u) => !bots.includes(u));
   }
@@ -249,9 +250,11 @@ export async function review(d: Deps, n: string) {
   if (b.forge.review_identity) return { cr: n, skipped: 'two identities: review-pr posts the review status' };
   const cr = await d.forge.view(n);
   const [report] = selectComments((await d.forge.comments(n)).reverse(), { owners: ownersFor(b.owners, 'forge'), trusted: true, marker: `<!-- review-pr ${cr.headSha}` });
-  const verdict = /^Verdict:\s*(PASS|REMEDIATION REQUIRED)\s*$/m.exec(report?.body ?? '')?.[1]; // the report's one verdict line
+  // The report's one verdict line; quoted CR text may carry another, so disagreeing verdicts fail.
+  const verdicts = new Set([...(report?.body ?? '').matchAll(/^Verdict:\s*(PASS|REMEDIATION REQUIRED)\s*$/gm)].map((m) => m[1]));
+  const verdict = verdicts.size > 1 ? 'CONFLICT' : [...verdicts][0];
   const state = verdict === 'PASS' ? 'success' : verdict ? 'failure' : 'pending';
-  const description = verdict ? `review-pr: ${verdict}` : 'waits for a trusted review-pr report on this head';
+  const description = verdict === 'CONFLICT' ? 'review-pr: the report holds conflicting verdicts' : verdict ? `review-pr: ${verdict}` : 'waits for a trusted review-pr report on this head';
   await d.forge.status(cr.headSha, { context: b.forge.review_check_name ?? 'review', state, description, ...(report?.url ? { url: report.url } : {}) }, { as: 'ci' });
   return { cr: cr.n, state, ...(verdict ? { verdict } : {}) };
 }
@@ -468,8 +471,9 @@ export async function signalOnRed(d: Deps, id: string) {
   const runs = [...(await d.forge.runs({ failed: true })), ...(await d.forge.runs({}))];
   const run = runs.find((r) => String(r.id) === id);
   if (!run) return { created: false, reason: `run ${redact(id, 40)} not in the recent runs` };
+  if (run.state !== 'failure') return { created: false, reason: `run ${redact(id, 40)} did not fail (${redact(run.state, 20)})` };
   const v = d.binding.vcs;
-  if (run.ref !== v.trunk && !run.ref.startsWith(v.release_prefix)) return { created: false, reason: `ref ${redact(run.ref, 100)} is not trunk or a release line` };
+  if (run.ref !== v.trunk && !(v.release_prefix && run.ref.startsWith(v.release_prefix))) return { created: false, reason: `ref ${redact(run.ref, 100)} is not trunk or a release line` };
   const title = redact(`CI red: ${run.name} @ ${run.ref} (run ${run.id})`, 1000).replace(/[^A-Za-z0-9 ._/:@()-]/g, '').slice(0, 100);
   const existing = await d.board.list({ label: 'signal:ci' });
   if (existing.some((x) => x.title === title)) return { created: false };

@@ -237,8 +237,9 @@ test('approval: classes and the human-approval status per forge.human_approval',
     full: [{ user: 'factory-bot', state: 'approved', sha: 'hfull' }],
     fullok: [{ user: 'Dana', state: 'approved', sha: 'hfullok', assoc: 'COLLABORATOR' } as any],
     stranger: [{ user: 'mallory', state: 'approved', sha: 'hstranger', assoc: 'NONE' } as any],
-    guard: [{ user: 'dana', state: 'approved', sha: 'guard' }],
-    guardok: [{ user: 'fo', state: 'approved', sha: 'guard' }],
+    guard: [{ user: 'dana', state: 'approved', sha: 'guard', assoc: 'MEMBER' } as any],
+    guardok: [{ user: 'fo', state: 'approved', sha: 'guard', assoc: 'OWNER' } as any],
+    noassoc: [{ user: 'fo', state: 'approved', sha: 'guard' }],
   };
   const crs: Record<string, Partial<CR>> = { fast: prod('fast', 'Fast'), full: prod('full', 'Full'), fullok: prod('fullok', 'Full'), stranger: prod('stranger', 'Full'), nolane: prod('nolane') };
   const view = f.d.forge.view;
@@ -256,6 +257,8 @@ test('approval: classes and the human-approval status per forge.human_approval',
   assert.equal(await st('tune'), 'tuning:success');
   assert.equal(await st('guard'), 'guardrail:pending'); // a human, but not owners.factory
   assert.equal(await st('guardok'), 'guardrail:success');
+  reviews.guard = reviews.noassoc; // a review with no author association is no member's approval
+  assert.equal(await st('guard'), 'guardrail:pending');
   // An owner with { board, forge } approves with the forge name; the board name approves nothing.
   f.d.binding = { ...f.d.binding, owners: { factory: { board: 'acc-7', forge: 'fo' }, bots: [{ board: 'acc-bot', forge: 'factory-bot' }] } } as any;
   assert.equal(await st('guardok'), 'guardrail:success');
@@ -608,4 +611,40 @@ test('merged: a CR that is not merged moves nothing', async () => {
   f.d.forge.viewBySha = async () => ({ ...(await f.d.forge.view('open1')), state: 'open' });
   assert.match((await merged(f.d, 'x')).reason!, /not merged/);
   assert.equal(f.items[0].status, 'In review');
+});
+
+test('approval: a binding with no paths.factory fails closed to guardrail', async () => {
+  const f = fakes([item('1', 'In review', { lane: 'Fast' })], { c: { closes: ['1'], headSha: 'hc', source: '1/x' } }, { c: 'diff --git a/.agents/x.md b/.agents/x.md\n' });
+  f.d.forge.approvals = async () => [];
+  f.d.binding = { ...binding, paths: {}, owners: { factory: 'fo', bots: [] }, forge: {} } as any;
+  assert.equal((await approval(f.d, 'c')).class, 'guardrail');
+  f.d.binding = { ...binding, paths: { factory: [] }, owners: { factory: 'fo', bots: [] }, forge: {} } as any;
+  assert.deepEqual([(await approval(f.d, 'c')).class, (await approval(f.d, 'c')).state], ['guardrail', 'pending']);
+});
+
+test('gate review: a report holding both verdicts fails; one repeated verdict is fine; the marker must open the comment', async () => {
+  const f = fakes([], { 5: { headSha: 'h2' } });
+  const c = (body: string) => ({ id: body, author: 'factory-bot', createdAt: '', body, url: 'u' });
+  let list = [c('<!-- review-pr h2 -->\n> Verdict: PASS\nVerdict: REMEDIATION REQUIRED')];
+  f.d.forge.comments = async () => list;
+  f.d.binding = { ...binding, owners: { factory: 'fo', bots: ['factory-bot'] }, forge: { review_identity: '' } } as any;
+  assert.equal((await review(f.d, '5') as any).state, 'failure'); // a quoted "> Verdict" line is no verdict line
+  list = [c('<!-- review-pr h2 -->\nVerdict: PASS\nquoted:\nVerdict: REMEDIATION REQUIRED')];
+  assert.equal((await review(f.d, '5') as any).state, 'failure');
+  list = [c('<!-- review-pr h2 -->\nVerdict: PASS\nVerdict: PASS')];
+  assert.equal((await review(f.d, '5') as any).state, 'success');
+  list = [c('see below\n<!-- review-pr h2 -->\nVerdict: PASS')];
+  assert.equal((await review(f.d, '5') as any).state, 'pending');
+});
+
+test('signal-on-red: a run that did not fail opens no Signal; an unset release_prefix matches no ref or branch', async () => {
+  const run = (id: string, state: Run['state'], ref = 'main'): Run => ({ id, name: 'ci', ref, sha: 's', state, url: '', at: '' });
+  const f = fakes([], {}, {}, [run('1', 'success'), run('2', 'pending'), run('3', 'failure', 'undefined/x')]);
+  assert.match((await signalOnRed(f.d, '1') as any).reason, /did not fail/);
+  assert.equal((await signalOnRed(f.d, '2')).created, false);
+  const cd = { ...binding, vcs: { ...binding.vcs, release_prefix: undefined } } as any;
+  f.d.binding = cd;
+  assert.equal((await signalOnRed(f.d, '3')).created, false);
+  assert.equal(f.created.length, 0);
+  assert.deepEqual(branchNames(cd, ['undefinedwip', 'main']), ['undefinedwip']);
 });
