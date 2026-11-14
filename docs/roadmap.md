@@ -11,7 +11,6 @@ Cloud runtime facts live in [contract section 10](../references/architecture.md)
 | Item | Why | Done when |
 |---|---|---|
 | A board verb to set a milestone on an existing ticket | `backlog-grooming` sets milestones, but only `board create --milestone` can. | `board milestone <id> <name>` works on every adapter. |
-| One identity proved in the cloud | One identity is the individual default; CI's `review` gate posts the status, since the cloud proxy cannot. | A cloud cycle reviews its own draft CR, posts `review` and the CR merges with no hand fix. |
 | Two identities from the cloud | `organization` needs a review app; a cloud session acts as one account through the proxy. | A review routine posts `review` and approves as a second identity from a cloud session. |
 | The MCP server in a cloud session | `.mcp.json` does not connect when the environment has no setup script: `node_modules` is not installed at session start. | The routine template's setup script installs it, and one cloud run lists the MCP tools. |
 | Jira and Linear from the cloud | Both hosts are refused at the default network level. | The routine template adds the host to the environment's allowed domains and the token as a network secret; one cloud run lists the board. |
