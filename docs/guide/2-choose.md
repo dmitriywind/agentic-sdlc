@@ -3,6 +3,7 @@
 Make four decisions before you install. Each one is a binding value or an `init` flag, so you can
 change it later.
 
+<!-- viz: setup -->
 ```mermaid
 flowchart LR
   p["1. Who pays<br/>for the agents?"]:::q --> i["2. One forge identity<br/>or two?"]:::q

@@ -3,6 +3,7 @@
 Follow one ticket from a thought to production. Each box is a board status. Each arrow names the
 skill or gate that moves the ticket.
 
+<!-- viz: journey -->
 ```mermaid
 flowchart TD
   sig["Signals"]:::board -->|"triage-signal"| bl["Backlog"]:::board

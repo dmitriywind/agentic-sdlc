@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>agentic-sdlc Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="How agentic-sdlc moves a ticket from a signal to production, with an example you can step through and a setup chooser. Generated from docs/guide/*.md by scripts/guide.mjs.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: an app shell like a delivery board. A chapter rail on the left, one reading column, interactive parts in framed panels. */
+:root {
+  --paper: #f3f5f8; --sheet: #ffffff; --well: #eaedf2; --rule: #dde1e8; --ink: #161a21; --muted: #5a6271;
+  --accent: #2f4bd8; --accent-ink: #ffffff; --accent-soft: #e4e8fb;
+  --you: #b45309; --you-soft: #fdf0dc; --agent: #2f4bd8; --agent-soft: #e4e8fb; --ci: #15803d; --ci-soft: #ddf3e4;
+  --pass: #15803d; --pend: #b45309; --fail: #b91c1c; --idle: #8a92a0;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0f1217; --sheet: #161a21; --well: #1d222b; --rule: #2a303b; --ink: #e7eaf0; --muted: #a0a8b6;
+  --accent: #8ea2ff; --accent-ink: #0f1217; --accent-soft: #232b4d;
+  --you: #f0b25a; --you-soft: #3a2c17; --agent: #8ea2ff; --agent-soft: #232b4d; --ci: #5fd08a; --ci-soft: #183526;
+  --pass: #5fd08a; --pend: #f0b25a; --fail: #f17a7a; --idle: #6f7786; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0f1217; --sheet: #161a21; --well: #1d222b; --rule: #2a303b; --ink: #e7eaf0; --muted: #a0a8b6;
+  --accent: #8ea2ff; --accent-ink: #0f1217; --accent-soft: #232b4d;
+  --you: #f0b25a; --you-soft: #3a2c17; --agent: #8ea2ff; --agent-soft: #232b4d; --ci: #5fd08a; --ci-soft: #183526;
+  --pass: #5fd08a; --pend: #f0b25a; --fail: #f17a7a; --idle: #6f7786; color-scheme: dark; }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--font); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code, pre, .mono { font-family: var(--mono); }
+code { background: var(--well); padding: 1px 5px; border-radius: 4px; font-size: .86em; }
+.shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 32px; max-width: 1240px; margin: 0 auto;
+  padding-block: 28px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.shell > * { min-width: 0; }
+/* Chapter rail */
+.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 28px); align-self: start; display: grid; gap: 14px; }
+.brand { display: grid; gap: 2px; padding: 0 10px; text-decoration: none; color: var(--ink); }
+.brand b { font-size: 19px; letter-spacing: -.01em; }
+.brand span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.rail a.ch { display: grid; grid-template-columns: 26px 1fr; align-items: baseline; padding: 6px 10px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 15px; }
+.rail a.ch small { font-family: var(--mono); color: var(--muted); font-size: 12px; }
+.rail a.ch:hover { background: var(--well); }
+.rail a.ch[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+.rail a.ch[aria-current="page"] small { color: var(--accent-ink); }
+.rail select { display: none; }
+/* Reading column */
+.view { display: grid; gap: 28px; }
+.view > * { min-width: 0; }
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.15; letter-spacing: -.02em; margin: 6px 0 10px; text-wrap: balance; }
+h2 { font-size: 22px; letter-spacing: -.01em; margin: 40px 0 10px; text-wrap: balance; }
+h3 { font-size: 17px; margin: 24px 0 6px; }
+.lead { font-size: 18px; color: var(--muted); max-width: 62ch; margin: 0; }
+.prose { max-width: 74ch; overflow-wrap: break-word; }
+.prose code { overflow-wrap: anywhere; }
+.prose p, .prose li { max-width: 68ch; }
+.prose > h1:first-child { margin-top: 0; }
+.prose table { border-collapse: collapse; font-size: 15px; margin: 14px 0; width: 100%; }
+.tablewrap { overflow-x: auto; max-width: 100%; }
+.prose th, .prose td { border-bottom: 1px solid var(--rule); padding: 8px 12px 8px 0; text-align: left; vertical-align: top; }
+.prose th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.prose td code, .prose th code { white-space: nowrap; }
+.prose pre { background: var(--well); padding: 12px 14px; border-radius: var(--r); overflow-x: auto; font-size: 14px; }
+.prose pre code { background: none; padding: 0; }
+.diagram { margin: 18px 0; padding: 18px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); overflow-x: auto; text-align: center; }
+.diagram pre.mermaid { background: none; padding: 0; margin: 0; }
+.diagram svg { max-width: 100%; height: auto; }
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 40px; }
+.pager a { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--sheet); text-decoration: none; color: var(--ink); }
+.pager a:hover { border-color: var(--accent); }
+.pager small { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.pager .next { text-align: right; grid-column: 2; }
+.source { font-size: 13px; color: var(--muted); }
+/* Panels (interactive parts) */
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 14px; padding: 18px; display: grid; gap: 16px; }
+.panel h3 { margin: 0; }
+.example { font-size: 12px; color: var(--muted); }
+.btn { font: 500 14px var(--font); border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: .45; cursor: default; }
+/* Journey: the board */
+.board-wrap { overflow-x: auto; border-radius: var(--r); }
+.board { display: grid; grid-template-columns: repeat(6, minmax(104px, 1fr)); gap: 8px; min-width: 640px; }
+.col { background: var(--well); border-radius: var(--r); padding: 8px; display: grid; align-content: start; gap: 8px; min-height: 132px; transition: background .2s; }
+.col.on { background: var(--accent-soft); }
+.col header { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.col header i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.ticket { background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 9px; display: grid; gap: 6px; box-shadow: 0 1px 2px rgba(10, 20, 40, .08); }
+.ticket .id { font: 500 12px var(--mono); color: var(--muted); }
+.ticket .t { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.ticket .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { font: 500 11px var(--mono); padding: 1px 6px; border-radius: 999px; background: var(--well); color: var(--muted); white-space: nowrap; }
+.tag.hold { background: var(--you-soft); color: var(--you); }
+.ghost { border: 1px dashed var(--rule); border-radius: 8px; height: 46px; opacity: .6; }
+.journey-body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
+.now { display: grid; gap: 10px; align-content: start; }
+.actor { display: inline-flex; align-items: center; gap: 6px; font: 500 13px var(--mono); padding: 3px 10px; border-radius: 999px; justify-self: start; }
+.actor.you { background: var(--you-soft); color: var(--you); }
+.actor.agent { background: var(--agent-soft); color: var(--agent); }
+.actor.ci { background: var(--ci-soft); color: var(--ci); }
+.now p { margin: 0; font-size: 16px; }
+.now .see { font-size: 14px; color: var(--muted); }
+.now .see b { color: var(--ink); font-weight: 600; }
+.cr { border: 1px solid var(--rule); border-radius: var(--r); padding: 12px; display: grid; gap: 8px; align-content: start; }
+.cr .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.state { font: 500 11px var(--mono); padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+.state.none { background: var(--well); color: var(--muted); }
+.state.draft { background: var(--well); color: var(--ink); }
+.state.ready { background: var(--agent-soft); color: var(--agent); }
+.state.merged { background: var(--ci-soft); color: var(--ci); }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.checks li { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; font: 13px var(--mono); }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--idle); }
+.dot.pass { background: var(--pass); } .dot.pend { background: var(--pend); } .dot.fail { background: var(--fail); }
+.checks small { color: var(--muted); font-family: var(--font); font-size: 12px; }
+.shipped { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 8px; }
+.shipped b { color: var(--ink); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.steps { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+.steps button { width: 26px; height: 6px; padding: 0; border: 0; border-radius: 3px; background: var(--rule); cursor: pointer; }
+.steps button[aria-current="step"] { background: var(--accent); }
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font: 13px var(--mono); color: var(--muted); max-height: 140px; overflow-y: auto; }
+.log li { display: grid; grid-template-columns: 30px 1fr; gap: 6px; }
+.log li.last { color: var(--ink); }
+/* Setup chooser */
+.setup { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.q { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+.q legend { font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 6px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg label { position: relative; }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: inline-block; font-size: 13px; padding: 5px 10px; border: 1px solid var(--rule); border-radius: 999px; background: var(--sheet); }
+.seg input:checked + span { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg input:disabled + span { opacity: .4; text-decoration: line-through; }
+.out { display: grid; gap: 12px; align-content: start; }
+.out h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.cmd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.cmd pre { margin: 0; background: var(--well); border-radius: 8px; padding: 10px 12px; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.kv { margin: 0; background: var(--well); border-radius: 8px; padding: 10px 12px; font: 13px/1.7 var(--mono); white-space: pre-wrap; word-break: break-word; }
+.notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.notes li { padding: 8px 10px; border-radius: 8px; background: var(--well); }
+.notes li.warn { background: var(--you-soft); color: var(--ink); border-left: 3px solid var(--you); }
+/* Home */
+.hero { display: grid; gap: 10px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.card { display: grid; gap: 6px; align-content: start; padding: 14px 16px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--sheet); text-decoration: none; color: var(--ink); }
+.card:hover { border-color: var(--accent); }
+.card small { font: 500 12px var(--mono); color: var(--accent); }
+.card b { font-size: 16px; }
+.card span { font-size: 14px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--muted); align-items: center; }
+@media (max-width: 960px) {
+  .shell { grid-template-columns: 1fr; gap: 18px; padding-block: 12px 56px; }
+  .rail { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); padding-block: 8px; grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+  .rail ol { display: none; }
+  .rail select { display: block; width: 100%; font: 15px var(--font); padding: 8px; border-radius: 8px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); }
+  .journey-body, .setup { grid-template-columns: 1fr; }
+  .steps { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="rail" aria-label="Guide">
+    <a class="brand" href="#overview"><span>agentic-sdlc</span><b>Guide</b></a>
+    <ol id="toc"></ol>
+    <select id="pick" aria-label="Chapter"></select>
+  </nav>
+  <main id="main" class="view" tabindex="-1"></main>
+</div>
+<script type="module">
+import { marked } from 'https://cdn.jsdelivr.net/npm/marked@18.1.1/lib/marked.esm.js';
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@12.2.0/dist/mermaid.esm.min.mjs';
+
+const GUIDE = /*GUIDE_DATA*/null;
+const { chapters, blob } = GUIDE;
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+mermaid.initialize({
+  startOnLoad: false, securityLevel: 'strict', theme: 'base',
+  themeVariables: { fontFamily: css('--font'), fontSize: '15px', primaryColor: css('--agent-soft'), primaryTextColor: css('--ink'),
+    primaryBorderColor: css('--agent'), lineColor: css('--muted'), textColor: css('--ink'), background: 'transparent',
+    actorBkg: css('--agent-soft'), actorBorder: css('--agent'), actorTextColor: css('--ink'), signalColor: css('--muted'), signalTextColor: css('--ink'),
+    noteBkgColor: css('--you-soft'), noteTextColor: css('--ink'), noteBorderColor: css('--you'), edgeLabelBackground: css('--sheet'),
+    labelBoxBkgColor: css('--well'), labelTextColor: css('--ink'), loopTextColor: css('--ink'), sequenceNumberColor: css('--accent-ink') },
+  flowchart: { curve: 'basis', padding: 14, nodeSpacing: 42, rankSpacing: 50, wrappingWidth: 240 },
+  sequence: { mirrorActors: false, messageMargin: 30, useMaxWidth: false, actorFontSize: 15, messageFontSize: 15, noteFontSize: 14 },
+});
+marked.use({ renderer: {
+  code({ text, lang }) { return lang === 'mermaid' ? '<div class="diagram"><pre class="mermaid">' + esc(text) + '</pre></div>' : false; },
+  table(token) { return '<div class="tablewrap">' + this.constructor.prototype.table.call(this, token) + '</div>'; },
+} });
+
+/* ---------- A ticket's journey: an example you step through ---------- */
+const COLS = [['Signals', '--you'], ['Backlog', '--idle'], ['Ready', '--idle'], ['In progress', '--pend'], ['In review', '--ci'], ['Done', '--agent']];
+const CHECKS = ['Required', 'proofs-on-base', 'ticket-linkage', 'review', 'human-approval', 'skill-regression'];
+const P = 'pass', W = 'pend';
+const STEPS = [
+  { col: 'Signals', who: ['you', 'A user'], say: 'A user asks for a goodbye message. The request lands on the board as a Signal.', see: 'A ticket labelled <b>signal:feedback</b>.', log: 'Signal opened', tags: ['signal:feedback'] },
+  { col: 'Backlog', who: ['agent', 'triage-signal'], say: 'The cycle triages it: real and wanted. It goes to Backlog as a feature, with a priority.', see: 'A decision comment and <b>Priority: Default</b>.', log: 'triage-signal: accepted', tags: ['feature', 'Default'] },
+  { col: 'Ready', who: ['agent', 'shape'], say: 'shape writes three acceptance criteria, each with the proof that will show it done, and picks the size and lane.', see: 'The criteria comment, <b>Size XS</b>, <b>Lane Fast</b>.', log: 'shape: 3 criteria, XS, Fast', tags: ['feature', 'Default', 'XS', 'Fast'] },
+  { col: 'In progress', who: ['agent', 'implement-spec'], say: 'implement-spec claims the ticket. It writes the failing test first, then the code, on a short-lived branch.', see: 'Branch <b>feature/2-farewell-function</b>.', log: 'implement-spec: test, then code', tags: ['feature', 'XS', 'Fast'] },
+  { col: 'In review', who: ['agent', 'implement-spec'], say: 'It opens draft change request #3. CI starts: the tests run with no secrets, and the gates check the change.', see: 'Draft CR <b>#3</b> with checks running.', log: 'draft CR #3 opened', tags: ['feature', 'XS', 'Fast'], cr: 'draft', checks: [W, W, W, W, W, P] },
+  { col: 'In review', who: ['ci', 'CI gates'], say: 'The tests pass. The new test fails on the old code, so it proves the change. The CR closes exactly one ticket.', see: '<b>Required</b>, <b>proofs-on-base</b> and <b>ticket-linkage</b> green.', log: 'CI: tests and gates green', tags: ['feature', 'XS', 'Fast'], cr: 'draft', checks: [P, P, P, W, P, P] },
+  { col: 'In review', who: ['agent', 'review-pr'], say: 'review-pr grades each criterion against the diff and the CI results, in a fresh context. Verdict: PASS.', see: 'The review report, then the <b>review</b> check green.', log: 'review-pr: PASS', tags: ['feature', 'XS', 'Fast'], cr: 'ready', checks: [P, P, P, P, P, P] },
+  { col: 'Done', who: ['ci', 'merged gate'], say: 'Every check is green, so the change merges. A Fast-lane change needs no human approval. The ticket is Done.', see: 'CR merged. <b>Shipped: Not shipped</b>.', log: 'merged; ticket Done', tags: ['feature', 'XS'], cr: 'merged', checks: [P, P, P, P, P, P], shipped: 'Not shipped' },
+  { col: 'Done', who: ['ci', 'shipped gate'], say: 'Your deploy reports to the shipped gate. The ticket records where the change runs.', see: '<b>Shipped: On production</b>.', log: 'deploy: On production', tags: ['feature', 'XS'], cr: 'merged', checks: [P, P, P, P, P, P], shipped: 'On production' },
+];
+function journey(el) {
+  el.className = 'panel';
+  el.innerHTML = '<div class="legend"><span class="actor you">you</span><span class="actor agent">agents</span><span class="actor ci">CI gates</span><span class="example">Example, based on ticket #2 of a pilot run.</span></div>'
+    + '<div class="board-wrap"><div class="board">' + COLS.map(([c, color]) => '<section class="col" data-col="' + c + '"><header style="color:var(' + color + ')"><i></i>' + c + '</header></section>').join('') + '</div></div>'
+    + '<div class="journey-body"><div class="now" aria-live="polite"></div><div class="cr"></div></div>'
+    + '<div class="controls"><button class="btn" data-go="-1">Back</button><button class="btn primary" data-go="1">Next step</button><button class="btn" data-play>Play</button><div class="steps"></div></div>'
+    + '<ol class="log" aria-label="What happened"></ol>';
+  const card = document.createElement('article');
+  card.className = 'ticket';
+  const steps = $('.steps', el);
+  STEPS.forEach((_, i) => { const b = document.createElement('button'); b.setAttribute('aria-label', 'Step ' + (i + 1)); b.onclick = () => go(i); steps.append(b); });
+  let i = 0, timer = null;
+  function go(n) {
+    i = Math.max(0, Math.min(STEPS.length - 1, n));
+    const s = STEPS[i];
+    const col = el.querySelector('[data-col="' + s.col + '"]');
+    const before = card.isConnected ? card.getBoundingClientRect() : null;
+    card.innerHTML = '<span class="id">#2</span><span class="t">Add a farewell function</span><span class="tags">' + s.tags.map((t) => '<span class="tag">' + esc(t) + '</span>').join('') + '</span>';
+    if (card.parentElement !== col) col.append(card);
+    if (before && !reduced) {
+      const after = card.getBoundingClientRect();
+      card.animate([{ transform: 'translate(' + (before.left - after.left) + 'px,' + (before.top - after.top) + 'px)' }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    }
+    el.querySelectorAll('.col').forEach((c) => c.classList.toggle('on', c === col));
+    col.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+    $('.now', el).innerHTML = '<span class="eyebrow">Step ' + (i + 1) + ' of ' + STEPS.length + ' · ' + esc(s.col) + '</span><span class="actor ' + s.who[0] + '">' + esc(s.who[1]) + '</span><p>' + esc(s.say) + '</p><p class="see">You see: ' + s.see + '</p>';
+    const state = s.cr ?? 'none';
+    $('.cr', el).innerHTML = '<div class="head"><span>Change request #3</span><span class="state ' + state + '">' + (state === 'none' ? 'not yet' : state) + '</span></div>'
+      + '<ul class="checks">' + CHECKS.map((c, k) => { const st = s.checks?.[k]; return '<li><span class="dot ' + (st ?? '') + '"></span><span>' + c + '</span><small>' + (st === P ? 'pass' : st === W ? 'pending' : '') + '</small></li>'; }).join('') + '</ul>'
+      + '<div class="shipped">Shipped: <b>' + (s.shipped ?? 'not shipped') + '</b></div>';
+    $('.log', el).innerHTML = STEPS.slice(0, i + 1).map((x, k) => '<li class="' + (k === i ? 'last' : '') + '"><span>' + String(k + 1).padStart(2, '0') + '</span><span>' + esc(x.log) + '</span></li>').join('');
+    steps.querySelectorAll('button').forEach((b, k) => { if (k === i) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current'); });
+    $('[data-go="-1"]', el).disabled = i === 0;
+    $('[data-go="1"]', el).disabled = i === STEPS.length - 1;
+  }
+  function stop() { clearInterval(timer); timer = null; $('[data-play]', el).textContent = 'Play'; }
+  el.addEventListener('click', (e) => {
+    const g = e.target.closest('[data-go]');
+    if (g) { stop(); go(i + Number(g.dataset.go)); }
+    if (e.target.closest('[data-play]')) {
+      if (timer) return stop();
+      if (i === STEPS.length - 1) go(0);
+      $('[data-play]', el).textContent = 'Pause';
+      timer = setInterval(() => (i === STEPS.length - 1 ? stop() : go(i + 1)), 2600);
+    }
+  });
+  el.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') { stop(); go(i + 1); } if (e.key === 'ArrowLeft') { stop(); go(i - 1); } });
+  el.tabIndex = 0;
+  el.setAttribute('aria-label', 'A ticket\'s journey, step by step. Use the left and right arrow keys.');
+  go(0);
+}
+
+/* ---------- Choose your setup: answers in, init command and binding out ---------- */
+const QUESTIONS = [
+  ['pays', 'Who pays for the agents?', [['sub', 'Subscriptions'], ['mix', 'Subscriptions + API keys'], ['api', 'API keys']]],
+  ['ids', 'Forge identities', [['one', 'One: mine'], ['two', 'Two: plus a review app']]],
+  ['repos', 'Repos per board', [['one', 'One repo'], ['many', 'Many repos, one board']]],
+  ['runs', 'Where the cycle runs', [['cloud', 'Agent vendor cloud'], ['actions', 'GitHub Actions'], ['local', 'My machine'], ['managed', 'Managed agents']]],
+  ['board', 'Where tickets live', [['issues', 'GitHub issues'], ['project', 'GitHub Project'], ['jira', 'Jira'], ['linear', 'Linear'], ['local', 'A local file']]],
+  ['agent', 'Which agent', [['claude', 'Claude Code'], ['codex', 'Codex'], ['cursor', 'Cursor'], ['other', 'Another agent']]],
+];
+const RUNNER = 'https://github.com/dmitriywind/agentic-sdlc/blob/master/templates/runner/';
+function setup(el) {
+  el.className = 'panel';
+  const pick = { pays: 'sub', ids: 'one', repos: 'one', runs: 'cloud', board: 'issues', agent: 'claude' };
+  el.innerHTML = '<div class="setup"><form class="qs" style="display:grid;gap:16px">' + QUESTIONS.map(([k, label, opts]) =>
+    '<fieldset class="q"><legend>' + label + '</legend><div class="seg">' + opts.map(([v, t]) =>
+      '<label><input type="radio" id="q-' + k + '-' + v + '" name="' + k + '" value="' + v + '"' + (pick[k] === v ? ' checked' : '') + '><span>' + t + '</span></label>').join('') + '</div></fieldset>').join('')
+    + '</form><div class="out" aria-live="polite"></div></div>';
+  const form = $('form', el);
+  form.addEventListener('submit', (e) => e.preventDefault());
+  form.addEventListener('change', (e) => { pick[e.target.name] = e.target.value; draw(); });
+  el.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-copy]');
+    if (!b) return;
+    const text = $('.cmd pre', el).textContent;
+    try { await navigator.clipboard.writeText(text); b.textContent = 'Copied'; }
+    catch { const r = document.createRange(); r.selectNodeContents($('.cmd pre', el)); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent = 'Selected'; }
+    setTimeout(() => (b.textContent = 'Copy'), 1600);
+  });
+  function setDisabled(name, value, off) { const i = form.querySelector('#q-' + name + '-' + value); i.disabled = off; if (off && i.checked) { const first = [...form.querySelectorAll('input[name="' + name + '"]')].find((x) => !x.disabled); first.checked = true; pick[name] = first.value; } }
+  function draw() {
+    const profile = { sub: 'individual', mix: 'individual-api', api: 'organization' }[pick.pays];
+    setDisabled('ids', 'one', profile === 'organization');
+    setDisabled('runs', 'managed', profile === 'individual');
+    const harness = { claude: 'claude', codex: 'codex', cursor: 'cursor', other: 'generic' }[pick.agent];
+    const board = { issues: 'github-issues', project: 'github', jira: 'jira', linear: 'linear', local: 'local' }[pick.board];
+    const cloudClaude = pick.runs === 'cloud' && pick.agent === 'claude';
+    const cmd = 'npx --no agentic-sdlc init --profile ' + profile + ' --harness ' + harness + ' --board ' + board + (cloudClaude ? ' --no-plugin' : '');
+    const kv = ['profile: ' + profile];
+    if (pick.ids === 'one') kv.push('forge.review_identity: ""');
+    else kv.push('forge.review_identity: your-review-app[bot]', 'forge.options.review_token_env: AGENTIC_REVIEW_TOKEN');
+    kv.push('executors.default.sandbox: ' + (pick.runs === 'local' ? 'local' : profile === 'organization' ? 'container' : 'cloud'));
+    if (pick.repos === 'many' && pick.board === 'project') kv.push('board.options.repo: <owner>/<this repo>');
+    if (pick.repos === 'many' && ['issues', 'jira', 'linear'].includes(pick.board)) kv.push('board.scope.label: repo:<this repo>', 'board.scope.home: true   (one repo only)', 'board.scope.repos: [repo:a, repo:b]');
+    const notes = [], warn = [];
+    if (cloudClaude && pick.board === 'project') warn.push('A Claude cloud routine cannot reach a GitHub Project: its GitHub proxy refuses GraphQL. Pick GitHub issues, Jira or Linear, or run the cycle in GitHub Actions.');
+    if (pick.runs === 'cloud' && pick.agent === 'other') warn.push('Another agent has no vendor cloud here. Run the cycle in GitHub Actions or on your machine.');
+    if (pick.board === 'local' && pick.runs !== 'local') warn.push('The local board is a file in the repo. Use it to try the factory, not with a scheduler.');
+    if (pick.board === 'local' && pick.repos === 'many') warn.push('A local board cannot be shared by many repos.');
+    if (cloudClaude && ['jira', 'linear'].includes(pick.board)) notes.push('Add the board host to the cloud environment\'s allowed domains and its token as a network secret, with NODE_USE_ENV_PROXY=1.');
+    if (pick.runs === 'local') notes.push('Run it in a separate clone, with AGENTIC_SDLC_UNATTENDED=1 and AGENTIC_SDLC_LOCAL=1 in the scheduler\'s environment. Agents run with your account and files.');
+    if (profile !== 'individual' && pick.runs !== 'managed') notes.push('Give a managed executor\'s API key a name other than ANTHROPIC_API_KEY, so the cycle stays on the subscription.');
+    if (pick.ids === 'one') notes.push('One identity: review-pr runs in the cycle and CI posts the review status. A Full-lane change waits for a collaborator\'s approval or your admin merge.');
+    else notes.push('Two identities: schedule a second run with review-prompt.md. Only that run gets AGENTIC_REVIEW_TOKEN.');
+    if (['jira', 'linear'].includes(pick.board)) notes.push('Set board.options for ' + (pick.board === 'jira' ? 'Jira: base_url, project_key, email_env, token_env.' : 'Linear: team_key, token_env.'));
+    const tpl = pick.runs === 'local' ? 'local.md' : pick.runs === 'actions' ? (pick.agent === 'codex' ? 'github-actions-codex.yml' : 'github-actions-claude.yml')
+      : pick.runs === 'managed' ? 'routine.md' : pick.agent === 'cursor' ? 'cursor-automation.md' : pick.agent === 'codex' ? 'routine.md' : 'claude-routine.md';
+    $('.out', el).innerHTML = '<h4>1 · Run</h4><div class="cmd"><pre>' + esc(cmd) + '</pre><button class="btn" type="button" data-copy>Copy</button></div>'
+      + '<h4>2 · Check in .agents/binding.yml</h4><pre class="kv">' + esc(kv.join('\n')) + '</pre>'
+      + '<h4>3 · Schedule the cycle</h4><p style="margin:0;font-size:14px">Template: <a href="' + RUNNER + tpl + '">templates/runner/' + tpl + '</a></p>'
+      + (warn.length || notes.length ? '<h4>Notes</h4><ul class="notes">' + warn.map((w) => '<li class="warn">' + esc(w) + '</li>').join('') + notes.map((n) => '<li>' + esc(n) + '</li>').join('') + '</ul>' : '');
+  }
+  draw();
+}
+
+/* ---------- Pages ---------- */
+const toc = $('#toc'), select = $('#pick'), main = $('#main');
+select.add(new Option('Overview', 'overview'));
+for (const c of chapters) {
+  const n = parseInt(c.id);
+  toc.insertAdjacentHTML('beforeend', '<li><a class="ch" href="#' + c.id + '"><small>' + String(n).padStart(2, '0') + '</small><span>' + esc(c.title.replace(/^\d+\.\s*/, '')) + '</span></a></li>');
+  select.add(new Option(c.title, c.id));
+}
+select.onchange = () => go(select.value);
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href^="#"]');
+  if (!a) return;
+  const id = a.getAttribute('href').slice(1);
+  if (id !== 'overview' && !chapters.some((c) => c.id === id)) return;
+  e.preventDefault(); go(id);
+});
+function go(id) { try { history.pushState(null, '', '#' + id); } catch {} show(id); }
+const VIZ = { journey, setup };
+async function show(id = location.hash.slice(1)) {
+  const c = chapters.find((x) => x.id === id);
+  for (const a of toc.querySelectorAll('a')) { if (a.getAttribute('href') === '#' + (c?.id)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
+  select.value = c ? c.id : 'overview';
+  if (!c) {
+    main.innerHTML = '<header class="hero"><span class="eyebrow">agentic-sdlc · how it works</span><h1>Watch one ticket go from a signal to production</h1>'
+      + '<p class="lead">You put work on a board. A scheduled agent run moves each ticket one step. CI gates decide what merges. Step through a real example, then pick your setup.</p></header>'
+      + '<div data-viz="journey"></div>'
+      + '<section><h2>Read the guide</h2><div class="cards">' + chapters.map((x) => '<a class="card" href="#' + x.id + '"><small>' + String(parseInt(x.id)).padStart(2, '0') + '</small><b>' + esc(x.title.replace(/^\d+\.\s*/, '')) + '</b><span>' + esc(x.lead) + '</span></a>').join('') + '</div></section>';
+  } else {
+    const i = chapters.indexOf(c), prev = chapters[i - 1], next = chapters[i + 1];
+    const md = c.md.replace(/<!-- viz: (\w+) -->\n```mermaid\n[\s\S]*?```/g, '<div data-viz="$1"></div>').replace(/\nNext: \[[^\n]*\n?$/, '\n');
+    main.innerHTML = '<article class="prose">' + marked.parse(md) + '</article>'
+      + '<nav class="pager" aria-label="Chapters">' + (prev ? '<a href="#' + prev.id + '"><small>Previous</small>' + esc(prev.title) + '</a>' : '<span></span>')
+      + (next ? '<a class="next" href="#' + next.id + '"><small>Next</small>' + esc(next.title) + '</a>' : '') + '</nav>'
+      + '<p class="source">Source: <a href="' + blob + c.file + '">' + c.file + '</a></p>';
+  }
+  main.querySelectorAll('[data-viz]').forEach((el) => VIZ[el.dataset.viz]?.(el));
+  await mermaid.run({ nodes: main.querySelectorAll('pre.mermaid') });
+  scrollTo(0, 0);
+}
+addEventListener('popstate', () => show());
+show();
+</script>
+</body>
+</html>
