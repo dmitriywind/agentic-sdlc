@@ -13,9 +13,14 @@ board is out of reach; `doctor` fails on it in a cloud session. Use one of:
 A `github` board runs from GitHub Actions instead (`github-actions-claude.yml`); Actions is an option for any board.
 Verify: a cloud session has no Docker daemon and stops a foreground command at 10 minutes (2 hours in the
 background). The cycle runs `commands.fast_check`; `commands.verify` runs in CI as the `Required` check.
+Draft and merge: on a private repo on GitHub Free a draft CR is a PR with the `draft` label, and `forge automerge`
+merges directly once every `forge.required_checks` entry is green; no gate blocks that merge.
 Secrets: none for the model. The repo needs the Claude GitHub App or `/web-setup`; the session's `GH_TOKEN` is a placeholder the proxy replaces.
+Models: set the binding's `models` to Claude ids, for example Sonnet for `fast` and `balanced`, Opus for `deep`.
+Proxy: Linear and Jira calls go out through the session's network proxy only when Node reads the proxy env:
+add `NODE_USE_ENV_PROXY=1` to both environments (Node 24 or newer).
 Two routines, two cloud environments:
-- cycle environment: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_SDLC_UNATTENDED=1, AGENTIC_REVIEW_FIRE_CMD. Never AGENTIC_REVIEW_TOKEN.
+- cycle environment: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_SDLC_UNATTENDED=1, AGENTIC_REVIEW_FIRE_CMD, NODE_USE_ENV_PROXY=1. Never AGENTIC_REVIEW_TOKEN.
 - review environment: the same plus AGENTIC_REVIEW_TOKEN and AGENTIC_SDLC_ROLE=review (the names your binding uses).
 
 1. Create both cloud environments for the repo with the env vars above; set each setup script to `sh .agents/runner-setup.sh`.
@@ -25,5 +30,6 @@ Two routines, two cloud environments:
 5. Optional API trigger: `POST https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire`,
    `Authorization: Bearer <per-task token>`, `anthropic-beta: experimental-cc-routine-2026-04-01`, optional body `text`.
    Limit: 30 fires per hour per task.
-6. Branches pushed by a routine carry a `claude/` prefix: allow that prefix in the forge rules and trunk gate.
+6. A routine pushes only `claude/*` branches by default: set `vcs.change_pattern: claude/feature/<ticket>-<name>` and
+   `vcs.factory_change_pattern: claude/sdlc/<name>` in the binding, or allow unrestricted branch pushes on the routine.
 7. Cloud sessions run against GitHub, the one forge agentic-sdlc supports.

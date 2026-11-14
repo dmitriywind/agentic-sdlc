@@ -7,11 +7,17 @@ Secrets everywhere: `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN`, `AGENTIC_REVIE
 review identity).
 
 ## Claude cloud sessions
-The adapter calls only REST under `repos/{owner}/{repo}/…`, so every verb works behind a Claude
-cloud session's GitHub proxy, which refuses GraphQL (`gh pr`, `gh issue`). With
+In a cloud session the adapter calls only REST under `repos/{owner}/{repo}/…`, so every verb but
+`closing` works behind a Claude cloud session's GitHub proxy, which refuses GraphQL (`gh pr`,
+`gh issue`). `closing` uses `search/issues`, which the proxy refuses; the gates that use it run in CI. With
 `CLAUDE_CODE_REMOTE=true`, `forge ready`, `forge draft` and `forge automerge` use the proxy's
 `pulls/{n}/ccr/…` routes; those routes exist only in the cloud. The proxy injects the token, so a
 cloud session needs no `token_env`.
+
+A private repo on GitHub Free has no draft pull requests and no trunk protection. There a draft CR
+is a ready PR with the `draft` label, and `forge automerge` merges directly once the CR is ready and
+every `forge.required_checks` entry is green on its head (GitHub refuses auto-merge with nothing to
+wait on). No gate can block that merge, so the review is the last check; `doctor` warns about it.
 
 ## The checks
 | Check | Posted by | Notes |

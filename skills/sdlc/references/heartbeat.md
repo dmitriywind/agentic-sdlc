@@ -27,7 +27,7 @@ the rows back.
 }
 ```
 
-`at`, `factory`, `runs` and `errors` are required; an idle cycle writes `runs: []`. Optional:
+`at`, `factory`, `runs` and `errors` are required; an idle cycle writes `runs: []` and, when `learning.enabled` is true, `learning`. Optional:
 
 | Field | Meaning |
 |---|---|

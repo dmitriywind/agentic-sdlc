@@ -36,7 +36,7 @@ board:
     release_version: Release Version
   labels: { human: needs-human, bug: bug, feature: feature, release: release } # plus signal:<stream> and env_labels; no others. release marks a release request the Product owner opens at Backlog
   env_labels: [env:staging, env:production] # on a signal from a deployed environment
-  done_statuses: [Done, Cancelled] # left out of the heartbeat's items and oldestOpen
+  done_statuses: [Done, Cancelled] # statuses that count as closed (open blockers, gates, bench cases)
   views: [Board, Signals, Human, Release, Roadmap] # saved views the sdlc skill describes
   signal_streams: [alert, feedback, owner, security, ci, deploy, maintenance] # label signal:<stream>; maintenance: dependency, advisory, end-of-life and expiry scanners
 
@@ -91,9 +91,9 @@ mcps:                           # tool servers executors may use; name -> { url 
 #   uri: "s3://my-bucket/agentic/{run_id}.jsonl" # where executors write run traces; must contain {run_id}
 
 models:                         # skills name a tier (frontmatter metadata.tier), never a model; init --harness claude writes .claude/agents/sdlc-<tier>.md from this map
-  fast: claude-sonnet-5-5        # the cycle routine runs on this tier
-  balanced: claude-sonnet-5-5
-  deep: claude-opus-5-5         # shape and improve-factory
+  fast: your-fast-model-id      # the cycle routine runs on this tier
+  balanced: your-balanced-model-id
+  deep: your-deep-model-id      # shape and improve-factory
 # agent_command: "my-agent --model {model} --prompt-file {prompt_file} --cwd {workdir}" # bench run only
 
 commands:

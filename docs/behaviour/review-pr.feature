@@ -25,7 +25,17 @@ Feature: Review a change request
     Given the runtime is a Claude cloud session (CLAUDE_CODE_REMOTE=true)
     When the reviewer runs "forge ready <n>", "forge draft <n>" or "forge automerge <n>"
     Then the adapter calls the proxy's pulls/<n>/ccr route for it
-    And no forge verb calls GraphQL or a path outside repos/<owner>/<repo>
+    And no forge verb calls GraphQL
+    And only "closing" calls a path outside repos/<owner>/<repo> (search/issues), which the session refuses
+
+  # Source: src/forge/github.ts; references/architecture.md §3.2, "Adapter"
+  # Proof: test/forge.test.ts "github: a repo without draft PRs marks drafts with the draft label; an unprotected trunk merges once required checks are green"
+  Scenario: A private repo on GitHub Free holds drafts and merges unattended
+    Given a repo that refuses draft pull requests and has no ruleset or branch protection on the trunk
+    When the factory runs "forge open --draft", "forge ready <n>" and "forge draft <n>"
+    Then a draft CR is a ready pull request with the "draft" label, and ready removes the label
+    When the reviewer runs "forge automerge <n>" and GitHub refuses auto-merge
+    Then the adapter merges the CR at its head only when it is ready and every forge.required_checks entry is green there
 
   # Source: references/architecture.md, "Two runtimes, two identities"; src/forge/index.ts, "status"
   # Proof: test/forge.test.ts "cli: status refuses the contexts only a gate posts"

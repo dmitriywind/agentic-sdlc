@@ -10,7 +10,7 @@ skills one set of verbs for the board, the forge and Git, and the CI gates that 
 be trusted to keep. Your agent harness and scheduler run the skills. The package ships no agent
 runner of its own.
 
-- **Boards:** GitHub Projects, Jira, Linear, or a local JSON file.
+- **Boards:** GitHub Projects, the repo's GitHub issues (`github-issues`, over REST), Jira, Linear, or a local JSON file.
 - **Forge:** GitHub. **VCS:** Git, trunk-based.
 - **Harnesses:** Claude Code (as a plugin), Codex, Cursor, or any agent with a
   shell or MCP.
@@ -81,7 +81,7 @@ The CLI installs from Git only. Warning: the npm package `agentic-sdlc` is a dif
 |---|---|---|
 | `--profile` | `individual`, `enterprise` | `individual` |
 | `--harness` | `claude`, `codex`, `cursor`, `generic` | `generic` |
-| `--board` | `github`, `jira`, `linear`, `local` | `github` |
+| `--board` | `github`, `github-issues`, `jira`, `linear`, `local` | `github` |
 | `--forge` | `github` | `github` |
 | `--vcs` | `git` | `git` |
 | `--force` | overwrite files `init` would keep | off |

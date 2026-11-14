@@ -80,7 +80,7 @@ In order:
    `review-pr`), no held ticket has a trusted owner reply after its last `### Needs human`
    comment, no CR needs a review, and `ledger summary` shows neither `learning.due` nor
    `learning.judge` with an unscored run: write the idle heartbeat (`at`, `factory`, `runs: []`,
-   `errors: []`), fire no review, and stop. Done when it is posted.
+   `errors: []`, and `learning` copied forward when `learning.enabled` is true), fire no review, and stop. Done when it is posted.
 3. **Judge.** When `ledger summary` shows `learning.judge` (true only when `learning.enabled`): for
    each run in the newest heartbeats since the last judge step that has no `score` yet, except `judge-run` runs, `dispatch judge-run --ticket <id>` (`--cr <n>`; the heartbeat ticket for a
    run with neither) `--run <run id> --run-model <the row's model>`. It prints

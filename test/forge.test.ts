@@ -81,6 +81,32 @@ test('github: in a cloud session every verb is REST under repos/ and ready, draf
   assert.ok(has('repos/{owner}/{repo}/pulls/5 -H Accept: application/vnd.github.diff'));
 });
 
+test('github: a repo without draft PRs marks drafts with the draft label; an unprotected trunk merges once required checks are green', async () => {
+  let labels: { name: string }[] = [];
+  const { ctx, execs } = mk('github', { repo: 'o/r' }, () => ({}), (a) => {
+    const s = a.join(' ');
+    if (s.startsWith('pr ') || s.includes('/ccr/')) throw new Error('gh: Draft pull requests are not supported in this repository. (HTTP 422)');
+    if (s.includes('-X POST repos/o/r/pulls ')) {
+      if (JSON.parse(String(inputs.at(-1))).draft) throw new Error('Command failed: gh api\ngh: Draft pull requests are not supported in this repository. (HTTP 422)');
+      return JSON.stringify({ number: 5 });
+    }
+    if (s.includes('issues/5/labels/draft')) { labels = []; return '[]'; }
+    if (s.includes('issues/5/labels')) { labels = [{ name: 'draft' }]; return '[]'; }
+    return a.at(-1)?.startsWith('repos/o/r/pulls/5') && a.length === 2 ? JSON.stringify({ ...pull, labels }) : restExec(a);
+  });
+  const inputs: (string | undefined)[] = [];
+  const exec = ctx.exec;
+  ctx.exec = (c, a, o: any = {}) => (inputs.push(o.input), exec(c, a, o));
+  const f = createForge(ctx);
+  assert.equal((await f.open({ source: 'b', title: 'T', body: 'Closes 1', draft: true })).draft, true);
+  assert.equal((await f.ready('5')).draft, false);
+  assert.equal((await f.draft('5')).draft, true);
+  await assert.rejects(f.automerge('5'), /not supported/, 'a draft never merges');
+  await f.ready('5');
+  await f.automerge('5');
+  assert.ok(execs.some((a) => a.join(' ') === 'api -X PUT repos/o/r/pulls/5/merge -f merge_method=squash -f sha=h'));
+});
+
 const stdout = async (fn: () => Promise<unknown>) => {
   const out: string[] = [];
   const w = process.stdout.write;

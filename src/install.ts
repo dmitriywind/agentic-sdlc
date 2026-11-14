@@ -311,7 +311,7 @@ export function trunkProtection(b: any, ctx: any): string[] {
   let rules: any[];
   try { rules = JSON.parse(ctx.exec('gh', ['api', `repos/${repo}/rules/branches/${b.vcs.trunk}`])); }
   catch (e) {
-    if (/HTTP 403|Upgrade to GitHub Pro/.test((e as Error).message)) return [open];
+    if (/Upgrade to GitHub Pro/.test((e as Error).message)) return [open];
     return ['trunk protection: check manually (cannot read the trunk rules)', reminder];
   }
   if (!rules.length) {
@@ -423,7 +423,8 @@ export const cli: PortCli = async (argv, ctx) => {
       for (const [name, run] of probes) {
         try { await run(); out(`ok   ${name}`); }
         catch (e) {
-          bad++; out(`fail ${name}: ${redact((e as Error).message, ctx.env).split('\n')[0]}`);        }
+          bad++; out(`fail ${name}: ${redact((e as Error).message, ctx.env).split('\n')[0]}`);
+        }
       }
       return bad ? 1 : 0;
     }

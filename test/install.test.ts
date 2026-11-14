@@ -239,6 +239,7 @@ test('doctor: a trunk with no enforced ruleset or branch protection warns that n
   assert.match(trunkProtection(b, at('false'))[0], /no gate blocks a merge/);
   assert.match(trunkProtection(b, at('true\n'))[0], /classic branch protection is on/);
   assert.match(trunkProtection(b, { exec: () => { throw new Error('network down'); } })[0], /check manually/);
+  assert.match(trunkProtection(b, { exec: () => { throw new Error('gh: Resource not accessible by integration (HTTP 403)'); } })[0], /check manually/);
 });
 
 test('plugin guard hook blocks trunk pushes and forge approve outside the review role', () => {

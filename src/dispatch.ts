@@ -221,7 +221,7 @@ export const cli: PortCli = async (argv, ctx) => {
     }
 
     if (ex.kind === 'harness') {
-      return await done('harness', null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ''}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
+      return await done('harness', null, { instruction: `load .agents/skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ''}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
     }
     if (ex.kind === 'command') {
       const dir = mkdtempSync(join(tmpdir(), 'agentic-sdlc-'));

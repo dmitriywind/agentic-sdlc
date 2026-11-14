@@ -20,6 +20,9 @@ export function github(ctx: AdapterContext): Forge {
   // A Claude cloud session's GitHub proxy refuses GraphQL and serves the GraphQL-only PR actions under pulls/{n}/ccr/.
   const cloud = ctx.env.CLAUDE_CODE_REMOTE === 'true';
   const ccr = (method: string, n: string, route: string, ...f: string[]) => gh(['api', '-X', method, `${api}/pulls/${n}/ccr/${route}`, ...f]);
+  // A repo that cannot hold draft PRs (private on GitHub Free) marks a draft with the `draft` label instead.
+  const labelled = (p: any) => (p.labels ?? []).some((l: any) => l.name === 'draft');
+  const label = (n: string) => post(`issues/${n}/labels`, { labels: ['draft'] });
   const view = async (n: string): Promise<CR> => {
     const p = JSON.parse(gh(['api', `${api}/pulls/${n}`]));
     const runs = JSON.parse(gh(['api', `${api}/commits/${p.head.sha}/check-runs?per_page=100`])).check_runs ?? [];
@@ -31,7 +34,7 @@ export function github(ctx: AdapterContext): Forge {
     if (pushedAt && Number.isNaN(Date.parse(pushedAt))) pushedAt = undefined;
     return {
       n: String(p.number), url: p.html_url, title: p.title, source: p.head.ref, target: p.base.ref,
-      headSha: p.head.sha, baseSha: p.base.sha, draft: !!p.draft,
+      headSha: p.head.sha, baseSha: p.base.sha, draft: !!p.draft || labelled(p),
       state: p.merged_at ? 'merged' : p.state === 'open' ? 'open' : 'closed',
       behind: p.mergeable_state === 'behind', mergeSha: p.merged_at ? p.merge_commit_sha : undefined, closes: parseCloses(p.body ?? ''),
       checks: [
@@ -44,7 +47,15 @@ export function github(ctx: AdapterContext): Forge {
   };
   return {
     async open(o) {
-      return view(String(post('pulls', { head: o.source, base: ctx.binding.vcs.trunk, title: o.title, body: o.body, draft: !!o.draft }).number));
+      const pr = { head: o.source, base: ctx.binding.vcs.trunk, title: o.title, body: o.body };
+      let n: string;
+      try { n = String(post('pulls', { ...pr, draft: !!o.draft }).number); }
+      catch (e) {
+        if (!o.draft || !/draft pull requests are not supported/i.test((e as Error).message)) throw e;
+        n = String(post('pulls', pr).number);
+        label(n);
+      }
+      return view(n);
     },
     view,
     async viewBySha(sha) {
@@ -63,12 +74,30 @@ export function github(ctx: AdapterContext): Forge {
       const rows = JSON.parse(gh(['api', '-X', 'GET', 'search/issues', '-F', `q=${q}`, '-F', 'per_page=30'])).items ?? [];
       return (await Promise.all(rows.map((r: any) => view(String(r.number))))).filter((c) => c.closes.includes(id));
     },
-    async ready(n) { if (cloud) ccr('POST', n, 'ready_for_review'); else gh(['pr', 'ready', n]); return view(n); },
-    async draft(n) { if (cloud) ccr('POST', n, 'convert_to_draft'); else gh(['pr', 'ready', n, '--undo']); return view(n); },
+    async ready(n) {
+      if (labelled(JSON.parse(gh(['api', `${api}/pulls/${n}`])))) gh(['api', '-X', 'DELETE', `${api}/issues/${n}/labels/draft`]);
+      else if (cloud) ccr('POST', n, 'ready_for_review');
+      else gh(['pr', 'ready', n]);
+      return view(n);
+    },
+    async draft(n) {
+      try { if (cloud) ccr('POST', n, 'convert_to_draft'); else gh(['pr', 'ready', n, '--undo']); }
+      catch { label(n); }
+      return view(n);
+    },
     async sync(n) { gh(['api', '-X', 'PUT', `${api}/pulls/${n}/update-branch`]); return view(n); },
     async automerge(n) {
-      if (cloud) ccr('PUT', n, 'auto_merge', '-f', 'merge_method=squash');
-      else gh(['pr', 'merge', n, '--auto', '--squash']);
+      try {
+        if (cloud) ccr('PUT', n, 'auto_merge', '-f', 'merge_method=squash');
+        else gh(['pr', 'merge', n, '--auto', '--squash']);
+      } catch (e) {
+        // A trunk with no ruleset or branch protection gives auto-merge nothing to wait on, so GitHub refuses it:
+        // merge now, but only a ready CR whose every required check is green on its head.
+        const cr = await view(n);
+        const green = (r: string) => cr.checks.some((c) => c.name === r && c.state === 'success');
+        if (cr.draft || !(ctx.binding.forge.required_checks ?? []).every(green)) throw e;
+        gh(['api', '-X', 'PUT', `${api}/pulls/${n}/merge`, '-f', 'merge_method=squash', '-f', `sha=${cr.headSha}`]);
+      }
       return view(n);
     },
     async cut(revision, version) {

@@ -85,6 +85,7 @@ Feature: Routing and the unattended cycle
     And "ledger summary" shows neither "learning.due" nor a run to judge
     When the cycle runs
     Then it writes one heartbeat with only "at", "factory", an empty "runs" and "errors"
+    And when learning.enabled is true it also carries "learning" forward from the last heartbeat
     And it dispatches nothing
     And it does not fire the review runtime
 

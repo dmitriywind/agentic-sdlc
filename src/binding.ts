@@ -145,7 +145,8 @@ export function bindingWarnings(b: Binding): string[] {
     for (const [k, e] of Object.entries<any>(x.executors ?? {}))
       if (['managed', 'webhook', 'assign'].includes(e?.kind)) w.push(`executors.${k}: kind ${e.kind} needs an API or hosted agent; individual profile expects harness or a subscription CLI command`);
     const uri = x.traces?.uri;
-    if (uri !== undefined && !['./', '.agents/', '/'].some((q) => String(uri).startsWith(q)) && !/^[A-Za-z]:[\\/]/.test(String(uri))) w.push(`traces.uri '${uri}' is not a local path (./, .agents/ or absolute); individual profile has no org storage`);  } else if (x?.profile === 'enterprise') {
+    if (uri !== undefined && !['./', '.agents/', '/'].some((q) => String(uri).startsWith(q)) && !/^[A-Za-z]:[\\/]/.test(String(uri))) w.push(`traces.uri '${uri}' is not a local path (./, .agents/ or absolute); individual profile has no org storage`);
+  } else if (x?.profile === 'enterprise') {
     const rt = x.forge?.options?.review_token_env;
     if (rt && rt === x.forge?.options?.token_env) w.push('forge.options.review_token_env equals token_env: the reviewer and implementer share one identity');
     const sb = x.executors?.default?.sandbox;

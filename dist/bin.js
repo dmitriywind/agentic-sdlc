@@ -8529,6 +8529,8 @@ function github(ctx) {
   const post2 = (path, data, env) => JSON.parse(gh(["api", "-X", "POST", `${api}/${path}`, "--input", "-"], JSON.stringify(data), env));
   const cloud = ctx.env.CLAUDE_CODE_REMOTE === "true";
   const ccr = (method, n, route, ...f) => gh(["api", "-X", method, `${api}/pulls/${n}/ccr/${route}`, ...f]);
+  const labelled = (p) => (p.labels ?? []).some((l) => l.name === "draft");
+  const label = (n) => post2(`issues/${n}/labels`, { labels: ["draft"] });
   const view = async (n) => {
     const p = JSON.parse(gh(["api", `${api}/pulls/${n}`]));
     const runs = JSON.parse(gh(["api", `${api}/commits/${p.head.sha}/check-runs?per_page=100`])).check_runs ?? [];
@@ -8547,7 +8549,7 @@ function github(ctx) {
       target: p.base.ref,
       headSha: p.head.sha,
       baseSha: p.base.sha,
-      draft: !!p.draft,
+      draft: !!p.draft || labelled(p),
       state: p.merged_at ? "merged" : p.state === "open" ? "open" : "closed",
       behind: p.mergeable_state === "behind",
       mergeSha: p.merged_at ? p.merge_commit_sha : void 0,
@@ -8563,7 +8565,16 @@ function github(ctx) {
   };
   return {
     async open(o) {
-      return view(String(post2("pulls", { head: o.source, base: ctx.binding.vcs.trunk, title: o.title, body: o.body, draft: !!o.draft }).number));
+      const pr = { head: o.source, base: ctx.binding.vcs.trunk, title: o.title, body: o.body };
+      let n;
+      try {
+        n = String(post2("pulls", { ...pr, draft: !!o.draft }).number);
+      } catch (e) {
+        if (!o.draft || !/draft pull requests are not supported/i.test(e.message)) throw e;
+        n = String(post2("pulls", pr).number);
+        label(n);
+      }
+      return view(n);
     },
     view,
     async viewBySha(sha2) {
@@ -8585,13 +8596,18 @@ function github(ctx) {
       return (await Promise.all(rows.map((r) => view(String(r.number))))).filter((c) => c.closes.includes(id));
     },
     async ready(n) {
-      if (cloud) ccr("POST", n, "ready_for_review");
+      if (labelled(JSON.parse(gh(["api", `${api}/pulls/${n}`])))) gh(["api", "-X", "DELETE", `${api}/issues/${n}/labels/draft`]);
+      else if (cloud) ccr("POST", n, "ready_for_review");
       else gh(["pr", "ready", n]);
       return view(n);
     },
     async draft(n) {
-      if (cloud) ccr("POST", n, "convert_to_draft");
-      else gh(["pr", "ready", n, "--undo"]);
+      try {
+        if (cloud) ccr("POST", n, "convert_to_draft");
+        else gh(["pr", "ready", n, "--undo"]);
+      } catch {
+        label(n);
+      }
       return view(n);
     },
     async sync(n) {
@@ -8599,8 +8615,15 @@ function github(ctx) {
       return view(n);
     },
     async automerge(n) {
-      if (cloud) ccr("PUT", n, "auto_merge", "-f", "merge_method=squash");
-      else gh(["pr", "merge", n, "--auto", "--squash"]);
+      try {
+        if (cloud) ccr("PUT", n, "auto_merge", "-f", "merge_method=squash");
+        else gh(["pr", "merge", n, "--auto", "--squash"]);
+      } catch (e) {
+        const cr = await view(n);
+        const green = (r) => cr.checks.some((c) => c.name === r && c.state === "success");
+        if (cr.draft || !(ctx.binding.forge.required_checks ?? []).every(green)) throw e;
+        gh(["api", "-X", "PUT", `${api}/pulls/${n}/merge`, "-f", "merge_method=squash", "-f", `sha=${cr.headSha}`]);
+      }
       return view(n);
     },
     async cut(revision, version2) {
@@ -9207,7 +9230,7 @@ function trunkProtection(b, ctx) {
   try {
     rules = JSON.parse(ctx.exec("gh", ["api", `repos/${repo}/rules/branches/${b.vcs.trunk}`]));
   } catch (e) {
-    if (/HTTP 403|Upgrade to GitHub Pro/.test(e.message)) return [open];
+    if (/Upgrade to GitHub Pro/.test(e.message)) return [open];
     return ["trunk protection: check manually (cannot read the trunk rules)", reminder];
   }
   if (!rules.length) {
@@ -10883,7 +10906,7 @@ agentic-sdlc: run skill ${skill} (${ex.kind})${key ? `; close with <!-- ${DONE_M
 agentic-sdlc: ${skill} did not start`);
         }
         if (ex.kind === "harness") {
-          return await done("harness", null, { instruction: `load skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ""}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
+          return await done("harness", null, { instruction: `load .agents/skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ""}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
         }
         if (ex.kind === "command") {
           const dir = mkdtempSync3(join8(tmpdir3(), "agentic-sdlc-"));

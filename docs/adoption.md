@@ -13,7 +13,7 @@ flowchart TD
   ENT --> H
   H --> HC["--harness claude | codex | cursor |<br/>generic"]
   HC --> B["Where do tickets live?"]
-  B --> BC["--board github | jira | linear | local"]
+  B --> BC["--board github | github-issues | jira | linear | local"]
   BC --> F["Where do CRs live?"]
   F --> FG["--forge github<br/>(the one supported forge)"]
   FG --> S["Which scheduler?"]
