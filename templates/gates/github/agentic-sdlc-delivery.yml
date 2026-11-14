@@ -9,6 +9,9 @@ on:
   push:
     # set: your vcs.trunk
     branches: [main]
+  workflow_dispatch: # replays gate merged for one trunk commit whose push run failed
+    inputs:
+      sha: { description: 'trunk commit sha', required: true }
 
 # No concurrency group: GitHub keeps one pending run per group and cancels older ones, which would drop
 # events. The gates read a ticket again before each write and never lower Shipped, so runs may overlap.
@@ -17,6 +20,7 @@ permissions:
   contents: write   # gate shipped tags the released revision
   issues: write
   pull-requests: read   # gate merged finds the CR of a trunk commit
+  checks: read          # and reads that CR's check runs
   statuses: write
 
 env:
@@ -98,5 +102,7 @@ jobs:
         run: agentic-sdlc gate signal-on-red --run "$RUN_ID"
 
       - name: Merged
-        if: github.event_name == 'push' && github.ref_name == env.TRUNK
-        run: agentic-sdlc gate merged --sha "$GITHUB_SHA"
+        if: (github.event_name == 'push' && github.ref_name == env.TRUNK) || github.event_name == 'workflow_dispatch'
+        env:
+          MERGED_SHA: ${{ inputs.sha || github.sha }}
+        run: agentic-sdlc gate merged --sha "$MERGED_SHA"
