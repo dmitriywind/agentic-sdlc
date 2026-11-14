@@ -55,7 +55,14 @@ Feature: Groom the backlog
     And it sets the Priority field from "priorities"
     And it sets the milestone, per "paths.roadmap_doc"
     And nice-to-have work goes to "board.later_milestone"
-    And every unheld Backlog item has both Priority and milestone
+    And every unheld Backlog item has a Priority, and a milestone where the board has milestones
+
+  # Source: skills/backlog-grooming/SKILL.md, "Steps" 3 "Prioritise"
+  Scenario: A new project with no docs still gets priorities
+    Given no roadmap, narrative or importance doc ranks an item
+    When the skill prioritises
+    Then it judges the item by its own stated impact and sets a priority below the first
+    And it does not escalate for the missing docs
 
   # Source: skills/backlog-grooming/SKILL.md, "Rules"
   Scenario: The skill never sets P0
@@ -97,5 +104,5 @@ Feature: Groom the backlog
       | an item is tech debt with no stated cost                 | it stays a comment                                                |
       | a change ships behind a flag or toggle                   | it gets a child removal ticket naming the flag and a due milestone |
       | an item is a decided duplicate or superseded             | it is Cancelled with a reason comment and closed as not planned   |
-      | a priority cannot be derived from the docs               | the skill escalates                                               |
+      | an item claims the first priority                        | the skill escalates                                               |
       | two items conflict                                       | the skill escalates                                               |

@@ -18,7 +18,7 @@ merges directly once every `forge.required_checks` entry is green; no gate block
 Secrets: none for the model. The repo needs the Claude GitHub App or `/web-setup`; the session's `GH_TOKEN` is a placeholder the proxy replaces.
 Models: set the binding's `models` to Claude ids, for example Sonnet for `fast` and `balanced`, Opus for `deep`.
 Proxy: Linear and Jira calls go out through the session's network proxy only when Node reads the proxy env:
-add `NODE_USE_ENV_PROXY=1` to both environments (Node 24 or newer).
+add `NODE_USE_ENV_PROXY=1` to both environments (the cloud's Node 22 honours it and prints an `UNDICI-EHPA` experimental warning).
 Two routines, two cloud environments:
 - cycle environment: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_SDLC_UNATTENDED=1, AGENTIC_REVIEW_FIRE_CMD, NODE_USE_ENV_PROXY=1. Never AGENTIC_REVIEW_TOKEN.
 - review environment: the same plus AGENTIC_REVIEW_TOKEN and AGENTIC_SDLC_ROLE=review (the names your binding uses).

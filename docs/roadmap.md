@@ -27,11 +27,17 @@ runtime, not a fallback. Facts from a probe in a cloud session (2026-11-14) and 
   the environment's allowed domains.
 - Repo plugins do not load. No Docker daemon. A foreground command stops at 10 minutes; a
   background one at 2 hours. Scheduled runs use the same subscription limits as interactive work.
+- A first routine run on a sandbox repo (2026-11-14, `github-issues` board, Sonnet) ran setup,
+  `board`, `forge`, `dispatch`, a harness subagent and the heartbeat with no failed command.
+  Node 22 honours `NODE_USE_ENV_PROXY=1`. The `.mcp.json` server does not connect when the
+  environment has no setup script, because `node_modules` is not installed at session start.
 
 | Item | Why | Done when |
 |---|---|---|
+| A board verb to set a milestone on an existing ticket | `backlog-grooming` sets milestones, but only `board create --milestone` can. | `board milestone <id> <name>` works on every adapter. |
+| A review identity for the cloud | A cloud session acts as one GitHub account through the proxy; `forge status` needs a second identity's token. | The review routine posts `review` as a second account from a cloud session. |
 | Jira and Linear from the cloud | Both hosts are refused at the default network level. | The routine template adds the host to the environment's allowed domains and the token as a network secret; one cloud run lists the board. |
-| Pilot on a real product repo | 179 tests, no run against a real product. | Three scheduled cloud runs in a row write a heartbeat with no `errors`, and one ticket goes from Ready to Done with no hand fix. |
+| Pilot on a real product repo | One sandbox run so far; no CR has gone from Ready to merged. | Three scheduled cloud runs in a row write a heartbeat with no `errors`, and one ticket goes from Ready to Done with no hand fix. |
 
 ## Next
 

@@ -48,7 +48,7 @@ appears in exactly one heartbeat.
 | Key | Value |
 |---|---|
 | `id` | Unique run id: `<heartbeat at>-<skill>-<ticket>`, or the executor's `ref` when it is unique. |
-| `skill`, `skillHash` | The skill name and `agentic-sdlc ledger hash .agents/skills/<skill>` at the run's start. |
+| `skill`, `skillHash` | The skill name, and the `hash` string that `agentic-sdlc ledger hash .agents/skills/<skill>` prints at the run's start (not the whole JSON object). |
 | `ticket`, `cr` | The ticket id and CR number the run worked on; empty when it had none. |
 | `tier`, `model` | The skill's tier and the model the binding mapped it to; for a non-harness executor, what the executor reported, or empty. |
 | `executor`, `ref` | The executor kind and the `ref` that `dispatch` printed (session id, bot run, assignment). |

@@ -24,8 +24,10 @@ Follow the [common contract](../sdlc/references/contract.md). What matters most 
    when every grouping is settled, before any shape.
 3. **Prioritise.** Order by user impact, risk reduction and dependency, blockers first. Set the
    Priority field from `priorities` and the milestone, per `paths.roadmap_doc`. Nice-to-have work
-   goes to `board.later_milestone` (see [Board](../sdlc/references/board.md#board)). Done when every unheld
-   Backlog item has both.
+   goes to `board.later_milestone` (see [Board](../sdlc/references/board.md#board)). When no doc ranks the
+   item (a new project), judge it by the ticket's own stated impact and set a priority below the first;
+   when the board has no milestones, set none. Done when every unheld Backlog item has a Priority,
+   and a milestone where the board has milestones.
 4. **New work from a plan or an Idea.** Turn a plan or conversation into tickets: one each
    (`board create … --status Backlog`), shaped by the project's ticket template, label `bug` or
    `feature`. For an item a human moved out of Ideas, rewrite the body (keep the owner's words
@@ -44,4 +46,5 @@ Follow the [common contract](../sdlc/references/contract.md). What matters most 
 - A change shipped behind a flag or toggle gets a child removal ticket naming the flag and a due
   milestone.
 - A decided duplicate or superseded item is Cancelled with a reason comment.
-- Escalate when a priority cannot be derived from the docs or two items conflict.
+- Escalate when two items conflict, or an item claims the first priority. Missing docs alone are no
+  reason to escalate.
