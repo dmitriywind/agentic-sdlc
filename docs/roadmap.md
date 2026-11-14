@@ -13,19 +13,28 @@ flowchart LR
 ## Now
 
 The factory serves any project. A Claude cloud scheduled task on a subscription is a first-class
-runtime, not a fallback. Facts from the Claude Code docs (cloud environments, scheduled tasks):
-the GitHub proxy rejects every GraphQL call, whatever the token, so `gh pr`, `gh issue` and
-Projects v2 fail; repo plugins do not load; a foreground command stops at 10 minutes; scheduled
-runs use the same subscription limits as interactive work; claude.ai connectors and network
-secrets are available.
+runtime, not a fallback. Facts from a probe in a cloud session (2026-11-14) and the Claude Code docs:
+
+- The GitHub proxy rejects every GraphQL call, whatever the token: `gh pr`, `gh issue` and
+  Projects v2 fail.
+- REST works only under `repos/{owner}/{repo}/…` for the repos attached to the session.
+  `orgs/*` and `users/*` are refused, so Projects v2 is unreachable by REST too.
+- The proxy serves the GraphQL-only PR actions as REST: `POST pulls/{n}/ccr/ready_for_review`,
+  `POST pulls/{n}/ccr/convert_to_draft`, `PUT|DELETE pulls/{n}/ccr/auto_merge`,
+  `GET pulls/{n}/ccr/review_threads`.
+- The claude.ai GitHub connector works, with the same repo scope, and has no Projects tool.
+- At the default network level, `api.linear.app` and `*.atlassian.net` are refused; they need
+  the environment's allowed domains.
+- Repo plugins do not load. No Docker daemon. A foreground command stops at 10 minutes; a
+  background one at 2 hours. Scheduled runs use the same subscription limits as interactive work.
 
 | Item | Why | Done when |
 |---|---|---|
-| GitHub adapters on REST only | `src/forge/github.ts` and `src/board/github.ts` call `gh pr` and `gh issue` (GraphQL) about 15 times. | No adapter call uses GraphQL, except Projects v2 field writes. |
-| Draft and auto-merge without GraphQL | "Ready for review", "draft" and auto-merge exist only in GraphQL. | Draft is a label; the review run merges with `PUT /pulls/{n}/merge` after green checks; contract §3.2 says so. |
-| A board a cloud run can reach on GitHub | Projects v2 is GraphQL only. | A `github-issues` board (labels for Status, Size, Priority, Lane, Shipped), or the GitHub MCP connector through `board.mcp`, whichever the cloud probe proves. Jira and Linear stay: their hosts are outside the GitHub proxy; their tokens go in network secrets. |
+| GitHub forge adapter on REST only | `src/forge/github.ts` calls `gh pr` (GraphQL) 10 times. | Every forge verb uses `gh api repos/…`; in a cloud session (`CLAUDE_CODE_REMOTE=true`) `ready`, `draft` and `automerge` use the `ccr` routes. |
+| A GitHub board a cloud run can reach | Projects v2 is unreachable from a cloud session by GraphQL, REST and the connector. | A `github-issues` board: Status, Size, Priority, Lane and Shipped as labels, all through `repos/…`. The `github` (Projects v2) board stays for CI runtimes. |
+| Jira and Linear from the cloud | Both hosts are refused at the default network level. | The routine template adds the host to the environment's allowed domains and the token as a network secret; one cloud run lists the board. |
 | Skills in a cloud session | Plugins from `.claude/settings.json` do not load; `templates/runner/claude-routine.md` says to enable one. | `init --harness claude` can write the skills to `.claude/skills/`; the routine template names that path. |
-| Long verify out of the agent run | A cloud foreground command stops at 10 minutes. | The routine runs `commands.fast_check`; `Required` runs `commands.verify` in CI; the template says so. |
+| Verify out of the agent run | A cloud session has no Docker and stops a foreground command at 10 minutes. | The routine runs `commands.fast_check`; `Required` runs `commands.verify` in CI; the template says so. |
 | `doctor` names unenforced gates | On a private GitHub Free repo, rulesets and branch protection return 403, so no gate blocks a merge. | `doctor` warns when the trunk has no enforced ruleset. |
 | Cut cycle overhead | An idle cycle still writes a full heartbeat and starts a review session (about 12k tokens); every subagent re-loads the 3.7k-token navigator; the heartbeat holds 17 measures no code reads. | Idle exit; the review fires only for an unreviewed CR; heartbeat `at`, `factory`, `runs`, `errors`; a 1k contract file for step skills; Sonnet as the routine model, Opus for `shape`. |
 | Learning loop behind one switch | A subscription reports no cost per run, so the USD fields are always empty. | Learning is off unless enabled; the USD cost fields are gone; the bench stays for API-billed setups. |
