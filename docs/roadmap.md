@@ -37,7 +37,7 @@ runtime, not a fallback. Facts from a probe in a cloud session (2026-11-14) and 
 | A board verb to set a milestone on an existing ticket | `backlog-grooming` sets milestones, but only `board create --milestone` can. | `board milestone <id> <name>` works on every adapter. |
 | A review identity for the cloud | A cloud session acts as one GitHub account through the proxy; `forge status` needs a second identity's token. | The review routine posts `review` as a second account from a cloud session. |
 | Jira and Linear from the cloud | Both hosts are refused at the default network level. | The routine template adds the host to the environment's allowed domains and the token as a network secret; one cloud run lists the board. |
-| Pilot on a real product repo | One sandbox run so far; no CR has gone from Ready to merged. | Three scheduled cloud runs in a row write a heartbeat with no `errors`, and one ticket goes from Ready to Done with no hand fix. |
+| Pilot on a real product repo | On a sandbox, three cloud runs took a ticket from Backlog to a draft CR with green CI gates; review and merge wait on a second identity. | Three scheduled cloud runs in a row write a heartbeat with no `errors`, and one ticket goes from Ready to Done with no hand fix. |
 
 ## Next
 
