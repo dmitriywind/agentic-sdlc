@@ -75,7 +75,7 @@ sequenceDiagram
     O->>W: Dispatch its next step (groomed to shape, shaped to implement)
   end
   O->>B: 7. Report: write the cycle heartbeat with ledger rows
-  opt 8. Review hand-off: forge list shows a CR that needs a review
+  opt 8. Review hand-off (two identities only): forge list shows a CR that needs a review
     O->>R: Fire the review runtime once
     R->>B: review-pr per CR, a review heartbeat
   end

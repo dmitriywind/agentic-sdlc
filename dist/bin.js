@@ -7468,6 +7468,19 @@ function validateBinding(b) {
   if (x.traces && !String(x.traces.uri ?? "").includes("{run_id}")) p.push("traces.uri must contain {run_id}");
   if (x.executors && !x.executors.default) p.push("executors.default is missing");
   if (x.heartbeat && !String(x.heartbeat.ticket ?? "").trim()) p.push("heartbeat.ticket is empty: create the heartbeat ticket and put its id here");
+  const lists = [["board.done_statuses", x.board?.done_statuses], ["board.env_labels", x.board?.env_labels], ["board.signal_streams", x.board?.signal_streams], ["forge.required_checks", x.forge?.required_checks]];
+  for (const [k, v] of lists) if (v !== void 0 && !Array.isArray(v)) p.push(`${k} must be a list`);
+  for (const k of ["human", "bug", "feature"]) if (x.board?.labels !== void 0 && typeof x.board.labels?.[k] !== "string") p.push(`board.labels.${k} must be a label name`);
+  if (x.vcs?.version_scheme !== void 0 && !["calver", "semver"].includes(x.vcs.version_scheme)) p.push(`vcs.version_scheme '${x.vcs.version_scheme}' is not one of calver|semver`);
+  if (x.learning?.judge_tier !== void 0 && !TIERS.includes(x.learning.judge_tier)) p.push(`learning.judge_tier '${x.learning.judge_tier}' is not one of ${TIERS.join("|")}`);
+  for (const c of x.learning?.auto_merge_classes ?? []) if (c !== "tuning") p.push(`learning.auto_merge_classes '${c}': only tuning may merge without the factory owner`);
+  for (const [n, m] of Object.entries(x.mcps ?? {})) if (!m?.url === !m?.command) p.push(`mcps.${n} needs exactly one of url or command`);
+  for (const [k, e] of Object.entries(x.executors ?? {})) {
+    if (e?.kind !== "managed") continue;
+    const api = e.api ?? "generic";
+    const need3 = api === "claude" ? ["agent_env", "environment_env"] : api === "cursor" ? ["repo_url"] : api === "generic" ? ["endpoint_env"] : [];
+    for (const key of need3) if (!e[key]) p.push(`executors.${k}.${key} is required for a managed executor with api ${api}`);
+  }
   return p;
 }
 function bindingWarnings(b) {
@@ -9676,7 +9689,7 @@ async function review(d, n) {
   if (b.forge.review_identity) return { cr: n, skipped: "two identities: review-pr posts the review status" };
   const cr = await d.forge.view(n);
   const [report2] = selectComments((await d.forge.comments(n)).reverse(), { owners: ownersFor(b.owners, "forge"), trusted: true, marker: `<!-- review-pr ${cr.headSha}` });
-  const verdict = /^Verdict:\s*PASS\b/m.test(report2?.body ?? "") ? "PASS" : /REMEDIATION REQUIRED/.test(report2?.body ?? "") ? "REMEDIATION REQUIRED" : void 0;
+  const verdict = /^Verdict:\s*(PASS|REMEDIATION REQUIRED)\s*$/m.exec(report2?.body ?? "")?.[1];
   const state = verdict === "PASS" ? "success" : verdict ? "failure" : "pending";
   const description = verdict ? `review-pr: ${verdict}` : "waits for a trusted review-pr report on this head";
   await d.forge.status(cr.headSha, { context: b.forge.review_check_name ?? "review", state, description, ...report2?.url ? { url: report2.url } : {} }, { as: "ci" });
@@ -11084,7 +11097,7 @@ async function callTool(name, args, ctx, allow) {
   const s = served(allow).includes(name) ? TOOLS[name] : void 0;
   const fail = (text) => ({ content: [{ type: "text", text }], isError: true });
   if (!s) return fail(`unknown tool '${name}'`);
-  if (name === "dispatch" && args.ticket === void 0 && args.cr === void 0) return fail("dispatch: ticket or cr required");
+  if (name === "dispatch" && args.ticket === void 0 && args.cr === void 0 && args.skill !== "improve-factory") return fail("dispatch: ticket or cr required");
   const missing = [...s.pos, ...s.req, ...s.body ? ["body"] : []].filter((k) => args[k] === void 0);
   if (missing.length) return fail(`${name}: ${missing.join(", ")} required`);
   if (name === "forge_view" && args.n === void 0 && args.sha === void 0) return fail("forge_view: n or sha required");
@@ -11167,6 +11180,8 @@ var init_mcp = __esm({
       forge_approve: S("forge", "approve", ["n"], {}, "Approve a change request."),
       forge_approvals: S("forge", "approvals", ["n"], {}, "Reviews of a change request: user, state, sha."),
       forge_comment: S("forge", "comment", ["n"], {}, "Comment on a change request.", [], true),
+      forge_comments: S("forge", "comments", ["n"], { last: "integer", marker: "string", author: "strings", trusted: "boolean" }, "Read change request comments, newest first; trusted keeps the binding bots and owners."),
+      forge_cut: S("forge", "cut", ["revision", "version"], {}, "Ask the release workflow to cut a release line."),
       forge_status: S("forge", "status", ["n"], { context: "string", state: "string", description: "string", url: "string" }, "Post a commit status (n is the sha; state: pending|success|failure).", ["context", "state", "description"]),
       forge_runs: S("forge", "runs", [], { ref: "string", failed: "boolean" }, "List CI runs."),
       vcs_start: S("vcs", "start", ["name"], {}, "Start a working tree."),
@@ -11177,10 +11192,13 @@ var init_mcp = __esm({
       vcs_cut: S("vcs", "cut", ["rev", "release"], {}, "Cut a release ref."),
       vcs_tags: S("vcs", "tags", [], { prefix: "string" }, "List tags."),
       vcs_drop: S("vcs", "drop", ["name"], {}, "Remove a tree made by vcs_start."),
-      dispatch: S("dispatch", "", ["skill"], { ticket: "string", cr: "string", workdir: "string", run_model: "string", unattended: "boolean" }, "Start a skill on a ticket or, for a factory CR, on cr."),
+      dispatch: S("dispatch", "", ["skill"], { ticket: "string", cr: "string", run: "string", workdir: "string", run_model: "string", unattended: "boolean" }, "Start a skill on a ticket or, for a factory CR, on cr (neither for improve-factory)."),
       ledger_runs: S("ledger", "runs", [], { since: "integer", skill: "string" }, "Runs read from heartbeats."),
       ledger_summary: S("ledger", "summary", [], { since: "integer" }, "Aggregated run measures and the learning trigger."),
-      ledger_plan: S("ledger", "plan", [], { run: "string" }, "Scorers, evidence and the hard-fact cap for one run.", ["run"])
+      ledger_plan: S("ledger", "plan", [], { run: "string" }, "Scorers, evidence and the hard-fact cap for one run.", ["run"]),
+      ledger_record: S("ledger", "record", [], { run: "string", file: "string" }, "Record a judge run's scores file for one run.", ["run", "file"]),
+      ledger_hash: S("ledger", "hash", ["skill_dir"], {}, "Hash of a skill folder, for the heartbeat skillHash."),
+      ledger_stale: S("ledger", "stale", [], { max_hours: "integer" }, "Fails when the newest heartbeat is older than max_hours.", ["max_hours"])
     };
     GUARDED = { approve: "forge_approve", status: "forge_status" };
     served = (allow) => Object.keys(TOOLS).filter((n) => !Object.values(GUARDED).includes(n) || allow.has(n));

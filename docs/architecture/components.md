@@ -66,6 +66,7 @@ flowchart TB
       b2["jira"]
       b3["linear"]
       b4["local"]
+      b5["github-issues"]
     end
     subgraph FA["forge adapters"]
       f1["github"]

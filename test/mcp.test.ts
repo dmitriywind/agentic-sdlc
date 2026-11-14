@@ -16,7 +16,7 @@ test('tools/list has board_move with a schema; unknown method is -32601', async 
   assert.deepEqual(t.inputSchema.required, ['id', 'status']);
   assert.equal(t.inputSchema.properties.only_from.type, 'string');
   const names = r.result.tools.map((x: any) => x.name);
-  assert.equal(names.length, 34);
+  assert.equal(names.length, 39);
   for (const n of ['forge_approve', 'forge_status', 'vcs_tag']) assert.ok(!names.includes(n), n);
   assert.equal(((await handle(rpc('nope'), ctx)) as any).error.code, -32601);
 });

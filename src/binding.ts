@@ -135,6 +135,20 @@ export function validateBinding(b: Binding): string[] {
   if (x.traces && !String(x.traces.uri ?? '').includes('{run_id}')) p.push('traces.uri must contain {run_id}');
   if (x.executors && !x.executors.default) p.push('executors.default is missing');
   if (x.heartbeat && !String(x.heartbeat.ticket ?? '').trim()) p.push('heartbeat.ticket is empty: create the heartbeat ticket and put its id here');
+  // Keys the gates and skills read without a guard.
+  const lists: [string, unknown][] = [['board.done_statuses', x.board?.done_statuses], ['board.env_labels', x.board?.env_labels], ['board.signal_streams', x.board?.signal_streams], ['forge.required_checks', x.forge?.required_checks]];
+  for (const [k, v] of lists) if (v !== undefined && !Array.isArray(v)) p.push(`${k} must be a list`);
+  for (const k of ['human', 'bug', 'feature']) if (x.board?.labels !== undefined && typeof x.board.labels?.[k] !== 'string') p.push(`board.labels.${k} must be a label name`);
+  if (x.vcs?.version_scheme !== undefined && !['calver', 'semver'].includes(x.vcs.version_scheme)) p.push(`vcs.version_scheme '${x.vcs.version_scheme}' is not one of calver|semver`);
+  if (x.learning?.judge_tier !== undefined && !TIERS.includes(x.learning.judge_tier)) p.push(`learning.judge_tier '${x.learning.judge_tier}' is not one of ${TIERS.join('|')}`);
+  for (const c of x.learning?.auto_merge_classes ?? []) if (c !== 'tuning') p.push(`learning.auto_merge_classes '${c}': only tuning may merge without the factory owner`);
+  for (const [n, m] of Object.entries<any>(x.mcps ?? {})) if (!m?.url === !m?.command) p.push(`mcps.${n} needs exactly one of url or command`);
+  for (const [k, e] of Object.entries<any>(x.executors ?? {})) {
+    if (e?.kind !== 'managed') continue;
+    const api = e.api ?? 'generic';
+    const need = api === 'claude' ? ['agent_env', 'environment_env'] : api === 'cursor' ? ['repo_url'] : api === 'generic' ? ['endpoint_env'] : [];
+    for (const key of need) if (!e[key]) p.push(`executors.${k}.${key} is required for a managed executor with api ${api}`);
+  }
   return p;
 }
 

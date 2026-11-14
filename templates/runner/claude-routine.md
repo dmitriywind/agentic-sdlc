@@ -38,4 +38,3 @@ Two identities (`forge.review_identity` set): two routines, two cloud environmen
    Limit: 30 fires per hour per task.
 6. A routine pushes only `claude/*` branches by default: set `vcs.change_pattern: claude/feature/<ticket>-<name>` and
    `vcs.factory_change_pattern: claude/sdlc/<name>` in the binding, or allow unrestricted branch pushes on the routine.
-7. Cloud sessions run against GitHub, the one forge agentic-sdlc supports.

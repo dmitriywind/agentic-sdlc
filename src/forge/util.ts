@@ -3,8 +3,6 @@ import type { AdapterContext, CR } from '../ports.ts';
 
 export class UsageError extends Error {}
 
-export const MARKER = '<!-- agentic-sdlc:automerge -->';
-
 export function parseArgs(argv: string[], bool: string[] = []) {
   const pos: string[] = [];
   const flags: Record<string, string[]> = {};
@@ -53,16 +51,3 @@ export function secret(ctx: AdapterContext, key: string): string {
   return v;
 }
 
-export const basic = (user: string, pass: string) => `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
-
-/** Diff of a CR from local git objects, for forges without a unified-diff endpoint. */
-export const localDiff = (ctx: AdapterContext, cr: CR): string =>
-  ctx.exec('git', ['diff', '--no-color', `${cr.baseSha}...${cr.headSha}`], { cwd: ctx.root });
-
-/** Every required check (all checks when none are named) is success. */
-export function allGreen(cr: CR, required: string[]): boolean {
-  const names = required.length ? required : cr.checks.map((c) => c.name);
-  return names.every((n) => cr.checks.find((c) => c.name === n)?.state === 'success');
-}
-
-export const title1 = (s: string) => (s ?? '').split('\n')[0];

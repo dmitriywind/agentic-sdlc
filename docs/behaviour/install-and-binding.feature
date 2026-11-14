@@ -50,7 +50,7 @@ Feature: Install and validate the binding
     And an unknown profile makes the command exit with code 1
 
   # Source: src/install.ts, "init" (profile, ruleset)
-  # Proof: test/install.test.ts "init --profile individual and individual-api: one identity, and the ruleset asks for no approving review"
+  # Proof: test/install.test.ts "init --profile individual and individual-api: one identity; the ruleset asks for no approving review and pins every check to Actions"
   Scenario: The individual profiles start with one identity
     When the adopter runs "agentic-sdlc init --profile individual" or "--profile individual-api"
     Then the binding has no review_identity and no review_token_env
@@ -117,7 +117,7 @@ Feature: Install and validate the binding
     Then a warning says review-pr always runs in its own runtime
 
   # Source: src/install.ts, "doctor" and "trunkProtection"
-  # Proof: test/install.test.ts "doctor: unpinned required checks warn; non-GitHub gets a reminder"
+  # Proof: test/install.test.ts "doctor: unpinned required checks warn; no repo gets a reminder"
   Scenario: Doctor warns about required checks that are not pinned
     Given the trunk rules hold a required check with no integration_id
     When the adopter runs "agentic-sdlc doctor"

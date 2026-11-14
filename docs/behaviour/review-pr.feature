@@ -50,7 +50,7 @@ Feature: Review a change request
     When the reviewer runs "forge automerge <n>" and GitHub refuses auto-merge
     Then the adapter merges the CR at its head only when it is ready and every forge.required_checks entry is green there
 
-  # Source: references/architecture.md, "Two runtimes, two identities"; src/forge/index.ts, "status"
+  # Source: references/architecture.md, "One identity or two"; src/forge/index.ts, "status"
   # Proof: test/forge.test.ts "cli: status refuses the contexts only a gate posts"
   Scenario: The reviewer cannot post a gate's status
     Given the review runtime holds the review token

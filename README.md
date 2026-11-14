@@ -27,7 +27,7 @@ runner of its own.
 | [Docs index](docs/README.md) | Every guide. |
 | [Components](docs/architecture/components.md) and [flows](docs/architecture/flows.md) | Diagrams of the parts, trust boundaries, the cycle, review, release and learning. |
 | [Claude](docs/ecosystems/claude-code.md), [Codex](docs/ecosystems/codex.md), [Cursor](docs/ecosystems/cursor.md), [any other](docs/ecosystems/generic.md) | Install and run in each ecosystem. |
-| [Individual](docs/profiles/individual.md) and [organization](docs/profiles/organization.md) | Pick a profile. |
+| [Individual and individual-api](docs/profiles/individual.md) and [organization](docs/profiles/organization.md) | Pick a profile. |
 | [Forge](docs/forges.md) | GitHub checks, approval, tokens and one-time setup. |
 | [The contract](references/architecture.md) | Normative: ports, gates, binding, executors, runtimes. |
 
@@ -56,7 +56,7 @@ Eleven skills, each with a model tier in `metadata.tier`:
 | `backlog-grooming` | balanced | Priority, dedupe, initiatives, decluttering. |
 | `shape` | deep | Backlog to Ready: size, split, criteria with proof, lane, spec. |
 | `implement-spec` | balanced | Proof first on one change line, then a draft CR. |
-| `review-pr` | balanced | Independent review from CI results, then approval, ready and auto-merge, or send back. |
+| `review-pr` | balanced | Independent review from CI results, then ready and auto-merge (an approving review only with two identities), or send back. |
 | `verify-ux` | balanced | Drive a preview of the CR head for `computer-use` criteria. |
 | `release` | balanced | Choose what ships, set the version, cut the release branch. |
 | `escalate-to-human` | fast | Decide whether a person must act; hold the ticket with one structured ask. |
@@ -148,7 +148,7 @@ starts nothing. Open the folder in your agent and ask it to run the `sdlc` skill
 
 ## This repository
 
-This repo does not run its own factory yet: it has no `.agents/`, board or CI gates, and changes
+This repo does not run its own factory yet: it has no `.agents/`, no board and no factory gates (`.github/workflows/ci.yml` only builds and tests), and changes
 are made by hand. The reason is order: the gates and the review runtime have to be proved on
 sandbox repos first, and a broken factory gating its own repo could not be fixed through itself.
 Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Security: [SECURITY.md](SECURITY.md).

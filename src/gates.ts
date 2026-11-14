@@ -245,7 +245,7 @@ export async function review(d: Deps, n: string) {
   if (b.forge.review_identity) return { cr: n, skipped: 'two identities: review-pr posts the review status' };
   const cr = await d.forge.view(n);
   const [report] = selectComments((await d.forge.comments(n)).reverse(), { owners: ownersFor(b.owners, 'forge'), trusted: true, marker: `<!-- review-pr ${cr.headSha}` });
-  const verdict = /^Verdict:\s*PASS\b/m.test(report?.body ?? '') ? 'PASS' : /REMEDIATION REQUIRED/.test(report?.body ?? '') ? 'REMEDIATION REQUIRED' : undefined;
+  const verdict = /^Verdict:\s*(PASS|REMEDIATION REQUIRED)\s*$/m.exec(report?.body ?? '')?.[1]; // the report's one verdict line
   const state = verdict === 'PASS' ? 'success' : verdict ? 'failure' : 'pending';
   const description = verdict ? `review-pr: ${verdict}` : 'waits for a trusted review-pr report on this head';
   await d.forge.status(cr.headSha, { context: b.forge.review_check_name ?? 'review', state, description, ...(report?.url ? { url: report.url } : {}) }, { as: 'ci' });

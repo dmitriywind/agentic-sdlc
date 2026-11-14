@@ -80,7 +80,7 @@ test('validateBinding requires each executor kind its keys; review_runtime only 
   };
   const p = validateBinding(b).join('\n');
   for (const s of ['executors.a.run is required', 'executors.c.url_env is required', 'executors.d.token_env is required', "executors.d.api 'openai'", 'executors.e.user is required']) assert.ok(p.includes(s), s);
-  b.executors = { default: { kind: 'harness' }, a: { kind: 'command', run: 'x' }, c: { kind: 'webhook', url_env: 'U' }, d: { kind: 'managed', api: 'cursor', token_env: 'T' }, e: { kind: 'assign', user: 'u' } };
+  b.executors = { default: { kind: 'harness' }, a: { kind: 'command', run: 'x' }, c: { kind: 'webhook', url_env: 'U' }, d: { kind: 'managed', api: 'cursor', token_env: 'T', repo_url: 'https://github.com/o/r' }, e: { kind: 'assign', user: 'u' } };
   b.forge.review_runtime = 'same';
   assert.deepEqual(validateBinding(b), []);
   assert.match(bindingWarnings(b)[0], /^forge\.review_runtime is unused/);
@@ -111,7 +111,7 @@ test('profile is required and must be known', () => {
 
 test('bindingWarnings flags profile mismatches without failing validation', () => {
   const ind = structuredClone(good) as any;
-  ind.executors.triage = { kind: 'managed', token_env: 'T' }; ind.traces = { uri: 's3://b/{run_id}.jsonl' }; ind.learning = { enabled: true };
+  ind.executors.triage = { kind: 'managed', token_env: 'T', endpoint_env: 'E' }; ind.traces = { uri: 's3://b/{run_id}.jsonl' }; ind.learning = { enabled: true };
   const w = bindingWarnings(ind).join('\n');
   for (const s of ['executors.triage', 'traces.uri', 'agent_command']) assert.match(w, new RegExp(s));
   assert.deepEqual(validateBinding(ind), []);
@@ -122,7 +122,7 @@ test('bindingWarnings flags profile mismatches without failing validation', () =
   org.profile = 'organization';
   const e = bindingWarnings(org).join('\n');
   for (const s of ['sandbox', 'traces is unset', 'kind managed']) assert.match(e, new RegExp(s));
-  org.executors.default.sandbox = 'container'; org.traces = { uri: 'x/{run_id}' }; org.executors.impl = { kind: 'managed', token_env: 'K' };
+  org.executors.default.sandbox = 'container'; org.traces = { uri: 'x/{run_id}' }; org.executors.impl = { kind: 'managed', token_env: 'K', endpoint_env: 'E' };
   assert.deepEqual(bindingWarnings(org), []);
 });
 
@@ -235,4 +235,15 @@ test('validateBinding: an empty heartbeat.ticket is a problem', () => {
   const b = structuredClone(good) as any;
   b.heartbeat = { ticket: '' };
   assert.match(validateBinding(b as Binding).join(String.fromCharCode(10)), /heartbeat.ticket is empty/);
+});
+
+test('validate checks the keys the gates read unguarded, the judge tier, auto-merge classes, mcps and managed api fields', () => {
+  const b = structuredClone(good) as any;
+  Object.assign(b.board, { done_statuses: 'Done', labels: { human: 'h', bug: 'b' } });
+  b.vcs.version_scheme = 'date'; b.learning = { judge_tier: 'huge', auto_merge_classes: ['guardrail'] };
+  b.mcps = { both: { url: 'u', command: 'c' } };
+  b.executors.claude = { kind: 'managed', api: 'claude', token_env: 'K' };
+  const p = validateBinding(b).join('\n');
+  for (const s of ['board.done_statuses must be a list', 'board.labels.feature', "vcs.version_scheme 'date'", "learning.judge_tier 'huge'", "auto_merge_classes 'guardrail'", 'mcps.both needs exactly one', 'executors.claude.agent_env', 'executors.claude.environment_env'])
+    assert.ok(p.includes(s), s);
 });

@@ -18,8 +18,8 @@ the ticket, step 2 grades the CR's stated target, cause and proof, and findings 
 
 ## Steps
 
-Steps 1 to 8 review a draft CR. Steps 9 and 10 handle a ready CR. A check missing past
-`stall_minutes` follows step 4 on a draft CR and step 10 on a ready CR.
+Steps 1 to 8 review a draft CR. Steps 9 to 11 handle a ready CR. A check missing past
+`stall_minutes` follows step 4 on a draft CR and step 10 (red or missing) on a ready CR.
 
 0. **Once per head.** When the newest `<!-- review-pr <head sha> -->` report is for the current head and
    no trusted comment came after it, stop: post nothing. Done when you stopped or continue.
@@ -67,7 +67,7 @@ Steps 1 to 8 review a draft CR. Steps 9 and 10 handle a ready CR. A check missin
    `<!-- review-pr <head sha> -->`: the criterion table, findings
    smallest fix first, each tagged with a pass (bugs, security or compliance) and a severity
    (Important or Nit), with at most 5 Nits, the hunt, the CI results read and the head, and
-   the verdict PASS or REMEDIATION REQUIRED. Important is any criterion graded NOT DONE or
+   one line `Verdict: PASS` or `Verdict: REMEDIATION REQUIRED` (CI's `review` gate reads exactly this line). Important is any criterion graded NOT DONE or
    PARTIAL; DEVIATED unless the spec comment was updated to match (then it grades as DONE, no finding and no Nit); any bug, security,
    privacy or compliance finding; and any risk the spec's "Risks and rollback" does not list. Nit
    is everything else, and every hunt line (step 5) is a Nit unless it is also a bug. Nits are

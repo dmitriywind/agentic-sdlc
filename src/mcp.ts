@@ -44,6 +44,8 @@ const TOOLS: Record<string, Spec> = {
   forge_approve: S('forge', 'approve', ['n'], {}, 'Approve a change request.'),
   forge_approvals: S('forge', 'approvals', ['n'], {}, 'Reviews of a change request: user, state, sha.'),
   forge_comment: S('forge', 'comment', ['n'], {}, 'Comment on a change request.', [], true),
+  forge_comments: S('forge', 'comments', ['n'], { last: 'integer', marker: 'string', author: 'strings', trusted: 'boolean' }, 'Read change request comments, newest first; trusted keeps the binding bots and owners.'),
+  forge_cut: S('forge', 'cut', ['revision', 'version'], {}, 'Ask the release workflow to cut a release line.'),
   forge_status: S('forge', 'status', ['n'], { context: 'string', state: 'string', description: 'string', url: 'string' }, 'Post a commit status (n is the sha; state: pending|success|failure).', ['context', 'state', 'description']),
   forge_runs: S('forge', 'runs', [], { ref: 'string', failed: 'boolean' }, 'List CI runs.'),
   vcs_start: S('vcs', 'start', ['name'], {}, 'Start a working tree.'),
@@ -54,10 +56,13 @@ const TOOLS: Record<string, Spec> = {
   vcs_cut: S('vcs', 'cut', ['rev', 'release'], {}, 'Cut a release ref.'),
   vcs_tags: S('vcs', 'tags', [], { prefix: 'string' }, 'List tags.'),
   vcs_drop: S('vcs', 'drop', ['name'], {}, 'Remove a tree made by vcs_start.'),
-  dispatch: S('dispatch', '', ['skill'], { ticket: 'string', cr: 'string', workdir: 'string', run_model: 'string', unattended: 'boolean' }, 'Start a skill on a ticket or, for a factory CR, on cr.'),
+  dispatch: S('dispatch', '', ['skill'], { ticket: 'string', cr: 'string', run: 'string', workdir: 'string', run_model: 'string', unattended: 'boolean' }, 'Start a skill on a ticket or, for a factory CR, on cr (neither for improve-factory).'),
   ledger_runs: S('ledger', 'runs', [], { since: 'integer', skill: 'string' }, 'Runs read from heartbeats.'),
   ledger_summary: S('ledger', 'summary', [], { since: 'integer' }, 'Aggregated run measures and the learning trigger.'),
   ledger_plan: S('ledger', 'plan', [], { run: 'string' }, 'Scorers, evidence and the hard-fact cap for one run.', ['run']),
+  ledger_record: S('ledger', 'record', [], { run: 'string', file: 'string' }, 'Record a judge run\'s scores file for one run.', ['run', 'file']),
+  ledger_hash: S('ledger', 'hash', ['skill_dir'], {}, 'Hash of a skill folder, for the heartbeat skillHash.'),
+  ledger_stale: S('ledger', 'stale', [], { max_hours: 'integer' }, 'Fails when the newest heartbeat is older than max_hours.', ['max_hours']),
 };
 
 /** Tools served only when `mcp --allow` names them: they speak as the review identity. */
@@ -106,7 +111,7 @@ async function callTool(name: string, args: Record<string, unknown>, ctx: Ctx, a
   const s = served(allow).includes(name) ? TOOLS[name] : undefined;
   const fail = (text: string) => ({ content: [{ type: 'text', text }], isError: true });
   if (!s) return fail(`unknown tool '${name}'`);
-  if (name === 'dispatch' && args.ticket === undefined && args.cr === undefined) return fail('dispatch: ticket or cr required');
+  if (name === 'dispatch' && args.ticket === undefined && args.cr === undefined && args.skill !== 'improve-factory') return fail('dispatch: ticket or cr required');
   const missing = [...s.pos, ...s.req, ...(s.body ? ['body'] : [])].filter((k) => args[k] === undefined);
   if (missing.length) return fail(`${name}: ${missing.join(', ')} required`);
   if (name === 'forge_view' && args.n === undefined && args.sha === undefined) return fail('forge_view: n or sha required');

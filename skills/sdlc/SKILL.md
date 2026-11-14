@@ -101,7 +101,7 @@ In order:
    - Backlog: grooming for items with no Priority; shape while Ready plus the shapes under way hold
      fewer than `cycle.min_ready` tickets;
    - one identity (`forge.review_identity` empty): every CR that needs a review, to `review-pr`. Its
-     subagent starts with a fresh context and runs no CR code, as in the review runtime.
+     subagent starts with a fresh context and runs no CR code.
 
    When a run finishes, read its ticket again (`board get <id>`). When the ticket now matches another
    row the cycle dispatches (groomed to shape, shaped to Ready, implemented to In review with one
@@ -115,10 +115,6 @@ In order:
 8. **Review hand-off.** Only with a `forge.review_identity`: `forge list` again, since this cycle may
    have opened CRs. Fire the review runtime once, as the runner prompt says, only when a CR needs a
    review. Done when it was fired, or no CR needs a review, or the binding has one identity.
-
-With a `forge.review_identity`, the review runtime runs `review-pr`; the cycle never holds the review
-token and never reviews. With one identity there is no review token: the cycle dispatches `review-pr`
-(step 6), and the separation is the fresh subagent context, not a second account.
 
 Rules for every step:
 

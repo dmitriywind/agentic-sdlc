@@ -23,7 +23,7 @@ codex exec --sandbox workspace-write "Load the sdlc skill and run one cycle."
 ```
 Progress goes to stderr and the final message to stdout. `--json` gives JSONL events, `-o` writes the last message to a file.
 The default sandbox is read-only, so set `workspace-write`. [docs](https://learn.chatgpt.com/docs/non-interactive-mode)
-Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run as a separate scheduled run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md); only that run gets `AGENTIC_REVIEW_TOKEN`.
+Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). With two identities, reviews run as a separate run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md) and only that run gets `AGENTIC_REVIEW_TOKEN`; with one identity the cycle reviews.
 
 ## Run without your machine - Individual
 | Option | How | Limits |
@@ -60,7 +60,7 @@ executors:
   implement-spec: { kind: command, run: "codex exec --sandbox workspace-write --skip-git-repo-check \"$(cat {prompt_file})\"", secrets: [AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, CODEX_API_KEY], sandbox: container }
 ```
 `secrets` are the only env vars the child receives; never list `AGENTIC_REVIEW_TOKEN` for an implementer.
-Codex's own review is advisory. The `review` status and approval still come only from `review-pr`.
+Codex's own review is advisory. The `review` status still comes only from `review-pr`'s report (through CI's `gate review` with one identity).
 
 ## Limits and unknowns
 - Plan requirements and limits for cloud tasks and scheduled tasks: not documented at the time of writing.

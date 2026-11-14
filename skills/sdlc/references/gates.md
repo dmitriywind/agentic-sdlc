@@ -21,7 +21,8 @@ worked around.
 | `skill-regression` | check | A change under `paths.factory` keeps the skill pack valid: frontmatter, links, scorers. |
 | dead-man job | a Signal | `agentic-sdlc ledger stale --max-hours <h>` fails when the newest heartbeat is older. |
 
-The `review` status comes from `review-pr` as `forge.review_identity`. No merge until every
+The `review` status is posted by `review-pr` as `forge.review_identity`; with one identity, by the
+`review` gate from the newest trusted report. No merge until every
 `forge.required_checks` entry is green (`ticket-linkage`, `Required`, `proofs-on-base`, `review`,
 `human-approval`, `skill-regression`): that is the forge's branch protection, not a gate;
 `agentic-sdlc doctor` reports it and warns when a required check is not pinned to its CI app.
@@ -45,7 +46,7 @@ The classes are defined in [`improve-factory`](../../improve-factory/SKILL.md) R
 | CI | CI | Every push | `Required` and `proofs-on-base` on the head | Read by review-pr as evidence |
 | Review | review-pr; verify-ux for `computer-use` criteria | Draft CR at In review | Report comment with a row per criterion; a `<!-- verify-ux -->` comment per `computer-use` criterion set | Findings below |
 | Findings | review-pr | An Important finding | Ticket at In progress with the findings | implement-spec fixes and pushes |
-| Pass | review-pr | Every criterion proven, `Required` and `proofs-on-base` green on the head | `review` status and approval as the review identity; human approval requested when the class needs it; CR ready; auto-merge on | CR stays draft, review-pr reports |
+| Pass | review-pr | Every criterion proven, `Required` and `proofs-on-base` green on the head | `review` status (by `review-pr` as the review identity, or by CI's `review` gate with one identity) and approval (two identities only); human approval requested when the class needs it; CR ready; auto-merge on | CR stays draft, review-pr reports |
 | Human approval | A human owner | `human-approval` pending | Approving review on the head | None; the CR waits for the owner |
 | Merge | Forge | All required checks green | Merge on the trunk; board Done, Not shipped | Behind the trunk: review-pr syncs the CR and reviews again |
 | A required check red | review-pr | Ready CR, a required check red | CR back to draft, cause read | Cause in the diff or scope: the ticket returns to In progress with the cause; else a new Signal |

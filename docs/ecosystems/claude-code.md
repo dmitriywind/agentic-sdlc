@@ -46,9 +46,9 @@ approval is denied and the run can exit 0 having done nothing: set the mode and 
 cycle needs. Permission rules use the space form `Bash(npx --no agentic-sdlc *)`
 ([permissions](https://code.claude.com/docs/en/permissions), [headless](https://code.claude.com/docs/en/headless)).
 Prompt text:
-[`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run after the
-cycle, as a separate job with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md):
-only that job gets `AGENTIC_REVIEW_TOKEN` and allows `forge approve`.
+[`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). With two identities,
+reviews run after the cycle as a separate job with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md):
+only that job gets `AGENTIC_REVIEW_TOKEN` and allows `forge approve`. With one identity the cycle runs `review-pr`.
 
 ## Run on your machine
 A scheduler on your machine runs the command above in a separate clone, with no sandbox. Opt in with
@@ -80,7 +80,7 @@ How `executors` kinds map:
 | Binding kind | Claude |
 |---|---|
 | `harness` | The Claude session that runs the cycle spawns a subagent. |
-| `managed` | A Managed Agents session. `agent_env` holds the agent id, `endpoint_env` the API URL, `token_env` the key. The session id goes in the ledger. |
+| `managed` | A Managed Agents session. `agent_env` holds the agent id, `environment_env` the environment id, `token_env` the key (`endpoint_env` optionally overrides the API URL). The session id goes in the ledger. |
 | `webhook` | Your service starts a session or fires a scheduled task (`POST .../v1/claude_code/routines/<trig_id>/fire`, per-task bearer token; claude.ai users only, not the Platform API: [docs](https://code.claude.com/docs/en/routines)). |
 | `assign` | Assigning an issue to Claude: not found. The closest is the scheduled-task Issue trigger, or an `@claude` comment through the GitHub Action ([docs](https://code.claude.com/docs/en/github-actions)). |
 | `command` | `claude -p ...` as `run`. |

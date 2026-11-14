@@ -104,7 +104,7 @@ history, no direct push except the bot) and release branches cut with `vcs cut` 
 | Merged, shipped, signals | `agentic-sdlc-delivery.yml`: a trunk push runs `gate merged`, deploy runs run `gate shipped`, red CI runs run `signal-on-red`. A failed deploy opens one Signal with its env label |
 | Release cut | `agentic-sdlc-release.yml` (release-line delivery only) |
 | Auto-merge, merge queue | native; the CR workflow also triggers on `merge_group` |
-| Trunk | `ruleset.trunk.json`: one approving review, stale reviews dismissed, the four CI checks pinned to the Actions app (`review` and `human-approval` are not pinned: pin them to the review app when it is an App), linear history; a second ruleset for release branches, `.github/rulesets/release.json` |
+| Trunk | `ruleset.trunk.json`: one approving review (none with one identity), stale reviews dismissed, the four CI checks pinned to the Actions app (with one identity `review` and `human-approval` too; with two, pin them to the review app when it is an App), linear history; a second ruleset for release branches, `.github/rulesets/release.json` |
 
 One-time setup (private repos need a plan with Environments: Pro, Team or Enterprise):
 

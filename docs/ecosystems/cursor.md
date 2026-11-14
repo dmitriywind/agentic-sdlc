@@ -21,7 +21,7 @@ The init log is the exact list; the `--harness` flag decides. Only `~/.cursor/sk
 agent -p --force "Load the sdlc skill and run one cycle." --output-format json
 ```
 Without `--force` the CLI only proposes changes. Log in with `agent login` or set `CURSOR_API_KEY`. [docs](https://cursor.com/docs/cli/headless)
-Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run as a separate scheduled run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md); only that run gets `AGENTIC_REVIEW_TOKEN`.
+Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). With two identities, reviews run as a separate run with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md) and only that run gets `AGENTIC_REVIEW_TOKEN`; with one identity the cycle reviews.
 
 ## Run without your machine - Individual
 | Option | How | Limits |
@@ -54,10 +54,9 @@ executors:
   implement-spec: { kind: managed, api: cursor, token_env: CURSOR_API_KEY, repo_url: "https://github.com/<owner>/<repo>", sandbox: cloud }
 ```
 Bugbot reviews each PR update and reads `.cursor/BUGBOT.md` ([docs](https://cursor.com/docs/bugbot)). Its comments are input to
-`review-pr`; the `review` status still comes only from `review-pr`.
+`review-pr`; the `review` status still comes only from `review-pr`'s report (through CI's `gate review` with one identity).
 
 ## Limits and unknowns
 - Cloud Agents API is beta; v1 has no webhooks.
 - Whether `CURSOR_API_KEY` CLI usage bills against the subscription: not documented at the time of writing.
 - Rules need `.cursor/rules/*.mdc`; plain `.md` rules are ignored. `CLAUDE.md` in Cursor: not mentioned in the docs.
-- Page 2 of the Cloud Agents API docs was not read; check it before relying on artifacts or archive endpoints.

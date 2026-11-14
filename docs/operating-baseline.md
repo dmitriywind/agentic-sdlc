@@ -1,7 +1,7 @@
 # Operating baseline
 
 These are recommendations. The factory enforces only what the binding and the gates enforce; each item
-below says so when it is not enforced. All of it uses existing binding keys.
+below says so when it is not enforced.
 
 ## Team shapes
 
@@ -15,7 +15,7 @@ below says so when it is not enforced. All of it uses existing binding keys.
 
 ## Repo baseline
 
-- Protected trunk with a merge queue, approval of the last push and required thread resolution.
+- Protected trunk with a merge queue, approval of the last push (two identities only) and required thread resolution.
 - Trunk and release rulesets as code (`.github/rulesets/*.json` on GitHub).
 - Secret scanning with push protection.
 - CODEOWNERS covering `paths.factory` and every `lane_areas` path.
@@ -32,7 +32,7 @@ below says so when it is not enforced. All of it uses existing binding keys.
 - An SLA on Signals: each is triaged within a stated time.
 - A monthly review of Ideas by the Product owner; the factory never touches Ideas.
 
-## Operate in Q4 2026 and 2027 (not enforced yet)
+## Operate in Q4 2026 and 2027 (recommendations; `product.evidence` is enforced)
 
 - SLOs per user journey, with an error-budget policy that pauses feature work when the budget is spent
   ([sre.google/workbook](https://sre.google/workbook/table-of-contents/)).

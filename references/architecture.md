@@ -347,7 +347,13 @@ prompt in `templates/runner/cycle-prompt.md`.
 
 **Local execution.** A scheduler on your own machine (`templates/runner/local.md`) runs the same cycle
 prompt with no sandbox. An unattended `dispatch` refuses a `local` or unset sandbox, unless the stage
-names `sandbox: local` and the runner sets `AGENTIC_SDLC_LOCAL=1`; an unset sandbox is always refused.
+names `sandbox: local` and the runner sets `AGENTIC_SDLC_LOCAL=1`; an unset sandbox on a `harness` or `command` stage (after it inherits `executors.default.sandbox`) is always refused.
+
+**Environment variables the mechanism reads.** `AGENTIC_SDLC_UNATTENDED=1` (dispatch refuses local
+stages), `AGENTIC_SDLC_LOCAL=1` (local execution opt-in), `AGENTIC_SDLC_ROLE=review` (the plugin hook
+allows `forge approve`, and its MCP launcher serves `forge_approve` and `forge_status`),
+`CLAUDE_CODE_REMOTE=true` (a Claude cloud session: REST and `ccr` routes, the proxy token),
+`AGENTIC_SDLC_PACKAGE` (the package root `init` copies from; tests set it).
 
 Gates always run in the forge's CI, so trunk guarantees never depend on the runtime. A gate blocks a
 merge only where the forge enforces it: `doctor` warns when the trunk has no enforced ruleset or branch
@@ -370,8 +376,8 @@ stops a foreground command at 10 minutes: the cycle runs `commands.fast_check`, 
 CI. The shortest schedule interval is 1 hour; runs draw subscription usage.
 
 **Packaging per harness.** For Claude Code the package is a plugin (`.claude-plugin/`: skills,
-hooks, the MCP server), so skills are named `/agentic-sdlc:<skill>`. `init --harness claude`
-copies no skills; it generates one subagent per tier and adds an `@AGENTS.md` import to
+hooks, the MCP server), so skills are named `/agentic-sdlc:<skill>`. `init` always
+copies the pack to `.agents/skills` (the gates and `validate` read it); `init --harness claude` generates one subagent per tier and adds an `@AGENTS.md` import to
 `CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. Codex and Cursor read `.agents/skills`, which `init` writes. Claude
 headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-turns`. The cycle
 allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm checks, and adds

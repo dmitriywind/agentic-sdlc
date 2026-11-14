@@ -89,7 +89,7 @@ executors:                      # who runs each skill; default is a harness suba
   # triage-signal: { kind: managed, api: claude, agent_env: TRIAGE_AGENT_ID, environment_env: TRIAGE_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }  # api: claude | cursor (repo_url) | antigravity | generic (endpoint_env)
   # Any executor may also declare its stage definition:
   # verify-ux: { kind: harness, mcps: [browser], secrets: [TEST_USER_PASSWORD], sandbox: container, model: { tier: balanced } }
-  #   mcps: names from `mcps` below | secrets: env var names only, nothing else is passed | sandbox: cloud | container | local (--unattended refuses local) | model: { tier } or { id }, not both
+  #   mcps: names from `mcps` below | secrets: env var names only, nothing else is passed | sandbox: cloud | container | local (--unattended refuses local unless AGENTIC_SDLC_LOCAL=1; unset inherits executors.default.sandbox) | model: { tier } or { id }, not both
 
 mcps:                           # tool servers executors may use; name -> { url | command, token_env? }; token_env names an env var, never a value
   browser: { command: "npx @playwright/mcp" }

@@ -17,8 +17,8 @@
 
 | Profile | Guide | Pays with |
 |---|---|---|
-| individual | [profiles/individual.md](profiles/individual.md) | Subscriptions only. No API keys. |
-| organization | [profiles/organization.md](profiles/organization.md) | API keys and managed agents, two identities. |
+| individual, individual-api | [profiles/individual.md](profiles/individual.md) | Subscriptions; individual-api adds API keys for some stages. One identity by default. |
+| organization | [profiles/organization.md](profiles/organization.md) | API keys and managed agents. Two identities required. |
 
 ## Pick an ecosystem (where the cycle runs)
 
@@ -34,4 +34,4 @@ network access runs one cycle. Gates always run in the forge's CI.
 
 Each vendor fact carries its source link. Re-check it before you depend on a limit.
 
-Runner templates live in [`templates/runner/`](../templates/runner/).
+Runner templates live in [`templates/runner/`](../templates/runner/); [local.md](../templates/runner/local.md) runs the cycle on your own machine.

@@ -1,8 +1,8 @@
 import { defineConfig } from 'tsup';
 
-// ponytail: no dts; the CLI is the product. Add dts when the library API is stable.
+// The CLI is the product: one entry, no library build.
 export default defineConfig({
-  entry: ['src/bin.ts', 'src/index.ts'],
+  entry: ['src/bin.ts'],
   format: ['esm'],
   target: 'node22',
   clean: true,

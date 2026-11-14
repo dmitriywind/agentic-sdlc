@@ -12,8 +12,9 @@ within five working days. Only the latest alpha receives fixes while v2 is in al
 The package hands real tokens to agents that read untrusted text. Its design rests on six rules;
 the contract (`references/architecture.md`, sections 3.4 and 10) is the full statement.
 
-- **A separate review identity.** `forge status` and `forge approve` use only
-  `forge.options.review_token_env`, the `forge.review_identity` account. Only the review job holds that token; the cycle
+- **A separate review identity (two identities; required for `organization`).** `forge status` and
+  `forge approve` use only `forge.options.review_token_env`, the `forge.review_identity` account. With
+  one identity the review is a separate agent context, not a separate account (contract section 10). Only the review job holds that token; the cycle
   and every implementer never do, so an implementer cannot approve its own CR. Give the factory's
   accounts no admin or bypass right on the trunk.
 - **Gate statuses only from gates.** `forge status` refuses the contexts `human-approval`,
@@ -36,8 +37,9 @@ the contract (`references/architecture.md`, sections 3.4 and 10) is the full sta
   factory's own accounts write heartbeats.
 
 Also: secrets live only as env var names in the binding; an executor receives only the secrets it
-lists; unattended runs refuse a `local` sandbox; the hosted MCP endpoint needs a bearer token and
-leaves out `forge_approve` and `forge_status` unless started with `--allow`.
+lists; unattended runs refuse a `local` sandbox unless the stage names it and the runner sets
+`AGENTIC_SDLC_LOCAL=1`; the MCP server is stdio only and leaves out `forge_approve` and
+`forge_status` unless started with `--allow`.
 
 ## Known limits
 

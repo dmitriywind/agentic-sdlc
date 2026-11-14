@@ -4,15 +4,8 @@
   "private": true,
   "description": "Software factory / agentic SDLC: any board, any forge, trunk-based Git; ships as a Claude Code plugin",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
   "bin": {
     "agentic-sdlc": "./dist/bin.js"
-  },
-  "exports": {
-    ".": {
-      "import": "./dist/index.js"
-    }
   },
   "files": [
     "dist",

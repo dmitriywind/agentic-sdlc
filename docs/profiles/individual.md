@@ -76,7 +76,7 @@ wrapping is not supported on consumer plans.
 - [ ] The trunk ruleset is imported; on a private repo this needs a paid GitHub plan, else nothing enforces it.
 - [ ] The `approval` gate holds `guardrail` factory CRs for the factory owner and Full-lane CRs per `forge.human_approval` (see [forges.md](../forges.md)).
 - [ ] Secrets only as env var names in the binding. No values in the repo, board or CR comments.
-- [ ] Sandbox: `cloud` or `container`. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses `local`.
+- [ ] Sandbox: `cloud` or `container`. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses `local` unless `AGENTIC_SDLC_LOCAL=1` (local execution).
 - [ ] A cloud routine acts as your account. Give its repo access the least scope the vendor allows.
 
 ## Versus organization

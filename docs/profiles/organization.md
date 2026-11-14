@@ -61,7 +61,7 @@ Mix vendors per stage: the executor entries are per skill, and the bench compare
 - [ ] The trunk ruleset requires one approving review and `human-approval`; `review` and `human-approval` are pinned to the review app.
 - [ ] Secrets only as env var names. Each stage lists `secrets:`; nothing else is passed.
 - [ ] Stage `mcps:` lists only the servers that stage needs.
-- [ ] Sandbox `cloud` or `container`; unattended cycles refuse `local`.
+- [ ] Sandbox `cloud` or `container`; unattended cycles refuse `local` (opt-in only: `AGENTIC_SDLC_LOCAL=1`).
 - [ ] The reviewer executor is never the implementer executor of the same CR.
 - [ ] CI loads the binding from the target branch and never runs CR code with secrets.
 - [ ] Check vendor data terms: some managed agents are not ZDR or HIPAA eligible (see each guide).
