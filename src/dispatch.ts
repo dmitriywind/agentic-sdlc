@@ -209,8 +209,10 @@ export const cli: PortCli = async (argv, ctx) => {
     catch { /* only a harness stage needs the skill file */ }
     const stage = resolveStage(b, ex, judge?.tier ?? skillTier, judge?.model);
     const local = stage.sandbox === 'local' || (!stage.sandbox && (ex.kind === 'command' || ex.kind === 'harness'));
-    if (local && (f.unattended || ctx.env.AGENTIC_SDLC_UNATTENDED === '1')) {
-      throw new Error(`executor for ${skill} uses sandbox ${stage.sandbox ?? 'local (unset)'}; unattended runs refuse it`);
+    // Local execution is opt-in twice: the stage names sandbox local, and the runner sets AGENTIC_SDLC_LOCAL=1.
+    const localOk = stage.sandbox === 'local' && ctx.env.AGENTIC_SDLC_LOCAL === '1';
+    if (local && !localOk && (f.unattended || ctx.env.AGENTIC_SDLC_UNATTENDED === '1')) {
+      throw new Error(`executor for ${skill} uses sandbox ${stage.sandbox ?? 'local (unset)'}; unattended runs refuse it (local execution: sandbox local and AGENTIC_SDLC_LOCAL=1)`);
     }
     const info = { ...(judge ?? {}), model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox };
     // Claim before start: a second fire sees the marker even while this executor is still starting.

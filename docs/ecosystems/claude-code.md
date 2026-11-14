@@ -50,6 +50,10 @@ Prompt text:
 cycle, as a separate job with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md):
 only that job gets `AGENTIC_REVIEW_TOKEN` and allows `forge approve`.
 
+## Run on your machine
+A scheduler on your machine runs the command above in a separate clone, with no sandbox. Opt in with
+`sandbox: local` and `AGENTIC_SDLC_LOCAL=1`: [`templates/runner/local.md`](../../templates/runner/local.md).
+
 ## Run without your machine - Individual
 Subscription only.
 

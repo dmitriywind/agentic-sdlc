@@ -20,7 +20,7 @@ Setup step everywhere: `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_
 | Claude cloud scheduled task (routine) | `claude-routine.md` (`github-issues`, `jira` or `linear` board) | individual, individual-api |
 | Claude Managed Agents scheduled deployment | `claude-managed-deployment.json` (below) | individual-api or organization |
 | Cursor automation | `cursor-automation.md` | any |
-| Other (cron on your own host) | any of the above, adapted | any |
+| Your own machine (cron, launchd, Task Scheduler, a Claude Desktop scheduled task) | `local.md` (no sandbox: opt in with `sandbox: local` and `AGENTIC_SDLC_LOCAL=1`) | any |
 
 Secrets: the agent's own credential plus `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN` (or the names the binding gives); with two identities, `AGENTIC_REVIEW_TOKEN` in the review run only.
 Every `learning.every_cycles` cycles the sdlc skill runs `improve-factory`; the schedule does nothing extra.

@@ -128,7 +128,8 @@ Rules for every step:
   subagents, then report. The next cycle judges the runs that have no score.
   Keep `cycle.time_budget_minutes` below the runner's job timeout, so the heartbeat is always written.
 - A failed step goes into the heartbeat's `errors`, and the cycle goes on with the next step.
-- A step that failed in each of the last `cycle.failure_limit` heartbeats is not retried: call
+- A step that failed in each of the last `cycle.failure_limit` heartbeats whose `factory` is this
+  cycle's trunk sha (`vcs head`) is not retried: a factory change gives the step a fresh start. Call
   `escalate-to-human` on the step's ticket. A step with no ticket (read state, judge, learn) asks
   `owners.factory` with one comment on the heartbeat ticket, as escalate-to-human step 4 does for a
   run with no ticket: no label, no hold. The heartbeat is always written.

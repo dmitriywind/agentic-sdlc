@@ -116,6 +116,15 @@ test('unattended (flag or env) refuses sandbox local', async () => {
   assert.equal((await run({ default: { kind: 'command', run: 'bot', sandbox: 'container' } }, ['x', '--ticket', '1', '--unattended'])).code, 0);
 });
 
+test('local execution: unattended accepts sandbox local only with AGENTIC_SDLC_LOCAL=1; an unset sandbox stays refused', async () => {
+  const u = ['x', '--ticket', '1', '--unattended'];
+  const env = { AGENTIC_SDLC_LOCAL: '1' };
+  assert.equal((await run({ default: { kind: 'harness', sandbox: 'local' } }, u, env)).code, 0);
+  assert.equal((await run({ default: { kind: 'command', run: 'bot', sandbox: 'local' } }, u, env)).code, 0);
+  assert.equal((await run({ default: { kind: 'harness' } }, u, env)).code, 1);
+  assert.equal((await run({ default: { kind: 'harness', sandbox: 'local' } }, u, { AGENTIC_SDLC_LOCAL: 'yes' })).code, 1);
+});
+
 test('unattended treats an unset sandbox as local for command and harness; skills inherit the default sandbox', async () => {
   const u = ['x', '--ticket', '1', '--unattended'];
   assert.equal((await run({ default: { kind: 'command', run: 'bot' } }, u)).code, 1);

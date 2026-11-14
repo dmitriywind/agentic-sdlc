@@ -194,12 +194,18 @@ Feature: Routing and the unattended cycle
     Given a step failed in a cycle
     Then the failure goes into the "errors" of the heartbeat
     And the cycle goes on with the next step
-    Given the step failed in each of the last "cycle.failure_limit" heartbeats
+    Given the step failed in each of the last "cycle.failure_limit" heartbeats whose factory is the current trunk sha
     When the next cycle reaches that step
     Then the cycle does not retry it
     And it calls "escalate-to-human" on the ticket of the step
     And when the step has no ticket, it posts one comment to "owners.factory" on the heartbeat ticket, with no label
     And the heartbeat is always written
+
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", rules (failure_limit)
+  Scenario: A factory change gives a failing step a fresh start
+    Given the step failed in the last "cycle.failure_limit" heartbeats under an older factory sha
+    When the cycle runs on a newer trunk sha
+    Then it retries the step instead of escalating it
 
   # Source: src/ledger.ts, "learningState"; skills/sdlc/SKILL.md, "Run one cycle", step 4
   # Proof: test/ledger.test.ts "learningState: cycles since the last improve-factory heartbeat, due at every_cycles, off unless enabled"
@@ -259,3 +265,11 @@ Feature: Routing and the unattended cycle
     Given review and learn heartbeats between cycle heartbeats
     When "ledger summary" counts cycles since improve-factory
     Then it counts only the cycle heartbeats
+
+  # Source: src/dispatch.ts (sandbox check); templates/runner/local.md
+  # Proof: test/dispatch.test.ts "local execution: unattended accepts sandbox local only with AGENTIC_SDLC_LOCAL=1; an unset sandbox stays refused"
+  Scenario: A cycle on your own machine runs local stages only when both opt-ins are set
+    Given an unattended run on the adopter's machine
+    When the cycle dispatches a stage
+    Then dispatch starts it when the stage names sandbox local and AGENTIC_SDLC_LOCAL is 1
+    And dispatch refuses it when the stage's sandbox is unset, or AGENTIC_SDLC_LOCAL is not 1

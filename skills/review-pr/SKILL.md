@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Validate a draft change request (CR) against its ticket and spec in a fresh context, read CI's `Required` and `proofs-on-base` results, post the review status and approval as the review identity, request a human approval when the class needs one, then mark it ready with auto-merge or send it back. Use on Status In review with a draft CR, including after red CI sends a CR back to draft, on an In review ready CR behind the trunk, on a ready CR whose required check is red or missing past `stall_minutes`, and on a draft factory CR.
+description: Validate a draft change request (CR) against its ticket and spec in a fresh context, read CI's `Required` and `proofs-on-base` results, post the report (with a review identity, also the review status and approval; with one identity CI posts the status from the report), request a human approval when the class needs one, then mark it ready with auto-merge or send it back. Use on Status In review with a draft CR, including after red CI sends a CR back to draft, on an In review ready CR behind the trunk, on a ready CR whose required check is red or missing past `stall_minutes`, and on a draft factory CR.
 metadata:
   tier: balanced
 ---
@@ -80,8 +80,8 @@ Steps 1 to 8 review a draft CR. Steps 9 and 10 handle a ready CR. A check missin
        <report link>`, then `forge approve <n>`. Both use `forge.options.review_token_env`, never the
        implementer's token; when it is unset they fail: call
        [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access) and post nothing else.
-     - One identity (`forge.review_identity` empty): post no status and no approval. The step 6
-       report is the verdict: CI's `review` gate posts the `review` status from it (a Claude cloud
+     - One identity (`forge.review_identity` empty): never run `forge status` or `forge approve`.
+       The step 6 report is the verdict: CI's `review` gate posts the `review` status from it (a Claude cloud
        session cannot write commit statuses), and GitHub refuses an approval from the CR's author.
    - Human approval. When the CR needs one (a Full-lane product CR and `forge.human_approval` is
      `full-lane` or `always`; any product CR when `always`; a `guardrail` factory CR), one CR

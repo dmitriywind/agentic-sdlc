@@ -32,6 +32,8 @@ factory>-<skill>[-<run>][-<CR head sha>]`: a second dispatch with the same key i
 `cycle.dedupe_minutes` prints `{ skipped: true }` while the first run has not finished. The window catches a double fire; a finished run never blocks. A run has finished when its own done line `<!-- agentic-sdlc:done <key> -->` appears after the
 dispatch marker (posted by a bot, or by the `assign` executor's user); other runs' comments never count. `dispatch` hands that line to every executor in its task.
 An unfinished run blocks a second dispatch until `stall_minutes`. With
-`AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses a stage whose sandbox is `local` or unset. The
+`AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses a stage whose sandbox is `local` or unset, except a
+stage that names `sandbox: local` when the runner sets `AGENTIC_SDLC_LOCAL=1` (local execution:
+`templates/runner/local.md`). The
 ledger row records `executor` and `ref`, so the bench and `improve-factory` compare executors as
 they compare models.

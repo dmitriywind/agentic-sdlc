@@ -16,6 +16,7 @@ on:
 permissions:
   contents: write   # gate shipped tags the released revision
   issues: write
+  pull-requests: read   # gate merged finds the CR of a trunk commit
   statuses: write
 
 env:

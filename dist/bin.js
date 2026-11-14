@@ -10971,8 +10971,9 @@ agentic-sdlc: cycle claimed`);
         }
         const stage = resolveStage(b, ex, judge?.tier ?? skillTier, judge?.model);
         const local = stage.sandbox === "local" || !stage.sandbox && (ex.kind === "command" || ex.kind === "harness");
-        if (local && (f.unattended || ctx.env.AGENTIC_SDLC_UNATTENDED === "1")) {
-          throw new Error(`executor for ${skill} uses sandbox ${stage.sandbox ?? "local (unset)"}; unattended runs refuse it`);
+        const localOk = stage.sandbox === "local" && ctx.env.AGENTIC_SDLC_LOCAL === "1";
+        if (local && !localOk && (f.unattended || ctx.env.AGENTIC_SDLC_UNATTENDED === "1")) {
+          throw new Error(`executor for ${skill} uses sandbox ${stage.sandbox ?? "local (unset)"}; unattended runs refuse it (local execution: sandbox local and AGENTIC_SDLC_LOCAL=1)`);
         }
         const info = { ...judge ?? {}, model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox };
         if (key || ex.kind === "assign") {

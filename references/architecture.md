@@ -345,6 +345,10 @@ prompt in `templates/runner/cycle-prompt.md`.
 | Agent with MCP but no shell | `agentic-sdlc mcp` (stdio). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. |
 | Agent with only vendor MCP tools | the vendor tools that `board.mcp` maps to the board verbs; forge steps need a shell or the MCP server; gates still run in CI |
 
+**Local execution.** A scheduler on your own machine (`templates/runner/local.md`) runs the same cycle
+prompt with no sandbox. An unattended `dispatch` refuses a `local` or unset sandbox, unless the stage
+names `sandbox: local` and the runner sets `AGENTIC_SDLC_LOCAL=1`; an unset sandbox is always refused.
+
 Gates always run in the forge's CI, so trunk guarantees never depend on the runtime. A gate blocks a
 merge only where the forge enforces it: `doctor` warns when the trunk has no enforced ruleset or branch
 protection (an empty rule list, or the 403 a private repo on GitHub Free gets).
