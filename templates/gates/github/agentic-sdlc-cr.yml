@@ -113,7 +113,11 @@ jobs:
       # The PR head as data only: its objects let `gate approval` read the head's files; it is never checked out or run.
       - name: Fetch PR head objects
         if: env.CR != ''
-        run: git fetch --no-tags origin "+refs/pull/$CR/head:refs/remotes/pr/head"
+        # persist-credentials is off, so a private repo needs the job token for this one fetch.
+        env:
+          FETCH_TOKEN: ${{ github.token }}
+        run: |
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 -w0)" fetch --no-tags origin "+refs/pull/$CR/head:refs/remotes/pr/head"
       - uses: actions/setup-node@v4
         if: env.CR != ''
         with:

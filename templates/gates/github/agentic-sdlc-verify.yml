@@ -47,6 +47,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      checks: read      # forge view reads the head's check runs
+      statuses: read
     env:
       GH_TOKEN: ${{ github.token }}
       # forge.options.token_env: the job token is read-only, so the status post fails by design; the job's exit code is the check.
