@@ -1,0 +1,61 @@
+# 3. Your part
+<!-- group: Understand -->
+
+The factory asks a person only when a rule says so. Each ask is one comment that you answer on the
+ticket or on the pull request. Try a hold below: a skill stops, asks, and resumes after your reply.
+
+<!-- viz: hold -->
+```mermaid
+sequenceDiagram
+  participant K as A skill
+  participant B as Board
+  participant Y as You
+  K->>B: One "Needs human" comment, label needs-human
+  Note over B: Every skill skips the ticket
+  Y->>B: Reply in a comment
+  Note over B: The next cycle removes the label and resumes
+```
+
+## Every ask you can get
+
+| You get | From | You do |
+|---|---|---|
+| A "Needs human" comment on a ticket | `escalate-to-human` | Reply in a comment. |
+| A request to approve a Full-lane change | `review-pr` | Approve the pull request, or merge it as admin with one identity. |
+| A request to confirm a `manual` criterion | `review-pr` | Reply that you checked it on this version. |
+| A release ready for approval | `release` | Approve the release workflow run. |
+| A factory change of class `guardrail` | `improve-factory` | Review and approve it as the factory owner. |
+| A question about an unclear idea | `backlog-grooming` | Answer it, or leave the ticket in Ideas. |
+
+## Who you are
+
+| Role | Setting | Acts through |
+|---|---|---|
+| Product owner | `owners.product` | Ideas, Priority and P0, answers to holds, Full-lane and release approvals. |
+| Factory owner | `owners.factory` | The settings, the skills and the checks; approves `guardrail` factory changes. |
+| The factory | `owners.bots` | The cycle and the review run. Only these accounts' heartbeats count. |
+| Anyone else | | A pull request like any other, through the same checks. A Signal or `SECURITY.md` to report. |
+
+## A week with it
+
+<div class="callout">
+
+**Product owner**
+- Put ideas in Ideas; move the ones you want to Backlog.
+- Answer holds: filter the board on the `needs-human` label.
+- Approve Full-lane pull requests and releases.
+- Set P0 only with evidence of production impact.
+
+</div>
+
+<div class="callout">
+
+**Factory owner**
+- Read the heartbeats; act when `errors` repeat.
+- Watch the dead-man check (`ledger stale`): it fails when no cycle ran in time.
+- Review `guardrail` factory changes from the learning loop.
+- Upgrade one repo at a time ([9. Run it](9-run-it.md)).
+
+</div>
+
+Next: [4. The cycle](4-the-cycle.md).

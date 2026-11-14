@@ -1,63 +1,49 @@
 # 1. What it is
+<!-- group: Understand -->
 
-agentic-sdlc runs software delivery with agents. You put work on a board. A scheduled agent run,
-the **cycle**, moves each ticket one step: it shapes the ticket, builds it, reviews it and merges it.
-CI **gates** decide what may merge, and no agent can skip them. You act only when the factory asks
-you, or when you want to steer it.
+agentic-sdlc runs software delivery with agents. You put work on a board. Every hour, a scheduled
+agent run (the **cycle**) moves each ticket one step: it shapes the ticket, builds it, reviews it
+and merges it. CI checks decide what may merge, and no agent can skip them. You act when a rule
+says a person must decide. Together, the skills, your settings, the CLI and the CI checks are the
+**factory**.
 
 ```mermaid
-flowchart TD
+flowchart LR
   you(["You"]):::you -->|"ideas, priorities,<br/>answers"| board[("Board")]:::board
-  board --> cycle["Cycle<br/>(scheduled agents)"]:::agent
-  cycle -->|"draft change request"| forge["GitHub<br/>pull request"]:::board
-  forge --> gates["CI gates"]:::ci
-  gates -->|"merge"| trunk[("Trunk")]:::board
-  gates -->|"ticket Done"| board
-  cycle -.->|"asks when it must"| you
-  classDef you fill:#fde68a,stroke:#b45309,color:#111
-  classDef agent fill:#c7d2fe,stroke:#4f46e5,color:#111
-  classDef ci fill:#bbf7d0,stroke:#15803d,color:#111
-  classDef board fill:#e2e8f0,stroke:#64748b,color:#111
+  board --> cycle["Cycle:<br/>agents"]:::agent
+  cycle -->|"pull request"| gates["CI checks"]:::ci
+  gates -->|"merge"| main[("main branch")]:::board
+  gates -.->|"ticket Done"| board
+  cycle -.->|"asks"| you
 ```
 
-## Three layers
+## What it guarantees
 
-| Layer | Where | Holds |
-|---|---|---|
-| Skills | the plugin (Claude) or `.agents/skills/` | The process: every rule. The same for every project. |
-| Binding | `.agents/binding.yml` | Your project's values: board, owners, commands, environments, models. |
-| CLI | `agentic-sdlc` (and its MCP server) | The mechanism: board, forge and Git verbs, the gates, dispatch, the run ledger. |
-
-A project changes only its binding. A skill never calls a vendor tool: it calls the CLI.
-
-## Eleven skills
-
-Seven run in every project. Four run only when the binding asks for them.
-
-| Stage | Skill | Does | Runs |
-|---|---|---|---|
-| Navigate | `sdlc` | Runs one cycle: routes each ticket to the next skill. | always |
-| Intake | `triage-signal` | Turns one raw signal into Backlog, Ideas or Cancelled. | always |
-| Intake | `backlog-grooming` | Sets Priority, merges duplicates, groups work. | always |
-| Plan | `shape` | Takes a Backlog ticket to Ready: size, criteria with proof, lane, spec. | always |
-| Build | `implement-spec` | Writes the proof first, then the code, then opens a draft change request. | always |
-| Check | `review-pr` | Reviews the change request against its ticket and CI, then merges or sends it back. | always |
-| Check | `verify-ux` | Uses the running change as a user for `computer-use` criteria. Apart from `review-pr` because it runs the change's code. | a criterion names `computer-use` |
-| Ship | `release` | Chooses what ships, sets the version, cuts the release line. | release-line delivery |
-| People | `escalate-to-human` | Decides whether a person must act; holds the ticket with one question. | always |
-| Learn | `judge-run` | Grades each finished run. | `learning.enabled` |
-| Learn | `improve-factory` | Proposes one factory change, with proof. | `learning.enabled` |
-
-## Words
-
-| Word | Means |
+| Guarantee | How |
 |---|---|
-| Ticket | One item on the board. Its **status** says where it stands. |
-| Change request (CR) | A pull request. A **change line** is its short-lived branch. |
-| Lane | Fast (small, low risk: merges on the agent review) or Full (also needs a human approval). |
-| Proof | How a criterion is shown done: a test, an eval, a visual check, a data check, `computer-use` or `manual`. |
-| Gate | A CI job that posts a required check. Agents cannot skip it. |
-| Hold | The `needs-human` label: every skill skips the ticket until a person answers. |
-| Heartbeat | One comment per cycle on the heartbeat ticket: what ran and what failed. |
+| No change merges without its checks | Six required CI checks decide every merge. The checks read their rules from the main branch, never from the change. |
+| The code that is reviewed is the code that is tested | CI runs the tests with no secrets; the review reads the result and never runs the change's code. |
+| You are asked, not bypassed | A rule makes a skill stop and ask you: a product ruling, security, money, something that cannot be undone. |
+| Every run leaves a record | Each cycle writes a heartbeat: what ran, on which model, what failed. |
 
-Next: [2. Choose your setup](2-choose.md).
+## Is it for you
+
+<div class="callout ok">
+
+**A good fit:** a product on GitHub with tests in CI, work you can write as tickets, and an agent
+subscription (Claude, Codex or Cursor) or API keys.
+
+</div>
+
+<div class="callout warn">
+
+**Not a fit yet:** a forge other than GitHub; a team that cannot let agents open pull requests; work
+with no automated checks. It is alpha: the interfaces still change between versions.
+
+</div>
+
+You need: a GitHub repo with CI, a board (GitHub issues, a GitHub Project, Jira or Linear), an agent
+(Claude Code, Codex, Cursor or another with a shell), and a place to run the cycle (an agent
+vendor's cloud, GitHub Actions or your own machine).
+
+Next: [2. A ticket's journey](2-a-ticket.md).

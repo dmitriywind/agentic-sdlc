@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>agentic-sdlc Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="How agentic-sdlc moves work from a signal to production with agents, and how you set it up: step through real scenarios, compare setups, and get your init command.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a docs app shell. A grouped chapter rail on the left, one reading column, an "On this page" list on wide screens.
+   Interactive parts are framed panels that may use the full column; running text stays near 70 characters. */
+:root {
+  --paper: #f3f5f8; --sheet: #ffffff; --well: #eaedf2; --rule: #dde1e8; --ink: #161a21; --muted: #586070;
+  --accent: #2f4bd8; --accent-ink: #ffffff; --accent-soft: #e4e8fb;
+  --you: #a5520a; --you-soft: #fdf0dc; --agent: #2f4bd8; --agent-soft: #e4e8fb; --ci: #15803d; --ci-soft: #ddf3e4;
+  --world: #5b6577; --world-soft: #e6e9ef;
+  --pass: #15803d; --pend: #b45309; --fail: #b91c1c; --fail-soft: #fde4e4; --idle: #8a92a0;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r: 10px; --text: 70ch;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0f1217; --sheet: #161a21; --well: #1f242d; --rule: #2c323d; --ink: #e7eaf0; --muted: #a3abb9;
+  --accent: #8ea2ff; --accent-ink: #0f1217; --accent-soft: #252e52;
+  --you: #f0b25a; --you-soft: #3a2c17; --agent: #8ea2ff; --agent-soft: #252e52; --ci: #5fd08a; --ci-soft: #183526;
+  --world: #b3bbc8; --world-soft: #2a303a;
+  --pass: #5fd08a; --pend: #f0b25a; --fail: #f17a7a; --fail-soft: #3a1d1f; --idle: #6f7786; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0f1217; --sheet: #161a21; --well: #1f242d; --rule: #2c323d; --ink: #e7eaf0; --muted: #a3abb9;
+  --accent: #8ea2ff; --accent-ink: #0f1217; --accent-soft: #252e52;
+  --you: #f0b25a; --you-soft: #3a2c17; --agent: #8ea2ff; --agent-soft: #252e52; --ci: #5fd08a; --ci-soft: #183526;
+  --world: #b3bbc8; --world-soft: #2a303a;
+  --pass: #5fd08a; --pend: #f0b25a; --fail: #f17a7a; --fail-soft: #3a1d1f; --idle: #6f7786; color-scheme: dark; }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 24px; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--font); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code, kbd, .mono { font-family: var(--mono); }
+code { background: var(--well); padding: 1px 5px; border-radius: 4px; font-size: .86em; }
+kbd { font-size: 12px; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--sheet); }
+.shell { display: grid; grid-template-columns: 236px minmax(0, 1fr) 200px; gap: 36px; max-width: 1380px; margin: 0 auto;
+  padding-block: 28px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.shell > * { min-width: 0; }
+/* Rail */
+.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; display: grid; gap: 16px; max-height: calc(100vh - 48px); overflow-y: auto; }
+.brand { display: flex; align-items: center; gap: 8px; padding: 0 10px; text-decoration: none; color: var(--ink); }
+.brand b { font-size: 18px; letter-spacing: -.01em; }
+.pill { font: 500 11px var(--mono); padding: 1px 7px; border-radius: 999px; background: var(--you-soft); color: var(--you); }
+.rail .grp { display: grid; gap: 2px; }
+.rail .grp > span { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding: 0 10px 4px; }
+.rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.rail a.ch { display: grid; grid-template-columns: 24px 1fr; align-items: baseline; padding: 5px 10px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 15px; }
+.rail a.ch small { font-family: var(--mono); color: var(--muted); font-size: 11px; }
+.rail a.ch:hover { background: var(--well); }
+.rail a.ch[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+.rail a.ch[aria-current="page"] small { color: var(--accent-ink); }
+.rail select { display: none; }
+/* On this page */
+.otp { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13px; display: grid; gap: 6px; }
+.otp b { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.otp a { color: var(--muted); text-decoration: none; line-height: 1.35; }
+.otp a:hover { color: var(--accent); }
+/* Reading column */
+.view { display: grid; gap: 24px; }
+.view > * { min-width: 0; }
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.15; letter-spacing: -.02em; margin: 4px 0 10px; text-wrap: balance; }
+h2 { font-size: 22px; letter-spacing: -.01em; margin: 40px 0 10px; text-wrap: balance; }
+h3 { font-size: 17px; margin: 24px 0 6px; }
+.lead { font-size: 18px; color: var(--muted); max-width: 62ch; margin: 0; }
+.prose { overflow-wrap: break-word; }
+.prose > :not(.panel):not(.diagram):not(.tablewrap):not(pre):not(.codeblock) { max-width: var(--text); }
+.prose > h1:first-child { margin-top: 0; }
+.prose code { overflow-wrap: anywhere; }
+.prose table { border-collapse: collapse; font-size: 15px; width: 100%; }
+.tablewrap { overflow-x: auto; max-width: 100%; margin: 14px 0;
+  background: linear-gradient(to right, var(--paper) 30%, transparent), linear-gradient(to left, var(--paper) 30%, transparent) right,
+    radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.14), transparent) right;
+  background-repeat: no-repeat; background-size: 40px 100%, 40px 100%, 12px 100%; background-attachment: local, local, scroll; }
+.prose th, .prose td { border-bottom: 1px solid var(--rule); padding: 8px 14px 8px 0; text-align: left; vertical-align: top; }
+.prose th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.prose td code, .prose th code { white-space: nowrap; }
+.codeblock { position: relative; margin: 14px 0; }
+.codeblock pre { margin: 0; background: var(--well); padding: 12px 14px; padding-right: 72px; border-radius: var(--r); overflow-x: auto; font: 14px/1.6 var(--mono); }
+.codeblock pre code { background: none; padding: 0; font-size: inherit; }
+.codeblock .copy { position: absolute; top: 8px; right: 8px; }
+.diagram { margin: 18px 0; padding: 18px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); overflow-x: auto; }
+.diagram pre.mermaid { background: none; padding: 0; margin: 0 auto; font-family: var(--font); white-space: normal; width: max-content; max-width: none; }
+.diagram svg { max-width: none !important; height: auto; }
+.callout { border-radius: var(--r); padding: 12px 14px; background: var(--well); border-left: 3px solid var(--idle); }
+.callout.rule { border-left-color: var(--accent); background: var(--accent-soft); }
+.callout.warn { border-left-color: var(--you); background: var(--you-soft); }
+.callout.ok { border-left-color: var(--ci); background: var(--ci-soft); }
+.term { border-bottom: 1px dotted var(--muted); cursor: help; position: relative; }
+.term:hover::after, .term:focus::after { content: attr(data-def); position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; width: max-content; max-width: min(320px, 80vw);
+  padding: 8px 10px; border-radius: 8px; background: var(--ink); color: var(--paper); font-size: 13px; line-height: 1.45; font-weight: 400; white-space: normal; }
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+.pager a { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--sheet); text-decoration: none; color: var(--ink); }
+.pager a:hover { border-color: var(--accent); }
+.pager small { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.pager .next { text-align: right; grid-column: 2; }
+.source { font-size: 13px; color: var(--muted); margin: 0; }
+/* Shared parts every component uses */
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 14px; padding: 18px; display: grid; gap: 16px; margin: 18px 0; min-width: 0; }
+.panel h3, .panel h4 { margin: 0; }
+.btn { font: 500 14px var(--font); border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); border-radius: 8px; padding: 7px 12px; cursor: pointer; min-height: 36px; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: .45; cursor: default; }
+.actor { display: inline-flex; align-items: center; gap: 6px; font: 500 13px var(--mono); padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.actor.you { background: var(--you-soft); color: var(--you); }
+.actor.agent { background: var(--agent-soft); color: var(--agent); }
+.actor.ci { background: var(--ci-soft); color: var(--ci); }
+.actor.world { background: var(--world-soft); color: var(--world); }
+.tag { font: 500 11px var(--mono); padding: 1px 6px; border-radius: 999px; background: var(--well); color: var(--muted); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tag.hold { background: var(--you-soft); color: var(--you); }
+.state { font: 500 11px var(--mono); padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; background: var(--well); color: var(--muted); }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--idle); flex: none; }
+.dot.pass { background: var(--pass); } .dot.pend { background: var(--pend); } .dot.fail { background: var(--fail); }
+.dot.na { background: transparent; border: 2px solid var(--idle); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg label { position: relative; display: inline-flex; }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: inline-block; font-size: 13px; padding: 6px 12px; border: 1px solid var(--rule); border-radius: 999px; background: var(--sheet); }
+.seg input:checked + span { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg input:disabled + span { opacity: .45; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--muted); align-items: center; }
+.muted { color: var(--muted); }
+/* Home */
+.hero { display: grid; gap: 10px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.tile { padding: 14px 16px; border-radius: var(--r); background: var(--sheet); border: 1px solid var(--rule); display: grid; gap: 4px; }
+.tile b { font-size: 15px; } .tile span { font-size: 14px; color: var(--muted); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.card { display: grid; gap: 6px; align-content: start; padding: 14px 16px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--sheet); text-decoration: none; color: var(--ink); }
+.card:hover { border-color: var(--accent); }
+.card small { font: 500 12px var(--mono); color: var(--accent); }
+.card b { font-size: 16px; }
+.card span { font-size: 14px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.section-h { margin: 8px 0 0; }
+@media (max-width: 1200px) { .shell { grid-template-columns: 236px minmax(0, 1fr); } .otp { display: none; } }
+@media (max-width: 960px) {
+  html { scroll-padding-top: 72px; }
+  .shell { grid-template-columns: 1fr; gap: 18px; padding-block: 8px 56px; }
+  .rail { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); padding-block: 8px; grid-template-columns: auto minmax(0, 1fr); align-items: center; max-height: none; overflow: visible; }
+  .rail .grp { display: none; }
+  .brand { padding: 0; }
+  .rail select { display: block; width: 100%; font: 15px var(--font); padding: 8px; border-radius: 8px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); }
+}
+@media (max-width: 600px) { .prose td code { white-space: normal; } .prose table { min-width: 520px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="rail" aria-label="Guide">
+    <a class="brand" href="#overview"><b>agentic-sdlc</b><span class="pill">alpha</span></a>
+    <div id="toc"></div>
+    <select id="pick" aria-label="Chapter"></select>
+  </nav>
+  <main id="main" class="view" tabindex="-1"></main>
+  <aside class="otp" id="otp" aria-label="On this page"></aside>
+</div>
+<script type="module">
+import { marked } from 'https://cdn.jsdelivr.net/npm/marked@18.1.1/lib/marked.esm.js';
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@12.2.0/dist/mermaid.esm.min.mjs';
+
+/* ---------- Component contract ----------
+   Each file in scripts/guide/components/ adds one or more entries to VIZ: VIZ.<name> = (el) => { ... }.
+   A chapter places it with the marker <!-- viz: <name> --> (the next ```mermaid block, if any, is the GitHub fallback and is dropped).
+   Shell helpers available to components: $ (querySelector), esc (HTML escape), reduced (prefers-reduced-motion),
+   addStyle(id, cssText) (adds a component's CSS once), copyText(text, button) (copy with a select fallback).
+   Components style only with the tokens and shared classes in the stylesheet above, scroll only inside themselves,
+   never call scrollIntoView on the page, and work from 360px wide in light and dark. */
+const VIZ = {};
+const GUIDE = /*GUIDE_DATA*/null;
+const { chapters, groups, glossary, blob } = GUIDE;
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const styled = new Set();
+function addStyle(id, text) { if (styled.has(id)) return; styled.add(id); const s = document.createElement('style'); s.textContent = text; document.head.append(s); }
+async function copyText(text, btn) {
+  try { await navigator.clipboard.writeText(text); if (btn) btn.textContent = 'Copied'; }
+  catch { if (btn) btn.textContent = 'Select and copy'; }
+  if (btn) setTimeout(() => (btn.textContent = 'Copy'), 1600);
+}
+
+/*COMPONENTS*/
+
+/* ---------- Markdown and diagrams ---------- */
+const slug = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+marked.use({ renderer: {
+  code({ text, lang }) {
+    if (lang === 'mermaid') return '<div class="diagram"><pre class="mermaid">' + esc(text) + '</pre></div>';
+    return '<div class="codeblock"><pre><code>' + esc(text) + '</code></pre><button class="btn copy" type="button">Copy</button></div>';
+  },
+  table(token) { return '<div class="tablewrap">' + this.constructor.prototype.table.call(this, token) + '</div>'; },
+} });
+// Diagram colours come from the tokens, so they follow the theme: the chapters name a class (:::you, :::agent, :::ci, :::board) and no colour.
+function initMermaid() {
+  const role = (k, fill, stroke) => '.' + k + '>rect,.' + k + '>polygon,.' + k + '>circle,.' + k + '>path,.' + k + ' .basic.label-container{fill:' + fill + '!important;stroke:' + stroke + '!important}';
+  mermaid.initialize({
+    startOnLoad: false, securityLevel: 'strict', theme: 'base',
+    themeVariables: { fontFamily: css('--font'), fontSize: '15px', primaryColor: css('--sheet'), primaryTextColor: css('--ink'),
+      primaryBorderColor: css('--rule'), lineColor: css('--muted'), textColor: css('--ink'), background: css('--sheet'), mainBkg: css('--sheet'),
+      actorBkg: css('--agent-soft'), actorBorder: css('--agent'), actorTextColor: css('--ink'), signalColor: css('--muted'), signalTextColor: css('--ink'),
+      noteBkgColor: css('--you-soft'), noteTextColor: css('--ink'), noteBorderColor: css('--you'), edgeLabelBackground: css('--sheet'),
+      labelBoxBkgColor: css('--well'), labelBoxBorderColor: css('--rule'), labelTextColor: css('--ink'), loopTextColor: css('--ink'),
+      sequenceNumberColor: css('--accent-ink'), clusterBkg: css('--well'), clusterBorder: css('--rule'), titleColor: css('--ink') },
+    themeCSS: role('you', css('--you-soft'), css('--you')) + role('agent', css('--agent-soft'), css('--agent')) + role('ci', css('--ci-soft'), css('--ci'))
+      + role('board', css('--well'), css('--idle')) + '.nodeLabel,.edgeLabel,.label{color:' + css('--ink') + '!important}',
+    flowchart: { curve: 'basis', padding: 14, nodeSpacing: 40, rankSpacing: 46, wrappingWidth: 220, useMaxWidth: false },
+    sequence: { mirrorActors: false, messageMargin: 30, useMaxWidth: false, actorFontSize: 15, messageFontSize: 15, noteFontSize: 14, actorFontFamily: css('--font'), messageFontFamily: css('--font'), noteFontFamily: css('--font') },
+  });
+}
+// The first use of each glossary term in a chapter gets a definition on hover or focus.
+function glossaryTerms(root) {
+  const left = new Map(glossary.map((g) => [g.term.toLowerCase(), g]));
+  const re = new RegExp('\\b(' + glossary.map((g) => g.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).sort((a, b) => b.length - a.length).join('|') + ')\\b', 'i');
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement.closest('code,pre,a,h1,h2,h3,th,.panel,.diagram,.term,button') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+  const nodes = []; while (walk.nextNode()) nodes.push(walk.currentNode);
+  for (const n of nodes) {
+    const m = re.exec(n.nodeValue);
+    if (!m) continue;
+    const g = left.get(m[1].toLowerCase());
+    if (!g) continue;
+    left.delete(m[1].toLowerCase());
+    const after = n.splitText(m.index); after.nodeValue = after.nodeValue.slice(m[1].length);
+    const t = document.createElement('span'); t.className = 'term'; t.tabIndex = 0; t.textContent = m[1]; t.dataset.def = g.def;
+    n.after(t);
+  }
+}
+
+/* ---------- Pages ---------- */
+const toc = $('#toc'), select = $('#pick'), main = $('#main'), otp = $('#otp');
+select.add(new Option('Overview', 'overview'));
+toc.innerHTML = '<div class="grp"><ol><li><a class="ch" href="#overview"><small>·</small><span>Overview</span></a></li></ol></div>'
+  + groups.map((g) => '<div class="grp"><span>' + esc(g) + '</span><ol>' + chapters.filter((c) => c.group === g).map((c) =>
+    '<li><a class="ch" href="#' + c.id + '"><small>' + String(c.n).padStart(2, '0') + '</small><span>' + esc(c.short) + '</span></a></li>').join('') + '</ol></div>').join('');
+for (const g of groups) { const og = document.createElement('optgroup'); og.label = g; for (const c of chapters.filter((x) => x.group === g)) og.append(new Option(c.title, c.id)); select.append(og); }
+select.onchange = () => go(select.value);
+document.addEventListener('click', (e) => {
+  const cp = e.target.closest('.codeblock .copy');
+  if (cp) return copyText(cp.previousElementSibling.textContent, cp);
+  const a = e.target.closest('a[href^="#"]');
+  if (!a) return;
+  const id = a.getAttribute('href').slice(1);
+  if (id === 'overview' || chapters.some((c) => c.id === id)) { e.preventDefault(); go(id); }
+});
+function go(id) { try { history.pushState(null, '', '#' + id); } catch {} show(id); }
+function overview() {
+  return '<header class="hero"><span class="eyebrow">agentic-sdlc · alpha</span><h1>Software delivery run by agents, with gates they cannot skip</h1>'
+    + '<p class="lead">You put work on a board. Every hour an agent run moves each ticket one step: it shapes it, builds it, reviews it and merges it. CI decides what merges. You answer when a rule says a person must decide.</p></header>'
+    + '<div class="tiles"><div class="tile"><b>Agents cannot skip the gates</b><span>Six required CI checks decide every merge.</span></div>'
+    + '<div class="tile"><b>You act on asks, not on every step</b><span>Holds, approvals and releases come to you as one comment each.</span></div>'
+    + '<div class="tile"><b>Every run leaves a record</b><span>Each cycle writes a heartbeat: what ran, on which model, what failed.</span></div></div>'
+    + '<div data-viz="journey"></div>'
+    + groups.map((g) => '<section><h2 class="section-h">' + esc(g) + '</h2><div class="cards">' + chapters.filter((x) => x.group === g).map((x) =>
+      '<a class="card" href="#' + x.id + '"><small>' + String(x.n).padStart(2, '0') + '</small><b>' + esc(x.short) + '</b><span>' + esc(x.lead) + '</span></a>').join('') + '</div></section>').join('');
+}
+let current;
+async function show(id = location.hash.slice(1)) {
+  const c = chapters.find((x) => x.id === id);
+  current = c ? c.id : 'overview';
+  for (const a of toc.querySelectorAll('a')) { if (a.getAttribute('href') === '#' + current) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
+  select.value = current;
+  if (!c) { main.innerHTML = overview(); otp.innerHTML = ''; }
+  else {
+    const i = chapters.indexOf(c), prev = chapters[i - 1], next = chapters[i + 1];
+    const md = c.md.replace(/<!-- viz: (\w+) -->(\n```mermaid\n[\s\S]*?```)?/g, '<div data-viz="$1"></div>').replace(/\nNext: \[[^\n]*\n?$/, '\n');
+    main.innerHTML = '<article class="prose">' + marked.parse(md) + '</article>'
+      + '<nav class="pager" aria-label="Chapters">' + (prev ? '<a href="#' + prev.id + '"><small>Previous</small>' + esc(prev.title) + '</a>' : '<a href="#overview"><small>Previous</small>Overview</a>')
+      + (next ? '<a class="next" href="#' + next.id + '"><small>Next</small>' + esc(next.title) + '</a>' : '') + '</nav>'
+      + '<p class="source">Source: <a href="' + blob + c.file + '">' + c.file + '</a></p>';
+    const heads = [...main.querySelectorAll('.prose h2')];
+    for (const h of heads) h.id = slug(h.textContent);
+    otp.innerHTML = heads.length ? '<b>On this page</b>' + heads.map((h) => '<a href="javascript:void 0" data-to="' + h.id + '">' + esc(h.textContent) + '</a>').join('') : '';
+    if (!c.id.endsWith('glossary')) glossaryTerms($('.prose', main));
+  }
+  for (const el of main.querySelectorAll('[data-viz]')) {
+    const f = VIZ[el.dataset.viz];
+    if (f) { try { f(el); } catch (e) { el.textContent = 'This part did not load: ' + e.message; } }
+  }
+  initMermaid();
+  await mermaid.run({ nodes: main.querySelectorAll('pre.mermaid') });
+  scrollTo(0, 0);
+}
+otp.addEventListener('click', (e) => { const a = e.target.closest('[data-to]'); if (a) { e.preventDefault(); document.getElementById(a.dataset.to)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }); } });
+addEventListener('popstate', () => show());
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => show(current));
+new MutationObserver(() => show(current)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+show();
+</script>
+</body>
+</html>
