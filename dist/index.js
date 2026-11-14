@@ -7528,8 +7528,142 @@ function createGithubBoard(ctx) {
   };
 }
 
-// src/board/jira.ts
+// src/board/github-issues.ts
 var LOGICAL = ["size", "priority", "lane", "shipped", "release_version"];
+var STATUS = "status:";
+var PAGE = 100;
+function createGithubIssuesBoard(ctx) {
+  const repo = String(ctx.options.repo);
+  const api = (method, path, body) => {
+    const args = ["api", "-X", method, `repos/${repo}/${path}`];
+    if (body !== void 0) args.push("--input", "-");
+    const out = ctx.exec("gh", args, body === void 0 ? {} : { input: JSON.stringify(body) });
+    return out.trim() ? JSON.parse(out) : null;
+  };
+  const all = (path) => {
+    const out = [];
+    for (let page = 1; ; page++) {
+      const r = api("GET", `${path}${path.includes("?") ? "&" : "?"}per_page=${PAGE}&page=${page}`) ?? [];
+      out.push(...r);
+      if (r.length < PAGE) return out;
+    }
+  };
+  const prefix = (f) => `${(ctx.binding?.board?.fields?.[f] ?? f).toLowerCase()}:`;
+  const names = (i) => (i.labels ?? []).map((l) => typeof l === "string" ? l : l.name);
+  const statusOf = (i) => names(i).find((l) => l.toLowerCase().startsWith(STATUS))?.slice(STATUS.length);
+  const toItem = (i) => {
+    const fields = {}, labels = [];
+    let status = "";
+    for (const l of names(i)) {
+      const low = l.toLowerCase();
+      const f = LOGICAL.find((k) => low.startsWith(prefix(k)));
+      if (f) fields[f] = l.slice(prefix(f).length);
+      else if (low.startsWith(STATUS)) status = l.slice(STATUS.length);
+      else labels.push(l);
+    }
+    return {
+      id: String(i.number),
+      title: i.title,
+      url: i.html_url ?? "",
+      status,
+      labels,
+      fields,
+      milestone: i.milestone?.title ?? void 0,
+      children: [],
+      assignees: (i.assignees ?? []).map((a) => a.login),
+      createdAt: i.created_at ?? "",
+      updatedAt: i.updated_at ?? "",
+      body: i.body ?? ""
+    };
+  };
+  let known;
+  const ensureLabels = (ls) => {
+    known ??= new Set(all("labels").map((l) => String(l.name).toLowerCase()));
+    for (const name of ls) if (!known.has(name.toLowerCase())) {
+      api("POST", "labels", { name });
+      known.add(name.toLowerCase());
+    }
+  };
+  const issue = (id) => api("GET", `issues/${id}`);
+  const relabel = (i, drop, add, extra = {}) => {
+    ensureLabels(add);
+    const labels = [.../* @__PURE__ */ new Set([...names(i).filter((l) => !drop(l.toLowerCase())), ...add])];
+    api("PATCH", `issues/${i.number}`, { ...extra, labels });
+  };
+  const get = async (id) => {
+    const out = toItem(issue(id));
+    try {
+      out.children = all(`issues/${id}/sub_issues`).map((s) => String(s.number));
+      const p = api("GET", `issues/${id}/parent`);
+      if (p?.number) out.parent = String(p.number);
+    } catch {
+    }
+    return out;
+  };
+  const move = async (id, status, onlyFrom, extra) => {
+    const i = issue(id);
+    const cur = statusOf(i) ?? "";
+    if (onlyFrom && cur !== onlyFrom) throw new MovedError(id, onlyFrom, cur);
+    relabel(i, (l) => l.startsWith(STATUS), [STATUS + status], extra);
+    return get(id);
+  };
+  const milestone = (title) => {
+    const m = all("milestones?state=all").find((x) => x.title === title);
+    if (!m) throw new Error(`${repo} has no milestone '${title}'`);
+    return m.number;
+  };
+  return {
+    async list(q = {}) {
+      const words2 = (q.search ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+      return all("issues?state=all").filter((i) => !i.pull_request && statusOf(i) !== void 0).filter((i) => words2.every((w) => `${i.title}
+${i.body ?? ""}`.toLowerCase().includes(w))).map(toItem).filter((i) => (!q.status?.length || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label)));
+    },
+    get,
+    async create(t) {
+      const labels = [.../* @__PURE__ */ new Set([...t.labels ?? [], STATUS + t.status])];
+      ensureLabels(labels);
+      const body = { title: t.title, body: t.body, labels };
+      if (t.milestone) body.milestone = milestone(t.milestone);
+      const id = String(api("POST", "issues", body).number);
+      if (t.parent) await this.child(t.parent, id);
+      return get(id);
+    },
+    move: (id, status, onlyFrom) => move(id, status, onlyFrom),
+    async set(id, f, value) {
+      const p = prefix(f);
+      relabel(issue(id), (l) => l.startsWith(p), value === null ? [] : [p + value]);
+      return get(id);
+    },
+    async label(id, op, label) {
+      relabel(issue(id), (l) => op === "remove" && l === label.toLowerCase(), op === "add" ? [label] : []);
+      return get(id);
+    },
+    async assign(id, user) {
+      if (user) api("POST", `issues/${id}/assignees`, { assignees: [user] });
+      else api("PATCH", `issues/${id}`, { assignees: [] });
+      return get(id);
+    },
+    async comment(id, body) {
+      const c = api("POST", `issues/${id}/comments`, { body });
+      return { id: String(c.id), url: c.html_url };
+    },
+    async comments(id, q = {}) {
+      let list = all(`issues/${id}/comments`).map((c) => ({ id: String(c.id), author: c.user?.login ?? "", createdAt: c.created_at, body: c.body ?? "", url: c.html_url })).reverse();
+      if (q.marker) list = list.filter((c) => c.body.split("\n")[0].includes(q.marker));
+      return q.last ? list.slice(0, q.last) : list;
+    },
+    close(id, reason) {
+      return move(id, reason === "completed" ? "Done" : "Cancelled", void 0, { state: "closed", state_reason: reason });
+    },
+    async child(parent, child) {
+      api("POST", `issues/${parent}/sub_issues`, { sub_issue_id: issue(child).id });
+      return get(parent);
+    }
+  };
+}
+
+// src/board/jira.ts
+var LOGICAL2 = ["size", "priority", "lane", "shipped", "release_version"];
 var adf = (text) => ({
   type: "doc",
   version: 1,
@@ -7557,7 +7691,7 @@ function createJiraBoard(ctx) {
   };
   const fieldIds = async () => {
     const m = {};
-    for (const f of LOGICAL) if (fieldName(f)) m[f] = (await jiraField(f)).id;
+    for (const f of LOGICAL2) if (fieldName(f)) m[f] = (await jiraField(f)).id;
     return m;
   };
   const toItem = async (i) => {
@@ -7683,7 +7817,7 @@ function createJiraBoard(ctx) {
 }
 
 // src/board/linear.ts
-var LOGICAL2 = ["size", "priority", "lane", "shipped", "release_version"];
+var LOGICAL3 = ["size", "priority", "lane", "shipped", "release_version"];
 var ISSUE = `id identifier title url description createdAt updatedAt priority state { name } labels { nodes { id name } }
   assignee { id } parent { identifier } children { nodes { identifier } }`;
 function createLinearBoard(ctx) {
@@ -7719,7 +7853,7 @@ function createLinearBoard(ctx) {
     const fs = {}, labels = [];
     let milestone;
     for (const l of i.labels.nodes.map((x) => x.name)) {
-      const f = LOGICAL2.find((k) => !(k === "priority" && nativePriority()) && l.startsWith(prefix(fieldName(k))));
+      const f = LOGICAL3.find((k) => !(k === "priority" && nativePriority()) && l.startsWith(prefix(fieldName(k))));
       if (f) fs[f] = l.slice(prefix(fieldName(f)).length);
       else if (l.startsWith("milestone:")) milestone = l.slice(10);
       else labels.push(l);
@@ -7949,7 +8083,7 @@ function createLocalBoard(ctx) {
 
 // src/board/index.ts
 function createBoard(ctx) {
-  const make = { github: createGithubBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
+  const make = { github: createGithubBoard, "github-issues": createGithubIssuesBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
   if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
   return make(ctx);
 }
@@ -7966,16 +8100,20 @@ function secret(ctx, key) {
 }
 
 // src/forge/github.ts
-var ST = { SUCCESS: "success", PENDING: "pending", EXPECTED: "pending" };
-var checkState = (c) => c.__typename === "StatusContext" ? ST[c.state] ?? "failure" : c.status !== "COMPLETED" ? "pending" : ["SUCCESS", "NEUTRAL", "SKIPPED"].includes(c.conclusion) ? "success" : "failure";
+var runState = (c) => c.status !== "completed" ? "pending" : ["success", "neutral", "skipped"].includes(c.conclusion) ? "success" : "failure";
+var statusState = (s) => s.state === "success" || s.state === "pending" ? s.state : "failure";
 function github(ctx) {
   const repo = ctx.options.repo;
   const api = `repos/${repo ?? "{owner}/{repo}"}`;
   const withToken = (key) => ({ ...ctx.env, GH_TOKEN: secret(ctx, key) });
   const gh = (a, input, env = ctx.options.token_env ? withToken("token_env") : void 0) => ctx.exec("gh", repo && a[0] !== "api" ? [...a, "-R", repo] : a, { cwd: ctx.root, input, env });
+  const post = (path, data, env) => JSON.parse(gh(["api", "-X", "POST", `${api}/${path}`, "--input", "-"], JSON.stringify(data), env));
+  const cloud = ctx.env.CLAUDE_CODE_REMOTE === "true";
+  const ccr = (method, n, route, ...f) => gh(["api", "-X", method, `${api}/pulls/${n}/ccr/${route}`, ...f]);
   const view = async (n) => {
     const p = JSON.parse(gh(["api", `${api}/pulls/${n}`]));
-    const roll = JSON.parse(gh(["pr", "view", n, "--json", "statusCheckRollup"])).statusCheckRollup ?? [];
+    const runs = JSON.parse(gh(["api", `${api}/commits/${p.head.sha}/check-runs?per_page=100`])).check_runs ?? [];
+    const statuses = JSON.parse(gh(["api", `${api}/commits/${p.head.sha}/status`])).statuses ?? [];
     let pushedAt;
     try {
       pushedAt = gh(["api", `${api}/commits/${p.head.sha}/check-suites`, "--jq", "[.check_suites[].created_at] | min // empty"]).trim() || void 0;
@@ -7995,7 +8133,10 @@ function github(ctx) {
       behind: p.mergeable_state === "behind",
       mergeSha: p.merged_at ? p.merge_commit_sha : void 0,
       closes: parseCloses(p.body ?? ""),
-      checks: roll.map((c) => ({ name: c.name ?? c.context, state: checkState(c) })),
+      checks: [
+        ...runs.map((c) => ({ name: c.name, state: runState(c) })),
+        ...statuses.map((s) => ({ name: s.context, state: statusState(s) }))
+      ],
       body: p.body ?? "",
       author: p.user?.login ?? "",
       ...pushedAt ? { pushedAt } : {}
@@ -8003,9 +8144,7 @@ function github(ctx) {
   };
   return {
     async open(o) {
-      const args = ["pr", "create", "--head", o.source, "--base", ctx.binding.vcs.trunk, "--title", o.title, "--body-file", "-"];
-      if (o.draft) args.push("--draft");
-      return view(gh(args, o.body).trim().split("/").pop());
+      return view(String(post("pulls", { head: o.source, base: ctx.binding.vcs.trunk, title: o.title, body: o.body, draft: !!o.draft }).number));
     },
     view,
     async viewBySha(sha) {
@@ -8014,30 +8153,35 @@ function github(ctx) {
       return view(String(ps[0].number));
     },
     async diff(n) {
-      return gh(["pr", "diff", n]);
+      return gh(["api", `${api}/pulls/${n}`, "-H", "Accept: application/vnd.github.diff"]);
     },
     async list(q = {}) {
-      const rows = JSON.parse(gh(["pr", "list", "--state", q.state ?? "open", "--json", "number", "--limit", "100"]));
-      return Promise.all(rows.map((r) => view(String(r.number))));
+      const state = q.state === "merged" ? "closed" : q.state ?? "open";
+      const rows = JSON.parse(gh(["api", `${api}/pulls?state=${state}&per_page=100`]));
+      return Promise.all(rows.filter((p) => q.state !== "merged" || p.merged_at).map((p) => view(String(p.number))));
     },
     async closing(id) {
-      const rows = JSON.parse(gh(["pr", "list", "--state", "merged", "--search", `"Closes ${id}" OR "Closes #${id}" in:body`, "--json", "number", "--limit", "30"]));
+      const q = `repo:${repo ?? "{owner}/{repo}"} is:pr is:merged "Closes ${id}" OR "Closes #${id}" in:body`;
+      const rows = JSON.parse(gh(["api", "-X", "GET", "search/issues", "-F", `q=${q}`, "-F", "per_page=30"])).items ?? [];
       return (await Promise.all(rows.map((r) => view(String(r.number))))).filter((c) => c.closes.includes(id));
     },
     async ready(n) {
-      gh(["pr", "ready", n]);
+      if (cloud) ccr("POST", n, "ready_for_review");
+      else gh(["pr", "ready", n]);
       return view(n);
     },
     async draft(n) {
-      gh(["pr", "ready", n, "--undo"]);
+      if (cloud) ccr("POST", n, "convert_to_draft");
+      else gh(["pr", "ready", n, "--undo"]);
       return view(n);
     },
     async sync(n) {
-      gh(["pr", "update-branch", n]);
+      gh(["api", "-X", "PUT", `${api}/pulls/${n}/update-branch`]);
       return view(n);
     },
     async automerge(n) {
-      gh(["pr", "merge", n, "--auto", "--squash"]);
+      if (cloud) ccr("PUT", n, "auto_merge", "-f", "merge_method=squash");
+      else gh(["pr", "merge", n, "--auto", "--squash"]);
       return view(n);
     },
     async cut(revision, version) {
@@ -8052,8 +8196,8 @@ function github(ctx) {
       return { requested: true };
     },
     async comment(n, body) {
-      const url = gh(["pr", "comment", n, "--body-file", "-"], body).trim();
-      return { id: url.split("issuecomment-")[1] ?? url, url };
+      const c = post(`issues/${n}/comments`, { body });
+      return { id: String(c.id), url: c.html_url };
     },
     async comments(n) {
       const out = gh(["api", "--paginate", `${api}/issues/${n}/comments`, "--jq", ".[] | {id: (.id | tostring), author: .user.login, createdAt: .created_at, body: .body, url: .html_url}"]);
@@ -8065,7 +8209,7 @@ function github(ctx) {
       gh(a, void 0, withToken(opts?.as === "ci" ? "token_env" : "review_token_env"));
     },
     async approve(n) {
-      gh(["pr", "review", n, "--approve", "--body", "agentic-sdlc review: PASS"], void 0, withToken("review_token_env"));
+      post(`pulls/${n}/reviews`, { event: "APPROVE", body: "agentic-sdlc review: PASS" }, withToken("review_token_env"));
     },
     async approvals(n) {
       const out = gh(["api", "--paginate", `${api}/pulls/${n}/reviews`, "--jq", ".[] | {user: .user.login, state: (.state | ascii_downcase), sha: .commit_id}"]);
@@ -8238,13 +8382,14 @@ function loadBinding(root) {
   return (0, import_yaml.parse)(text);
 }
 var ADAPTERS = {
-  board: ["github", "jira", "linear", "local"],
+  board: ["github", "github-issues", "jira", "linear", "local"],
   forge: ["github"],
   vcs: ["git"]
 };
 var OPTIONS = {
   board: {
     github: [["owner", "project_number", "repo"], ["token_env"]],
+    "github-issues": [["repo"], []],
     jira: [["base_url", "project_key", "email_env", "token_env"], []],
     linear: [["team_key", "token_env"], []],
     local: [[], []]
@@ -8357,6 +8502,7 @@ function validateBinding(b) {
     const v = x.learning?.[k];
     if (v !== void 0 && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
   }
+  if (x.learning?.enabled !== void 0 && typeof x.learning.enabled !== "boolean") p.push("learning.enabled must be true or false");
   for (const k of ["preview", "proofs_on_base", "evidence_check"]) if (x.commands?.[k] !== void 0 && typeof x.commands[k] !== "string") p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? "").includes("{run_id}")) p.push("traces.uri must contain {run_id}");
   if (x.executors && !x.executors.default) p.push("executors.default is missing");
