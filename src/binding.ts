@@ -41,7 +41,7 @@ const EXECUTOR_KEYS: Record<string, string[]> = { command: ['run'], webhook: ['u
 const MANAGED_APIS = ['claude', 'cursor', 'antigravity', 'generic'];
 export const HUMAN_APPROVAL = ['full-lane', 'always', 'never'];
 const SANDBOXES =['cloud', 'container', 'local'];
-const PROFILES = ['individual', 'enterprise'];
+const PROFILES = ['individual', 'individual-api', 'organization'];
 export const DELIVERY = ['release-line', 'continuous'];
 const EVIDENCE = ['sbom', 'provenance', 'signature'];
 const TIERS = ['fast', 'balanced', 'deep'];
@@ -111,6 +111,19 @@ export function validateBinding(b: Binding): string[] {
     }
   }
   if (['human-approval', 'ticket-linkage', 'proofs-on-base'].includes(x.forge?.review_check_name)) p.push(`forge.review_check_name '${x.forge.review_check_name}' is a gate's context`);
+  const rid = String(x.forge?.review_identity ?? ''), rt = x.forge?.options?.review_token_env;
+  if (rid && !rt) p.push('forge.review_identity is set but forge.options.review_token_env is unset: name its token, or empty review_identity for one identity');
+  if (!rid && rt) p.push('forge.options.review_token_env is set but forge.review_identity is empty: name the review identity, or remove review_token_env for one identity');
+  if (rt && rt === x.forge?.options?.token_env) p.push('forge.options.review_token_env equals token_env: two identities need two tokens');
+  if (x.profile === 'organization' && !rid) p.push('profile organization needs a separate review identity: set forge.review_identity and forge.options.review_token_env');
+  const sc = x.board?.scope;
+  if (sc !== undefined) {
+    const label = String(sc?.label ?? ''), pre = label.split(':')[0];
+    if (!/^[^:]+:.+/.test(label)) p.push("board.scope.label must be '<prefix>:<name>', e.g. repo:app-a");
+    else if (sc.home && !(Array.isArray(sc.repos) && sc.repos.includes(label) && sc.repos.every((r: unknown) => String(r).startsWith(`${pre}:`))))
+      p.push(`board.scope.repos must list every repo label, this repo's included, each starting '${pre}:'`);
+    else if (!sc.home && sc.repos !== undefined) p.push('board.scope.repos is for the home repo only (board.scope.home: true)');
+  }
   const ha = x.forge?.human_approval;
   if (ha !== undefined && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join('|')}`);
   for (const k of ['bench_min_cases', 'bench_trials']) {
@@ -143,15 +156,14 @@ export function bindingWarnings(b: Binding): string[] {
   if (x?.learning?.budget_usd_per_week !== undefined) w.push('learning.budget_usd_per_week is unused; learning.enabled turns learning on; remove it');
   if (x?.profile === 'individual') {
     for (const [k, e] of Object.entries<any>(x.executors ?? {}))
-      if (['managed', 'webhook', 'assign'].includes(e?.kind)) w.push(`executors.${k}: kind ${e.kind} needs an API or hosted agent; individual profile expects harness or a subscription CLI command`);
+      if (['managed', 'webhook', 'assign'].includes(e?.kind)) w.push(`executors.${k}: kind ${e.kind} needs an API or hosted agent; profile individual is subscriptions only: use individual-api`);
     const uri = x.traces?.uri;
     if (uri !== undefined && !['./', '.agents/', '/'].some((q) => String(uri).startsWith(q)) && !/^[A-Za-z]:[\\/]/.test(String(uri))) w.push(`traces.uri '${uri}' is not a local path (./, .agents/ or absolute); individual profile has no org storage`);
-  } else if (x?.profile === 'enterprise') {
-    const rt = x.forge?.options?.review_token_env;
-    if (rt && rt === x.forge?.options?.token_env) w.push('forge.options.review_token_env equals token_env: the reviewer and implementer share one identity');
+  } else if (x?.profile === 'organization') {
     const sb = x.executors?.default?.sandbox;
-    if (!sb || sb === 'local') w.push('executors.default.sandbox is local or unset: enterprise expects cloud or container');
-    if (!x.traces) w.push('traces is unset: enterprise expects traces.uri on org storage');
+    if (!sb || sb === 'local') w.push('executors.default.sandbox is local or unset: organization expects cloud or container');
+    if (!x.traces) w.push('traces is unset: organization expects traces.uri on org storage');
+    if (!Object.values<any>(x.executors ?? {}).some((e) => e?.kind === 'managed')) w.push('no executor is kind managed: organization runs its stages on managed agents');
   }
   return w;
 }

@@ -35,7 +35,7 @@ Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-p
 Template: [`templates/runner/github-actions-codex.yml`](../../templates/runner/github-actions-codex.yml). The documented auth input of
 `openai/codex-action@v1` is `openai-api-key` only; ChatGPT login there: not documented at the time of writing ([docs](https://learn.chatgpt.com/docs/github-action)).
 
-## Run without your machine - Enterprise
+## Run without your machine - Organization
 - `openai/codex-action@v1` with `openai-api-key`: wraps `codex exec`; inputs `prompt`, `sandbox`, `model`, `effort`, `safety-strategy` (default drops sudo), `allow-users`; output `final-message`. [docs](https://learn.chatgpt.com/docs/github-action)
 - `codex exec` in any job runner with `CODEX_API_KEY` for the run. [docs](https://learn.chatgpt.com/docs/non-interactive-mode)
 - Team Tasks run in the cloud through a team service account ([docs](https://learn.chatgpt.com/docs/automations)).
@@ -60,7 +60,7 @@ executors:
   implement-spec: { kind: command, run: "codex exec --sandbox workspace-write --skip-git-repo-check \"$(cat {prompt_file})\"", secrets: [AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, CODEX_API_KEY], sandbox: container }
 ```
 `secrets` are the only env vars the child receives; never list `AGENTIC_REVIEW_TOKEN` for an implementer.
-Codex's own review is advisory. The `review` status and approval still come only from the review identity.
+Codex's own review is advisory. The `review` status and approval still come only from `review-pr`.
 
 ## Limits and unknowns
 - Plan requirements and limits for cloud tasks and scheduled tasks: not documented at the time of writing.

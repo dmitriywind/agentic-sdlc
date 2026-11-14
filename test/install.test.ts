@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { cli, cloudBoard, deliveryWorkflow, implementerToken, selfHostedRunner, trunkProtection, validate } from '../src/install.ts';
+import { parse } from 'yaml';
 import { fakeCtx } from './helpers.ts';
 
 const w = (p: string, s: string) => { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, s); };
@@ -18,6 +19,7 @@ function fixture() {
   w(join(pkg, 'templates/gates/hooks/pre-push'), '#!/bin/sh\n');
   for (const n of ['cycle-prompt.md', 'review-prompt.md']) w(join(pkg, 'templates/runner', n), n);
   cpSync(join(import.meta.dirname, '../templates/mcp'), join(pkg, 'templates/mcp'), { recursive: true });
+  cpSync(join(import.meta.dirname, '../templates/gates/github/ruleset.trunk.json'), join(pkg, 'templates/gates/github/ruleset.trunk.json'));
   process.env.AGENTIC_SDLC_PACKAGE = pkg;
   return mkdtempSync(join(tmpdir(), 'proj-'));
 }
@@ -99,15 +101,34 @@ test('validate warns on a top-level skill tier and fails when no tier exists', a
   assert.ok(!problems.some((m) => /skill (old|sdlc):/.test(m)), problems.join('|'));
 });
 
-test('init --profile enterprise writes traces and container sandbox; warnings keep validate at 0', async () => {
+test('init --profile organization writes two identities, traces and a container sandbox; the ruleset asks for an approving review', async () => {
   const root = fixture();
   const { ctx } = fakeCtx(root, {}, () => ({}));
-  assert.equal(await quiet(() => cli(['init', '--profile', 'enterprise'], ctx)), 0);
-  const b = readFileSync(join(root, '.agents/binding.yml'), 'utf8');
-  assert.match(b, /profile: enterprise/);
-  assert.match(b, /sandbox: container/);
-  assert.match(b, /\.agents\/runtime\/traces\/\{run_id\}\.jsonl/);
+  assert.equal(await quiet(() => cli(['init', '--profile', 'organization'], ctx)), 0);
+  const b = parse(readFileSync(join(root, '.agents/binding.yml'), 'utf8'));
+  assert.equal(b.profile, 'organization');
+  assert.equal(b.executors.default.sandbox, 'container');
+  assert.equal(b.traces.uri, '.agents/runtime/traces/{run_id}.jsonl');
+  assert.ok(b.forge.review_identity);
+  assert.deepEqual([b.forge.options.token_env, b.forge.options.review_token_env], ['AGENTIC_FORGE_TOKEN', 'AGENTIC_REVIEW_TOKEN']);
+  const pr = JSON.parse(readFileSync(join(root, '.github/rulesets/trunk.json'), 'utf8')).rules.find((r: any) => r.type === 'pull_request');
+  assert.equal(pr.parameters.required_approving_review_count, 1);
   assert.equal(await quiet(() => cli(['init', '--profile', 'bogus', '--force'], ctx)), 1);
+});
+
+test('init --profile individual and individual-api: one identity, and the ruleset asks for no approving review', async () => {
+  for (const profile of ['individual', 'individual-api']) {
+    const root = fixture();
+    const { ctx } = fakeCtx(root, {}, () => ({}));
+    assert.equal(await quiet(() => cli(['init', '--profile', profile], ctx)), 0);
+    const b = parse(readFileSync(join(root, '.agents/binding.yml'), 'utf8'));
+    assert.equal(b.profile, profile);
+    assert.ok(!b.forge.review_identity);
+    assert.equal(b.forge.options?.review_token_env, undefined);
+    const pr = JSON.parse(readFileSync(join(root, '.github/rulesets/trunk.json'), 'utf8')).rules.find((r: any) => r.type === 'pull_request');
+    assert.equal(pr.parameters.required_approving_review_count, 0);
+    assert.equal(pr.parameters.require_last_push_approval, false);
+  }
 });
 
 test('validate prints warn: lines and exits 0 when only warnings exist', async () => {

@@ -7,7 +7,7 @@ it. They are the acceptance view of the [use cases](../use-cases.md).
 
 ```gherkin
 # Source: skills/review-pr/SKILL.md, "Decide" (PASS)
-# Proof: test/forge.test.ts "status and approve need review_token_env and never use the implementer token"
+# Proof: test/forge.test.ts "two identities: status and approve need review_token_env and never use the implementer token"
 Scenario: PASS marks the CR ready with auto-merge
   Given a draft CR for a ticket at In review
   When the review runtime decides

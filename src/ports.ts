@@ -171,8 +171,9 @@ export function ownersFor(o: Binding['owners'] | undefined, side: 'board' | 'for
 /** The parsed binding. src/binding.ts validates it; keys follow references/architecture.md section 4. */
 export interface Binding {
   version: 2;
-  /** individual: subscriptions only; enterprise: APIs and managed agents (architecture.md section 10). */
-  profile: 'individual' | 'enterprise';
+  /** individual: subscriptions only; individual-api: subscriptions plus API keys and managed agents;
+   * organization: API keys and managed agents, a separate review identity (architecture.md section 10). */
+  profile: 'individual' | 'individual-api' | 'organization';
   /** bots: the accounts the factory runs as; only their heartbeat comments are trusted. Each account is one
    * name, or `{ board, forge }` when the board and the forge know the person by different names. */
   owners: { product: Who; factory: Who; bots: Who[] };
@@ -188,10 +189,13 @@ export interface Binding {
     later_milestone?: string;
     views?: string[];
     signal_streams: string[];
+    /** Many repos on one board: this repo's tickets carry `label`; `home` also takes items with no label of its prefix. Unset: one repo. */
+    scope?: { label: string; home?: boolean; repos?: string[] };
   };
   forge: {
     adapter: 'github';
     options: Record<string, unknown>;
+    /** The account behind review_token_env. Empty: one identity, the implementer's (architecture.md section 10). */
     review_identity: string;
     /** Who must approve besides the agent review (status human-approval). Absent: full-lane. */
     human_approval?: 'full-lane' | 'always' | 'never';

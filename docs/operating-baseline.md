@@ -7,11 +7,11 @@ below says so when it is not enforced. All of it uses existing binding keys.
 
 | Shape | profile | owners | forge.human_approval | Review identity | Assurance |
 |---|---|---|---|---|---|
-| Solo | individual | product and factory are the same person; bots holds the factory account | `full-lane` | none separate | The factory authors CRs as `owners.bots`, so the owner can approve them. This separation of duties is a compensating control, not independent review. |
-| Small team | individual or enterprise | product: the lead; factory: a second engineer | `full-lane` | optional | A second human approves Full-lane CRs; Fast-lane CRs rely on the gates and the agent review. |
-| Enterprise | enterprise | product: a product role; factory: a platform team | `always` | a separate `review_identity` | Every product CR gets a human approval plus an independent reviewing identity. |
-| Agent-heavy | enterprise | as enterprise, several bots | `always` | separate identity per reviewing agent | Humans approve every CR; use `lane_areas` to keep sensitive paths in the Full lane. |
-| Non-developer product owner with a technical steward | individual or enterprise | product: the owner; factory: the steward | `full-lane` or `always` | steward-held | The owner acts only through board comments (trusted replies) and Idea moves. A trusted reply answers a hold: the cycle removes the `needs-human` label, so the owner needs no label rights. The steward holds `owners.factory`, approves CRs and changes the binding. |
+| Solo | individual or individual-api | product, factory and bots are the same person | `full-lane` | none: one identity | The factory authors CRs as you, so nobody can approve them on GitHub: a Full-lane CR merges when you merge it as admin. The review is a separate agent context, not independent review. |
+| Small team | individual, individual-api or organization | product: the lead; factory: a second engineer | `full-lane` | optional | A second human approves Full-lane CRs; Fast-lane CRs rely on the gates and the agent review. |
+| Organization | organization | product: a product role; factory: a platform team | `always` | a separate `review_identity` (required) | Every product CR gets a human approval plus an independent reviewing identity. |
+| Agent-heavy | organization | as organization, several bots | `always` | separate identity per reviewing agent | Humans approve every CR; use `lane_areas` to keep sensitive paths in the Full lane. |
+| Non-developer product owner with a technical steward | any | product: the owner; factory: the steward | `full-lane` or `always` | steward-held | The owner acts only through board comments (trusted replies) and Idea moves. A trusted reply answers a hold: the cycle removes the `needs-human` label, so the owner needs no label rights. The steward holds `owners.factory`, approves CRs and changes the binding. |
 
 ## Repo baseline
 

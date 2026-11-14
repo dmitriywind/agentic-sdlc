@@ -126,8 +126,8 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `automerge <n>` | Merge when every required check is green | `CR` |
 | `comment <n> --body-file <f>` | CR comment | `{ id, url }` |
 | `comments <n> [--last <k>] [--marker <text>] [--author <a>]… [--trusted]` | CR comments (review report, owner reply on a factory CR), newest first, system notes dropped; same filters as `board comments` (`--last` counts after them) | `Comment[]` |
-| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted only with `options.review_token_env`. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`). The `proofs-on-base` and `linkage` gates post with `options.token_env` (the CI job's token); the CLI verb never does. | `{}` |
-| `approve <n>` | Approving review as `review_identity`, with `options.review_token_env` | `{}` |
+| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted with `options.review_token_env`; with one identity (`review_identity` empty), with the implementer's token. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`). The `proofs-on-base` and `linkage` gates post with `options.token_env` (the CI job's token); with two identities the CLI verb never does. | `{}` |
+| `approve <n>` | Approving review as `review_identity`, with `options.review_token_env`. Refused with one identity: GitHub refuses an approval from the CR's author | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
 | `runs [--ref <r>] [--failed]` | CI runs | `Run[]` |
 | `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
@@ -175,16 +175,17 @@ Checks:
 - **`Required`** is a CI job, not a gate and not an agent: on `pull_request`, with no secrets, it
   runs `commands.install` and `commands.verify` on the CR head. The `proofs-on-base` gate runs in
   its own job, also with no secrets: where it cannot post the status, its result is the check. The GitHub CR workflow also triggers on `merge_group`, for merge queues.
-- **`review`** is posted by `review-pr` as `forge.review_identity`.
+- **`review`** is posted by `review-pr`: as `forge.review_identity`, or with the implementer's token
+  when the binding has one identity (section 10).
 - **Required checks**: `ticket-linkage`, `Required`, `proofs-on-base`, `review`,
   `human-approval`, `skill-regression`. The trunk ruleset pins the four CI checks to their
-  source app (`integration_id`); `review` and `human-approval` post with the review token, so pin them
+  source app (`integration_id`); with two identities `review` and `human-approval` post with the review token, so pin them
   to the review app when it is an App. `doctor` warns when a required check is not pinned. No CODEOWNERS file:
   the `approval` gate enforces owner approval by class, so `tuning` can auto-merge.
 - A dead-man job runs `ledger stale --max-hours <h>` on a schedule.
 
 CI loads the binding from the **target** branch, never from the CR, and never runs CR code with
-secrets. The trunk needs the review identity's approving review and every required check green.
+secrets. The trunk needs every required check green and, with two identities, the review identity's approving review.
 
 ## 4. The binding (`.agents/binding.yml`)
 
@@ -201,9 +202,11 @@ Keys this contract relies on by name:
   --trusted`, spec authors) use `board`; forge reads (the approval gate, `forge comments --trusted`) use `forge`.
 - `heartbeat.ticket`: the id of the ticket that holds heartbeat comments; `validate` fails when it is empty.
   `init --board local` creates it (status Cancelled, so no route reads it) and sets it.
-- `forge.human_approval: full-lane | always | never` (default `full-lane`), `forge.review_identity`,
-  `forge.options.review_token_env`,
-  `forge.required_checks`.
+- `forge.human_approval: full-lane | always | never` (default `full-lane`), `forge.review_identity`
+  (empty: one identity), `forge.options.review_token_env` (set exactly when `review_identity` is, and
+  never equal to `token_env`; `validate` fails otherwise), `forge.required_checks`.
+- `board.scope: { label, home, repos }` (unset: the board serves one repo): many repos on one board.
+  Section 10 says what it does.
 - `commands.install`, `commands.verify` (the `Required` job), `commands.proofs_on_base` (the
   `proofs-on-base` gate: a command with `{files}`, run once per new proof file), `commands.preview` (optional: deploys
   a CR head for `verify-ux`), `commands.rollback`, `commands.evidence_check` (exits 0 when every
@@ -369,28 +372,60 @@ headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-
 allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm checks, and adds
 `--disallowedTools` for `forge approve`. The review allows only the CLI and the MCP server.
 
-`profile` in the binding picks the defaults:
+`profile` in the binding picks one of three paths:
 
-| | `individual` (subscriptions only) | `enterprise` (APIs and managed agents) |
-|---|---|---|
-| Scheduler | The subscription's own scheduler or CI cron with a subscription-authenticated headless CLI | Any of those, plus a managed-agent platform or the org's job runner |
-| Executors | `harness` only; `command` for a local headless CLI logged in with the subscription | All kinds |
-| Review identity | A second account or a fine-grained token for the reviewer | A forge app or bot account with its own token |
-| Traces | None, or files in the runner's scratch dir | `traces.uri` on the org's storage |
-| Bench | Small suites inside the plan's usage limits | Full suites across models and executors |
+| | `individual` | `individual-api` | `organization` |
+|---|---|---|---|
+| Who pays | A subscription | A subscription, plus metered API keys | Metered API keys |
+| Scheduler | The subscription's own (a Claude cloud routine, a Codex or Cursor scheduled task) or CI cron with a subscription-authenticated CLI | Any `individual` scheduler, plus a managed-agent deployment | A managed-agent platform, CI with an API key, or the org's job runner |
+| Executors | `harness`; `command` for a CLI logged in with the subscription | All kinds: `managed`, `webhook`, `assign` too | All kinds; stages run on `managed` agents |
+| Forge identities | One (default): yours | One (default), or two | Two: required |
+| Traces | None, or local files | Local files, or `traces.uri` | `traces.uri` on the org's storage |
+| Bench | Small suites inside the plan's usage limits | As the API budget allows | Full suites across models and executors |
 
-`init --profile individual|enterprise` writes these defaults. `validate` warns when an
-`individual` binding names an executor kind that needs an API key; the individual runner fails
-when `ANTHROPIC_API_KEY` is set, since it outranks the subscription token.
+`init --profile <p>` writes these defaults. `validate` fails an `organization` binding with no
+`forge.review_identity`, and warns when an `individual` binding names an executor kind that needs
+an API key, or an `organization` binding has no `managed` executor. The runner setup fails under
+`individual` and `individual-api` when `ANTHROPIC_API_KEY` is set, since it outranks the subscription
+token: `individual-api` names a managed executor's key otherwise (`executors.<skill>.token_env`).
 
-**Two runtimes, two identities.** Every scheduler runs two jobs: the cycle (`templates/runner/cycle-prompt.md`), which never holds the
-review token, and the review (`templates/runner/review-prompt.md`), which runs after the cycle
-finishes (a job dependency, or the cycle's fire command when a CR needs a review; never its own clock), holds `forge.options.review_token_env` and runs
-only `review-pr`, for product and factory CRs. `forge status` refuses the contexts the gates own
-(`human-approval`, `ticket-linkage`, `proofs-on-base`). The implementer's `token_env` has no commit-status
-write (a fine-grained token with Commit statuses: no access; `doctor` warns on a classic token with scope
-`repo` or `repo:status`), and every required check is pinned to the app that posts it. The review runtime **never runs CR code**: it reads
-`Required` and `proofs-on-base` from CI and runs no install or test command. So an implementer can
-never post the `review` status or the approving review for its own CR, and a CR's code never sees
-the review token. Unattended jobs set
+**One identity or two.** `forge.review_identity` decides it.
+
+- **One identity** (`review_identity` empty; the `individual` and `individual-api` default). The
+  factory acts as one account, yours: on a Claude cloud routine, the proxy's GitHub login. There is
+  one scheduled job, the cycle. It dispatches `review-pr` like any other step, as a harness subagent
+  with a fresh context that runs no CR code. `review-pr` posts the `review` status with the
+  implementer's token and gives no approving review, since GitHub refuses one from the CR's author.
+  `forge approve` refuses. `init` writes a trunk ruleset that needs no approving review. The
+  `approval` gate posts `human-approval` with the CI job's token; a CR that needs a human waits until a
+  collaborator approves its head, or the owner merges it as admin (the ruleset's admin bypass). The
+  trade-off: the review is a separate context, not a separate account, so the trunk ruleset cannot
+  prove that an agent did not post its own `review` status.
+- **Two identities** (`review_identity` and `review_token_env` set; required for `organization`).
+  Every scheduler runs two jobs: the cycle (`templates/runner/cycle-prompt.md`), which never holds the
+  review token, and the review (`templates/runner/review-prompt.md`), which runs after the cycle
+  finishes (a job dependency, or the cycle's fire command when a CR needs a review; never its own clock),
+  holds `forge.options.review_token_env` and runs only `review-pr`, for product and factory CRs. The
+  implementer's `token_env` has no commit-status write (a fine-grained token with Commit statuses: no
+  access; `doctor` warns on a classic token with scope `repo` or `repo:status`), and every required
+  check is pinned to the app that posts it. So an implementer can never post the `review` status or
+  the approving review for its own CR, and a CR's code never sees the review token.
+
+In both, `forge status` refuses the contexts the gates own (`human-approval`, `ticket-linkage`,
+`proofs-on-base`), and `review-pr` **never runs CR code**: it reads `Required` and `proofs-on-base`
+from CI and runs no install or test command. The MCP server's default tool list has no `forge_status`,
+so a one-identity cycle that has no shell starts it with `mcp --allow status`. Unattended jobs set
 `AGENTIC_SDLC_UNATTENDED=1`.
+
+**One repo or many.** A binding belongs to one repo; each repo has its own install, cycle, heartbeat
+ticket and pinned version.
+
+- **One repo** (`board.scope` unset): the board serves one repo: a `github-issues` board, a Jira
+  project or Linear team of its own, a `local` board.
+- **Many repos, one board**: a GitHub Project needs no scope, since `board.options.repo` keeps one
+  repo's issues. Any other shared board (one Jira project, one Linear team, one hub repo's
+  `github-issues`) sets `board.scope` in each repo's binding. `board list` then returns only tickets
+  with `board.scope.label` (`repo:<name>`), and `board create` adds that label. Exactly one repo sets
+  `home: true` and lists every label in `repos`: it also lists the tickets with no `repo:` label, and
+  `triage-signal` gives each one the label of the repo whose code it is about. Grooming, shaping and
+  delivery stay inside each repo's scope.

@@ -7,9 +7,10 @@ Feature: Review a change request
   So that only a proven, correct CR is marked ready and auto-merged
 
   # Source: skills/review-pr/SKILL.md, "Decide" (PASS)
-  # Proof: test/forge.test.ts "status and approve need review_token_env and never use the implementer token"
-  Scenario: PASS marks the CR ready with auto-merge
-    Given a draft CR for a ticket at In review
+  # Proof: test/forge.test.ts "two identities: status and approve need review_token_env and never use the implementer token"
+  Scenario: PASS with two identities marks the CR ready with auto-merge
+    Given forge.review_identity is set
+    And a draft CR for a ticket at In review
     And every criterion is proven
     And no Important finding is open
     And "Required" and "proofs-on-base" are green on this head
@@ -18,6 +19,17 @@ Feature: Review a change request
     And it approves the CR with the review token
     And it runs "forge ready <n>" and "forge automerge <n>"
     And the ticket still shows In review
+
+  # Source: skills/review-pr/SKILL.md, "Decide" (PASS, one identity); src/forge/github.ts, "status" and "approve"
+  # Proof: test/forge.test.ts "one identity: status posts with the implementer token; approve is refused, since GitHub refuses the author"
+  Scenario: PASS with one identity posts the status with the implementer's token and gives no approval
+    Given forge.review_identity is empty
+    And a draft CR that passes review
+    When review-pr decides in the cycle
+    Then it posts the review status with the implementer's token
+    And it does not run "forge approve", which refuses with one identity
+    And it runs "forge ready <n>" and "forge automerge <n>"
+    And for a CR that needs a human it asks a collaborator to approve the head, or the owner to merge it as admin
 
   # Source: src/forge/github.ts; references/architecture.md §3.2, "Adapter"
   # Proof: test/forge.test.ts "github: in a cloud session every verb is REST under repos/ and ready, draft, automerge use the ccr routes; an unset token_env falls back to the proxy"

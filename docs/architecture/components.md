@@ -190,7 +190,8 @@ flowchart LR
 - CI loads the binding from the target branch, never from the CR.
 - CR code runs only in the no-secrets `Required` job. The review runtime reads its result and
   runs no install or test command.
-- The implementer holds no review token. It cannot post `review` or approve.
+- With two identities the implementer holds no review token. It cannot post `review` or approve.
+  With one identity the review runtime is a `review-pr` subagent of the cycle, under the same account.
 - The `approval` gate posts `human-approval` only with the approvals the CR's class needs.
 - Only heartbeats by accounts in `owners.bots` count as state.
 - Secrets reach an executor only when its entry lists them.

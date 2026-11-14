@@ -73,3 +73,21 @@ test('cli comments --trusted keeps the binding bots and owners only', async () =
   try { assert.equal(await cli(['comments', '1', '--trusted'], f.ctx), 0); } finally { console.log = log; }
   assert.deepEqual(JSON.parse(out[0]).map((c: { body: string }) => c.body), ['by po', 'by bot']);
 });
+
+test('board.scope: many repos on one board; a repo lists its own label, the home repo also the unlabelled, create adds the label', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'bl-'));
+  const at = (scope: unknown) => {
+    const f = fakeCtx(root, {}, () => ({}));
+    f.ctx.binding = { ...f.ctx.binding, board: { ...f.ctx.binding.board, scope } } as any;
+    return createBoard(f.ctx);
+  };
+  const a = at({ label: 'repo:a' }), home = at({ label: 'repo:b', home: true, repos: ['repo:a', 'repo:b'] });
+  const mine = await a.create({ title: 'A work', body: '', status: 'Backlog' });
+  assert.deepEqual(mine.labels, ['repo:a']);
+  await at(undefined).create({ title: 'New signal', body: '', status: 'Signals', labels: ['signal:alert'] });
+  await home.create({ title: 'B work', body: '', status: 'Backlog' });
+  const titles = async (b: typeof a) => (await b.list()).map((i) => i.title).sort();
+  assert.deepEqual(await titles(a), ['A work']);
+  assert.deepEqual(await titles(home), ['B work', 'New signal']);
+  assert.equal((await at(undefined).list()).length, 3);
+});

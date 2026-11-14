@@ -16,15 +16,18 @@ runner of its own.
   shell or MCP.
 - **Executors per stage:** a harness subagent, a command bot, a webhook bot, a managed agent, or
   a hosted coding agent by assignment.
-- **Profiles:** `individual` runs on subscriptions only; `enterprise` adds API keys, managed
-  agents, trace storage and a separate review app.
+- **Profiles:** `individual` runs on subscriptions only; `individual-api` adds API keys and managed
+  agents to it; `organization` runs on API keys and managed agents, with trace storage and a separate review app.
+- **Identities:** one (the default for both individual profiles: the factory acts as your account) or
+  two (a separate review identity; required for `organization`).
+- **Repos:** one repo per board, or many repos on one board (`board.scope`).
 
 | Start here | |
 |---|---|
 | [Docs index](docs/README.md) | Every guide. |
 | [Components](docs/architecture/components.md) and [flows](docs/architecture/flows.md) | Diagrams of the parts, trust boundaries, the cycle, review, release and learning. |
 | [Claude](docs/ecosystems/claude-code.md), [Codex](docs/ecosystems/codex.md), [Cursor](docs/ecosystems/cursor.md), [any other](docs/ecosystems/generic.md) | Install and run in each ecosystem. |
-| [Individual](docs/profiles/individual.md) and [enterprise](docs/profiles/enterprise.md) | Pick a profile. |
+| [Individual](docs/profiles/individual.md) and [organization](docs/profiles/organization.md) | Pick a profile. |
 | [Forge](docs/forges.md) | GitHub checks, approval, tokens and one-time setup. |
 | [The contract](references/architecture.md) | Normative: ports, gates, binding, executors, runtimes. |
 
@@ -38,8 +41,9 @@ runner of its own.
 
 A scheduled agent loads the `sdlc` skill and runs one cycle; the skill routes each ticket to a
 step skill. Every hand-off goes through the board and the forge. CI runs the CR's code with no
-secrets (the `Required` check); a separate review runtime, with its own identity, reads that
-result and never runs CR code. A Full-lane CR also needs one human approval.
+secrets (the `Required` check); `review-pr`, in a fresh agent context, reads that result and never
+runs CR code. With two identities it runs in a separate review runtime under its own account. A
+Full-lane CR also needs one human approval.
 
 ## Skills
 
@@ -81,7 +85,7 @@ again. npm 12 refuses to change an installed Git dependency in place (`EALLOWGIT
 
 | Flag | Values | Default |
 |---|---|---|
-| `--profile` | `individual`, `enterprise` | `individual` |
+| `--profile` | `individual`, `individual-api`, `organization` | `individual` |
 | `--harness` | `claude`, `codex`, `cursor`, `generic` | `generic` |
 | `--board` | `github`, `github-issues`, `jira`, `linear`, `local` | `github` |
 | `--forge` | `github` | `github` |
@@ -102,8 +106,8 @@ review prompts in `.agents/`, and a pointer block in `AGENTS.md`. Per harness:
 | `generic` | `.agents/skills/` (see the ecosystem guide) | `AGENTS.md` | printed for you to add |
 
 The init log is the exact list. Then fill in the binding and run `doctor` until every port is ok.
-Prerequisites for the GitHub adapters: `gh` logged in, a token with Projects v2 scope for the
-board, and a second account or app for the review identity.
+Prerequisites for the GitHub adapters: `gh` logged in (or a Claude cloud session), and a token with
+Projects v2 scope for a `github` board. The `organization` profile also needs a review GitHub App.
 
 ### Claude Code plugin
 

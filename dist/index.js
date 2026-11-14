@@ -8085,7 +8085,16 @@ function createLocalBoard(ctx) {
 function createBoard(ctx) {
   const make = { github: createGithubBoard, "github-issues": createGithubIssuesBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
   if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
-  return make(ctx);
+  const board = make(ctx);
+  const scope = ctx.binding.board.scope;
+  if (!scope?.label) return board;
+  const pre = scope.label.slice(0, scope.label.indexOf(":") + 1);
+  const mine = (i) => i.labels.includes(scope.label) || !!scope.home && !i.labels.some((l) => l.startsWith(pre));
+  return {
+    ...board,
+    list: async (q) => (await board.list(q)).filter(mine),
+    create: (t) => board.create({ ...t, labels: [.../* @__PURE__ */ new Set([...t.labels ?? [], scope.label])] })
+  };
 }
 
 // src/forge/index.ts
@@ -8114,6 +8123,7 @@ function github(ctx) {
   const gh = (a, input, env = implementer()) => ctx.exec("gh", repo && a[0] !== "api" ? [...a, "-R", repo] : a, { cwd: ctx.root, input, env });
   const post = (path, data, env) => JSON.parse(gh(["api", "-X", "POST", `${api}/${path}`, "--input", "-"], JSON.stringify(data), env));
   const cloud = ctx.env.CLAUDE_CODE_REMOTE === "true";
+  const oneIdentity = !ctx.binding.forge.review_identity;
   const ccr = (method, n, route, ...f) => gh(["api", "-X", method, `${api}/pulls/${n}/ccr/${route}`, ...f]);
   const labelled = (p) => (p.labels ?? []).some((l) => l.name === "draft");
   const label = (n) => post(`issues/${n}/labels`, { labels: ["draft"] });
@@ -8235,9 +8245,10 @@ function github(ctx) {
     async status(sha, s, opts) {
       const a = ["api", "-X", "POST", `${api}/statuses/${sha}`, "-f", `state=${s.state}`, "-f", `context=${s.context}`, "-f", `description=${s.description}`];
       if (s.url) a.push("-f", `target_url=${s.url}`);
-      gh(a, void 0, withToken(opts?.as === "ci" ? "token_env" : "review_token_env"));
+      gh(a, void 0, opts?.as === "ci" ? withToken("token_env") : oneIdentity ? implementer() : withToken("review_token_env"));
     },
     async approve(n) {
+      if (oneIdentity) throw new Error("one identity (forge.review_identity is empty): GitHub refuses an approving review from the CR's author; review-pr skips forge approve");
       post(`pulls/${n}/reviews`, { event: "APPROVE", body: "agentic-sdlc review: PASS" }, withToken("review_token_env"));
     },
     async approvals(n) {
@@ -8457,7 +8468,7 @@ var EXECUTOR_KEYS = { command: ["run"], webhook: ["url_env"], managed: ["token_e
 var MANAGED_APIS = ["claude", "cursor", "antigravity", "generic"];
 var HUMAN_APPROVAL = ["full-lane", "always", "never"];
 var SANDBOXES = ["cloud", "container", "local"];
-var PROFILES = ["individual", "enterprise"];
+var PROFILES = ["individual", "individual-api", "organization"];
 var DELIVERY = ["release-line", "continuous"];
 var EVIDENCE = ["sbom", "provenance", "signature"];
 var TIERS = ["fast", "balanced", "deep"];
@@ -8525,6 +8536,19 @@ function validateBinding(b) {
     }
   }
   if (["human-approval", "ticket-linkage", "proofs-on-base"].includes(x.forge?.review_check_name)) p.push(`forge.review_check_name '${x.forge.review_check_name}' is a gate's context`);
+  const rid = String(x.forge?.review_identity ?? ""), rt = x.forge?.options?.review_token_env;
+  if (rid && !rt) p.push("forge.review_identity is set but forge.options.review_token_env is unset: name its token, or empty review_identity for one identity");
+  if (!rid && rt) p.push("forge.options.review_token_env is set but forge.review_identity is empty: name the review identity, or remove review_token_env for one identity");
+  if (rt && rt === x.forge?.options?.token_env) p.push("forge.options.review_token_env equals token_env: two identities need two tokens");
+  if (x.profile === "organization" && !rid) p.push("profile organization needs a separate review identity: set forge.review_identity and forge.options.review_token_env");
+  const sc = x.board?.scope;
+  if (sc !== void 0) {
+    const label = String(sc?.label ?? ""), pre = label.split(":")[0];
+    if (!/^[^:]+:.+/.test(label)) p.push("board.scope.label must be '<prefix>:<name>', e.g. repo:app-a");
+    else if (sc.home && !(Array.isArray(sc.repos) && sc.repos.includes(label) && sc.repos.every((r) => String(r).startsWith(`${pre}:`))))
+      p.push(`board.scope.repos must list every repo label, this repo's included, each starting '${pre}:'`);
+    else if (!sc.home && sc.repos !== void 0) p.push("board.scope.repos is for the home repo only (board.scope.home: true)");
+  }
   const ha = x.forge?.human_approval;
   if (ha !== void 0 && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join("|")}`);
   for (const k of ["bench_min_cases", "bench_trials"]) {

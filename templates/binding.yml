@@ -1,10 +1,11 @@
 # Project binding for the sdlc skills: every project value they read. Names and commands only.
 # Another project replaces this file and keeps .agents/skills/. Secrets never go here: name env vars.
 version: 2
-# profile picks the defaults init writes and what validate warns about (architecture.md section 10):
+# profile picks the defaults init writes and what validate checks (architecture.md section 10):
 #   individual: subscriptions only; harness executors or a local subscription CLI via `command`; no API keys, no org storage.
-#   enterprise: APIs and managed agents; all executor kinds, a separate review identity, traces on org storage, full bench.
-profile: individual # individual (subscriptions only) | enterprise (APIs, managed agents)
+#   individual-api: individual plus API keys: every executor kind, managed agents included.
+#   organization: API keys and managed agents; a separate review identity (required), traces on org storage, full bench.
+profile: individual # individual | individual-api | organization
 owners:
   product: your-product-owner   # rules the product: narrative, priorities, P0, releases, production approval
   factory: your-factory-owner   # rules the factory: skills, binding, gates, guardrail learning proposals
@@ -39,20 +40,27 @@ board:
   done_statuses: [Done, Cancelled] # statuses that count as closed (open blockers, gates, bench cases)
   views: [Board, Signals, Human, Release, Roadmap] # saved views the sdlc skill describes
   signal_streams: [alert, feedback, owner, security, ci, deploy, maintenance] # label signal:<stream>; maintenance: dependency, advisory, end-of-life and expiry scanners
+  # scope:                      # many repos, one board (unset: this board serves one repo). Each repo's binding names its own label.
+  #   label: repo:app-a         # this repo's tickets carry it; board list shows only them; board create adds it
+  #   home: true                # in exactly one repo: it also lists tickets with no repo: label and triage gives each one a label
+  #   repos: [repo:app-a, repo:app-b] # home only: every repo label triage may give
+  # A GitHub Project needs no scope: board.options.repo already keeps one repo's issues.
 
 forge:
   adapter: github               # github
   options:                      # adapter-specific; credentials only as env var names; validate rejects unknown keys
-    # review_token_env: the review identity's credential. forge status and forge approve use it and nothing else;
-    #   the implementer's token_env never posts a status, so an implementer cannot green its own review.
     # github:    { repo: my-org/my-repo, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
-    #            token_env (optional): passed to gh as GH_TOKEN; unset = gh's own login. Give it Commit statuses:
-    #            no access (a fine-grained token): doctor warns on a classic token with repo scope
+    #            token_env (optional): passed to gh as GH_TOKEN; unset = gh's own login (in a Claude cloud session, the proxy).
+    #            review_token_env: only with review_identity: the review identity's token; forge status and approve use it.
+    #            With two identities give token_env Commit statuses: no access, so an implementer cannot green its own review.
     {}
-  review_identity: reviewer-account # the account behind review_token_env: posts the review status and the approving review
+  review_identity: ""           # empty: one identity (yours): review-pr runs in the cycle, posts the review status with
+                                #   your token and gives no approving review (GitHub refuses one from the CR's author).
+                                #   Set: the separate review account or app behind review_token_env; review-pr runs in
+                                #   the review runtime only. organization requires it.
   human_approval: full-lane     # full-lane | always | never. Which product CRs need one approving review by a human
-                                #   (not owners.bots, not review_identity) on the head: gate approval posts status human-approval
-                                #   given review_token_env; the cycle never holds it
+                                #   (not owners.bots, not review_identity) on the head: gate approval posts status human-approval.
+                                #   With one identity a collaborator approves, or you merge the CR as admin
   review_check_name: review     # status context review-pr posts on a pass
   verify_check_name: Required   # CI job (no secrets) running commands.install and commands.verify; review-pr reads it
   required_checks: [ticket-linkage, Required, proofs-on-base, review, human-approval, skill-regression] # must be green before merge

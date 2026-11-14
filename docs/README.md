@@ -18,7 +18,7 @@
 | Profile | Guide | Pays with |
 |---|---|---|
 | individual | [profiles/individual.md](profiles/individual.md) | Subscriptions only. No API keys. |
-| enterprise | [profiles/enterprise.md](profiles/enterprise.md) | APIs and managed agents. |
+| organization | [profiles/organization.md](profiles/organization.md) | API keys and managed agents, two identities. |
 
 ## Pick an ecosystem (where the cycle runs)
 

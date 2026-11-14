@@ -74,17 +74,23 @@ Steps 1 to 8 review a draft CR. Steps 9 and 10 handle a ready CR. A check missin
    posted in the report; they never block PASS or cause a send-back. Done when posted.
 7. **Decide.**
    - PASS (every criterion proven, no Important finding open, `Required` and `proofs-on-base` green on this
-     head), from the review runtime only, as `forge.review_identity`: `forge status <head>
-     --context <forge.review_check_name> --state success --description <verdict> --url <report
-     link>`, then `forge approve <n>`. Both use `forge.options.review_token_env`, never the
-     implementer's token; when it is unset they fail: call
-     [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access) and post nothing else.
+     head): `forge status <head> --context <forge.review_check_name> --state success --description
+     <verdict> --url <report link>`.
+     - Two identities (`forge.review_identity` set): from the review runtime only, then `forge
+       approve <n>`. Both use `forge.options.review_token_env`, never the implementer's token; when
+       it is unset they fail: call [`escalate-to-human`](../escalate-to-human/SKILL.md) (Access) and
+       post nothing else.
+     - One identity (`forge.review_identity` empty): the status goes out with the implementer's
+       token. Skip `forge approve`: GitHub refuses an approving review from the CR's author.
    - Human approval. When the CR needs one (a Full-lane product CR and `forge.human_approval` is
      `full-lane` or `always`; any product CR when `always`; a `guardrail` factory CR), one CR
      comment asking `owners.product` (for a factory CR, `owners.factory`) to approve the head. The
-     `approval` gate enforces it; you never approve for a human.
-   - Then `forge ready <n>` and `forge automerge <n>`. Done when the CR is approved by the review
-     identity, ready, any human approval is requested, and the ticket still shows In review.
+     `approval` gate enforces it; you never approve for a human. With one identity the owner is
+     the CR's author, who cannot approve it: ask a collaborator to approve the head, or the owner
+     to merge it as admin.
+   - Then `forge ready <n>` and `forge automerge <n>`. Done when the review status is posted (and,
+     with two identities, the approval), the CR is ready, any human approval is requested, and the
+     ticket still shows In review.
 8. **Send back.**
    - Findings (any Important) on a product CR opened by the factory: move the ticket to In progress
      for [`implement-spec`](../implement-spec/SKILL.md).

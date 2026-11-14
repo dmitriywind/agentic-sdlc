@@ -71,7 +71,7 @@ flowchart LR
 The same skills serve every shape; only binding values change. The values are in the
 [operating baseline](operating-baseline.md#team-shapes).
 
-| Use case | Solo | Small team | Enterprise | Agent-heavy | Non-developer owner |
+| Use case | Solo | Small team | Organization | Agent-heavy | Non-developer owner |
 |---|---|---|---|---|---|
 | UC-04 Add an idea | the developer | the lead | product role | product role | the owner, on the board only |
 | UC-11 Approve a Full-lane CR | the developer approves the bot's CR | a second engineer | a human on every CR | a human on every CR | the technical steward |

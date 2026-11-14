@@ -3,8 +3,8 @@
 Git only, and GitHub is the one forge: on other forges a CR can change the pipeline file that runs
 its own gates. The adapter is
 unit-tested against a fake process runner, not against GitHub itself yet.
-Secrets everywhere: `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN`, `AGENTIC_REVIEW_TOKEN` (the
-review identity).
+Secrets: `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN`, and with two identities `AGENTIC_REVIEW_TOKEN`
+(the review identity). In a Claude cloud session the proxy is the forge login.
 
 ## Claude cloud sessions
 In a cloud session the adapter calls only REST under `repos/{owner}/{repo}/…`, so every verb but
@@ -26,22 +26,29 @@ wait on). No gate can block that merge, so the review is the last check; `doctor
 | `Required` | CI job on `pull_request`, no secrets | `commands.install` then `commands.verify` on the CR head. No agent posts it. |
 | `proofs-on-base` | gate, own no-secrets job | Each new or changed proof must fail on the merge base. |
 | `ticket-linkage` | gate `linkage` | One `Closes <id>` for one open ticket. |
-| `review` | `review-pr` as the review identity | From the review runtime only. |
+| `review` | `review-pr` | Two identities: as the review identity, from the review runtime only. One identity: with the implementer's token, from the cycle. |
 | `human-approval` | gate `approval` | By class; see below. |
 | `skill-regression` | gate | Factory changes keep the skill pack valid. |
 
 Pin each required check to the app that posts it (on GitHub the ruleset's `integration_id`), so a
 token that can write statuses cannot fake it. The trunk ruleset pins the four CI checks (`ticket-linkage`,
-`Required`, `proofs-on-base`, `skill-regression`) to the Actions app. `review` and `human-approval` post with
-the review token: pin them to the review app when it is an App. `agentic-sdlc doctor` warns when one is
+`Required`, `proofs-on-base`, `skill-regression`) to the Actions app. With two identities `review` and
+`human-approval` post with the review token: pin them to the review app when it is an App. With one
+identity they post with your token and the CI job's token, and cannot be pinned to a separate app. `agentic-sdlc doctor` warns when one is
 not pinned.
 
 The gate jobs on GitHub are named `linkage-gate` and `approval-gate`. `ticket-linkage` is a commit status
 that the linkage job posts with its own `GITHUB_TOKEN`.
 
 ## Review identity and approval
-`forge status` and `forge approve` use only `forge.options.review_token_env` (the
-`forge.review_identity` account); without it they fail. The implementer's `token_env` cannot post
+**One identity** (`forge.review_identity` empty, the default of both individual profiles): `forge status`
+posts with the implementer's token and `forge approve` refuses, since GitHub refuses an approving review
+from the CR's author. `init` writes a trunk ruleset that needs no approving review. The `approval` gate
+posts `human-approval` with the CI job's token. A CR that needs a human waits until a collaborator
+approves its head, or the owner merges it as admin (the ruleset lets admins bypass in a pull request).
+
+**Two identities** (required for `organization`): `forge status` and `forge approve` use only
+`forge.options.review_token_env` (the `forge.review_identity` account); without it they fail. The implementer's `token_env` cannot post
 `review` or approve. Give the implementer's account no admin or bypass right, and keep
 `AGENTIC_REVIEW_TOKEN` out of the implementer's runtime. The review runtime never runs CR code.
 `forge status` refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`).

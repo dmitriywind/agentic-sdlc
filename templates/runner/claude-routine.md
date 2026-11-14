@@ -1,6 +1,6 @@
 # Claude cloud scheduled task (routine)
 
-Profile: individual (also works on Team/Enterprise seats). Research preview; needs a claude.ai login (not an API key, Bedrock or Vertex).
+Profile: individual or individual-api (also works on Team and Enterprise seats of the Claude plan). Research preview; needs a claude.ai login (not an API key, Bedrock or Vertex).
 Install at: claude.ai/code/routines, or `/schedule` in Claude Code. The task belongs to, and acts as, one claude.ai account.
 Usage: scheduled runs draw the same subscription usage as interactive work. The shortest schedule interval is 1 hour.
 Skills: a cloud session loads no repo plugin, only `.claude/skills/`. Install with
@@ -19,14 +19,20 @@ Secrets: none for the model. The repo needs the Claude GitHub App or `/web-setup
 Models: set the binding's `models` to Claude ids, for example Sonnet for `fast` and `balanced`, Opus for `deep`.
 Proxy: Linear and Jira calls go out through the session's network proxy only when Node reads the proxy env:
 add `NODE_USE_ENV_PROXY=1` to both environments (the cloud's Node 22 honours it and prints an `UNDICI-EHPA` experimental warning).
-Two routines, two cloud environments:
-- cycle environment: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_SDLC_UNATTENDED=1, AGENTIC_REVIEW_FIRE_CMD, NODE_USE_ENV_PROXY=1. Never AGENTIC_REVIEW_TOKEN.
+One identity (`forge.review_identity` empty, the default): one routine, one cloud environment. The routine acts as your
+GitHub account, and the cycle runs review-pr itself.
+- environment: AGENTIC_SDLC_UNATTENDED=1, NODE_USE_ENV_PROXY=1, and a board token for Jira or Linear. No forge token: the proxy is the forge login.
+
+1. Create the cloud environment for the repo with the env vars above; set its setup script to `sh .agents/runner-setup.sh`.
+2. Cycle routine on it: paste the text of `cycle-prompt.md` below the `---` line as the prompt; pick the binding's `models.fast` model (Sonnet).
+3. Trigger: a Schedule (custom cron, at least 1 hour apart). Limit: 100 scheduled runs per hour per account.
+
+Two identities (`forge.review_identity` set): two routines, two cloud environments:
+- cycle environment: the one above plus AGENTIC_REVIEW_FIRE_CMD. Never AGENTIC_REVIEW_TOKEN.
 - review environment: the same plus AGENTIC_REVIEW_TOKEN and AGENTIC_SDLC_ROLE=review (the names your binding uses).
 
-1. Create both cloud environments for the repo with the env vars above; set each setup script to `sh .agents/runner-setup.sh`.
-2. Cycle routine on the cycle environment: paste the text of `cycle-prompt.md` below the `---` line as the prompt; pick the binding's `models.fast` model (Sonnet).
-3. Review routine on the review environment: paste the text of `review-prompt.md` below the `---` line as the prompt.
-4. Triggers: the cycle routine on a Schedule (custom cron, at least 1 hour apart); the review routine on an API trigger that the cycle fires when a CR needs a review (`AGENTIC_REVIEW_FIRE_CMD`, see `routine.md`). Limit: 100 scheduled runs per hour per account.
+4. Review routine on the review environment: paste the text of `review-prompt.md` below the `---` line as the prompt, on an
+   API trigger that the cycle fires when a CR needs a review (`AGENTIC_REVIEW_FIRE_CMD`, see `routine.md`).
 5. Optional API trigger: `POST https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire`,
    `Authorization: Bearer <per-task token>`, `anthropic-beta: experimental-cc-routine-2026-04-01`, optional body `text`.
    Limit: 30 fires per hour per task.

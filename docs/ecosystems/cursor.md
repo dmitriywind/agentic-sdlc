@@ -30,7 +30,7 @@ Prompt text: [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-p
 | Cloud Agent by hand | cursor.com/agents, phone app, Slack `@cursor`, `@cursor` on a PR or issue. [docs](https://cursor.com/docs/cloud-agent) | Needs Premium or higher, Teams, Enterprise or legacy paid; not Free or Plus. Usage is billed from the plan at the model rate, with a spend limit prompt. |
 | CI cron with the CLI | `agent -p` in a job with the secret `CURSOR_API_KEY`. [docs](https://cursor.com/docs/cli/github-actions) | Whether CLI use with that key bills against the subscription or separately: not documented at the time of writing. |
 
-## Run without your machine - Enterprise
+## Run without your machine - Organization
 - Cloud Agents API (beta): `POST /v1/agents` with `prompt.text`, `repos[].url`, `repos[].startingRef`, `autoCreatePR`, `model`, `mcpServers`, `envVars`. Follow-ups `POST /v1/agents/{id}/runs`; stream `GET .../runs/{runId}/stream`; cancel and usage endpoints. Auth is Basic or Bearer with a user or service-account key. Default rate limit 20 requests per minute per endpoint. [endpoints](https://cursor.com/docs/cloud-agent/api/endpoints), [api](https://cursor.com/docs/api)
 - Automations can "Run as" a team service account ([docs](https://cursor.com/docs/cloud-agent/automations)).
 - Environments come from `.cursor/environment.json`; network allowlist and hooks run in the cloud. SCM: GitHub (including Enterprise Server), GitLab (including self-hosted), Bitbucket Cloud, Azure DevOps ([docs](https://cursor.com/docs/cloud-agent)).
@@ -54,7 +54,7 @@ executors:
   implement-spec: { kind: managed, api: cursor, token_env: CURSOR_API_KEY, repo_url: "https://github.com/<owner>/<repo>", sandbox: cloud }
 ```
 Bugbot reviews each PR update and reads `.cursor/BUGBOT.md` ([docs](https://cursor.com/docs/bugbot)). Its comments are input to
-`review-pr`; the `review` status still comes only from the review identity.
+`review-pr`; the `review` status still comes only from `review-pr`.
 
 ## Limits and unknowns
 - Cloud Agents API is beta; v1 has no webhooks.

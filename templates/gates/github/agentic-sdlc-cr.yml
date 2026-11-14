@@ -2,7 +2,7 @@ name: agentic-sdlc CR gate
 # Event -> gate wiring only. Process rules live in the CLI and the binding.
 # Required checks (ruleset.trunk.json): job "ticket-linkage" here; status "human-approval" posted here by
 # `gate approval`; "Required", "proofs-on-base" and "skill-regression" come from agentic-sdlc-verify.yml;
-# "review" is posted by review-pr in the review runtime.
+# "review" is posted by review-pr (the review runtime; with one identity, the cycle).
 # pull_request_target: this file and the binding come from the base branch, so a PR cannot change
 # what runs with these secrets. The PR's code is never checked out or run here; its number, head ref
 # and head sha reach the gates only as data (env).
@@ -86,8 +86,9 @@ jobs:
 
 
   human-approval:
-    # Posts status human-approval on the head (with the review identity's token): computes the class and
-    # checks the approving reviews the class needs. Runs on a PR event and, via workflow_run, on a review event.
+    # Posts status human-approval on the head (with the review identity's token; with one identity, no
+    # forge.review_identity, with this job's token): computes the class and checks the approving reviews
+    # the class needs. Runs on a PR event and, via workflow_run, on a review event.
     name: approval-gate
     if: github.event_name == 'pull_request_target' || github.event_name == 'workflow_run'
     environment: agentic-review
@@ -97,8 +98,9 @@ jobs:
       contents: read
       pull-requests: read
       checks: read      # forge view reads the head's check runs
-      statuses: read
+      statuses: write   # one identity: the gate posts with this job's token
     env:
+      GH_TOKEN: ${{ github.token }}
       AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
       AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
       AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}

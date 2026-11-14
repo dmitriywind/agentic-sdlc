@@ -41,12 +41,41 @@ Feature: Install and validate the binding
     Then the command exits with code 1
 
   # Source: src/install.ts, "init" (profile)
-  # Proof: test/install.test.ts "init --profile enterprise writes traces and container sandbox; warnings keep validate at 0"
-  Scenario: The enterprise profile sets traces and a container sandbox
-    When the adopter runs "agentic-sdlc init --profile enterprise"
-    Then the binding has "profile: enterprise" and a container sandbox
-    And the binding has a traces.uri
+  # Proof: test/install.test.ts "init --profile organization writes two identities, traces and a container sandbox; the ruleset asks for an approving review"
+  Scenario: The organization profile sets two identities, traces and a container sandbox
+    When the adopter runs "agentic-sdlc init --profile organization"
+    Then the binding has "profile: organization" and a container sandbox
+    And the binding has a traces.uri, a review_identity, a token_env and a review_token_env
+    And the trunk ruleset asks for one approving review
     And an unknown profile makes the command exit with code 1
+
+  # Source: src/install.ts, "init" (profile, ruleset)
+  # Proof: test/install.test.ts "init --profile individual and individual-api: one identity, and the ruleset asks for no approving review"
+  Scenario: The individual profiles start with one identity
+    When the adopter runs "agentic-sdlc init --profile individual" or "--profile individual-api"
+    Then the binding has no review_identity and no review_token_env
+    And the trunk ruleset asks for no approving review, since GitHub refuses one from the CR's author
+
+  # Source: src/binding.ts, "validateBinding" (identities) and "bindingWarnings" (profile)
+  # Proof: test/binding.test.ts "identities: organization needs a review identity; review_identity and review_token_env come together and differ from token_env"
+  # Proof: test/binding.test.ts "bindingWarnings flags profile mismatches without failing validation"
+  Scenario: Validate checks the identities each profile needs
+    Then validate fails an organization binding with no forge.review_identity
+    And validate fails a review_identity without a review_token_env, a review_token_env without a review_identity, and a review_token_env equal to token_env
+    And an individual binding with a managed, webhook or assign executor gets a warning to use individual-api
+    And an individual-api binding gets no such warning
+    And an organization binding with no managed executor gets a warning
+
+  # Source: src/board/index.ts, "createBoard" (scope); src/binding.ts, "validateBinding" (board.scope)
+  # Proof: test/board-local.test.ts "board.scope: many repos on one board; a repo lists its own label, the home repo also the unlabelled, create adds the label"
+  # Proof: test/binding.test.ts "board.scope: a prefixed label; the home repo lists every repo label, its own included"
+  Scenario: Many repos share one board through board.scope
+    Given two repos whose bindings name the same board, one with board.scope.label "repo:a", one with "repo:b" and home true
+    When each repo runs "board list"
+    Then repo a sees only tickets labelled "repo:a"
+    And the home repo sees tickets labelled "repo:b" and tickets with no "repo:" label
+    And "board create" in each repo adds that repo's label
+    And validate fails a home binding whose board.scope.repos does not list every repo label
 
   # Source: src/binding.ts, "validateBinding"
   # Proof: test/binding.test.ts "validateBinding reports each broken rule"

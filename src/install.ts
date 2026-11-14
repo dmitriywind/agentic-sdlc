@@ -205,7 +205,8 @@ async function init(root: string, argv: string[], log: string[]) {
   const board = f.board ?? 'github', forge = f.forge ?? 'github', vcs = f.vcs ?? 'git', harness = f.harness ?? 'generic';
   const force = f.force === 'true';
   const profile = f.profile ?? 'individual';
-  if (profile !== 'individual' && profile !== 'enterprise') throw new Error(`--profile must be individual or enterprise, got '${profile}'`);
+  if (!['individual', 'individual-api', 'organization'].includes(profile)) throw new Error(`--profile must be individual, individual-api or organization, got '${profile}'`);
+  const org = profile === 'organization';
   if (vcs !== 'git') throw new Error(`--vcs must be git (v2 supports git only), got '${vcs}'`);
   if (!FORGES.includes(forge)) throw new Error(`--forge must be one of ${FORGES.join('|')}, got '${forge}'`);
   if (!MCP_FILES.has(harness)) throw new Error(`--harness must be one of ${[...MCP_FILES.keys()].join('|')}, got '${harness}'`);
@@ -236,9 +237,13 @@ async function init(root: string, argv: string[], log: string[]) {
     doc.setIn(['forge', 'adapter'], forge);
     doc.setIn(['vcs', 'adapter'], vcs);
     doc.set('profile', profile);
-    doc.setIn(['executors', 'default'], { kind: 'harness', sandbox: profile === 'enterprise' ? 'container' : 'cloud' });
-    if (profile === 'enterprise') {
+    doc.setIn(['executors', 'default'], { kind: 'harness', sandbox: org ? 'container' : 'cloud' });
+    if (org) {
       doc.set('traces', { uri: '.agents/runtime/traces/{run_id}.jsonl' }); // placeholder: point it at org storage
+      // Two identities: the implementer's token and the review app's token.
+      doc.setIn(['forge', 'options', 'token_env'], 'AGENTIC_FORGE_TOKEN');
+      doc.setIn(['forge', 'options', 'review_token_env'], 'AGENTIC_REVIEW_TOKEN');
+      doc.setIn(['forge', 'review_identity'], 'your-review-app[bot]');
     }
     const repo = forge === 'github' ? originRepo(root) : undefined;
     if (repo) {
@@ -260,14 +265,26 @@ async function init(root: string, argv: string[], log: string[]) {
   const gates = join(pkg, 'templates', 'gates');
   const dir = need(pkg, `templates/gates/${forge}`);
   // Continuous delivery has no release line: no release workflow, no release ruleset.
-  const continuous = parse(readFileSync(bindingFile, 'utf8'))?.product?.delivery === 'continuous';
+  const bound = parse(readFileSync(bindingFile, 'utf8'));
+  const continuous = bound?.product?.delivery === 'continuous';
+  const oneIdentity = !bound?.forge?.review_identity;
   {
     for (const n of readdirSync(dir).filter((n) => n.endsWith('.yml') && !(continuous && n === 'agentic-sdlc-release.yml'))) copyFile(join(dir, n), join(root, '.github', 'workflows', n), force, log);
     if (existsSync(join(dir, 'pull_request_template.md'))) copyFile(join(dir, 'pull_request_template.md'), join(root, '.github', 'pull_request_template.md'), force, log);
     if (existsSync(join(dir, 'ruleset.trunk.json'))) {
-      copyFile(join(dir, 'ruleset.trunk.json'), join(root, '.github', 'rulesets', 'trunk.json'), force, log);
+      const dest = join(root, '.github', 'rulesets', 'trunk.json');
+      const fresh = force || !existsSync(dest);
+      copyFile(join(dir, 'ruleset.trunk.json'), dest, force, log);
+      if (fresh && oneIdentity) {
+        // One identity: GitHub refuses an approving review from the CR's author, so the ruleset asks for none.
+        const rs = readJson(dest);
+        for (const r of rs.rules) if (r.type === 'pull_request') Object.assign(r.parameters, { required_approving_review_count: 0, require_last_push_approval: false });
+        writeFileSync(dest, JSON.stringify(rs, null, 2) + '\n');
+      }
       log.push('import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk');
-      log.push('its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App\'s id if it is an App (a PAT cannot be pinned)');
+      log.push(oneIdentity
+        ? 'one identity: the ruleset needs no approving review; a Full-lane CR waits on human-approval until a collaborator approves it or you merge it as admin'
+        : 'its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App\'s id if it is an App (a PAT cannot be pinned)');
     }
     if (!continuous && existsSync(join(dir, 'ruleset.release.json'))) {
       copyFile(join(dir, 'ruleset.release.json'), join(root, '.github', 'rulesets', 'release.json'), force, log);
@@ -446,7 +463,7 @@ export const cli: PortCli = async (argv, ctx) => {
       }
       return bad ? 1 : 0;
     }
-    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|enterprise] [--no-plugin] [--force] | validate | doctor');
+    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|individual-api|organization] [--no-plugin] [--force] | validate | doctor');
     return 2;
   } catch (e) {
     console.error(redact((e as Error).message, ctx.env));

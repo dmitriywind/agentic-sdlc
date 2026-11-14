@@ -1,10 +1,11 @@
-# Profile: individual (subscription token) or enterprise (API key).
+# Profile: individual or individual-api (subscription token) or organization (API key).
 # Install at: .github/workflows/factory-cycle-claude.yml
 # Secrets (set ONE auth secret; the API key outranks the token, so never set both — setup.sh refuses
-# ANTHROPIC_API_KEY when the binding's profile is individual):
-#   individual: CLAUDE_CODE_OAUTH_TOKEN  (create with `claude setup-token`)
-#   enterprise: ANTHROPIC_API_KEY
-# Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_REVIEW_TOKEN (the names your binding uses).
+# ANTHROPIC_API_KEY when the binding's profile is individual or individual-api):
+#   individual, individual-api: CLAUDE_CODE_OAUTH_TOKEN  (create with `claude setup-token`)
+#   organization: ANTHROPIC_API_KEY
+# Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, and AGENTIC_REVIEW_TOKEN with two identities (the names your binding uses).
+# One identity (forge.review_identity empty): the cycle runs review-pr itself; delete the `review` job.
 # --allowedTools: set the npm entries to your binding's commands.fast_check and commands.verify.
 # Three jobs: `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
 # `review` starts when the cycle finishes, with the review token and the review prompt only;
@@ -26,7 +27,7 @@ env:
   AGENTIC_SDLC_UNATTENDED: "1"
   CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: "1"
   CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}  # individual
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}              # enterprise; empty unless the secret exists
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}              # organization; empty unless the secret exists
 defaults:
   run:
     shell: bash   # self-hosted Windows runners default to PowerShell
@@ -47,7 +48,7 @@ jobs:
           node-version: 22
       # set: pin an exact Claude Code version
       - run: npm i -g @anthropic-ai/claude-code
-      - run: sh .agents/runner-setup.sh   # also the ANTHROPIC_API_KEY guard for the individual profile
+      - run: sh .agents/runner-setup.sh   # also the ANTHROPIC_API_KEY guard for the individual profiles
       - name: Run one cycle
         run: >-
           claude -p "$(sed '1,/^---$/d' .agents/cycle-prompt.md)"

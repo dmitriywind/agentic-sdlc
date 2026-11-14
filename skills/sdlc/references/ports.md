@@ -34,8 +34,8 @@ meaning of each verb is unchanged. Write bodies to a file and pass `--body-file`
 | Bring the CR up to the trunk | `forge sync <n>` |
 | Merge when every required check is green | `forge automerge <n>` |
 | CR comment (review report) | `forge comment <n> --body-file <f>` |
-| Post the review status (review runtime only) | `forge status <sha> --context <c> --state success\|failure\|pending --description <d> [--url <u>]` |
-| Approve as the review identity (review runtime only) | `forge approve <n>` |
+| Post the review status (`review-pr` only: the review runtime, or the cycle with one identity) | `forge status <sha> --context <c> --state success\|failure\|pending --description <d> [--url <u>]` |
+| Approve as the review identity (review runtime only; refused with one identity) | `forge approve <n>` |
 | Read CR comments (review report, owner reply on a factory CR) by a trusted author | `forge comments <n> [--last <k>] [--marker <text>] --trusted` |
 | Read the CR's reviews | `forge approvals <n>` |
 | Read CI runs | `forge runs [--ref <r>] [--failed]` |

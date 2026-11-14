@@ -8,9 +8,12 @@ How to put the factory on a repo, and on many repos. The install commands are in
 ```mermaid
 flowchart TD
   A["Who pays for the agents?"] -->|"subscriptions only"| IND["--profile individual"]
-  A -->|"API keys, managed agents"| ENT["--profile enterprise"]
-  IND --> H["Which agent runs the cycle?"]
-  ENT --> H
+  A -->|"subscriptions, plus API keys for some stages"| API["--profile individual-api"]
+  A -->|"API keys, managed agents"| ORG["--profile organization<br/>(two identities)"]
+  IND --> ID["One identity, or a review identity?<br/>forge.review_identity"]
+  API --> ID
+  ID --> H["Which agent runs the cycle?"]
+  ORG --> H
   H --> HC["--harness claude | codex | cursor |<br/>generic"]
   HC --> B["Where do tickets live?"]
   B --> BC["--board github | github-issues | jira | linear | local"]
@@ -90,9 +93,12 @@ flowchart LR
 
 - Each repo has its own binding and its own pinned version. Upgrade one repo at a time.
 - Each repo has its own cycle and review schedulers, and its own heartbeat ticket.
-- Give each repo its own board scope, so a cycle routes only its own tickets: a Jira
-  `project_key`, a Linear `team_key`, or `board.options.repo` on a GitHub Project. Several repos
-  can share one GitHub Project; each repo's adapter reads only that repo's issues.
+- One board per repo: a Jira `project_key`, a Linear `team_key` or a `github-issues` board of its own.
+- Or one board for many repos:
+  - A GitHub Project: each repo sets its own `board.options.repo`; each adapter reads only that repo's issues.
+  - A shared Jira project, Linear team or hub repo's issues: each repo sets `board.scope.label: repo:<name>`.
+    One repo sets `home: true` and every label in `repos`; its `triage-signal` gives each new
+    ticket its repo label. Every other repo lists only its own label.
 - One person or team can be the Factory owner of many repos.
 - `improve-factory` changes the copy of the skills in its own repo only. A change that should
   reach every repo goes upstream to this repo, then out with the next tag.

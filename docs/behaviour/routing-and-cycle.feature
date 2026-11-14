@@ -75,7 +75,7 @@ Feature: Routing and the unattended cycle
     And then it triages every ticket at Signals
     And then it routes the board
     And then it writes one heartbeat that holds every run of this cycle, the judge and learn runs too
-    And then it fires the review runtime only when a CR needs a review
+    And then, with a forge.review_identity, it fires the review runtime only when a CR needs a review
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 2
   Scenario: An idle cycle exits with a minimal heartbeat
@@ -91,7 +91,8 @@ Feature: Routing and the unattended cycle
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 8
   Scenario Outline: The review runtime fires only for a CR that needs a review
-    Given the cycle has written its heartbeat
+    Given forge.review_identity is set
+    And the cycle has written its heartbeat
     And "forge list" shows <cr>
     When the cycle reaches the review hand-off
     Then the review runtime <fired>
@@ -105,11 +106,21 @@ Feature: Routing and the unattended cycle
       | no open CR                                                           | is not fired    |
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle"
-  Scenario: The cycle never reviews
+  Scenario: With two identities the cycle never reviews
+    Given forge.review_identity is set
     When the cycle runs
     Then the cycle reviews nothing
     And the review runtime runs "review-pr"
     And the cycle never holds the review token
+
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", steps 6 and 8
+  Scenario: With one identity the cycle reviews in the same cycle
+    Given forge.review_identity is empty
+    And implement-spec opened a draft CR in this cycle
+    When the run finishes and its ticket shows In review
+    Then the cycle dispatches "review-pr" for that CR in the same cycle, as a fresh subagent
+    And the heartbeat holds the review-pr run
+    And the cycle fires no review runtime
 
   # Source: skills/sdlc/references/heartbeat.md, "Shape"
   # Proof: test/ledger.test.ts "flattenRuns filters by age and skill and applies the newest rescore" (heartbeats of only "at" and "runs")

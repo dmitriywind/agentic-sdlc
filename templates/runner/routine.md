@@ -1,25 +1,28 @@
 # Scheduling the factory cycle
 
-Every scheduler runs two prompts, one run of each at a time:
-- the cycle: `cycle-prompt.md` (installed at `.agents/cycle-prompt.md`), WITHOUT `AGENTIC_REVIEW_TOKEN`;
+One identity (`forge.review_identity` empty, the individual default): one prompt, the cycle (`cycle-prompt.md`,
+installed at `.agents/cycle-prompt.md`). It runs `review-pr` itself. Ignore the review prompt and `AGENTIC_REVIEW_FIRE_CMD`.
+
+Two identities (required for organization): every scheduler runs two prompts, one run of each at a time:
+- the cycle: `cycle-prompt.md`, WITHOUT `AGENTIC_REVIEW_TOKEN`;
 - the review, started when the cycle ends: `review-prompt.md` (installed at `.agents/review-prompt.md`), the only run holding `AGENTIC_REVIEW_TOKEN` and `AGENTIC_SDLC_ROLE=review`.
 
-The cycle never holds the review token, so an implementer cannot approve its own CR. Both runs set `AGENTIC_SDLC_UNATTENDED=1`.
+The cycle never holds the review token, so an implementer cannot approve its own CR. Every run sets `AGENTIC_SDLC_UNATTENDED=1`.
 A `github` (Projects v2) board needs a runtime that can reach GitHub Projects: GitHub Actions works, on a GitHub-hosted or a
 self-hosted runner (`AGENTIC_RUNS_ON`; no billed minutes). A Claude cloud routine cannot reach it; it runs a
 `github-issues`, `jira` or `linear` board (`claude-routine.md`).
-Setup step everywhere: `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_API_KEY` under the individual profile). Gates run in the forge's CI whatever the runtime.
+Setup step everywhere: `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_API_KEY` under the individual and individual-api profiles). Gates run in the forge's CI whatever the runtime.
 
 | Runtime | Template | Profile |
 |---|---|---|
-| GitHub Actions + Claude Code CLI | `github-actions-claude.yml` | individual (OAuth token) or enterprise (API key) |
-| GitHub Actions + Codex CLI | `github-actions-codex.yml` | enterprise |
-| Claude cloud scheduled task (routine) | `claude-routine.md` (`github-issues`, `jira` or `linear` board) | individual |
-| Claude Managed Agents scheduled deployment | `claude-managed-deployment.json` (below) | enterprise |
-| Cursor automation | `cursor-automation.md` | individual or enterprise |
-| Other (cron on your own host) | any of the above, adapted | either |
+| GitHub Actions + Claude Code CLI | `github-actions-claude.yml` | individual, individual-api (OAuth token) or organization (API key) |
+| GitHub Actions + Codex CLI | `github-actions-codex.yml` | individual-api or organization |
+| Claude cloud scheduled task (routine) | `claude-routine.md` (`github-issues`, `jira` or `linear` board) | individual, individual-api |
+| Claude Managed Agents scheduled deployment | `claude-managed-deployment.json` (below) | individual-api or organization |
+| Cursor automation | `cursor-automation.md` | any |
+| Other (cron on your own host) | any of the above, adapted | any |
 
-Secrets: the agent's own credential plus `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN` (or the names the binding gives); `AGENTIC_REVIEW_TOKEN` in the review run only.
+Secrets: the agent's own credential plus `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN` (or the names the binding gives); with two identities, `AGENTIC_REVIEW_TOKEN` in the review run only.
 Every `learning.every_cycles` cycles the sdlc skill runs `improve-factory`; the schedule does nothing extra.
 Executors: `.agents/skills/sdlc/references/executors.md`. Scheduled runs pass `--unattended`.
 
@@ -44,7 +47,7 @@ The CI templates have it as a job; elsewhere schedule it anywhere that alerts on
 
 ## Claude Managed Agents deployment
 
-Profile enterprise. `claude-managed-deployment.json` holds two request bodies: POST each entry of
+Profiles individual-api and organization. `claude-managed-deployment.json` holds two request bodies: POST each entry of
 `deployments` to `https://api.anthropic.com/v1/deployments?beta=true` with headers
 `x-api-key: $ANTHROPIC_API_KEY`, `anthropic-version: 2026-10-21`, `anthropic-beta: managed-agents-2026-04-01`.
 Create the agents (`/v1/agents`) and two environments (`/v1/environments`) first and put their ids in.

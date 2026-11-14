@@ -16,7 +16,7 @@ const mk = (adapter: string, options: Record<string, unknown>, routes: (m: strin
     root: '.',
     env: { TOK: 't', U: 'u', REV: 'r' },
     options,
-    binding: { forge: { adapter, options, required_checks: ['ci'] }, vcs: { trunk: 'main' } },
+    binding: { forge: { adapter, options, required_checks: ['ci'], review_identity: options.review_token_env ? 'reviewer' : '' }, vcs: { trunk: 'main' } },
     exec: (_c: string, a: string[], o: any = {}) => { execs.push(a); envs.push(o.env?.GH_TOKEN); return execOut(a); },
     http: async (m: string, url: string, o: any = {}) => { calls.push({ m, url, body: o.body }); return routes(m, url, o.body); },
   } as unknown as AdapterContext;
@@ -178,11 +178,21 @@ test('list: merged CRs are the closed pulls with a merge', async () => {
   assert.ok(gh.execs[0].includes('repos/o/r/pulls?state=closed&per_page=100'));
 });
 
-test('status and approve need review_token_env and never use the implementer token', async () => {
+test('two identities: status and approve need review_token_env and never use the implementer token', async () => {
   const st = { context: 'review', state: 'success' as const, description: 'd' };
-  const gh = mk('github', { repo: 'o/r' }, () => ({}));
+  const gh = mk('github', { repo: 'o/r', token_env: 'TOK', review_token_env: 'UNSET' }, () => ({}));
   await assert.rejects(createForge(gh.ctx).status('abc', st), /review_token_env/);
   await assert.rejects(createForge(gh.ctx).approve('5'), /review_token_env/);
+  assert.deepEqual(gh.envs, []);
+});
+
+test('one identity: status posts with the implementer token; approve is refused, since GitHub refuses the author', async () => {
+  const st = { context: 'review', state: 'success' as const, description: 'd' };
+  const gh = mk('github', { repo: 'o/r', token_env: 'TOK' }, () => ({}));
+  await createForge(gh.ctx).status('abc', st);
+  assert.ok(gh.execs[0].includes('repos/o/r/statuses/abc'));
+  assert.deepEqual(gh.envs, ['t']);
+  await assert.rejects(createForge(gh.ctx).approve('5'), /one identity/);
 });
 
 test('approvals: { user, state, sha } from the PR reviews', async () => {

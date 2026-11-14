@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import type { AdapterContext, Binding, Board, Comment, LogicalField, PortCli } from '../ports.ts';
+import type { AdapterContext, Binding, Board, Comment, Item, LogicalField, PortCli } from '../ports.ts';
 import { ownersFor } from '../ports.ts';
 import { selectComments } from '../comments.ts';
 import { createGithubBoard } from './github.ts';
@@ -11,7 +11,18 @@ import { createLocalBoard } from './local.ts';
 export function createBoard(ctx: AdapterContext): Board {
   const make = { github: createGithubBoard, 'github-issues': createGithubIssuesBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
   if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
-  return make(ctx);
+  const board = make(ctx);
+  const scope = ctx.binding.board.scope;
+  if (!scope?.label) return board;
+  // Many repos, one board: a repo lists only tickets with its scope label; the home repo also lists
+  // tickets with no label of that prefix, which triage gives a repo label. Every new ticket gets this repo's label.
+  const pre = scope.label.slice(0, scope.label.indexOf(':') + 1);
+  const mine = (i: Item) => i.labels.includes(scope.label) || (!!scope.home && !i.labels.some((l) => l.startsWith(pre)));
+  return {
+    ...board,
+    list: async (q) => (await board.list(q)).filter(mine),
+    create: (t) => board.create({ ...t, labels: [...new Set([...(t.labels ?? []), scope.label])] }),
+  };
 }
 
 class Usage extends Error {}

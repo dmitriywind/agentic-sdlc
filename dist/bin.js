@@ -7444,6 +7444,19 @@ function validateBinding(b) {
     }
   }
   if (["human-approval", "ticket-linkage", "proofs-on-base"].includes(x.forge?.review_check_name)) p.push(`forge.review_check_name '${x.forge.review_check_name}' is a gate's context`);
+  const rid = String(x.forge?.review_identity ?? ""), rt = x.forge?.options?.review_token_env;
+  if (rid && !rt) p.push("forge.review_identity is set but forge.options.review_token_env is unset: name its token, or empty review_identity for one identity");
+  if (!rid && rt) p.push("forge.options.review_token_env is set but forge.review_identity is empty: name the review identity, or remove review_token_env for one identity");
+  if (rt && rt === x.forge?.options?.token_env) p.push("forge.options.review_token_env equals token_env: two identities need two tokens");
+  if (x.profile === "organization" && !rid) p.push("profile organization needs a separate review identity: set forge.review_identity and forge.options.review_token_env");
+  const sc = x.board?.scope;
+  if (sc !== void 0) {
+    const label = String(sc?.label ?? ""), pre = label.split(":")[0];
+    if (!/^[^:]+:.+/.test(label)) p.push("board.scope.label must be '<prefix>:<name>', e.g. repo:app-a");
+    else if (sc.home && !(Array.isArray(sc.repos) && sc.repos.includes(label) && sc.repos.every((r) => String(r).startsWith(`${pre}:`))))
+      p.push(`board.scope.repos must list every repo label, this repo's included, each starting '${pre}:'`);
+    else if (!sc.home && sc.repos !== void 0) p.push("board.scope.repos is for the home repo only (board.scope.home: true)");
+  }
   const ha = x.forge?.human_approval;
   if (ha !== void 0 && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join("|")}`);
   for (const k of ["bench_min_cases", "bench_trials"]) {
@@ -7474,15 +7487,14 @@ function bindingWarnings(b) {
   if (x?.learning?.budget_usd_per_week !== void 0) w.push("learning.budget_usd_per_week is unused; learning.enabled turns learning on; remove it");
   if (x?.profile === "individual") {
     for (const [k, e] of Object.entries(x.executors ?? {}))
-      if (["managed", "webhook", "assign"].includes(e?.kind)) w.push(`executors.${k}: kind ${e.kind} needs an API or hosted agent; individual profile expects harness or a subscription CLI command`);
+      if (["managed", "webhook", "assign"].includes(e?.kind)) w.push(`executors.${k}: kind ${e.kind} needs an API or hosted agent; profile individual is subscriptions only: use individual-api`);
     const uri = x.traces?.uri;
     if (uri !== void 0 && !["./", ".agents/", "/"].some((q) => String(uri).startsWith(q)) && !/^[A-Za-z]:[\\/]/.test(String(uri))) w.push(`traces.uri '${uri}' is not a local path (./, .agents/ or absolute); individual profile has no org storage`);
-  } else if (x?.profile === "enterprise") {
-    const rt = x.forge?.options?.review_token_env;
-    if (rt && rt === x.forge?.options?.token_env) w.push("forge.options.review_token_env equals token_env: the reviewer and implementer share one identity");
+  } else if (x?.profile === "organization") {
     const sb = x.executors?.default?.sandbox;
-    if (!sb || sb === "local") w.push("executors.default.sandbox is local or unset: enterprise expects cloud or container");
-    if (!x.traces) w.push("traces is unset: enterprise expects traces.uri on org storage");
+    if (!sb || sb === "local") w.push("executors.default.sandbox is local or unset: organization expects cloud or container");
+    if (!x.traces) w.push("traces is unset: organization expects traces.uri on org storage");
+    if (!Object.values(x.executors ?? {}).some((e) => e?.kind === "managed")) w.push("no executor is kind managed: organization runs its stages on managed agents");
   }
   return w;
 }
@@ -7543,7 +7555,7 @@ var init_binding = __esm({
     MANAGED_APIS = ["claude", "cursor", "antigravity", "generic"];
     HUMAN_APPROVAL = ["full-lane", "always", "never"];
     SANDBOXES = ["cloud", "container", "local"];
-    PROFILES = ["individual", "enterprise"];
+    PROFILES = ["individual", "individual-api", "organization"];
     DELIVERY = ["release-line", "continuous"];
     EVIDENCE = ["sbom", "provenance", "signature"];
     TIERS = ["fast", "balanced", "deep"];
@@ -8335,7 +8347,16 @@ import { readFileSync as readFileSync3 } from "fs";
 function createBoard(ctx) {
   const make = { github: createGithubBoard, "github-issues": createGithubIssuesBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
   if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
-  return make(ctx);
+  const board = make(ctx);
+  const scope = ctx.binding.board.scope;
+  if (!scope?.label) return board;
+  const pre = scope.label.slice(0, scope.label.indexOf(":") + 1);
+  const mine = (i) => i.labels.includes(scope.label) || !!scope.home && !i.labels.some((l) => l.startsWith(pre));
+  return {
+    ...board,
+    list: async (q) => (await board.list(q)).filter(mine),
+    create: (t) => board.create({ ...t, labels: [.../* @__PURE__ */ new Set([...t.labels ?? [], scope.label])] })
+  };
 }
 function parse2(argv, bools = []) {
   const pos = [], flags = {};
@@ -8533,6 +8554,7 @@ function github(ctx) {
   const gh = (a, input, env = implementer()) => ctx.exec("gh", repo && a[0] !== "api" ? [...a, "-R", repo] : a, { cwd: ctx.root, input, env });
   const post2 = (path, data, env) => JSON.parse(gh(["api", "-X", "POST", `${api}/${path}`, "--input", "-"], JSON.stringify(data), env));
   const cloud = ctx.env.CLAUDE_CODE_REMOTE === "true";
+  const oneIdentity = !ctx.binding.forge.review_identity;
   const ccr = (method, n, route, ...f) => gh(["api", "-X", method, `${api}/pulls/${n}/ccr/${route}`, ...f]);
   const labelled = (p) => (p.labels ?? []).some((l) => l.name === "draft");
   const label = (n) => post2(`issues/${n}/labels`, { labels: ["draft"] });
@@ -8654,9 +8676,10 @@ function github(ctx) {
     async status(sha2, s, opts) {
       const a = ["api", "-X", "POST", `${api}/statuses/${sha2}`, "-f", `state=${s.state}`, "-f", `context=${s.context}`, "-f", `description=${s.description}`];
       if (s.url) a.push("-f", `target_url=${s.url}`);
-      gh(a, void 0, withToken(opts?.as === "ci" ? "token_env" : "review_token_env"));
+      gh(a, void 0, opts?.as === "ci" ? withToken("token_env") : oneIdentity ? implementer() : withToken("review_token_env"));
     },
     async approve(n) {
+      if (oneIdentity) throw new Error("one identity (forge.review_identity is empty): GitHub refuses an approving review from the CR's author; review-pr skips forge approve");
       post2(`pulls/${n}/reviews`, { event: "APPROVE", body: "agentic-sdlc review: PASS" }, withToken("review_token_env"));
     },
     async approvals(n) {
@@ -9137,7 +9160,8 @@ async function init(root, argv, log) {
   const board = f.board ?? "github", forge = f.forge ?? "github", vcs = f.vcs ?? "git", harness = f.harness ?? "generic";
   const force = f.force === "true";
   const profile = f.profile ?? "individual";
-  if (profile !== "individual" && profile !== "enterprise") throw new Error(`--profile must be individual or enterprise, got '${profile}'`);
+  if (!["individual", "individual-api", "organization"].includes(profile)) throw new Error(`--profile must be individual, individual-api or organization, got '${profile}'`);
+  const org = profile === "organization";
   if (vcs !== "git") throw new Error(`--vcs must be git (v2 supports git only), got '${vcs}'`);
   if (!FORGES.includes(forge)) throw new Error(`--forge must be one of ${FORGES.join("|")}, got '${forge}'`);
   if (!MCP_FILES.has(harness)) throw new Error(`--harness must be one of ${[...MCP_FILES.keys()].join("|")}, got '${harness}'`);
@@ -9163,9 +9187,12 @@ async function init(root, argv, log) {
     doc.setIn(["forge", "adapter"], forge);
     doc.setIn(["vcs", "adapter"], vcs);
     doc.set("profile", profile);
-    doc.setIn(["executors", "default"], { kind: "harness", sandbox: profile === "enterprise" ? "container" : "cloud" });
-    if (profile === "enterprise") {
+    doc.setIn(["executors", "default"], { kind: "harness", sandbox: org ? "container" : "cloud" });
+    if (org) {
       doc.set("traces", { uri: ".agents/runtime/traces/{run_id}.jsonl" });
+      doc.setIn(["forge", "options", "token_env"], "AGENTIC_FORGE_TOKEN");
+      doc.setIn(["forge", "options", "review_token_env"], "AGENTIC_REVIEW_TOKEN");
+      doc.setIn(["forge", "review_identity"], "your-review-app[bot]");
     }
     const repo = forge === "github" ? originRepo(root) : void 0;
     if (repo) {
@@ -9184,14 +9211,23 @@ async function init(root, argv, log) {
   }
   const gates = join4(pkg, "templates", "gates");
   const dir = need(pkg, `templates/gates/${forge}`);
-  const continuous = (0, import_yaml2.parse)(readFileSync5(bindingFile, "utf8"))?.product?.delivery === "continuous";
+  const bound = (0, import_yaml2.parse)(readFileSync5(bindingFile, "utf8"));
+  const continuous = bound?.product?.delivery === "continuous";
+  const oneIdentity = !bound?.forge?.review_identity;
   {
     for (const n of readdirSync(dir).filter((n2) => n2.endsWith(".yml") && !(continuous && n2 === "agentic-sdlc-release.yml"))) copyFile(join4(dir, n), join4(root, ".github", "workflows", n), force, log);
     if (existsSync3(join4(dir, "pull_request_template.md"))) copyFile(join4(dir, "pull_request_template.md"), join4(root, ".github", "pull_request_template.md"), force, log);
     if (existsSync3(join4(dir, "ruleset.trunk.json"))) {
-      copyFile(join4(dir, "ruleset.trunk.json"), join4(root, ".github", "rulesets", "trunk.json"), force, log);
+      const dest = join4(root, ".github", "rulesets", "trunk.json");
+      const fresh = force || !existsSync3(dest);
+      copyFile(join4(dir, "ruleset.trunk.json"), dest, force, log);
+      if (fresh && oneIdentity) {
+        const rs = readJson(dest);
+        for (const r of rs.rules) if (r.type === "pull_request") Object.assign(r.parameters, { required_approving_review_count: 0, require_last_push_approval: false });
+        writeFileSync2(dest, JSON.stringify(rs, null, 2) + "\n");
+      }
       log.push("import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk");
-      log.push("its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
+      log.push(oneIdentity ? "one identity: the ruleset needs no approving review; a Full-lane CR waits on human-approval until a collaborator approves it or you merge it as admin" : "its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
     }
     if (!continuous && existsSync3(join4(dir, "ruleset.release.json"))) {
       copyFile(join4(dir, "ruleset.release.json"), join4(root, ".github", "rulesets", "release.json"), force, log);
@@ -9430,7 +9466,7 @@ ${END}`;
           }
           return bad ? 1 : 0;
         }
-        console.error("usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|enterprise] [--no-plugin] [--force] | validate | doctor");
+        console.error("usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|individual-api|organization] [--no-plugin] [--force] | validate | doctor");
         return 2;
       } catch (e) {
         console.error(redact(e.message, ctx.env));

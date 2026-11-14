@@ -32,7 +32,11 @@ questions; a part missing is written as "none" when triaged.
    name the file read or the change that already fixed it.
 4. **Duplicate.** `board list --search "<keywords>"`. Done when you name the first
    ticket or write "none".
-5. **Decide.** Exactly one, with a comment saying why:
+5. **Repo.** Only with many repos on one board (`board.scope.home` true, so this repo also sees
+   tickets with no repo label): add the one `board.scope.repos` label of the repo whose code the
+   signal is about. When it is another repo's label, stop here: that repo's cycle triages it. Done
+   when the ticket has one repo label, or `board.scope` is unset.
+6. **Decide.** Exactly one, with a comment saying why:
    - Backlog: accept. Real and accepted. Add label `bug` or `feature`, set the Priority (see
      [Board](../sdlc/references/board.md#board)), and set the milestone: the earliest open one, unless the
      signal says otherwise.

@@ -1,71 +1,87 @@
-# Profile: individual (subscriptions only)
+# Profiles: individual and individual-api
 
-## Who it is for
-One person or a small team that pays for agent subscriptions and has no API budget or org platform.
-No API keys. Nothing stored outside the repo and the board.
+## Who they are for
+One person or a small team.
+
+- `individual`: agent subscriptions only. No API keys. Nothing stored outside the repo and the board.
+- `individual-api`: the same subscription for the cycle, plus API keys for some stages: managed
+  agents, webhook bots or hosted coding agents.
+
+Both run as **one identity** by default: the factory acts as your own forge account.
 
 ## Set it up
 ```bash
 npx --no agentic-sdlc init --profile individual --harness <name> --board github-issues --forge github --vcs git
 ```
-A Claude cloud scheduled task reaches a `github-issues`, `jira` or `linear` board, not `github` (Projects v2), and needs `--harness claude --no-plugin`.
-Init writes the template defaults; the excerpt shows the keys this profile cares about. `validate` warns when the binding names an executor kind that needs an API key.
+Use `--profile individual-api` for the API variant. A Claude cloud routine reaches a `github-issues`,
+`jira` or `linear` board, not `github` (Projects v2), and needs `--harness claude --no-plugin`.
+
+## One identity: what it means
+GitHub refuses an approving review from a CR's author. With one identity the factory is the author,
+so it never approves. The path is:
+
+1. The cycle implements a ticket and opens a draft CR as you.
+2. In the same cycle, it dispatches `review-pr` as a subagent with a fresh context. `review-pr` reads
+   CI, posts the `review` status with your token and gives no approving review.
+3. `init` writes a trunk ruleset that needs no approving review.
+4. A Fast-lane CR auto-merges when every required check is green.
+5. A Full-lane CR waits on `human-approval`. A collaborator approves its head, or you merge it as admin.
+
+There is one scheduled job: the cycle. There is no review routine, no review token and no second account.
+
+The trade-off: the review is a separate agent context, not a separate account. The ruleset cannot
+prove that an agent did not post its own `review` status. When you need that proof, add a second
+identity: set `forge.review_identity` and `forge.options.review_token_env`, and run the review
+runtime (`templates/runner/review-prompt.md`). The `organization` profile requires it.
 
 ## Binding excerpt
 ```yaml
-profile: individual
-owners: { product: me, factory: me, bots: [my-factory-bot] }
+profile: individual                              # or individual-api
+owners: { product: me, factory: me, bots: [me] } # one identity: the factory runs as you
 executors:
-  default: { kind: harness, sandbox: cloud }     # or a local subscription CLI:
-  # implement-spec: { kind: command, run: "claude -p \"$(cat {prompt_file})\"", secrets: [AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, CLAUDE_CODE_OAUTH_TOKEN], sandbox: container }
-  #   secrets: the only env vars the child gets; never AGENTIC_REVIEW_TOKEN
+  default: { kind: harness, sandbox: cloud }
+  # individual-api only, a stage on a managed agent; give its key a name other than ANTHROPIC_API_KEY:
+  # implement-spec: { kind: managed, api: claude, agent_env: IMPL_AGENT_ID, environment_env: IMPL_ENVIRONMENT_ID, token_env: MANAGED_API_KEY, sandbox: cloud }
 forge:
   adapter: github
-  options: { repo: me/app, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
-  review_identity: my-reviewer-account           # a second account or fine-grained token
-  human_approval: full-lane                      # full-lane | always | never: who besides the agent review approves
-# traces: omitted (none), or files in the runner's scratch dir
+  options: { repo: me/app }                      # no token_env: gh's login, or the cloud proxy
+  review_identity: ""                            # one identity
+  human_approval: full-lane                      # full-lane | always | never
 learning:
-  every_cycles: 20
-  bench_size: 20                                 # at least bench_min_cases
-  bench_min_cases: 20                            # bench compare needs this many shared cases
-  bench_trials: 3                                # and this many trials per case
-  auto_merge_classes: []                         # add tuning once a bench baseline exists
-  enabled: true                                  # the template default is false (learning off); learning runs draw plan usage
-# agent_command: "<subscription CLI headless command with {model} {prompt_file} {workdir}>"   # bench only
+  enabled: false                                 # learning runs draw plan usage
 ```
-Executors: `harness` only, plus `command` for a headless CLI logged in with the subscription.
-With `human_approval: full-lane` you approve Full-lane CRs yourself from your own account, which
-must not be `review_identity`. The runner templates fail when `ANTHROPIC_API_KEY` is set.
+The runner setup fails when `ANTHROPIC_API_KEY` is set, under both profiles: that key outranks the
+subscription login and bills the cycle to the API. `validate` warns when an `individual` binding
+names an executor kind that needs an API key.
 
 ## Recommended runtime per ecosystem
 | Ecosystem | Runtime | Guide |
 |---|---|---|
-| Claude | Scheduled task in the cloud | [claude.md](../ecosystems/claude-code.md) |
+| Claude | Cloud routine (`templates/runner/claude-routine.md`) | [claude.md](../ecosystems/claude-code.md) |
 | Codex | ChatGPT scheduled task or cloud task | [codex.md](../ecosystems/codex.md) |
 | Cursor | Automation (cloud agent on a schedule) | [cursor.md](../ecosystems/cursor.md) |
 | Other | CI cron with a headless CLI, or the shell route | [generic.md](../ecosystems/generic.md) |
 
-Read each guide's terms caveat before you put a consumer login in CI. Some vendors say third-party wrapping is not supported on consumer plans.
+`individual-api` adds a Claude Managed Agents deployment (`templates/runner/claude-managed-deployment.json`)
+for the stages you move to the API.
+
+Read each guide's terms caveat before you put a consumer login in CI. Some vendors say third-party
+wrapping is not supported on consumer plans.
 
 ## Security checklist
-- [ ] A separate review token: `review_token_env` belongs to a second account or a fine-grained token, and only the review runtime holds it (the runner templates' review job or task runs `review-prompt.md`; the cycle never sees the token).
-- [ ] The trunk ruleset requires `human-approval`; the `approval` gate holds `guardrail` factory CRs for the factory owner and Full-lane CRs per `forge.human_approval` (see [forges.md](../forges.md)).
+- [ ] The trunk ruleset is imported; on a private repo this needs a paid GitHub plan, else nothing enforces it.
+- [ ] The `approval` gate holds `guardrail` factory CRs for the factory owner and Full-lane CRs per `forge.human_approval` (see [forges.md](../forges.md)).
 - [ ] Secrets only as env var names in the binding. No values in the repo, board or CR comments.
 - [ ] Sandbox: `cloud` or `container`. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses `local`.
-- [ ] The bot account has no admin or bypass right on the trunk.
-- [ ] A cloud scheduled task acts as your account. Give its repo access the least scope the vendor allows.
-- [ ] Trunk protection is on: change request only, green required checks, one approving review.
+- [ ] A cloud routine acts as your account. Give its repo access the least scope the vendor allows.
 
-## What you lose and gain versus enterprise
-| | Individual | Enterprise |
+## Versus organization
+| | individual, individual-api | organization |
 |---|---|---|
-| Cost | Plan price; usage limits per vendor | Metered API spend, budgeted |
-| Executors | `harness`, local `command` | All kinds |
-| Review identity | Second account or token | Forge app or bot account |
-| Traces | None or scratch files | `traces.uri` on org storage |
-| Bench | Small suites | Full suites across models and executors |
-| Limits | Vendor rate and run caps; tied to one person | Caps you set and pay for |
-| Setup | Minutes | An agent platform and secrets management |
+| Cost | Plan price (plus metered API stages for individual-api) | Metered API spend, budgeted |
+| Identities | One by default | Two, required |
+| Executors | individual: `harness`, `command`; individual-api: all | All, on managed agents |
+| Traces | None or local files | `traces.uri` on org storage |
+| Setup | Minutes | An agent platform, a review app and secrets management |
 
-See [enterprise.md](enterprise.md).
+See [organization.md](organization.md).

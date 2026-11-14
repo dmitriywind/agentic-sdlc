@@ -1,4 +1,4 @@
-# Profile: enterprise (API key).
+# Profile: organization or individual-api (API key). One identity (forge.review_identity empty): delete the `review` job.
 # Install at: .github/workflows/factory-cycle-codex.yml
 # Secrets: CODEX_API_KEY (an OpenAI API key), AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_REVIEW_TOKEN.
 # Two jobs: `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;

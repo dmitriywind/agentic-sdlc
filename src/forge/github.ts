@@ -10,7 +10,7 @@ const statusState = (s: any): State => (s.state === 'success' || s.state === 'pe
 export function github(ctx: AdapterContext): Forge {
   const repo = ctx.options.repo as string | undefined;
   const api = `repos/${repo ?? '{owner}/{repo}'}`;
-  // GH_TOKEN from the env var named by options[key]; status and approve use review_token_env, never the implementer's.
+  // GH_TOKEN from the env var named by options[key]; with a review identity, status and approve use review_token_env, never the implementer's.
   const withToken = (key: string) => ({ ...ctx.env, GH_TOKEN: secret(ctx, key) });
   // In a Claude cloud session the proxy injects the token, so an unset token_env falls back to it: one binding
   // serves CI (token_env set) and the cloud. The review token never falls back.
@@ -26,6 +26,7 @@ export function github(ctx: AdapterContext): Forge {
     JSON.parse(gh(['api', '-X', 'POST', `${api}/${path}`, '--input', '-'], JSON.stringify(data), env));
   // A Claude cloud session's GitHub proxy refuses GraphQL and serves the GraphQL-only PR actions under pulls/{n}/ccr/.
   const cloud = ctx.env.CLAUDE_CODE_REMOTE === 'true';
+  const oneIdentity = !ctx.binding.forge.review_identity;
   const ccr = (method: string, n: string, route: string, ...f: string[]) => gh(['api', '-X', method, `${api}/pulls/${n}/ccr/${route}`, ...f]);
   // A repo that cannot hold draft PRs (private on GitHub Free) marks a draft with the `draft` label instead.
   const labelled = (p: any) => (p.labels ?? []).some((l: any) => l.name === 'draft');
@@ -132,9 +133,13 @@ export function github(ctx: AdapterContext): Forge {
     async status(sha, s, opts) {
       const a = ['api', '-X', 'POST', `${api}/statuses/${sha}`, '-f', `state=${s.state}`, '-f', `context=${s.context}`, '-f', `description=${s.description}`];
       if (s.url) a.push('-f', `target_url=${s.url}`);
-      gh(a, undefined, withToken(opts?.as === 'ci' ? 'token_env' : 'review_token_env'));
+      // One identity (no review_identity): the review status goes out with the implementer's own token.
+      gh(a, undefined, opts?.as === 'ci' ? withToken('token_env') : oneIdentity ? implementer() : withToken('review_token_env'));
     },
-    async approve(n) { post(`pulls/${n}/reviews`, { event: 'APPROVE', body: 'agentic-sdlc review: PASS' }, withToken('review_token_env')); },
+    async approve(n) {
+      if (oneIdentity) throw new Error('one identity (forge.review_identity is empty): GitHub refuses an approving review from the CR\'s author; review-pr skips forge approve');
+      post(`pulls/${n}/reviews`, { event: 'APPROVE', body: 'agentic-sdlc review: PASS' }, withToken('review_token_env'));
+    },
     async approvals(n) {
       const out = gh(['api', '--paginate', `${api}/pulls/${n}/reviews`, '--jq', '.[] | {user: .user.login, state: (.state | ascii_downcase), sha: .commit_id}']);
       return out.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));

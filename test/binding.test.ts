@@ -50,6 +50,7 @@ test('validateBinding rejects unknown option keys and missing required ones per 
   for (const s of ['board.options.project_key is required', 'board.options.project is not read', 'forge.options.host is not read', 'vcs.options.remote is not read']) assert.match(p, new RegExp(s));
   b.board.options = { base_url: 'u', project_key: 'P', email_env: 'E', token_env: 'T' };
   b.forge.options = { repo: 'o/r', token_env: 'T', review_token_env: 'R' };
+  b.forge.review_identity = 'reviewer';
   delete b.vcs.options;
   assert.deepEqual(validateBinding(b as Binding), []);
 });
@@ -114,12 +115,43 @@ test('bindingWarnings flags profile mismatches without failing validation', () =
   const w = bindingWarnings(ind).join('\n');
   for (const s of ['executors.triage', 'traces.uri', 'agent_command']) assert.match(w, new RegExp(s));
   assert.deepEqual(validateBinding(ind), []);
-  const ent = structuredClone(good) as any;
-  ent.profile = 'enterprise'; ent.forge.options = { token_env: 'T', review_token_env: 'T' };
-  const e = bindingWarnings(ent).join('\n');
-  for (const s of ['review_token_env', 'sandbox', 'traces is unset']) assert.match(e, new RegExp(s));
-  ent.forge.options = { token_env: 'T', review_token_env: 'R' }; ent.executors.default.sandbox = 'container'; ent.traces = { uri: 'x/{run_id}' };
-  assert.deepEqual(bindingWarnings(ent), []);
+  const api = structuredClone(ind);
+  api.profile = 'individual-api';
+  assert.doesNotMatch(bindingWarnings(api).join('\n'), /executors\.triage/);
+  const org = structuredClone(good) as any;
+  org.profile = 'organization';
+  const e = bindingWarnings(org).join('\n');
+  for (const s of ['sandbox', 'traces is unset', 'kind managed']) assert.match(e, new RegExp(s));
+  org.executors.default.sandbox = 'container'; org.traces = { uri: 'x/{run_id}' }; org.executors.impl = { kind: 'managed', token_env: 'K' };
+  assert.deepEqual(bindingWarnings(org), []);
+});
+
+test('identities: organization needs a review identity; review_identity and review_token_env come together and differ from token_env', () => {
+  const org = structuredClone(good) as any;
+  org.profile = 'organization';
+  assert.match(validateBinding(org).join('\n'), /organization needs a separate review identity/);
+  org.forge = { adapter: 'github', review_identity: 'app[bot]', options: { token_env: 'T', review_token_env: 'T' } };
+  assert.match(validateBinding(org).join('\n'), /two identities need two tokens/);
+  org.forge.options.review_token_env = 'R';
+  assert.deepEqual(validateBinding(org), []);
+  const one = structuredClone(good) as any;
+  assert.deepEqual(validateBinding(one), [], 'individual with no review_identity: one identity');
+  one.forge.options = { review_token_env: 'R' };
+  assert.match(validateBinding(one).join('\n'), /review_identity is empty/);
+  one.forge = { adapter: 'github', review_identity: 'rev' };
+  assert.match(validateBinding(one).join('\n'), /review_token_env is unset/);
+});
+
+test('board.scope: a prefixed label; the home repo lists every repo label, its own included', () => {
+  const b = structuredClone(good) as any;
+  b.board.scope = { label: 'app-a' };
+  assert.match(validateBinding(b).join('\n'), /board\.scope\.label must be/);
+  b.board.scope = { label: 'repo:a', repos: ['repo:a'] };
+  assert.match(validateBinding(b).join('\n'), /home repo only/);
+  b.board.scope = { label: 'repo:a', home: true, repos: ['repo:b'] };
+  assert.match(validateBinding(b).join('\n'), /board\.scope\.repos must list/);
+  b.board.scope.repos = ['repo:a', 'repo:b'];
+  assert.deepEqual(validateBinding(b), []);
 });
 
 test('new keys validate; product.kind and board.milestone only warn as unused', () => {

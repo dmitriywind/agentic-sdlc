@@ -78,7 +78,7 @@ In order:
    `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --last <n> --marker
    "<!-- heartbeat -->" --trusted`) and `ledger summary`.
 2. **Idle exit.** When no unheld ticket matches a Routing row the cycle dispatches (any skill but
-   `review-pr`), no held ticket has a trusted owner reply after its last `### Needs human`
+   `review-pr` when `forge.review_identity` is set), no held ticket has a trusted owner reply after its last `### Needs human`
    comment, no CR needs a review, and `ledger summary` shows neither `learning.due` nor
    `learning.judge` with an unscored run: write the idle heartbeat (`at`, `factory`, `runs: []`,
    `errors: []`, and `learning` copied forward when `learning.enabled` is true), fire no review, and stop. Done when it is posted.
@@ -97,20 +97,26 @@ In order:
    - every ticket at In progress (rework, or a resumed implementation);
    - Ready from the top, at most `cycle.max_implementations` new claims;
    - Backlog: grooming for items with no Priority; shape while Ready plus the shapes under way hold
-     fewer than `cycle.min_ready` tickets.
+     fewer than `cycle.min_ready` tickets;
+   - one identity (`forge.review_identity` empty): every CR that needs a review, to `review-pr`. Its
+     subagent starts with a fresh context and runs no CR code, as in the review runtime.
 
    When a run finishes, read its ticket again (`board get <id>`). When the ticket now matches another
-   row the cycle dispatches (groomed to shape, shaped to Ready), dispatch that next step in this cycle,
+   row the cycle dispatches (groomed to shape, shaped to Ready, implemented to In review with one
+   identity), dispatch that next step in this cycle,
    under the same caps. Start no new step after `cycle.time_budget_minutes`. Done when no finished
    ticket matches a further row, or the time budget is spent.
 7. **Report.** Write one heartbeat as [`references/heartbeat.md`](references/heartbeat.md) says. Its
-   runs include the judge runs of step 3; the `improve-factory` run is in its own `learn` heartbeat, and
-   the review runtime writes a `review` heartbeat for its runs, so every run is in the ledger once.
-8. **Review hand-off.** `forge list` again, since this cycle may have opened CRs. Fire the review
-   runtime once, as the runner prompt says, only when a CR needs a review. Done when it was fired,
-   or no CR needs a review.
+   runs include the judge runs of step 3 and, with one identity, the `review-pr` runs of step 6; the
+   `improve-factory` run is in its own `learn` heartbeat, and the review runtime writes a `review`
+   heartbeat for its runs, so every run is in the ledger once.
+8. **Review hand-off.** Only with a `forge.review_identity`: `forge list` again, since this cycle may
+   have opened CRs. Fire the review runtime once, as the runner prompt says, only when a CR needs a
+   review. Done when it was fired, or no CR needs a review, or the binding has one identity.
 
-The review runtime runs `review-pr`; the cycle never holds the review token and never reviews.
+With a `forge.review_identity`, the review runtime runs `review-pr`; the cycle never holds the review
+token and never reviews. With one identity there is no review token: the cycle dispatches `review-pr`
+(step 6), and the separation is the fresh subagent context, not a second account.
 
 Rules for every step:
 

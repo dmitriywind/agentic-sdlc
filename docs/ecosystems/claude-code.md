@@ -22,7 +22,7 @@ every session, the repo is also a plugin marketplace:
 /plugin marketplace add dmitriywind/agentic-sdlc
 /plugin install agentic-sdlc@agentic-sdlc
 ```
-The plugin's hook refuses a push to the trunk and allows `forge approve` only in the review runtime.
+The plugin's hook refuses a push to the trunk and allows `forge approve` only in the review runtime (two identities).
 
 What `init --harness claude` writes:
 - `.agents/binding.yml`, `.agents/scorers/`, the gate templates for your forge, the runner prompts.
@@ -63,7 +63,7 @@ built on the Agent SDK ([docs](https://code.claude.com/docs/en/agent-sdk/overvie
 not that case, but the docs state no internal-use stance for `setup-token` in CI at the time of writing.
 Zero-Data-Retention, HIPAA and CMEK orgs cannot use cloud sessions ([docs](https://code.claude.com/docs/en/claude-code-on-the-web)).
 
-## Run without your machine - Enterprise
+## Run without your machine - Organization
 Use API keys, not a person's login.
 
 | Path | How |
