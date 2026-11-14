@@ -114,7 +114,8 @@ Steps 1 to 8 review a draft CR. Steps 9 to 11 handle a ready CR. A check missing
     <n>` (Status stays In review). Cause in the diff or the ticket's scope: move the ticket to In
     progress with the cause (a CR a person opened: the report names the cause, and the ticket
     stays In review). Cause elsewhere (a flake, a broken neighbour): file a new Signal and
-    state it on the CR. Done when the CR is draft and
+    state it on the CR in a comment that starts `<!-- review-pr <head sha> -->` and holds the line
+    `Signal: <id>`; once that Signal is closed, the cycle routes the CR here again. Done when the CR is draft and
     the ticket is at In progress, the Signal is filed, or the ask is filed.
 11. **Green but open.** A ready In review CR whose every `required_checks` entry is green on its
     head and that is still open: `forge automerge <n>`. Done when the CR is merged or auto-merge is on.

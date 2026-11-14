@@ -70,8 +70,9 @@ double fire; leave it.
 
 A CR **needs a review** when it is open, a `review-pr` row of the Routing table matches it, and,
 for a draft CR, the newest `<!-- review-pr` report on it (`forge comments <n> --last 1 --marker
-"<!-- review-pr" --trusted`) is not for its head sha, or is a PASS for it (a PASS leaves the CR
-ready, so a draft with one is a review that did not finish).
+"<!-- review-pr" --trusted`) is not for its head sha, or is for it but is neither a `Verdict:
+REMEDIATION REQUIRED` report nor a red-gate note whose `Signal: <id>` ticket is still open. A PASS
+leaves the CR ready, and a fixed outside cause clears a red gate, so such a draft waits on nobody.
 
 In order:
 

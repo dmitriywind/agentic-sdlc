@@ -103,6 +103,8 @@ Feature: Routing and the unattended cycle
       | a ready CR at In review behind the trunk                             | is fired once   |
       | a draft factory CR whose newest review-pr report for its head is REMEDIATION REQUIRED | is not fired    |
       | a draft CR whose newest review-pr report for its head is a PASS (unfinished) | is fired once   |
+      | a draft CR whose newest review-pr note for its head names a closed Signal | is fired once   |
+      | a draft CR whose newest review-pr note for its head names an open Signal | is not fired    |
       | a ready CR at In review with a green review status and no red check  | is not fired    |
       | no open CR                                                           | is not fired    |
 
