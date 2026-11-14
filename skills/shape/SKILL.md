@@ -8,7 +8,7 @@ metadata:
 
 # Shape a ticket
 
-Follow the common contract in [`sdlc`](../sdlc/SKILL.md). Read the domain docs the agent card
+Follow the [common contract](../sdlc/references/contract.md). Read the domain docs the agent card
 routes to for the touched area before shaping. One pass moves the ticket from Backlog to Ready;
 a step already done on the ticket is checked, not redone. A ticket with children is an
 initiative (see [Sub-issues](../sdlc/references/board.md#sub-issues)): stop with only the closing comment of
@@ -69,7 +69,7 @@ the common contract, which names the ticket as an initiative.
 
    Attach it as one ticket comment (`board comment`) whose first line is `spec_marker`, edited in
    place on later passes. One spec per ticket. Find the existing one with `board comments <id>
-   --last 1 --marker <spec_marker> --trusted` (see [`sdlc`](../sdlc/SKILL.md) Trusted comments).
+   --last 1 --marker <spec_marker> --trusted` (see [contract](../sdlc/references/contract.md) Trusted comments).
    Done when the comment exists, written by this run's account.
 8. **Pass the checklist.** Every acceptance criterion has a named proof (and, in the Full lane, is
    covered by the test plan); open questions is empty; no open blocker; Size within
@@ -90,5 +90,4 @@ the common contract, which names the ticket as an initiative.
   never scope creep in this ticket.
 - A hard-to-reverse choice is stated in the spec with its reason; a settled rule goes as one plain
   sentence into its owning doc.
-- Escalate when it cannot split without changing scope or a criterion needs a product ruling, plus
-  the triggers of [`escalate-to-human`](../escalate-to-human/SKILL.md).
+- Escalate when it cannot split without changing scope or a criterion needs a product ruling.

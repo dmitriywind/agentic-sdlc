@@ -9,8 +9,7 @@ metadata:
 # Escalate to a human
 
 The one classifier every step skill calls, at any working status. It is never a status and never
-calls another skill. Read the binding (`.agents/binding.yml`) and the hold rules in
-[`sdlc`](../sdlc/SKILL.md).
+calls another skill. Follow the [common contract](../sdlc/references/contract.md).
 
 ## Steps
 

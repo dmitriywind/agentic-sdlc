@@ -91,9 +91,9 @@ mcps:                           # tool servers executors may use; name -> { url 
 #   uri: "s3://my-bucket/agentic/{run_id}.jsonl" # where executors write run traces; must contain {run_id}
 
 models:                         # skills name a tier (frontmatter metadata.tier), never a model; init --harness claude writes .claude/agents/sdlc-<tier>.md from this map
-  fast: your-fast-model-id
-  balanced: your-balanced-model-id
-  deep: your-deep-model-id
+  fast: claude-sonnet-5-5        # the cycle routine runs on this tier
+  balanced: claude-sonnet-5-5
+  deep: claude-opus-5-5         # shape and improve-factory
 # agent_command: "my-agent --model {model} --prompt-file {prompt_file} --cwd {workdir}" # bench run only
 
 commands:

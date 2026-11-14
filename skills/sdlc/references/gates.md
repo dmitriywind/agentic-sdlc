@@ -45,8 +45,8 @@ The classes are defined in [`improve-factory`](../../improve-factory/SKILL.md) R
 | Review | review-pr; verify-ux for `computer-use` criteria | Draft CR at In review | Report comment with a row per criterion; a `<!-- verify-ux -->` comment per `computer-use` criterion set | Findings below |
 | Findings | review-pr | An Important finding | Ticket at In progress with the findings | implement-spec fixes and pushes |
 | Pass | review-pr | Every criterion proven, `Required` and `proofs-on-base` green on the head | `review` status and approval as the review identity; human approval requested when the class needs it; CR ready; auto-merge on | CR stays draft, review-pr reports |
-| Human approval | A human owner | `human-approval` pending | Approving review on the head | None; the CR waits, visible in the heartbeat |
+| Human approval | A human owner | `human-approval` pending | Approving review on the head | None; the CR waits for the owner |
 | Merge | Forge | All required checks green | Merge on the trunk; board Done, Not shipped | Behind the trunk: review-pr syncs the CR and reviews again |
 | A required check red | review-pr | Ready CR, a required check red | CR back to draft, cause read | Cause in the diff or scope: the ticket returns to In progress with the cause; else a new Signal |
-| A required check missing longer than `stall_minutes` | review-pr | Ready CR, check absent past the limit | Heartbeat `stalled` lists it | escalate-to-human (Access); the CR stays ready |
+| A required check missing longer than `stall_minutes` | review-pr | Ready CR, check absent past the limit | review-pr names the check | escalate-to-human (Access); the CR stays ready |
 | A gate that never runs | escalate-to-human | No run at all for a gate | `needs-human` ask, reason Access | Factory owner restores the gate |
