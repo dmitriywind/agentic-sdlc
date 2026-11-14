@@ -175,8 +175,9 @@ export async function linkage(d: Deps, n: string) {
   if (cr.closes.length !== 1) errors.push(`CR ${n} must close exactly one ticket, found ${cr.closes.length}`);
   else {
     const id = cr.closes[0];
-    const item = await d.board.get(id).catch(() => undefined);
-    if (!item) errors.push(`ticket ${id} is not on the board`);
+    let why = '';
+    const item = await d.board.get(id).catch((e) => { why = String((e as Error).message ?? e).split('\n').slice(-1)[0]; return undefined; });
+    if (!item) errors.push(`ticket ${id} is not on the board${why ? ` (${why})` : ''}`);
     else if (d.binding.board.done_statuses.includes(item.status)) errors.push(`ticket ${id} is not open (${item.status})`);
     if (!nameHas(cr.source, id)) errors.push(`source change line "${cr.source}" does not name ${id}`);
   }

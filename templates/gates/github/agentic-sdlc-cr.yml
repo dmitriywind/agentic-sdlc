@@ -41,6 +41,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      issues: read      # the board: a github-issues board on a private repo
       checks: read
       statuses: write
     env:
@@ -99,6 +100,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      issues: read      # the closing ticket's Lane
       checks: read      # forge view reads the head's check runs
       statuses: write   # one identity: the gate posts with this job's token
     env:
