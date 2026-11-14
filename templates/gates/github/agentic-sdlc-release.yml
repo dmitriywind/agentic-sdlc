@@ -41,7 +41,7 @@ jobs:
           if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
             npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           else
-            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.4}"
+            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-2.0.0-alpha.5}"
           fi
       - name: Cut the release line
         run: agentic-sdlc vcs cut "$REVISION" "$VERSION"

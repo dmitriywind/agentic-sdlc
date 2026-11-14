@@ -68,7 +68,7 @@ factory owner. Learning is off until you set `learning.budget_usd_per_week` abov
 ## Install
 
 ```bash
-npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.4
+npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.5
 npx --no agentic-sdlc init --profile individual --harness claude --board github --forge github --vcs git
 npx --no agentic-sdlc doctor
 ```
@@ -128,7 +128,7 @@ No board account and no forge needed for this part. The `local` board is `.agent
 
 ```bash
 mkdir try-agentic && cd try-agentic && git init -b main && npm init -y
-npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.4
+npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.5
 npx --no agentic-sdlc init --board local --forge github --harness generic
 printf 'Show a greeting on the home page.\n' > body.md
 npx --no agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog

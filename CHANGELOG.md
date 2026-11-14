@@ -3,7 +3,7 @@
 All notable changes to this package. Versions follow semver. A release is a `v<version>` Git tag; the package is
 not on npm.
 
-## Unreleased
+## 2.0.0-alpha.5 (2026-11-14)
 
 - Breaking: GitHub is the one forge. The GitLab, Azure DevOps and Bitbucket adapters, their gate templates and `gitlab-ci-cycle.yml` are removed, because a CR there could change the pipeline file that ran its own gates. `gate approval --fail-pending` is removed; `forge cut` is a required port verb and the release skill always cuts through it.
 - Breaking: `templates/binding.yml` writes `heartbeat.ticket: ""`, and `validate` fails on an empty heartbeat ticket. `init --board local` creates the heartbeat ticket (status Cancelled) and sets its id.

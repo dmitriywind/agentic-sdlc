@@ -11,7 +11,7 @@ The skills, hooks and MCP server ship as a Claude Code plugin named `agentic-sdl
 `/agentic-sdlc:sdlc`, `/agentic-sdlc:review-pr` and so on ([plugins](https://code.claude.com/docs/en/plugins)).
 
 ```bash
-npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.4
+npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v2.0.0-alpha.5
 npx --no agentic-sdlc init --harness claude --profile individual --board github --forge github --vcs git
 claude --plugin-dir ./node_modules/agentic-sdlc
 ```
