@@ -22,6 +22,12 @@ flowchart TD
 
 The forge is GitHub only. See [forges.md](forges.md).
 
+A Claude cloud scheduled task on a subscription is a full runtime, with three choices fixed by it:
+`--harness claude --no-plugin` (a cloud session loads `.claude/skills`, not repo plugins); a
+`github-issues`, `jira` or `linear` board, never `github` (Projects v2 is out of reach of the cloud's
+GitHub proxy); and `commands.verify` in CI (no Docker, 10-minute foreground limit). See
+[`templates/runner/claude-routine.md`](../templates/runner/claude-routine.md).
+
 ## Adopt on one repo
 
 1. Install the CLI as a devDependency, pinned to a tag. The repo then owns its version.
@@ -33,7 +39,8 @@ The forge is GitHub only. See [forges.md](forges.md).
    and the release workflow (see [forges.md](forges.md#github)).
 4. Write `paths.importance_doc` and `paths.guiding_narrative`. The skills judge every ticket
    against them; without them every product question becomes a hold.
-5. Run `doctor` until every port is ok.
+5. Run `doctor` until every port is ok. A warning that no gate blocks a merge means the trunk has no
+   enforced ruleset or branch protection (a private repo on GitHub Free cannot enforce one).
 6. Put two or three real tickets in Backlog with a Priority.
 7. Run one cycle by hand: open the repo in the agent and run the `sdlc` skill for one cycle.
    Read the heartbeat and every comment it wrote.

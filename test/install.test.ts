@@ -230,6 +230,17 @@ test('doctor: unpinned required checks warn; no repo gets a reminder', () => {
   assert.ok(trunkProtection({ ...b, forge: { adapter: 'github', options: {} } }, {}).some((m) => m.startsWith('warn: pin')));
 });
 
+test('doctor: a trunk with no enforced ruleset or branch protection warns that no gate blocks a merge', () => {
+  const b = { forge: { adapter: 'github', options: { repo: 'o/r' } }, vcs: { trunk: 'main' } };
+  const free = trunkProtection(b, { exec: () => { throw new Error('Command failed: gh api\ngh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)'); } });
+  assert.deepEqual(free, [free[0]]);
+  assert.match(free[0], /^warn: trunk protection: main has no enforced ruleset or branch protection, so no gate blocks a merge/);
+  const at = (prot: string) => ({ exec: (_c: string, a: string[]) => a[1].includes('/rules/') ? '[]' : prot });
+  assert.match(trunkProtection(b, at('false'))[0], /no gate blocks a merge/);
+  assert.match(trunkProtection(b, at('true\n'))[0], /classic branch protection is on/);
+  assert.match(trunkProtection(b, { exec: () => { throw new Error('network down'); } })[0], /check manually/);
+});
+
 test('plugin guard hook blocks trunk pushes and forge approve outside the review role', () => {
   const hook = join(import.meta.dirname, '..', 'hooks', 'guard.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'guard-'));
@@ -336,8 +347,8 @@ test('doctor: a self-hosted runner fails on a public repo and warns when CR code
   assert.equal(selfHostedRunner(b, { exec: () => { throw new Error('403'); } }), undefined);
 });
 
-test('doctor: a Claude cloud session with a GitHub board names the runner that can reach Projects', () => {
-  assert.match(cloudBoard({ board: { adapter: 'github' } }, { CLAUDE_CODE_REMOTE: 'true' })!, /cannot reach GitHub Projects.*GitHub Actions/);
+test('doctor: a Claude cloud session fails a GitHub Projects board and names the boards it can reach', () => {
+  assert.match(cloudBoard({ board: { adapter: 'github' } }, { CLAUDE_CODE_REMOTE: 'true' })!, /^fail board: .*cannot reach GitHub Projects.*github-issues, jira or linear.*GitHub Actions/);
   assert.equal(cloudBoard({ board: { adapter: 'github' } }, {}), undefined);
   assert.equal(cloudBoard({ board: { adapter: 'jira' } }, { CLAUDE_CODE_REMOTE: 'true' }), undefined);
 });

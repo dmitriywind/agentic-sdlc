@@ -95,6 +95,21 @@ Feature: Install and validate the binding
     Then a warning names that check
     And on a forge other than GitHub doctor prints a reminder to pin each check
 
+  # Source: src/install.ts, "trunkProtection"
+  # Proof: test/install.test.ts "doctor: a trunk with no enforced ruleset or branch protection warns that no gate blocks a merge"
+  Scenario: Doctor warns when nothing enforces the gates on the trunk
+    Given the trunk rules are empty and the trunk has no branch protection, or reading them returns 403 "Upgrade to GitHub Pro"
+    When the adopter runs "agentic-sdlc doctor"
+    Then a warning says no gate blocks a merge into the trunk
+
+  # Source: src/install.ts, "init" (--no-plugin)
+  # Proof: test/install.test.ts "init --harness claude writes no .mcp.json (the plugin serves MCP); --no-plugin merges it and pins npx -y to the Git tag"
+  Scenario: Init for Claude Code without the plugin writes the skills a cloud session loads
+    When the adopter runs "agentic-sdlc init --harness claude --no-plugin"
+    Then .claude/skills holds the skill pack
+    And .mcp.json holds the agentic-sdlc server
+    And without --no-plugin init writes no .claude/skills
+
   # Source: src/install.ts, "doctor" and "deliveryWorkflow"
   # Proof: test/install.test.ts "doctor: the delivery workflow must name the trunk and release line"
   Scenario: Doctor fails when the delivery workflow does not name the trunk
@@ -184,10 +199,9 @@ Feature: Install and validate the binding
     And with two separate runners the runner check is ok
 
   # Source: src/install.ts, "cloudBoard"
-  # Proof: test/install.test.ts "doctor: a Claude cloud session with a GitHub board names the runner that can reach Projects"
-  Scenario: doctor in a Claude cloud session names a runner that can reach the GitHub board
+  # Proof: test/install.test.ts "doctor: a Claude cloud session fails a GitHub Projects board and names the boards it can reach"
+  Scenario: doctor in a Claude cloud session fails a GitHub Projects board
     Given a binding with board adapter "github"
-    And doctor runs in a Claude cloud session
-    When the board probe fails
-    Then doctor says a cloud session cannot reach GitHub Projects
-    And it names GitHub Actions as the runner for the cycle
+    When doctor runs in a Claude cloud session (CLAUDE_CODE_REMOTE=true)
+    Then doctor fails, saying a cloud session cannot reach GitHub Projects
+    And it names the github-issues, jira and linear boards, and GitHub Actions as the runner for a github board
