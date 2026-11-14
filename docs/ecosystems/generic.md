@@ -1,6 +1,6 @@
 # Any other runtime
 
-Use this when your agent is not Claude, Codex, Cursor, Antigravity or Grok, or when you wire a bot by hand.
+Use this when your agent is not Claude, Codex or Cursor, or when you wire a bot by hand.
 The factory needs three things from a runtime: the repo, network access, and one of the three tool routes below.
 Contract: [`references/architecture.md`](../../references/architecture.md) section 10.
 
@@ -41,15 +41,7 @@ Stdio, inside the agent's session. Register the server in the tool's MCP config:
 ```json
 { "mcpServers": { "agentic-sdlc": { "command": "npx", "args": ["--no-install", "agentic-sdlc", "mcp"] } } }
 ```
-Hosted, for bots that cannot spawn a process:
-```bash
-export AGENTIC_SDLC_MCP_TOKEN="<long random value>"
-npx --no agentic-sdlc mcp --http
-```
-Rules for the hosted endpoint:
-- Every call needs the bearer token in `AGENTIC_SDLC_MCP_TOKEN`. Generate it, keep it in a secret store, rotate it.
-- Bind to loopback or a private interface and check the bind address with `npx --no agentic-sdlc mcp --help`.
-- Put it behind TLS (a reverse proxy or the platform's ingress). Never expose plain HTTP.
+The server is stdio only; a bot that cannot spawn a process uses route 3.
 - The server holds the board and forge tokens of the process that started it. Run it as the implementer identity, never with the review token.
 - By default it leaves out `forge_approve` and `forge_status`. Only a server for the review runtime starts with `mcp --allow approve,status`.
 
@@ -66,5 +58,4 @@ The verbs and their meaning stay the same. Forge verbs (`forge open`, `status`, 
 those on a shell or the MCP server. Gates still run in CI. Keep this route for intake and triage bots, not for the full cycle.
 
 ## Limits and unknowns
-- Streamable HTTP versus SSE transport for `mcp --http`: check the CLI help; not stated in the contract.
 - A runtime with neither shell nor MCP cannot run the cycle; it can still be an intake (create a Signals item).

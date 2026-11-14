@@ -14,23 +14,22 @@ It is the only skill that proposes a new rule.
 
 ## Steps
 
-1. **Due and budget.** `agentic-sdlc ledger summary`. Done when `learning.due` is true and
-   `learning.spentWeekUsd` is under `learning.budget_usd_per_week`; otherwise write
-   `learning: not due` or `learning: over budget` in the heartbeat's `did` and stop.
+1. **Due.** `agentic-sdlc ledger summary`. Done when `learning.due` is true; otherwise write
+   `learning: not due` in the heartbeat's `did` and stop.
 2. **Last proposal.** Read `learning.lastProposal` from the last trusted heartbeat. While it is
    `open`, propose nothing new: check its CR (`agentic-sdlc forge view <n>`) and set its state:
    `merged`; `rejected` when the review report says REMEDIATION REQUIRED or an owner declined;
    `closed` when the CR closed unmerged. Done when no proposal is open.
-3. **Evidence.** `agentic-sdlc ledger summary --since 28` and the `measures` it prints. Done
+3. **Evidence.** `agentic-sdlc ledger summary --since 28` and the stats and failure clusters it prints. Done
    when you hold the failure clusters (by scorer and by normalised error, each
    with its run count and its tickets), the per-skill, per-model, per-executor and per-scorer
-   stats, and the cost and quality trends.
+   stats, and the time and quality trends.
 4. **Pick one target.** The cluster with the most runs, where runs ≥ `learning.min_evidence_runs`
    and the same mistake appears on at least two tickets. Name it with its count:
    "`<scorer>` failed N times across M tickets in `<skill>`" for a scorer cluster, "`<error>` N
    times across M tickets" for an error cluster. A cost target counts too: a skill whose cheaper
    tier or another executor may hold its pass rate. For a `models` target, read
-   `agentic-sdlc bench report --suite <s>`: propose the cheapest model on the Pareto front
+   `agentic-sdlc bench report --suite <s>`: propose the fastest model on the Pareto front
    (`pareto: true`) whose pass rate is not below the current one. Skip a target a `rejected`
    proposal already tried. Done when one target is named with its count and run ids, or
    `learning: no target` is written and you stop.
@@ -43,11 +42,9 @@ It is the only skill that proposes a new rule.
    value, one gate, or one executor move. Classify it by the table under Rules. Done when the diff
    is written on a factory change line (`agentic-sdlc vcs start <name>` per
    `vcs.factory_change_pattern`) and its class is stated.
-7. **Prove on the bench.** Estimate the cost first: `bench run --suite <s> --model <id> --dry-run`
-   prints the command per case; price it from the ledger's cost per `implement-spec` run. Stop
-   with `learning: over budget` when the estimate plus `spentWeekUsd` reaches the budget, and with
-   `learning: too few cases` when the suite has fewer than `learning.bench_min_cases` cases. Pass
-   `--budget <budget minus spentWeekUsd>` to every `bench run`.
+7. **Prove on the bench.** `bench run --suite <s> --model <id> --dry-run` prints the command per
+   case. Stop with `learning: too few cases` when the suite has fewer than
+   `learning.bench_min_cases` cases.
    - Baseline: `learning.benchBaseline` when its factory is the trunk and its model and executor
      match; otherwise `agentic-sdlc bench run --suite <s> --model <id>` on the trunk. With no
      suite, `bench build --suite <s> [--paths <glob>]… [--per-size <n>]` first.
@@ -56,8 +53,7 @@ It is the only skill that proposes a new rule.
    - `agentic-sdlc bench compare <baseline> <candidate>`. It needs at least
      `learning.bench_min_cases` shared cases and `learning.bench_trials` trials per case and
      judges on the Wilson lower bound of the pass rate; fewer is `regressed`.
-   Done when compare exits 0 and the cost delta is no larger than the gain (pass-rate gain, or
-   cost saved at the same pass rate). Otherwise write `learning: not proven` with the compare JSON
+   Done when compare exits 0. Otherwise write `learning: not proven` with the compare JSON
    and stop.
    A binding-only change the bench cannot measure (`cycle.*`, `stall_minutes`, `parallel_agents`)
    is proved by the ledger instead: once merged it stays `open` in `learning.lastProposal` until
@@ -70,7 +66,7 @@ It is the only skill that proposes a new rule.
    human must approve. Never mark it ready or merge it yourself. Done when the draft CR is open
    with its proof.
 9. **Record.** Write one `learn` heartbeat on `heartbeat.ticket`
-   ([heartbeat](../sdlc/references/heartbeat.md)): your own run row, whose cost includes the bench
+   ([heartbeat](../sdlc/references/heartbeat.md)): your own run row, whose minutes include the bench
    runs, and `learning` with `lastProposal` and, when you ran the trunk bench, `benchBaseline`. Done
    when it is posted.
 
@@ -82,14 +78,13 @@ It is the only skill that proposes a new rule.
 - The bench pass rate is the proof; the judge score only picks the target. A change the bench
   cannot exercise needs the ledger before/after proof.
 - Evidence is heartbeats by `owners.bots` only (`ledger` filters them); a forged heartbeat never
-  moves the budget, the cycle count or a target.
-- No change may lower the bench pass rate, and none may raise cost by more than its gain.
+  moves the cycle count or a target.
+- No change may lower the bench pass rate.
 - Bench: the oracle stays hidden from the candidate, and `agent_command` must confine the agent to
   `{workdir}` (no network to the board or forge, no VCS history past the base; a run that read the
   future is void). Compare only within one suite and on the same cases; a model or executor
   comparison holds the factory fixed, a factory comparison holds the model and executor fixed.
   Only `harness` and `command` executors run on the bench. A results file is never edited.
-- Bench, judge and improve spend count toward `learning.budget_usd_per_week`.
 - Merge classes. When unsure, the class is `guardrail`. The `approval` gate computes it.
 
   | Class | Covers | Merge |

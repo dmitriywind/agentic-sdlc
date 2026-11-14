@@ -6,8 +6,9 @@ No API keys. Nothing stored outside the repo and the board.
 
 ## Set it up
 ```bash
-npx --no agentic-sdlc init --profile individual --harness <name> --board github --forge github --vcs git
+npx --no agentic-sdlc init --profile individual --harness <name> --board github-issues --forge github --vcs git
 ```
+A Claude cloud scheduled task reaches a `github-issues`, `jira` or `linear` board, not `github` (Projects v2), and needs `--harness claude --no-plugin`.
 Init writes the template defaults; the excerpt shows the keys this profile cares about. `validate` warns when the binding names an executor kind that needs an API key.
 
 ## Binding excerpt
@@ -30,7 +31,7 @@ learning:
   bench_min_cases: 20                            # bench compare needs this many shared cases
   bench_trials: 3                                # and this many trials per case
   auto_merge_classes: []                         # add tuning once a bench baseline exists
-  budget_usd_per_week: 50                        # the template default is 0 (learning off); keep the cap inside the plan's weekly allowance
+  enabled: true                                  # the template default is false (learning off); learning runs draw plan usage
 # agent_command: "<subscription CLI headless command with {model} {prompt_file} {workdir}>"   # bench only
 ```
 Executors: `harness` only, plus `command` for a headless CLI logged in with the subscription.
@@ -43,8 +44,6 @@ must not be `review_identity`. The runner templates fail when `ANTHROPIC_API_KEY
 | Claude | Scheduled task in the cloud | [claude.md](../ecosystems/claude-code.md) |
 | Codex | ChatGPT scheduled task or cloud task | [codex.md](../ecosystems/codex.md) |
 | Cursor | Automation (cloud agent on a schedule) | [cursor.md](../ecosystems/cursor.md) |
-| Antigravity | Remote Agent (Pro or Ultra personal account) | [antigravity.md](../ecosystems/antigravity.md) |
-| Grok | Grok Bot routine; the CLI scheduler story is thin | [grok.md](../ecosystems/grok.md) |
 | Other | CI cron with a headless CLI, or the shell route | [generic.md](../ecosystems/generic.md) |
 
 Read each guide's terms caveat before you put a consumer login in CI. Some vendors say third-party wrapping is not supported on consumer plans.

@@ -45,7 +45,7 @@ Since v2.1.302 `-p` starts in Manual mode when nothing sets a mode, so a tool ca
 approval is denied and the run can exit 0 having done nothing: set the mode and list what the
 cycle needs. Permission rules use the space form `Bash(npx --no agentic-sdlc *)`
 ([permissions](https://code.claude.com/docs/en/permissions), [headless](https://code.claude.com/docs/en/headless)).
-The JSON has `total_cost_usd` (a client-side estimate). Prompt text:
+Prompt text:
 [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). Reviews run after the
 cycle, as a separate job with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md):
 only that job gets `AGENTIC_REVIEW_TOKEN` and allows `forge approve`.

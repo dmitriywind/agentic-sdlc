@@ -11,7 +11,7 @@ the rows back.
   cycle's done line from `dispatch sdlc`.
 - Read back with `board comments <heartbeat.ticket> --last <n> --marker "<!-- heartbeat -->"
   --trusted`; `ledger runs` and `ledger summary` read only heartbeats by `owners.bots`.
-  `ledger summary` also prints `learning: { due, judge, cyclesSince, spentWeekUsd }`; no skill
+  `ledger summary` also prints `learning: { due, judge, cyclesSince }`; no skill
   keeps a counter.
 - Scores are not written here: `judge-run` posts them with `ledger record`, owners post
   `agentic-sdlc:grade` comments, and `ledger` joins both to the run rows.
@@ -33,7 +33,7 @@ the rows back.
 |---|---|
 | `kind` | `cycle` (the default), `review` (the review runtime) or `learn` (`improve-factory`). Only `cycle` heartbeats count cycles. |
 | `did` | One short line per step result, with the ticket id. |
-| `learning` | `lastProposal` and `benchBaseline` (see Learning). Only when learning is on (`learning.budget_usd_per_week` above 0): copied forward from the last heartbeat, changed only by `improve-factory`. |
+| `learning` | `lastProposal` and `benchBaseline` (see Learning). Only when `learning.enabled` is true: copied forward from the last heartbeat, changed only by `improve-factory`. |
 | `measures` | Board measures over the last 7 days (lead and cycle days, first-pass rate, DORA). Not computed unless the runner prompt asks for them; `ledger summary` prints the ones the rows give. |
 
 `errors` holds one entry per failed step: the step name, the ticket id when there is one, the
@@ -52,7 +52,7 @@ appears in exactly one heartbeat.
 | `ticket`, `cr` | The ticket id and CR number the run worked on; empty when it had none. |
 | `tier`, `model` | The skill's tier and the model the binding mapped it to; for a non-harness executor, what the executor reported, or empty. |
 | `executor`, `ref` | The executor kind and the `ref` that `dispatch` printed (session id, bot run, assignment). |
-| `tokens`, `cost_usd`, `minutes` | What the run reported. A value the executor does not report is left out, never guessed. |
+| `tokens`, `minutes` | What the run reported. A value the executor does not report is left out, never guessed. |
 | `outcome` | `done` (its Done-when conditions held), `sent_back`, `failed`, `escalated` or `timeout`. Anything but `done` counts as a failure. |
 | `trace` | The run id to fill `traces.uri` with, when the executor stored a full transcript there; left out otherwise. |
 | `error` | For a failure: the first line of the cause, as the run or the gate stated it. The ledger clusters on it. |
@@ -62,11 +62,10 @@ appears in exactly one heartbeat.
 
 ## Learning
 
-`ledger summary` computes `cyclesSince` (cycles since the last `improve-factory` run),
-`spentWeekUsd` (judge, improve and bench spend in the last 7 days) and `due` (`cyclesSince` has
-reached `learning.every_cycles` and the spend is under `learning.budget_usd_per_week`).
+`ledger summary` computes `cyclesSince` (cycles since the last `improve-factory` run) and `due`
+(`cyclesSince` has reached `learning.every_cycles` and `learning.enabled` is true).
 
 | Key | Value |
 |---|---|
 | `lastProposal` | The last factory change proposed: when, its CR, its class, the failure cluster it targets, the run ids that were its evidence, and `open`, `merged`, `rejected` or `closed`. |
-| `benchBaseline` | The last bench result of the trunk's factory: the results file, factory revision, model, executor, case count, pass rate, cost and minutes. |
+| `benchBaseline` | The last bench result of the trunk's factory: the results file, factory revision, model, executor, case count, pass rate and minutes. |

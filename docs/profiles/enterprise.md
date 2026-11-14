@@ -35,7 +35,7 @@ learning:
   bench_trials: 3
   auto_merge_classes: []                         # add tuning once a bench baseline exists
   judge_tier: fast                               # template default; judge-run picks the next tier when it is the run's own model
-  budget_usd_per_week: 50                        # the template default is 0 (learning off); set a cap to turn learning on
+  enabled: true                                  # the template default is false (learning off)
 ```
 All executor kinds are allowed: `managed`, `webhook`, `assign`, `command`, `harness`. See [executors.md](../../skills/sdlc/references/executors.md).
 
@@ -45,9 +45,7 @@ All executor kinds are allowed: `managed`, `webhook`, `assign`, `command`, `harn
 | Claude | Managed Agents deployments (cron) or the GitHub Action with an API key | [claude.md](../ecosystems/claude-code.md) |
 | Codex | `openai/codex-action` with an API key, or `codex exec` with `CODEX_API_KEY` | [codex.md](../ecosystems/codex.md) |
 | Cursor | Cloud Agents API and Automations run as a service account | [cursor.md](../ecosystems/cursor.md) |
-| Antigravity | Gemini API Antigravity agent (preview) | [antigravity.md](../ecosystems/antigravity.md) |
-| Grok | xAI API with a hosted `agentic-sdlc mcp --http` endpoint; the hosted-agent story is thin | [grok.md](../ecosystems/grok.md) |
-| Other | Org job runner plus `mcp --http` behind TLS | [generic.md](../ecosystems/generic.md) |
+| Other | Org job runner with the shell route or the stdio MCP server | [generic.md](../ecosystems/generic.md) |
 
 Mix vendors per stage: the executor entries are per skill, and the bench compares executors like models.
 
@@ -57,7 +55,6 @@ Mix vendors per stage: the executor entries are per skill, and the bench compare
 - [ ] Secrets only as env var names. Each stage lists `secrets:`; nothing else is passed.
 - [ ] Stage `mcps:` lists only the servers that stage needs.
 - [ ] Sandbox `cloud` or `container`; unattended cycles refuse `local`.
-- [ ] The hosted MCP endpoint is behind TLS, with `AGENTIC_SDLC_MCP_TOKEN` rotated and a private bind address.
 - [ ] The reviewer executor is never the implementer executor of the same CR.
 - [ ] CI loads the binding from the target branch and never runs CR code with secrets.
 - [ ] Check vendor data terms: some managed agents are not ZDR or HIPAA eligible (see each guide).
@@ -70,7 +67,7 @@ Mix vendors per stage: the executor entries are per skill, and the bench compare
 | Executors | All kinds, per stage | `harness`, local `command` |
 | Traces | On your storage, read by scorers | None or scratch files |
 | Bench | Full suites across models and executors | Small suites |
-| Cost | Metered, can grow; capped by `budget_usd_per_week` and per-run budgets | Flat plan, hard usage limits |
+| Cost | Metered, can grow; learning only when `learning.enabled` | Flat plan, hard usage limits |
 | Setup | Agent platform, secrets, storage, an on-call owner | Minutes |
 
 See [individual.md](individual.md).

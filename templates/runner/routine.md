@@ -17,8 +17,6 @@ Setup step everywhere: `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_
 | Claude cloud scheduled task (routine) | `claude-routine.md` (`github-issues`, `jira` or `linear` board) | individual |
 | Claude Managed Agents scheduled deployment | `claude-managed-deployment.json` (below) | enterprise |
 | Cursor automation | `cursor-automation.md` | individual or enterprise |
-| Antigravity remote agent / Gemini API | `antigravity-remote-agent.md` | individual or enterprise |
-| Grok | `grok.md` | individual or enterprise |
 | Other (cron on your own host) | any of the above, adapted | either |
 
 Secrets: the agent's own credential plus `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN` (or the names the binding gives); `AGENTIC_REVIEW_TOKEN` in the review run only.
@@ -29,7 +27,7 @@ Executors: `.agents/skills/sdlc/references/executors.md`. Scheduled runs pass `-
 
 CI templates chain with a job dependency (`needs`). A scheduler without one chains through the cycle:
 put the command that starts the review run in the cycle environment as `AGENTIC_REVIEW_FIRE_CMD`; the
-cycle prompt runs it once, after the heartbeat. It is a trigger credential, not the review token.
+cycle prompt runs it once, after the heartbeat, only when a CR needs a review. It is a trigger credential, not the review token.
 
 - Routine: give the review routine an API trigger and set
   `AGENTIC_REVIEW_FIRE_CMD='curl -fsS -X POST "https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire" -H "Authorization: Bearer $REVIEW_FIRE_TOKEN" -H "anthropic-beta: experimental-cc-routine-2026-04-01"'`.

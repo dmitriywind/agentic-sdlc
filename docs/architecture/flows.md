@@ -188,10 +188,10 @@ flowchart TD
 ```
 
 - One change per proposal, from `improve-factory` only.
-- The change must not lower the bench pass rate or raise cost beyond its gain.
+- The change must not lower the bench pass rate.
 - Any change to skill text is `guardrail`. `tuning` is only the `models` map and a benched
   skill's tier.
-- Weekly spend on learning stays under the budget. Over budget, the loop stops.
+- Learning runs only when `learning.enabled` is true.
 - Unknown paths and deletions count as guardrail.
 
 ## 6. Signal on red

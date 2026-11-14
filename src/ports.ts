@@ -177,7 +177,7 @@ export interface Binding {
    * name, or `{ board, forge }` when the board and the forge know the person by different names. */
   owners: { product: Who; factory: Who; bots: Who[] };
   board: {
-    adapter: 'github' | 'jira' | 'linear' | 'local';
+    adapter: 'github' | 'github-issues' | 'jira' | 'linear' | 'local';
     options: Record<string, unknown>;
     mcp?: Record<string, unknown>;
     statuses: string[];

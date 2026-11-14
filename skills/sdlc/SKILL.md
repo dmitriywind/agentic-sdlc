@@ -81,13 +81,12 @@ In order:
    comment, no CR needs a review, and `ledger summary` shows neither `learning.due` nor
    `learning.judge` with an unscored run: write the idle heartbeat (`at`, `factory`, `runs: []`,
    `errors: []`), fire no review, and stop. Done when it is posted.
-3. **Judge.** When `ledger summary` shows `learning.judge` (the weekly budget is not spent and learning
-   is on): for each run in the newest heartbeats since the last judge step that has no `score` yet,
-   except `judge-run` runs, `dispatch judge-run --ticket <id>` (`--cr <n>`; the heartbeat ticket for a
+3. **Judge.** When `ledger summary` shows `learning.judge` (true only when `learning.enabled`): for
+   each run in the newest heartbeats since the last judge step that has no `score` yet, except `judge-run` runs, `dispatch judge-run --ticket <id>` (`--cr <n>`; the heartbeat ticket for a
    run with neither) `--run <run id> --run-model <the row's model>`. It prints
    `{ skip: true }` when no independent model exists: name it in this heartbeat's `errors`.
-4. **Learn.** When step 1's `ledger summary` shows `learning.due` (due counts cycles and checks
-   the weekly budget), `dispatch improve-factory`. It runs beside the next steps and writes its own
+4. **Learn.** When step 1's `ledger summary` shows `learning.due` (due counts cycles, only when
+   `learning.enabled`), `dispatch improve-factory`. It runs beside the next steps and writes its own
    `learn` heartbeat, so its row survives a cycle that times out; give it its own executor
    (`executors.improve-factory`) when the bench would outlast the cycle's job timeout.
 5. **Triage Signals.** Every ticket at Signals, in the order `triage-signal` names.

@@ -17,7 +17,7 @@ Three layers, each with one home:
 | Binding | `.agents/binding.yml` in the project | Every project value: board, statuses, commands, paths, owners, model tiers, executors. |
 | Ports | `src/` → the `agentic-sdlc` CLI and MCP server | Board, forge and VCS adapters, repo gates, dispatch, the run ledger and the bench. Mechanism only, no process rule. |
 
-An agent harness (Claude Code, Codex, Cursor, Antigravity, Grok, any other) runs the loop by
+An agent harness (Claude Code, Codex, Cursor, any other) runs the loop by
 loading the `sdlc` skill. The package ships **no supervisor and no agent runner**. The one
 exception is `bench run`, which starts the binding's `agent_command` headless on a past task.
 
@@ -35,10 +35,11 @@ hooks/                       plugin hooks (hooks.json, guard.mjs) and the plugin
 skills/                      the portable skill pack (Agent Skills format: <name>/SKILL.md)
   sdlc/                      navigator: contract, routing, cycle, the hold, branches
     SKILL.md
+    references/contract.md   words, roles and the rules every step skill follows
     references/statuses.md   statuses and Shipped
     references/board.md      board fields, lanes, sub-issues
     references/gates.md      gates, required checks, approval, In review hand-offs
-    references/heartbeat.md  heartbeat v6 incl. the run ledger
+    references/heartbeat.md  the heartbeat incl. the run ledger
     references/ports.md      how a skill calls the board, forge and VCS
   triage-signal/  backlog-grooming/  shape/  implement-spec/  review-pr/  release/
   escalate-to-human/
@@ -220,7 +221,7 @@ Keys this contract relies on by name:
 - `learning.every_cycles`, `learning.min_evidence_runs`, `learning.bench_size`,
   `learning.bench_min_cases` (default 20), `learning.bench_trials` (default 3),
   `learning.auto_merge_classes` (template default `[]` until a bench baseline exists),
-  `learning.judge_tier`, `learning.budget_usd_per_week` (`learning.due` is false once the week's learning spend reaches it).
+  `learning.judge_tier`, `learning.enabled` (default `false`: `learning.due` and `learning.judge` stay false).
 
 ## 5. Skills
 
@@ -247,7 +248,7 @@ needs `agent_command`.
    summary` adds `learning: { due, judge, cyclesSince }` (`judge` and `due` are false unless
    `learning.enabled`), computed from heartbeats and run rows, so no skill keeps a counter. `ledger stale --max-hours <h>` exits 1 when the newest
    heartbeat is older. The heartbeat's `learning` object carries `lastProposal` and
-   `benchBaseline`; only `improve-factory` changes them and every heartbeat copies them forward
+   `benchBaseline`; only `improve-factory` changes them and, when `learning.enabled`, every heartbeat copies them forward
    (fields in `skills/sdlc/references/heartbeat.md`).
 2. **Scorers.** A scorer is a file `.agents/scorers/<name>.md`: frontmatter `name`, `applies_to`
    (skills, or `*`) and `scale` (`pass-fail` or `0-4`), and a body that is the rubric question.
@@ -262,7 +263,7 @@ needs `agent_command`.
    `<!-- scores -->` comment on the heartbeat ticket; `ledger` reads these. A **human grade**, a
    comment `agentic-sdlc:grade <run-id> <scorer> <value>` by `owners.product` or
    `owners.factory`, wins over both.
-4. **Improve.** When `learning.due`, `improve-factory` reads the ledger and the measures, clusters
+4. **Improve.** When `learning.due`, `improve-factory` reads the ledger, clusters
    failures by scorer and by normalised error, takes the worst cluster (at least
    `learning.min_evidence_runs` runs over two tickets), and proposes **one** factory change in a
    draft factory CR, which `review-pr` reviews (`dispatch --cr`).
@@ -284,8 +285,8 @@ needs `agent_command`.
    records pass and minutes per case. `bench report --suite <s>` marks the Pareto front
    of pass rate against median minutes. Only `harness` and `command` executors run on the bench.
 8. **Measures.** `ledger summary` reports runs, median score, failure rate and minutes by skill,
-   model, executor and scorer, and the failure clusters. The heartbeat's measures (automation
-   rate, DORA, cycle time, first-pass rate) are as the cycle read them from the board.
+   model, executor and scorer, and the failure clusters. The heartbeat's optional `measures` (DORA,
+   cycle time, first-pass rate) are off unless the runner prompt asks for them.
 
 ## 7. Executors: who runs each stage
 
@@ -336,8 +337,8 @@ prompt in `templates/runner/cycle-prompt.md`.
 
 | Runtime | How it reaches the ports |
 |---|---|
-| Agent with a shell (Claude Code, Codex, Cursor, Antigravity, Grok, CI cron with a headless agent CLI) | `npx --no agentic-sdlc <group> <verb>` |
-| Agent with MCP but no shell | `agentic-sdlc mcp` (stdio; `--http` for a hosted endpoint with a bearer token). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. |
+| Agent with a shell (Claude Code, Codex, Cursor, CI cron with a headless agent CLI) | `npx --no agentic-sdlc <group> <verb>` |
+| Agent with MCP but no shell | `agentic-sdlc mcp` (stdio). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. |
 | Agent with only vendor MCP tools | the vendor tools that `board.mcp` maps to the board verbs; forge steps need a shell or the MCP server; gates still run in CI |
 
 Gates always run in the forge's CI, so trunk guarantees never depend on the runtime. A gate blocks a
@@ -363,7 +364,7 @@ CI. The shortest schedule interval is 1 hour; runs draw subscription usage.
 **Packaging per harness.** For Claude Code the package is a plugin (`.claude-plugin/`: skills,
 hooks, the MCP server), so skills are named `/agentic-sdlc:<skill>`. `init --harness claude`
 copies no skills; it generates one subagent per tier and adds an `@AGENTS.md` import to
-`CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. Codex, Cursor and Antigravity read `.agents/skills`, which `init` writes. Claude
+`CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. Codex and Cursor read `.agents/skills`, which `init` writes. Claude
 headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-turns`. The cycle
 allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm checks, and adds
 `--disallowedTools` for `forge approve`. The review allows only the CLI and the MCP server.
@@ -376,7 +377,7 @@ allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm 
 | Executors | `harness` only; `command` for a local headless CLI logged in with the subscription | All kinds |
 | Review identity | A second account or a fine-grained token for the reviewer | A forge app or bot account with its own token |
 | Traces | None, or files in the runner's scratch dir | `traces.uri` on the org's storage |
-| Bench | Small suites inside the weekly budget | Full suites across models and executors |
+| Bench | Small suites inside the plan's usage limits | Full suites across models and executors |
 
 `init --profile individual|enterprise` writes these defaults. `validate` warns when an
 `individual` binding names an executor kind that needs an API key; the individual runner fails
@@ -384,7 +385,7 @@ when `ANTHROPIC_API_KEY` is set, since it outranks the subscription token.
 
 **Two runtimes, two identities.** Every scheduler runs two jobs: the cycle (`templates/runner/cycle-prompt.md`), which never holds the
 review token, and the review (`templates/runner/review-prompt.md`), which runs after the cycle
-finishes (a job dependency, never its own clock), holds `forge.options.review_token_env` and runs
+finishes (a job dependency, or the cycle's fire command when a CR needs a review; never its own clock), holds `forge.options.review_token_env` and runs
 only `review-pr`, for product and factory CRs. `forge status` refuses the contexts the gates own
 (`human-approval`, `ticket-linkage`, `proofs-on-base`). The implementer's `token_env` has no commit-status
 write (a fine-grained token with Commit statuses: no access; `doctor` warns on a classic token with scope

@@ -11,7 +11,7 @@ flowchart TD
   A -->|"API keys, managed agents"| ENT["--profile enterprise"]
   IND --> H["Which agent runs the cycle?"]
   ENT --> H
-  H --> HC["--harness claude | codex | cursor |<br/>antigravity | grok | generic"]
+  H --> HC["--harness claude | codex | cursor |<br/>generic"]
   HC --> B["Where do tickets live?"]
   B --> BC["--board github | jira | linear | local"]
   BC --> F["Where do CRs live?"]

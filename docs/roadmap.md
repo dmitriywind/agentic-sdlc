@@ -5,7 +5,7 @@ is its backlog. A finished item leaves this file; the git log holds it.
 
 ```mermaid
 flowchart LR
-  C["Cloud as a first-class runtime"] --> O["Cut cycle overhead"] --> N1["Pilot on a real product"] --> N2["Fix what the pilot finds"]
+  C["Cloud as a first-class runtime"] --> N1["Pilot on a real product"] --> N2["Fix what the pilot finds"]
   N2 --> X["Next"]
   X --> L["Later"]
 ```
@@ -46,6 +46,6 @@ runtime, not a fallback. Facts from a probe in a cloud session (2026-11-14) and 
 | Item | Why |
 |---|---|
 | Scorers for shape quality and triage accuracy | `improve-factory` has no evidence for those two skills. |
-| Move the common contract to `skills/sdlc/references/contract.md`; fold `verify-ux` into `review-pr` | Shorter skills, one home per rule. |
+| Fold `verify-ux` into `review-pr` | Shorter skills, one home per rule. |
 | OpenTelemetry GenAI attributes and CDEvents on factory and deploy records | Standard telemetry for agent runs and deploys. |
 | `signal-on-red` through a `forge run <id>` verb | Today it searches a window of 30 runs. |

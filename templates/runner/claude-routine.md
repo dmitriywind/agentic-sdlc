@@ -19,9 +19,9 @@ Two routines, two cloud environments:
 - review environment: the same plus AGENTIC_REVIEW_TOKEN and AGENTIC_SDLC_ROLE=review (the names your binding uses).
 
 1. Create both cloud environments for the repo with the env vars above; set each setup script to `sh .agents/runner-setup.sh`.
-2. Cycle routine on the cycle environment: paste the text of `cycle-prompt.md` below the `---` line as the prompt.
+2. Cycle routine on the cycle environment: paste the text of `cycle-prompt.md` below the `---` line as the prompt; pick the binding's `models.fast` model (Sonnet).
 3. Review routine on the review environment: paste the text of `review-prompt.md` below the `---` line as the prompt.
-4. Triggers: the cycle routine on a Schedule (custom cron, at least 1 hour apart); the review routine on an API trigger that the cycle fires when it ends (`AGENTIC_REVIEW_FIRE_CMD`, see `routine.md`). Limit: 100 scheduled runs per hour per account.
+4. Triggers: the cycle routine on a Schedule (custom cron, at least 1 hour apart); the review routine on an API trigger that the cycle fires when a CR needs a review (`AGENTIC_REVIEW_FIRE_CMD`, see `routine.md`). Limit: 100 scheduled runs per hour per account.
 5. Optional API trigger: `POST https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire`,
    `Authorization: Bearer <per-task token>`, `anthropic-beta: experimental-cc-routine-2026-04-01`, optional body `text`.
    Limit: 30 fires per hour per task.
