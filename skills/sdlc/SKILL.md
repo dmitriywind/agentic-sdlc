@@ -46,6 +46,7 @@ Pick the first row that matches. Skip a held ticket.
 | Status In review, ready CR behind the trunk | [`review-pr`](../review-pr/SKILL.md) |
 | Status In review, ready CR with no `review` status on its head | [`review-pr`](../review-pr/SKILL.md) |
 | Status In review, ready CR whose required check is red, or missing for longer than `stall_minutes` (never `review` or `human-approval`, which wait for a review and a person) | [`review-pr`](../review-pr/SKILL.md) |
+| Status In review, ready CR with every `required_checks` entry green on its head, still open | [`review-pr`](../review-pr/SKILL.md): it merges (step 11) |
 | Status In review, otherwise | none; approvals and auto-merge act |
 | Draft factory CR (only `paths.factory` changed, change line per `vcs.factory_change_pattern`) | [`review-pr`](../review-pr/SKILL.md), dispatched with `--cr` |
 | Open dependency CR (change line `dependabot/` or `renovate/`, no ticket) | [`review-pr`](../review-pr/SKILL.md), dispatched with `--cr` |
@@ -69,7 +70,8 @@ double fire; leave it.
 
 A CR **needs a review** when it is open, a `review-pr` row of the Routing table matches it, and,
 for a draft CR, the newest `<!-- review-pr` report on it (`forge comments <n> --last 1 --marker
-"<!-- review-pr" --trusted`) is not for its head sha.
+"<!-- review-pr" --trusted`) is not for its head sha, or is a PASS for it (a PASS leaves the CR
+ready, so a draft with one is a review that did not finish).
 
 In order:
 

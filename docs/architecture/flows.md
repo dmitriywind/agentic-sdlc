@@ -130,8 +130,8 @@ sequenceDiagram
   `merged` gate moves it to Done.
 - The implementer never reviews its own CR. The review runtime never runs CR code.
 - The diagram shows two identities. With one identity (`forge.review_identity` empty) there is no
-  review runtime: the cycle dispatches `review-pr` as a fresh subagent in the same cycle, which posts
-  the review status with the implementer's token and gives no approval.
+  review runtime: the cycle dispatches `review-pr` as a fresh subagent in the same cycle. It posts its
+  report and no approval; CI's `review` gate turns the report into the `review` status.
 - A Fast-lane product CR merges on the agent review. A Full-lane one also needs a human
   approval when `forge.human_approval` is `full-lane` or `always`.
 - Red or missing checks send the CR back to draft. The cause decides who fixes it.

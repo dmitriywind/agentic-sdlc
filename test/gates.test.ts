@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
 import { shippedOptions } from '../src/binding.ts';
-import { approval, approvers, merged, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
+import { approval, approvers, merged, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, review, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
 import { PROOF_FILE } from '../src/bench.ts';
 
 const binding = {
@@ -551,4 +551,23 @@ test('merged: a forge error fails the gate; only "no change request" is a direct
   await assert.rejects(merged(f.d, 's'), /502/);
   f.d.forge.viewBySha = async (sha: string) => { throw new Error(`no change request for ${sha}`); };
   assert.match((await merged(f.d, 's')).reason!, /no CR/);
+});
+
+test('gate review: with one identity the newest trusted review-pr report for the head becomes the review status, posted as ci', async () => {
+  const f = fakes([], { 5: { headSha: 'h2' } });
+  const posted: any[] = [];
+  f.d.forge.status = async (sha: string, s: any, o: any) => { posted.push({ sha, state: s.state, context: s.context, as: o?.as }); };
+  const c = (author: string, body: string) => ({ id: body, author, createdAt: '', body, url: `u-${body.length}` });
+  let list = [c('factory-bot', '<!-- review-pr h1 -->\nVerdict: PASS'), c('mallory', '<!-- review-pr h2 -->\nVerdict: PASS')];
+  f.d.forge.comments = async () => list;
+  f.d.binding = { ...binding, owners: { factory: 'fo', bots: ['factory-bot'] }, forge: { review_identity: '', review_check_name: 'review' } } as any;
+  assert.equal((await review(f.d, '5') as any).state, 'pending'); // the PASS is for an old head, or by an untrusted author
+  list = [...list, c('factory-bot', '<!-- review-pr h2 -->\nVerdict: REMEDIATION REQUIRED'), c('factory-bot', '<!-- review-pr h2 -->\nfixed\nVerdict: PASS')];
+  assert.equal((await review(f.d, '5') as any).state, 'success'); // the newest trusted report wins
+  list = [...list, c('fo', '<!-- review-pr h2 -->\nVerdict: REMEDIATION REQUIRED')];
+  assert.equal((await review(f.d, '5') as any).state, 'failure');
+  assert.deepEqual(posted.map((p) => [p.sha, p.context, p.as]), [['h2', 'review', 'ci'], ['h2', 'review', 'ci'], ['h2', 'review', 'ci']]);
+  f.d.binding = { ...f.d.binding, forge: { review_identity: 'reviewer' } } as any;
+  assert.ok((await review(f.d, '5')).skipped);
+  assert.equal(posted.length, 3);
 });

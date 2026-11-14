@@ -165,6 +165,7 @@ change line `start` opens.
 | `linkage` | Posts check `ticket-linkage`: a product CR closes exactly one open ticket and names it in its source. |
 | `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base, or when a product CR changes only `paths.no_proof`. |
 | `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by `owners.factory`. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
+| `review --cr <n>` | One identity only (`forge.review_identity` empty): posts status `review` on the head from the newest `review-pr` report for that head by a trusted author (`owners.bots`, `owners.product`, `owners.factory`): success on `Verdict: PASS`, failure on `REMEDIATION REQUIRED`, pending with no report. Posts with the CI job's token. With two identities it does nothing. |
 | `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. Done records a fact: a held ticket moves and keeps its label; a Cancelled ticket stays. A push with no CR changes nothing. No CR-pipeline gate writes the board; besides this gate only `shipped` moves a ticket (In review to Done, when a deploy reports first). |
 | `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
 | `signal-on-red --run <id>` | A red trunk or release-line run opens a Signal with a redacted evidence bundle. Other refs are ignored. |
@@ -175,8 +176,8 @@ Checks:
 - **`Required`** is a CI job, not a gate and not an agent: on `pull_request`, with no secrets, it
   runs `commands.install` and `commands.verify` on the CR head. The `proofs-on-base` gate runs in
   its own job, also with no secrets: where it cannot post the status, its result is the check. The GitHub CR workflow also triggers on `merge_group`, for merge queues.
-- **`review`** is posted by `review-pr`: as `forge.review_identity`, or with the implementer's token
-  when the binding has one identity (section 10).
+- **`review`** is posted by `review-pr` as `forge.review_identity`. With one identity (section 10) the
+  `review` gate posts it in CI from the newest trusted `review-pr` report on the head.
 - **Required checks**: `ticket-linkage`, `Required`, `proofs-on-base`, `review`,
   `human-approval`, `skill-regression`. The trunk ruleset pins the four CI checks to their
   source app (`integration_id`); with two identities `review` and `human-approval` post with the review token, so pin them
@@ -394,9 +395,13 @@ token: `individual-api` names a managed executor's key otherwise (`executors.<sk
 - **One identity** (`review_identity` empty; the `individual` and `individual-api` default). The
   factory acts as one account, yours: on a Claude cloud routine, the proxy's GitHub login. There is
   one scheduled job, the cycle. It dispatches `review-pr` like any other step, as a harness subagent
-  with a fresh context that runs no CR code. `review-pr` posts the `review` status with the
-  implementer's token and gives no approving review, since GitHub refuses one from the CR's author.
-  `forge approve` refuses. `init` writes a trunk ruleset that needs no approving review. The
+  with a fresh context that runs no CR code. `review-pr` posts its report and no status: a Claude cloud
+  session's proxy refuses commit-status writes (HTTP 403). The report comment starts the CR workflow
+  (`issue_comment`), whose `review` gate posts the `review` status from the newest report on the head
+  by a trusted author (`owners.bots`, `owners.product`, `owners.factory`) with the CI job's token.
+  `review-pr` then waits for that status and runs `forge automerge`. It gives no approving review, since
+  GitHub refuses one from the CR's author, and `forge approve` refuses. `init` writes a trunk ruleset
+  that needs no approving review and pins every required check to GitHub Actions. The
   `approval` gate posts `human-approval` with the CI job's token; a CR that needs a human waits until a
   collaborator approves its head, or the owner merges it as admin (the ruleset's admin bypass). The
   trade-off: the review is a separate context, not a separate account, so the trunk ruleset cannot

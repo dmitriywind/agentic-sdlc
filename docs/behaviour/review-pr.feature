@@ -20,15 +20,15 @@ Feature: Review a change request
     And it runs "forge ready <n>" and "forge automerge <n>"
     And the ticket still shows In review
 
-  # Source: skills/review-pr/SKILL.md, "Decide" (PASS, one identity); src/forge/github.ts, "status" and "approve"
+  # Source: skills/review-pr/SKILL.md, "Decide" (PASS, one identity); src/forge/github.ts, "approve"
   # Proof: test/forge.test.ts "one identity: status posts with the implementer token; approve is refused, since GitHub refuses the author"
-  Scenario: PASS with one identity posts the status with the implementer's token and gives no approval
+  Scenario: PASS with one identity posts only the report and gives no approval
     Given forge.review_identity is empty
     And a draft CR that passes review
     When review-pr decides in the cycle
-    Then it posts the review status with the implementer's token
+    Then it posts its report and no status
     And it does not run "forge approve", which refuses with one identity
-    And it runs "forge ready <n>" and "forge automerge <n>"
+    And it runs "forge ready <n>", waits up to 5 minutes for CI's review status, then runs "forge automerge <n>"
     And for a CR that needs a human it asks a collaborator to approve the head, or the owner to merge it as admin
 
   # Source: src/forge/github.ts; references/architecture.md §3.2, "Adapter"
@@ -207,3 +207,10 @@ Feature: Review a change request
     When review-pr handles it
     Then it posts one comment asking the author to update the CR
     And it runs no "forge sync"
+
+  # Source: skills/review-pr/SKILL.md, "Green but open"; skills/sdlc/SKILL.md, Routing
+  Scenario: A ready CR with every required check green that is still open is merged
+    Given a ready CR at In review whose every forge.required_checks entry is green on its head
+    And the CR is still open
+    When the cycle routes it to review-pr
+    Then review-pr runs "forge automerge <n>"

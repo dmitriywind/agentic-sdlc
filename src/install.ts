@@ -279,11 +279,14 @@ async function init(root: string, argv: string[], log: string[]) {
         // One identity: GitHub refuses an approving review from the CR's author, so the ruleset asks for none.
         const rs = readJson(dest);
         for (const r of rs.rules) if (r.type === 'pull_request') Object.assign(r.parameters, { required_approving_review_count: 0, require_last_push_approval: false });
+        // CI posts review (gate review) and human-approval with the Actions token: pin them to Actions too.
+        for (const r of rs.rules) if (r.type === 'required_status_checks')
+          for (const c of r.parameters.required_status_checks) if (['review', 'human-approval'].includes(c.context)) c.integration_id = 15368;
         writeFileSync(dest, JSON.stringify(rs, null, 2) + '\n');
       }
       log.push('import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk');
       log.push(oneIdentity
-        ? 'one identity: the ruleset needs no approving review; a Full-lane CR waits on human-approval until a collaborator approves it or you merge it as admin'
+        ? 'one identity: the ruleset needs no approving review and pins every required check to GitHub Actions (integration_id 15368); a Full-lane CR waits on human-approval until a collaborator approves it or you merge it as admin'
         : 'its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App\'s id if it is an App (a PAT cannot be pinned)');
     }
     if (!continuous && existsSync(join(dir, 'ruleset.release.json'))) {

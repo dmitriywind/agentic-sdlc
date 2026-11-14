@@ -54,8 +54,8 @@ forge:
     #            review_token_env: only with review_identity: the review identity's token; forge status and approve use it.
     #            With two identities give token_env Commit statuses: no access, so an implementer cannot green its own review.
     {}
-  review_identity: ""           # empty: one identity (yours): review-pr runs in the cycle, posts the review status with
-                                #   your token and gives no approving review (GitHub refuses one from the CR's author).
+  review_identity: ""           # empty: one identity (yours): review-pr runs in the cycle and posts its report; CI's gate
+                                #   review turns it into the review status. No approving review (GitHub refuses the author's).
                                 #   Set: the separate review account or app behind review_token_env; review-pr runs in
                                 #   the review runtime only. organization requires it.
   human_approval: full-lane     # full-lane | always | never. Which product CRs need one approving review by a human

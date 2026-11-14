@@ -26,7 +26,7 @@ wait on). No gate can block that merge, so the review is the last check; `doctor
 | `Required` | CI job on `pull_request`, no secrets | `commands.install` then `commands.verify` on the CR head. No agent posts it. |
 | `proofs-on-base` | gate, own no-secrets job | Each new or changed proof must fail on the merge base. |
 | `ticket-linkage` | gate `linkage` | One `Closes <id>` for one open ticket. |
-| `review` | `review-pr` | Two identities: as the review identity, from the review runtime only. One identity: with the implementer's token, from the cycle. |
+| `review` | `review-pr`, or gate `review` | Two identities: `review-pr` as the review identity, from the review runtime only. One identity: gate `review` in CI, from the newest trusted `review-pr` report on the head. |
 | `human-approval` | gate `approval` | By class; see below. |
 | `skill-regression` | gate | Factory changes keep the skill pack valid. |
 
@@ -34,16 +34,18 @@ Pin each required check to the app that posts it (on GitHub the ruleset's `integ
 token that can write statuses cannot fake it. The trunk ruleset pins the four CI checks (`ticket-linkage`,
 `Required`, `proofs-on-base`, `skill-regression`) to the Actions app. With two identities `review` and
 `human-approval` post with the review token: pin them to the review app when it is an App. With one
-identity they post with your token and the CI job's token, and cannot be pinned to a separate app. `agentic-sdlc doctor` warns when one is
+identity CI posts both with the Actions token, and `init` pins them to Actions too. `agentic-sdlc doctor` warns when one is
 not pinned.
 
 The gate jobs on GitHub are named `linkage-gate` and `approval-gate`. `ticket-linkage` is a commit status
 that the linkage job posts with its own `GITHUB_TOKEN`.
 
 ## Review identity and approval
-**One identity** (`forge.review_identity` empty, the default of both individual profiles): `forge status`
-posts with the implementer's token and `forge approve` refuses, since GitHub refuses an approving review
-from the CR's author. `init` writes a trunk ruleset that needs no approving review. The `approval` gate
+**One identity** (`forge.review_identity` empty, the default of both individual profiles): `review-pr`
+posts only its report, since a Claude cloud session's proxy refuses commit-status writes. The CR
+workflow's `review-gate` job runs on that comment and posts `review` from the newest trusted report on
+the head (`agentic-sdlc gate review --cr <n>`). `forge approve` refuses, since GitHub refuses an
+approving review from the CR's author. `init` writes a trunk ruleset that needs no approving review. The `approval` gate
 posts `human-approval` with the CI job's token. A CR that needs a human waits until a collaborator
 approves its head, or the owner merges it as admin (the ruleset lets admins bypass in a pull request).
 

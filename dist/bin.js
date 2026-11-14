@@ -8676,7 +8676,7 @@ function github(ctx) {
     async status(sha2, s, opts) {
       const a = ["api", "-X", "POST", `${api}/statuses/${sha2}`, "-f", `state=${s.state}`, "-f", `context=${s.context}`, "-f", `description=${s.description}`];
       if (s.url) a.push("-f", `target_url=${s.url}`);
-      gh(a, void 0, opts?.as === "ci" ? withToken("token_env") : oneIdentity ? implementer() : withToken("review_token_env"));
+      gh(a, void 0, opts?.as === "ci" || oneIdentity ? implementer() : withToken("review_token_env"));
     },
     async approve(n) {
       if (oneIdentity) throw new Error("one identity (forge.review_identity is empty): GitHub refuses an approving review from the CR's author; review-pr skips forge approve");
@@ -9224,10 +9224,13 @@ async function init(root, argv, log) {
       if (fresh && oneIdentity) {
         const rs = readJson(dest);
         for (const r of rs.rules) if (r.type === "pull_request") Object.assign(r.parameters, { required_approving_review_count: 0, require_last_push_approval: false });
+        for (const r of rs.rules) if (r.type === "required_status_checks") {
+          for (const c of r.parameters.required_status_checks) if (["review", "human-approval"].includes(c.context)) c.integration_id = 15368;
+        }
         writeFileSync2(dest, JSON.stringify(rs, null, 2) + "\n");
       }
       log.push("import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk");
-      log.push(oneIdentity ? "one identity: the ruleset needs no approving review; a Full-lane CR waits on human-approval until a collaborator approves it or you merge it as admin" : "its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
+      log.push(oneIdentity ? "one identity: the ruleset needs no approving review and pins every required check to GitHub Actions (integration_id 15368); a Full-lane CR waits on human-approval until a collaborator approves it or you merge it as admin" : "its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
     }
     if (!continuous && existsSync3(join4(dir, "ruleset.release.json"))) {
       copyFile(join4(dir, "ruleset.release.json"), join4(root, ".github", "rulesets", "release.json"), force, log);
@@ -9494,6 +9497,7 @@ __export(gates_exports, {
   proofFiles: () => proofFiles,
   proofRunner: () => proofRunner,
   proofsOnBase: () => proofsOnBase,
+  review: () => review,
   shipped: () => shipped,
   signalOnRed: () => signalOnRed,
   skillRegression: () => skillRegression
@@ -9666,6 +9670,17 @@ async function approval(d, n) {
   const description = need3 === "none" ? `${klass}: no human approval needed` : pass ? `${klass}: approved by ${by}` : `${klass}: waits for an approval of the head by ${need3 === "owner" ? "owners.factory" : "a human"}`;
   await d.forge.status(cr.headSha, { context: "human-approval", state: pass ? "success" : "pending", description });
   return { cr: cr.n, class: klass, need: need3, state: pass ? "success" : "pending", ...by ? { by } : {} };
+}
+async function review(d, n) {
+  const b = d.binding;
+  if (b.forge.review_identity) return { cr: n, skipped: "two identities: review-pr posts the review status" };
+  const cr = await d.forge.view(n);
+  const [report2] = selectComments((await d.forge.comments(n)).reverse(), { owners: ownersFor(b.owners, "forge"), trusted: true, marker: `<!-- review-pr ${cr.headSha}` });
+  const verdict = /^Verdict:\s*PASS\b/m.test(report2?.body ?? "") ? "PASS" : /REMEDIATION REQUIRED/.test(report2?.body ?? "") ? "REMEDIATION REQUIRED" : void 0;
+  const state = verdict === "PASS" ? "success" : verdict ? "failure" : "pending";
+  const description = verdict ? `review-pr: ${verdict}` : "waits for a trusted review-pr report on this head";
+  await d.forge.status(cr.headSha, { context: b.forge.review_check_name ?? "review", state, description, ...report2?.url ? { url: report2.url } : {} }, { as: "ci" });
+  return { cr: cr.n, state, ...verdict ? { verdict } : {} };
 }
 function onlyNoProof(b, diff) {
   const globs = [b.paths?.no_proof ?? []].flat();
@@ -9940,6 +9955,7 @@ var init_gates = __esm({
     init_board();
     init_forge();
     init_vcs();
+    init_comments();
     matchesAny = (path, globs) => globs.some((g) => globToRegExp(g).test(path));
     factoryGlobs = (b) => b.paths.factory ?? [];
     TUNING_KEYS = ["models"];
@@ -10013,6 +10029,8 @@ var init_gates = __esm({
           const r = await approval(deps(), a.need("cr"));
           return r;
         }
+        case "review":
+          return review(deps(), a.need("cr"));
         case "proofs-on-base":
           return fail(await proofsOnBase(deps(), a.need("cr")));
         case "evidence": {

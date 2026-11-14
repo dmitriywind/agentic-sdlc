@@ -116,7 +116,7 @@ test('init --profile organization writes two identities, traces and a container 
   assert.equal(await quiet(() => cli(['init', '--profile', 'bogus', '--force'], ctx)), 1);
 });
 
-test('init --profile individual and individual-api: one identity, and the ruleset asks for no approving review', async () => {
+test('init --profile individual and individual-api: one identity; the ruleset asks for no approving review and pins every check to Actions', async () => {
   for (const profile of ['individual', 'individual-api']) {
     const root = fixture();
     const { ctx } = fakeCtx(root, {}, () => ({}));
@@ -128,6 +128,8 @@ test('init --profile individual and individual-api: one identity, and the rulese
     const pr = JSON.parse(readFileSync(join(root, '.github/rulesets/trunk.json'), 'utf8')).rules.find((r: any) => r.type === 'pull_request');
     assert.equal(pr.parameters.required_approving_review_count, 0);
     assert.equal(pr.parameters.require_last_push_approval, false);
+    const checks = JSON.parse(readFileSync(join(root, '.github/rulesets/trunk.json'), 'utf8')).rules.find((r: any) => r.type === 'required_status_checks').parameters.required_status_checks;
+    assert.ok(checks.every((c: any) => c.integration_id === 15368), 'one identity: CI posts every required check');
   }
 });
 

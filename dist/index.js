@@ -8245,7 +8245,7 @@ function github(ctx) {
     async status(sha, s, opts) {
       const a = ["api", "-X", "POST", `${api}/statuses/${sha}`, "-f", `state=${s.state}`, "-f", `context=${s.context}`, "-f", `description=${s.description}`];
       if (s.url) a.push("-f", `target_url=${s.url}`);
-      gh(a, void 0, opts?.as === "ci" ? withToken("token_env") : oneIdentity ? implementer() : withToken("review_token_env"));
+      gh(a, void 0, opts?.as === "ci" || oneIdentity ? implementer() : withToken("review_token_env"));
     },
     async approve(n) {
       if (oneIdentity) throw new Error("one identity (forge.review_identity is empty): GitHub refuses an approving review from the CR's author; review-pr skips forge approve");

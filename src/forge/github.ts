@@ -134,7 +134,8 @@ export function github(ctx: AdapterContext): Forge {
       const a = ['api', '-X', 'POST', `${api}/statuses/${sha}`, '-f', `state=${s.state}`, '-f', `context=${s.context}`, '-f', `description=${s.description}`];
       if (s.url) a.push('-f', `target_url=${s.url}`);
       // One identity (no review_identity): the review status goes out with the implementer's own token.
-      gh(a, undefined, opts?.as === 'ci' ? withToken('token_env') : oneIdentity ? implementer() : withToken('review_token_env'));
+      // { as: 'ci' }: the CI job's token (token_env, or gh's GH_TOKEN when token_env is unset).
+      gh(a, undefined, opts?.as === 'ci' || oneIdentity ? implementer() : withToken('review_token_env'));
     },
     async approve(n) {
       if (oneIdentity) throw new Error('one identity (forge.review_identity is empty): GitHub refuses an approving review from the CR\'s author; review-pr skips forge approve');

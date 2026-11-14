@@ -11,6 +11,7 @@ import { UsageError, guard, parseArgs } from './forge/util.ts';
 import { createBoard } from './board/index.ts';
 import { createForge } from './forge/index.ts';
 import { createVcs } from './vcs/index.ts';
+import { selectComments } from './comments.ts';
 
 export interface Deps {
   binding: Binding;
@@ -232,6 +233,23 @@ export async function approval(d: Deps, n: string) {
     : `${klass}: waits for an approval of the head by ${need === 'owner' ? 'owners.factory' : 'a human'}`;
   await d.forge.status(cr.headSha, { context: 'human-approval', state: pass ? 'success' : 'pending', description });
   return { cr: cr.n, class: klass, need, state: pass ? 'success' : 'pending', ...(by ? { by } : {}) };
+}
+
+/**
+ * Status `review` with one identity (no forge.review_identity): a cloud session cannot write commit
+ * statuses, so review-pr posts only its report and CI turns the newest trusted report for the head
+ * into the status. With two identities review-pr posts the status itself and this gate does nothing.
+ */
+export async function review(d: Deps, n: string) {
+  const b = d.binding;
+  if (b.forge.review_identity) return { cr: n, skipped: 'two identities: review-pr posts the review status' };
+  const cr = await d.forge.view(n);
+  const [report] = selectComments((await d.forge.comments(n)).reverse(), { owners: ownersFor(b.owners, 'forge'), trusted: true, marker: `<!-- review-pr ${cr.headSha}` });
+  const verdict = /^Verdict:\s*PASS\b/m.test(report?.body ?? '') ? 'PASS' : /REMEDIATION REQUIRED/.test(report?.body ?? '') ? 'REMEDIATION REQUIRED' : undefined;
+  const state = verdict === 'PASS' ? 'success' : verdict ? 'failure' : 'pending';
+  const description = verdict ? `review-pr: ${verdict}` : 'waits for a trusted review-pr report on this head';
+  await d.forge.status(cr.headSha, { context: b.forge.review_check_name ?? 'review', state, description, ...(report?.url ? { url: report.url } : {}) }, { as: 'ci' });
+  return { cr: cr.n, state, ...(verdict ? { verdict } : {}) };
 }
 
 /** True when every changed path matches paths.no_proof (docs, config): such a product CR needs no proof file. */
@@ -543,6 +561,7 @@ export const cli: PortCli = (argv, base) =>
         const r = await approval(deps(), a.need('cr'));
         return r;
       }
+      case 'review': return review(deps(), a.need('cr'));
       case 'proofs-on-base': return fail(await proofsOnBase(deps(), a.need('cr')));
       case 'evidence': {
         const sha = a.need('sha');

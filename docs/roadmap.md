@@ -35,7 +35,7 @@ runtime, not a fallback. Facts from a probe in a cloud session (2026-11-14) and 
 | Item | Why | Done when |
 |---|---|---|
 | A board verb to set a milestone on an existing ticket | `backlog-grooming` sets milestones, but only `board create --milestone` can. | `board milestone <id> <name>` works on every adapter. |
-| One identity proved in the cloud | One identity is the individual default, but no cloud run has posted `review` through the proxy yet. | A cloud cycle reviews its own draft CR, posts `review` and the CR merges with no hand fix. |
+| One identity proved in the cloud | One identity is the individual default. The first cloud review (2026-11-14) passed PR 3, but the proxy refused `POST statuses` (HTTP 403); CI's `review` gate now posts the status from the report. | A cloud cycle reviews its own draft CR, posts `review` and the CR merges with no hand fix. |
 | Two identities from the cloud | `organization` needs a review app; a cloud session acts as one account through the proxy. | A review routine posts `review` and approves as a second identity from a cloud session. |
 | Jira and Linear from the cloud | Both hosts are refused at the default network level. | The routine template adds the host to the environment's allowed domains and the token as a network secret; one cloud run lists the board. |
 | Pilot on a real product repo | On a sandbox, three cloud runs took a ticket from Backlog to a draft CR with green CI gates; review and merge are not proved yet. | Three scheduled cloud runs in a row write a heartbeat with no `errors`, and one ticket goes from Ready to Done with no hand fix. |

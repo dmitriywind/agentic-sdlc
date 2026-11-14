@@ -22,15 +22,19 @@ so it never approves. The path is:
 
 1. The cycle implements a ticket and opens a draft CR as you.
 2. In the same cycle, it dispatches `review-pr` as a subagent with a fresh context. `review-pr` reads
-   CI, posts the `review` status with your token and gives no approving review.
-3. `init` writes a trunk ruleset that needs no approving review.
-4. A Fast-lane CR auto-merges when every required check is green.
-5. A Full-lane CR waits on `human-approval`. A collaborator approves its head, or you merge it as admin.
+   CI, posts its report and gives no approving review.
+3. The report starts CI's `review-gate` job, which posts the `review` status from the report with the
+   GitHub Actions token. A cloud session cannot write statuses itself.
+4. `init` writes a trunk ruleset that needs no approving review and pins every check to Actions.
+5. A Fast-lane CR merges when every required check is green: `review-pr` waits for the `review`
+   status, then runs `forge automerge`.
+6. A Full-lane CR waits on `human-approval`. A collaborator approves its head, or you merge it as admin.
 
 There is one scheduled job: the cycle. There is no review routine, no review token and no second account.
 
-The trade-off: the review is a separate agent context, not a separate account. The ruleset cannot
-prove that an agent did not post its own `review` status. When you need that proof, add a second
+The trade-off: the review is a separate agent context, not a separate account. CI posts the status,
+but the report it reads is written under your account, so the ruleset cannot prove that a
+separate agent wrote it. When you need that proof, add a second
 identity: set `forge.review_identity` and `forge.options.review_token_env`, and run the review
 runtime (`templates/runner/review-prompt.md`). The `organization` profile requires it.
 
