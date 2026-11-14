@@ -29,7 +29,7 @@ only when listed, and never through a board or CR comment.
 posts its marker, starts the executor and prints `{ kind, ref, startedAt }`; for `harness` it prints
 the instruction for the orchestrator and starts nothing. The idempotency key is `<ticket, cr or
 factory>-<skill>[-<run>][-<CR head sha>]`: a second dispatch with the same key inside
-`cycle.dedupe_minutes` prints `{ skipped: true }`. The window catches a double fire. A run has finished when its own done line `<!-- agentic-sdlc:done <key> -->` appears after the
+`cycle.dedupe_minutes` prints `{ skipped: true }` while the first run has not finished. The window catches a double fire; a finished run never blocks. A run has finished when its own done line `<!-- agentic-sdlc:done <key> -->` appears after the
 dispatch marker (posted by a bot, or by the `assign` executor's user); other runs' comments never count. `dispatch` hands that line to every executor in its task.
 An unfinished run blocks a second dispatch until `stall_minutes`. With
 `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses a stage whose sandbox is `local` or unset. The

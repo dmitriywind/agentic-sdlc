@@ -185,7 +185,8 @@ export const cli: PortCli = async (argv, ctx) => {
       const finished = mine && all.some((c) => later(c) && c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`));
       const stall = Number(b.stall_minutes) || 0;
       const age = (Date.now() - at) / 60_000;
-      if (mine && (age < window || (!finished && age < stall))) {
+      // A finished run never blocks: a re-run after it is a new run, not a double fire.
+      if (mine && !finished && (age < window || age < stall)) {
         console.log(JSON.stringify({ skipped: true, key, since: mine.createdAt, comment: mine.id, reason: age < window ? 'double fire' : 'the previous run has not finished' }));
         return 0;
       }

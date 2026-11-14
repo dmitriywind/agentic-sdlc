@@ -211,8 +211,8 @@ Keys this contract relies on by name:
 - `product.delivery: release-line | continuous` (default `release-line`; continuous needs no
   `vcs.release_prefix` and has no In release), `product.evidence: [sbom | provenance | signature]`,
   `paths.no_proof` (globs a product CR may change with no proof file).
-- `cycle.dedupe_minutes`: a second dispatch of the same skill and subject inside it is a double fire
-  and is skipped (unset or 0: no check; the template sets 10). A run has finished when its own done line `<!-- agentic-sdlc:done <key> -->` appears after the
+- `cycle.dedupe_minutes`: a second dispatch of the same skill and subject inside it, while the first
+  has not finished, is a double fire and is skipped (unset or 0: no check; the template sets 10). A run has finished when its own done line `<!-- agentic-sdlc:done <key> -->` appears after the
   dispatch marker (posted by a bot, or by the `assign` executor's user); other runs' comments never count. `dispatch` hands that line to every executor in its task.
   An unfinished run blocks a second dispatch until `stall_minutes`.
 - `paths.factory`: a change only there is a **factory change**: no ticket, its own change pattern

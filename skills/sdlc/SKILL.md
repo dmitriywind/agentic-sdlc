@@ -64,7 +64,8 @@ triage, one shape, one implementation, one judge) goes to its own subagent with 
 folder, at most `parallel_agents` at once. Each starts with `agentic-sdlc dispatch <skill>
 --ticket <id>` (`--cr <n>` for a factory CR; no subject for `improve-factory`); the binding's
 `executors` says who runs it (see Executors). A second dispatch of the same skill and subject
-inside `cycle.dedupe_minutes` prints `{ skipped: true }`: it is a double fire; leave it.
+inside `cycle.dedupe_minutes`, while the first has not finished, prints `{ skipped: true }`: it is a
+double fire; leave it.
 
 A CR **needs a review** when it is open, a `review-pr` row of the Routing table matches it, and,
 for a draft CR, the newest `<!-- review-pr` report on it (`forge comments <n> --last 1 --marker

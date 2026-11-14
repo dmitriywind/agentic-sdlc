@@ -10888,7 +10888,7 @@ var init_dispatch = __esm({
           const finished = mine && all.some((c) => later(c) && c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`));
           const stall = Number(b.stall_minutes) || 0;
           const age = (Date.now() - at) / 6e4;
-          if (mine && (age < window || !finished && age < stall)) {
+          if (mine && !finished && (age < window || age < stall)) {
             console.log(JSON.stringify({ skipped: true, key, since: mine.createdAt, comment: mine.id, reason: age < window ? "double fire" : "the previous run has not finished" }));
             return 0;
           }

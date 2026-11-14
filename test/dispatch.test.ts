@@ -197,6 +197,9 @@ test('idempotency: a trusted marker for the same key inside cycle.dedupe_minutes
   assert.equal(first.out.tier, 'deep'); // metadata.tier
   assert.deepEqual((await go(['implement-spec', '--ticket', '1'])).out.skipped, true);
   assert.equal((await go(['review-pr', '--ticket', '1'])).out.kind, 'harness'); // another skill is another key
+  // A finished run never blocks: after its done line, a re-run inside the window starts.
+  await board.comment('1', '<!-- agentic-sdlc:done 1-review-pr -->');
+  assert.equal((await go(['review-pr', '--ticket', '1'])).out.kind, 'harness');
   const cr = await go(['improve-factory', '--cr', '9']);
   assert.equal(cr.out.key, '9-improve-factory-crsha');
   assert.match((await board.comments('2'))[0].body, /^<!-- agentic-sdlc:dispatch 9-improve-factory-crsha -->/);

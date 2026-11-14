@@ -153,6 +153,13 @@ Feature: Routing and the unattended cycle
     Then the dispatch prints "{ skipped: true }"
     And the orchestrator leaves it
 
+  # Source: src/dispatch.ts, "cli" (idempotency)
+  # Proof: test/dispatch.test.ts "idempotency: a trusted marker for the same key inside cycle.dedupe_minutes skips; --cr and improve-factory use the heartbeat ticket"
+  Scenario: A finished run never blocks a re-run
+    Given the dispatch for ticket "1" posted its done line
+    When the same dispatch runs again inside "cycle.dedupe_minutes"
+    Then the dispatch is not skipped
+
   # Source: skills/sdlc/SKILL.md, "Run one cycle" (rules for every step)
   Scenario: The time budget stops new work
     Given "cycle.time_budget_minutes" has passed since the cycle started
