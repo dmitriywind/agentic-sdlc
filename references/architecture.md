@@ -339,7 +339,9 @@ prompt in `templates/runner/cycle-prompt.md`.
 | Agent with MCP but no shell | `agentic-sdlc mcp` (stdio; `--http` for a hosted endpoint with a bearer token). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. |
 | Agent with only vendor MCP tools | the vendor tools that `board.mcp` maps to the board verbs; forge steps need a shell or the MCP server; gates still run in CI |
 
-Gates always run in the forge's CI, so trunk guarantees never depend on the runtime.
+Gates always run in the forge's CI, so trunk guarantees never depend on the runtime. A gate blocks a
+merge only where the forge enforces it: `doctor` warns when the trunk has no enforced ruleset or branch
+protection (an empty rule list, or the 403 a private repo on GitHub Free gets).
 
 **Runners.** The GitHub templates read `runs-on` from two repo variables, as JSON: `AGENTIC_RUNS_ON` for the
 jobs that run CR or agent code (`agentic-sdlc-verify.yml`, the runner's `cycle` job) and
@@ -347,15 +349,20 @@ jobs that run CR or agent code (`agentic-sdlc-verify.yml`, the runner's `cycle` 
 `"ubuntu-latest"`). A self-hosted runner bills no minutes. `doctor` fails a self-hosted runner on a public
 repo and warns when both variables name the same runner. Every job runs `bash`.
 
-**A board the runtime cannot reach.** A Claude cloud session reaches the repo but not GitHub Projects, so a
-cloud routine cannot run the cycle on a `github` board. With that board, run the cycle from GitHub Actions
-(`templates/runner/github-actions-claude.yml`). `doctor` in a cloud session (`CLAUDE_CODE_REMOTE=true`) says so when
-`board.list` fails.
+**Claude cloud session.** A cloud routine (`templates/runner/claude-routine.md`) is a full runtime on a
+subscription. Its GitHub proxy refuses GraphQL and every `orgs/*` and `users/*` route; REST works under
+`repos/{owner}/{repo}/...`. So it runs a `github-issues`, `jira` or `linear` board, never `github`
+(Projects v2): `doctor` in a cloud session (`CLAUDE_CODE_REMOTE=true`) fails a `github` board, which runs
+from GitHub Actions (`templates/runner/github-actions-claude.yml`) instead. Jira and Linear need their host in
+the environment's allowed domains and the token as a network secret. A cloud session loads no repo plugin, so
+it gets the skills from `.claude/skills` (`init --harness claude --no-plugin`). It has no Docker daemon and
+stops a foreground command at 10 minutes: the cycle runs `commands.fast_check`, and `commands.verify` runs in
+CI. The shortest schedule interval is 1 hour; runs draw subscription usage.
 
 **Packaging per harness.** For Claude Code the package is a plugin (`.claude-plugin/`: skills,
 hooks, the MCP server), so skills are named `/agentic-sdlc:<skill>`. `init --harness claude`
 copies no skills; it generates one subagent per tier and adds an `@AGENTS.md` import to
-`CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead, for a setup without the plugin. Codex, Cursor and Antigravity read `.agents/skills`, which `init` writes. Claude
+`CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. Codex, Cursor and Antigravity read `.agents/skills`, which `init` writes. Claude
 headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-turns`. The cycle
 allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm checks, and adds
 `--disallowedTools` for `forge approve`. The review allows only the CLI and the MCP server.

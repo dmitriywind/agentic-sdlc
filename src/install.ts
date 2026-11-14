@@ -205,7 +205,8 @@ async function init(root: string, argv: string[], log: string[]) {
 
   const skills = need(pkg, 'skills');
   syncSkills(skills, root, '.agents/skills', force, log);
-  // Claude Code gets skills and the MCP server from the plugin, unless --no-plugin.
+  // Claude Code gets skills and the MCP server from the plugin, unless --no-plugin
+  // (a Claude cloud session loads no repo plugin, only .claude/skills).
   const noPlugin = harness === 'claude' && f['no-plugin'] === 'true';
   if (noPlugin) syncSkills(skills, root, '.claude/skills', force, log);
   const pinned = pinCli(root, version, force, log);
@@ -306,9 +307,18 @@ export function trunkProtection(b: any, ctx: any): string[] {
   const repo = b.forge.options?.repo;
   const reminder = 'warn: pin each required check to the CI integration that posts it, so no other token can post it';
   if (!repo) return ['trunk protection: check manually', reminder];
+  const open = `warn: trunk protection: ${b.vcs.trunk} has no enforced ruleset or branch protection, so no gate blocks a merge (a private repo on GitHub Free cannot enforce one)`;
   let rules: any[];
   try { rules = JSON.parse(ctx.exec('gh', ['api', `repos/${repo}/rules/branches/${b.vcs.trunk}`])); }
-  catch { return ['trunk protection: check manually (cannot read the trunk rules)', reminder]; }
+  catch (e) {
+    if (/HTTP 403|Upgrade to GitHub Pro/.test((e as Error).message)) return [open];
+    return ['trunk protection: check manually (cannot read the trunk rules)', reminder];
+  }
+  if (!rules.length) {
+    let classic = false;
+    try { classic = ctx.exec('gh', ['api', `repos/${repo}/branches/${b.vcs.trunk}`, '--jq', '.protected']).trim() === 'true'; } catch { /* read as unprotected */ }
+    return classic ? ['trunk protection: classic branch protection is on; check its required checks manually', reminder] : [open];
+  }
   const checks = rules.filter((r) => r.type === 'required_status_checks').flatMap((r) => r.parameters?.required_status_checks ?? []);
   if (!checks.length) return ['fail trunk protection: no required status checks'];
   const loose = checks.filter((c: any) => !c.integration_id).map((c: any) => c.context);
@@ -351,10 +361,10 @@ export function selfHostedRunner(b: any, ctx: { exec: (c: string, a: string[], o
   return `ok   runner: self-hosted, code on ${code || 'ubuntu-latest'}, secrets on ${trusted || 'ubuntu-latest'}`;
 }
 
-/** Claude cloud sessions reach the repo but not GitHub Projects (GraphQL and the Projects REST API). */
+/** A Claude cloud session reaches only `repos/{owner}/{repo}/...` REST: no GraphQL, so no GitHub Projects. */
 export function cloudBoard(b: any, env: Record<string, string | undefined> = {}): string | undefined {
   if (b.board?.adapter !== 'github' || env.CLAUDE_CODE_REMOTE !== 'true') return undefined;
-  return 'fail board.list: a Claude cloud session cannot reach GitHub Projects; run the cycle from GitHub Actions (templates/runner/github-actions-claude.yml), on a self-hosted runner for no billed minutes';
+  return 'fail board: a Claude cloud session cannot reach GitHub Projects (board adapter github); use github-issues, jira or linear, or run the cycle from GitHub Actions (templates/runner/github-actions-claude.yml)';
 }
 
 /** The stock delivery workflow's push branches must name this project's trunk and release lines. */
@@ -401,6 +411,8 @@ export const cli: PortCli = async (argv, ctx) => {
         ['vcs.head', () => createVcs({ ...c, options: binding.vcs.options ?? {} }).head()],
       ];
       let bad = 0;
+      const cb = cloudBoard(binding, ctx.env);
+      if (cb) { out(cb); bad++; probes.shift(); } // the board.list probe would only repeat it
       trunkProtection(binding, ctx).forEach(out);
       const it = implementerToken(binding, ctx);
       if (it) out(it);
@@ -411,14 +423,11 @@ export const cli: PortCli = async (argv, ctx) => {
       for (const [name, run] of probes) {
         try { await run(); out(`ok   ${name}`); }
         catch (e) {
-          bad++; out(`fail ${name}: ${redact((e as Error).message, ctx.env).split('\n')[0]}`);
-          const hint = name === 'board.list' ? cloudBoard(binding, ctx.env) : undefined;
-          if (hint) out(hint);
-        }
+          bad++; out(`fail ${name}: ${redact((e as Error).message, ctx.env).split('\n')[0]}`);        }
       }
       return bad ? 1 : 0;
     }
-    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|enterprise] [--force] | validate | doctor');
+    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|enterprise] [--no-plugin] [--force] | validate | doctor');
     return 2;
   } catch (e) {
     console.error(redact((e as Error).message, ctx.env));

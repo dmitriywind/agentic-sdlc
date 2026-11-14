@@ -2,7 +2,7 @@
 
 ## What you get
 - Claude Code CLI: skills, MCP, headless `claude -p`.
-- Cloud sessions and scheduled tasks (formerly routines) that run on Anthropic's cloud with your laptop closed.
+- Cloud sessions and scheduled tasks (routines) that run on Anthropic's cloud with your laptop closed.
 - Managed Agents API (API-key billed): hosted agents, cloud sandboxes, cron deployments.
 - A GitHub Action that runs the same prompt on your runners.
 
@@ -32,7 +32,8 @@ What `init --harness claude` writes:
   `CLAUDE.md`; with one, a plain "read AGENTS.md" line is not loaded, the `@` import is
   ([memory](https://code.claude.com/docs/en/memory)).
 - With `--no-plugin` only: the skills in `.claude/skills/` and an `agentic-sdlc mcp` entry in `.mcp.json` (project
-  scope; `type` is required and `${VAR}` expands: [mcp](https://code.claude.com/docs/en/mcp)).
+  scope; `type` is required and `${VAR}` expands: [mcp](https://code.claude.com/docs/en/mcp)). A cloud session
+  loads no repo plugin, only `.claude/skills/`, so a repo that runs cloud routines uses `--no-plugin`.
 
 The init log is the exact list.
 
@@ -54,7 +55,7 @@ Subscription only.
 
 | Option | How | Limits |
 |---|---|---|
-| Scheduled task (cloud) | Create at claude.ai/code/routines or with `/schedule`. Saved prompt, repo, connectors; schedule, API or GitHub-event trigger. Template: [`templates/runner/claude-routine.md`](../../templates/runner/claude-routine.md). | Research preview. 100 scheduled runs per hour per account; Run-now and API fires 30 per hour per task. Runs draw plan usage. It acts as your claude.ai user. Clone and push need GitHub (GitLab and Bitbucket cannot push back). `/schedule` needs a claude.ai login, not an API key. [docs](https://code.claude.com/docs/en/routines) |
+| Scheduled task (cloud) | Create at claude.ai/code/routines or with `/schedule`. Saved prompt, repo, connectors; schedule, API or GitHub-event trigger. Template: [`templates/runner/claude-routine.md`](../../templates/runner/claude-routine.md). Board: `github-issues`, or `jira`/`linear` with the host in the environment's allowed domains and the token as a network secret; not `github` (Projects v2), which the GitHub proxy cannot reach (no GraphQL, no `orgs/*` or `users/*`). | Research preview. Shortest interval 1 hour. 100 scheduled runs per hour per account; Run-now and API fires 30 per hour per task. Runs draw the same plan usage as interactive work. No Docker daemon; a foreground command stops at 10 minutes, so `commands.verify` runs in CI. It acts as your claude.ai user. Clone and push need GitHub (GitLab and Bitbucket cannot push back). `/schedule` needs a claude.ai login, not an API key. [docs](https://code.claude.com/docs/en/routines) |
 | CI cron with a subscription token | `claude setup-token` prints a one-year OAuth token; store it as `CLAUDE_CODE_OAUTH_TOKEN`. The template fails when `ANTHROPIC_API_KEY` is also set, since it would win and bill the API. Template: [`templates/runner/github-actions-claude.yml`](../../templates/runner/github-actions-claude.yml) | The token only makes model requests: no claude.ai connectors. `ANTHROPIC_API_KEY`, if set, wins. `--bare` ignores the subscription login. Subscription tokens are tied to one person. [auth](https://code.claude.com/docs/en/authentication), [action](https://code.claude.com/docs/en/github-actions) |
 
 Terms caveat: Anthropic does not allow third-party products to offer claude.ai login or rate limits, including agents
@@ -95,4 +96,4 @@ and skills per run (`agent_with_overrides`). The reviewer is never the implement
 - The GitHub trigger does not cover forks; auto-fix does not react to merge conflicts.
 - Anthropic-hosted sessions fail if your org uses IP allowlisting without an exemption.
 - Managed Agents GitHub resource, skills attach format and webhook signing: not verified here.
-- Claude Code does not read `.agents/skills`; the plugin is how it gets the skills.
+- Claude Code does not read `.agents/skills`; it gets the skills from the plugin, or from `.claude/skills` (`--no-plugin`).

@@ -31,9 +31,6 @@ runtime, not a fallback. Facts from a probe in a cloud session (2026-11-14) and 
 | Item | Why | Done when |
 |---|---|---|
 | Jira and Linear from the cloud | Both hosts are refused at the default network level. | The routine template adds the host to the environment's allowed domains and the token as a network secret; one cloud run lists the board. |
-| Skills in a cloud session | Plugins from `.claude/settings.json` do not load; `templates/runner/claude-routine.md` says to enable one. | `init --harness claude` can write the skills to `.claude/skills/`; the routine template names that path. |
-| Verify out of the agent run | A cloud session has no Docker and stops a foreground command at 10 minutes. | The routine runs `commands.fast_check`; `Required` runs `commands.verify` in CI; the template says so. |
-| `doctor` names unenforced gates | On a private GitHub Free repo, rulesets and branch protection return 403, so no gate blocks a merge. | `doctor` warns when the trunk has no enforced ruleset. |
 | Cut cycle overhead | An idle cycle still writes a full heartbeat and starts a review session (about 12k tokens); every subagent re-loads the 3.7k-token navigator; the heartbeat holds 17 measures no code reads. | Idle exit; the review fires only for an unreviewed CR; heartbeat `at`, `factory`, `runs`, `errors`; a 1k contract file for step skills; Sonnet as the routine model, Opus for `shape`. |
 | Pilot on a real product repo | 179 tests, no run against a real product. | Three scheduled cloud runs in a row write a heartbeat with no `errors`, and one ticket goes from Ready to Done with no hand fix. |
 
