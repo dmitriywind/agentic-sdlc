@@ -215,10 +215,12 @@ Keys this contract relies on by name:
 - `product.delivery: release-line | continuous` (default `release-line`; continuous needs no
   `vcs.release_prefix` and has no In release), `product.evidence: [sbom | provenance | signature]`,
   `paths.no_proof` (globs a product CR may change with no proof file).
-- `cycle.dedupe_minutes`: a second dispatch of the same skill and subject inside it, while the first
-  has not finished, is a double fire and is skipped (unset or 0: no check; the template sets 10). A run has finished when its own done line `<!-- agentic-sdlc:done <key> -->` appears after the
+- `cycle.dedupe_minutes`: a second dispatch of the same skill and subject while the first marker is
+  younger than it is a double fire and is skipped (unset or 0: no dispatch check at all; the template sets 10). A run has finished when its own done line `<!-- agentic-sdlc:done <key> -->` appears after the
   dispatch marker (posted by a bot, or by the `assign` executor's user); other runs' comments never count. `dispatch` hands that line to every executor in its task.
-  An unfinished run blocks a second dispatch until `stall_minutes`.
+  An unfinished run blocks a second dispatch until `stall_minutes`, which must exceed the longest stage run.
+- `cycle.max_rework`: the most `REMEDIATION REQUIRED` reports `review-pr` may post on one CR before it
+  escalates instead of sending the ticket back (the template sets 3).
 - `paths.factory`: a change only there is a **factory change**: no ticket, its own change pattern
   (`vcs.factory_change_pattern`), classified by the `approval` gate and checked by
   `skill-regression`.
@@ -342,7 +344,7 @@ prompt in `templates/runner/cycle-prompt.md`.
 | Runtime | How it reaches the ports |
 |---|---|
 | Agent with a shell (Claude Code, Codex, Cursor, CI cron with a headless agent CLI) | `npx --no agentic-sdlc <group> <verb>` |
-| Agent with MCP but no shell | `agentic-sdlc mcp` (stdio). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. |
+| Agent with MCP but no shell | `agentic-sdlc mcp` (stdio). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. `initialize` answers the client's protocol version when the server supports it (2025-11-25 down to 2024-11-05), else the newest; every tool carries a title and annotations (read-only, destructive, idempotent, open-world); `tools/call` checks arguments against the input schema and answers -32602 on a bad one; an object result also comes back as `structuredContent`. |
 | Agent with only vendor MCP tools | the vendor tools that `board.mcp` maps to the board verbs; forge steps need a shell or the MCP server; gates still run in CI |
 
 **Local execution.** A scheduler on your own machine (`templates/runner/local.md`) runs the same cycle

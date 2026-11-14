@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { loadBinding } from './binding.ts';
 import { exec, http } from './exec.ts';
 import type { AdapterContext, PortCli } from './ports.ts';
@@ -11,7 +12,7 @@ const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, string]>
   forge: [() => import('./forge/index.ts'), true, 'open view diff list ready draft sync automerge cut approve approvals comment comments status runs'],
   vcs: [() => import('./vcs/index.ts'), true, 'start head changed base push cut tag tags drop checkout-tests'],
   dispatch: [() => import('./dispatch.ts'), true, 'dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>]'],
-  gate: [() => import('./gates.ts'), true, 'branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red skill-regression'],
+  gate: [() => import('./gates.ts'), true, 'branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red skill-regression review'],
   ledger: [() => import('./ledger.ts'), true, 'runs summary plan record stale hash: the run ledger from heartbeats'],
   bench: [() => import('./bench.ts'), true, 'build propose run report compare'],
   mcp: [() => import('./mcp.ts'), true, 'serve the port verbs as MCP tools over stdio; --allow approve,status'],
@@ -19,21 +20,34 @@ const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, string]>
 
 const INIT_FLAGS = '[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github|github-issues|jira|linear|local] [--forge github] [--vcs git] [--no-plugin] [--force]';
 
+/** The package version: package.json sits one folder above src/ and dist/. */
+const version = () => {
+  try { return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version as string; } catch { return 'unknown'; }
+};
+
 const help = () =>
-  ['usage: agentic-sdlc [--root <dir>] <group> <verb> ...', ...Object.entries(GROUPS).map(([g, v]) => `  ${g.padEnd(9)} ${v[2]}`)].join('\n');
+  ['usage: agentic-sdlc [--root <dir>] [--version] <group> <verb> ...', ...Object.entries(GROUPS).map(([g, v]) => `  ${g.padEnd(9)} ${v[2]}`)].join('\n');
 
 export async function main(argv: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {
   let root = process.cwd();
   const args = [...argv];
-  const at = args.indexOf('--root');
-  if (at >= 0) { root = args[at + 1] ?? root; args.splice(at, 2); }
+  // --root is a leading option only: later arguments belong to the verb, whatever they look like.
+  while (args[0] === '--root' || args[0]?.startsWith('--root=')) {
+    const [flag] = args.splice(0, 1);
+    const v = flag === '--root' ? args.shift() : flag.slice(7);
+    if (!v || v.startsWith('-') || Object.hasOwn(GROUPS, v)) { console.error(`--root needs a directory\n${help()}`); return 2; }
+    root = v;
+  }
   const [group, ...rest] = args;
-  if (!group || group === '--help' || group === '-h') { console.log(help()); return group ? 0 : 2; }
+  if (group === '--version' || group === '-v') { console.log(version()); return 0; }
+  if (group === 'help' || group === '--help' || group === '-h') { console.log(help()); return 0; }
+  if (!group) { console.log(help()); return 2; }
+  if (!Object.hasOwn(GROUPS, group)) { console.error(`unknown group '${group}'\n${help()}`); return 2; }
   const entry = GROUPS[group];
-  if (!entry) { console.error(`unknown group '${group}'\n${help()}`); return 2; }
   // `<group> --help` (or -h) prints that group's usage; a group that needs a verb and has none is a usage error.
   const usage = `usage: agentic-sdlc ${group} ${group === 'init' ? INIT_FLAGS : entry[1] ? '<verb> ...' : ''}\n  ${entry[2]}`;
-  if (rest.includes('--help') || rest[0] === '-h') { console.log(usage); return 0; }
+  const isHelp = (a?: string) => a === '--help' || a === '-h';
+  if (isHelp(rest[0]) || (entry[1] && isHelp(rest[1]))) { console.log(usage); return 0; }
   if (!rest.length && entry[1] && group !== 'mcp') { console.error(usage); return 2; }
   const ctx = { root, env, exec, http } as Omit<AdapterContext, 'options'>;
   // The binding loads on first read of ctx.binding; init, validate and doctor never use this getter.

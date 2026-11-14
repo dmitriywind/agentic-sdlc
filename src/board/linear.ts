@@ -3,8 +3,8 @@ import type { AdapterContext, Board, Comment, Item, LogicalField } from '../port
 import { MovedError } from '../ports.ts';
 
 const LOGICAL: LogicalField[] = ['size', 'priority', 'lane', 'shipped', 'release_version'];
-const ISSUE = `id identifier title url description createdAt updatedAt priority state { name } labels { nodes { id name } }
-  assignee { id } parent { identifier } children { nodes { identifier } }`;
+const ISSUE = `id identifier title url description createdAt updatedAt priority state { name } labels(first:250) { nodes { id name } }
+  assignee { id } parent { identifier } children(first:250) { nodes { identifier } }`;
 
 export function createLinearBoard(ctx: AdapterContext): Board {
   const o = ctx.options as { team_key: string; token_env: string };
@@ -20,7 +20,7 @@ export function createLinearBoard(ctx: AdapterContext): Board {
   const priorities = () => ctx.binding?.priorities ?? [];
   let team: any;
   const getTeam = async () =>
-    (team ??= (await gql(`query($k:String!){ teams(filter:{key:{eq:$k}}){ nodes { id states { nodes { id name } } labels { nodes { id name } } } } }`, { k: o.team_key })).teams.nodes[0]);
+    (team ??= (await gql(`query($k:String!){ teams(filter:{key:{eq:$k}}){ nodes { id states(first:250) { nodes { id name } } labels(first:250) { nodes { id name } } } } }`, { k: o.team_key })).teams.nodes[0]);
   const state = async (name: string) => {
     const s = (await getTeam()).states.nodes.find((x: any) => x.name === name);
     if (!s) throw new Error(`Linear team ${o.team_key} has no state '${name}'`);
@@ -60,8 +60,10 @@ export function createLinearBoard(ctx: AdapterContext): Board {
     return toItem(r.issueUpdate.issue);
   };
   const withLabels = async (id: string, change: (names: string[]) => string[]) => {
-    const names = change((await raw(id)).labels.nodes.map((l: any) => l.name));
-    return update(id, { labelIds: await Promise.all(names.map(labelId)) });
+    const own = (await raw(id)).labels.nodes as { id: string; name: string }[];
+    const names = change(own.map((l) => l.name));
+    // A label the issue already carries keeps its id: a workspace-level label is not re-created as a team label.
+    return update(id, { labelIds: await Promise.all(names.map((n) => own.find((l) => l.name === n)?.id ?? labelId(n))) });
   };
   const move = async (id: string, status: string, onlyFrom?: string) => {
     if (onlyFrom) {

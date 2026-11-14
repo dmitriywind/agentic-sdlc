@@ -7,6 +7,13 @@ export function git(ctx: AdapterContext): Vcs {
   const { trunk, release_prefix } = ctx.binding.vcs;
   const g = (...a: string[]) => ctx.exec('git', a, { cwd: ctx.root }).trim();
   const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean);
+  // A rev, tag name or path reaches git argv: never an option.
+  const plain = (what: string, v: string) => {
+    if (typeof v !== 'string' || !v || v.startsWith('-')) throw new Error(`vcs: ${what} not allowed: ${v}`);
+    return v;
+  };
+  // Listed file names stay raw: no octal quoting of non-ASCII paths.
+  const NAMES = ['-c', 'core.quotepath=off'];
   const base = () => g('merge-base', 'HEAD', `origin/${trunk}`);
   // A change line name reaches git argv and a path under .agents/work: no option, no path escape.
   const safeName = (name: string) => {
@@ -42,7 +49,10 @@ export function git(ctx: AdapterContext): Vcs {
       return { workdir, ref: name };
     },
     async head() { return { ref: g('rev-parse', '--abbrev-ref', 'HEAD'), sha: g('rev-parse', 'HEAD') }; },
-    async changed(since) { return lines(g('diff', '--name-only', `${since ?? `origin/${trunk}`}...HEAD`)); },
+    async changed(since) {
+      if (since !== undefined) plain('revision', since);
+      return lines(g(...NAMES, 'diff', '--name-only', '--end-of-options', `${since ?? `origin/${trunk}`}...HEAD`));
+    },
     async base() { return { sha: base() }; },
     async push() {
       const ref = g('rev-parse', '--abbrev-ref', 'HEAD');
@@ -51,12 +61,14 @@ export function git(ctx: AdapterContext): Vcs {
       g('push', '-u', 'origin', ref);
     },
     async cut(rev, release) {
+      plain('revision', rev); plain('release', release);
       const ref = `refs/heads/${release_prefix}${release}`;
       g('push', 'origin', `${rev}:${ref}`);
       return { ref };
     },
     async tag(name, rev) {
-      g('tag', '-a', name, rev, '-m', name);
+      plain('tag name', name); plain('revision', rev);
+      g('tag', '-a', '-m', name, '--end-of-options', name, rev);
       g('push', 'origin', `refs/tags/${name}`);
     },
     async tags(prefix) {
@@ -70,18 +82,21 @@ export function git(ctx: AdapterContext): Vcs {
     },
     async checkoutTests(rev, paths) {
       // read-tree also removes files HEAD added that rev lacks, so a proof cannot lean on new product code.
-      g('read-tree', '-u', '--reset', rev);
+      plain('revision', rev);
+      paths.forEach((p) => plain('path', p));
+      g('read-tree', '-u', '--reset', '--end-of-options', rev);
       if (paths.length) g('checkout', 'HEAD', '--', ...paths);
     },
     async snapshot(rev) {
       // ponytail: a linked worktree shares the repo's .git object DB, so `git log` / `git show`
       // still reach every later commit; agent_command must sandbox the agent away from git.
+      plain('revision', rev);
       const workdir = mkdtempSync(join(tmpdir(), 'agentic-bench-'));
       g('worktree', 'add', '--detach', workdir, rev);
       const w = (...a: string[]) => ctx.exec('git', a, { cwd: workdir });
       return {
         workdir,
-        async changed() { w('add', '-A'); return lines(w('diff', '--cached', '--name-only', '--no-renames', rev)); },
+        async changed() { w('add', '-A'); return lines(w(...NAMES, 'diff', '--cached', '--name-only', '--no-renames', '--end-of-options', rev)); },
         async drop() {
           try { g('worktree', 'remove', '--force', workdir); } catch { /* removed below */ }
           rmSync(workdir, { recursive: true, force: true });

@@ -64,7 +64,7 @@ export function createJiraBoard(ctx: AdapterContext): Board {
     await transition(id, status);
     return get(id);
   };
-  const quote = (s: string) => `"${s.replaceAll('"', '\\"')}"`;
+  const quote = (s: string) => `"${s.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 
   return {
     async list(q = {}) {

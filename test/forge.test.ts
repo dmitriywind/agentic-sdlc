@@ -31,8 +31,8 @@ test('parseCloses never reads an id from the next line and dedupes', () => {
 const pull = { number: 5, html_url: 'u', title: 'T', head: { ref: 'b', sha: 'h' }, base: { ref: 'main', sha: 'm' }, draft: false, state: 'open', body: 'Closes 1', mergeable_state: 'behind' };
 const restExec = (a: string[]) => {
   const path = a.find((x) => x.startsWith('repos/')) ?? '';
-  if (path.includes('/check-runs')) return JSON.stringify({ check_runs: [{ id: 3, name: 'ci', status: 'completed', conclusion: 'success' }, { id: 2, name: 'e2e', status: 'in_progress', conclusion: null }, { id: 1, name: 'ci', status: 'completed', conclusion: 'failure' }] });
-  if (path.endsWith('/status')) return JSON.stringify({ statuses: [{ context: 'review', state: 'error' }] });
+  if (path.includes('/check-runs')) return [{ id: 3, name: 'ci', status: 'completed', conclusion: 'success' }, { id: 2, name: 'e2e', status: 'in_progress', conclusion: null }, { id: 1, name: 'ci', status: 'completed', conclusion: 'failure' }].map((r) => JSON.stringify(r)).join('\n');
+  if (path.includes('/status?')) return JSON.stringify({ context: 'review', state: 'error' });
   // gh --paginate --slurp returns one array per page.
   if (path.includes('/pulls?')) return JSON.stringify([[{ number: 5, merged_at: 'x' }, { number: 6, merged_at: null }]]);
   if (path.includes('/check-suites') || a.includes('--paginate')) return '';
@@ -47,8 +47,8 @@ test('github: draft = ready --undo outside the cloud, checks from REST (the newe
   assert.ok(execs.some((a) => a.join(' ').startsWith('pr ready 5 --undo')));
   assert.equal(cr.behind, true);
   assert.deepEqual(cr.checks, [{ name: 'ci', state: 'success' }, { name: 'e2e', state: 'pending' }, { name: 'review', state: 'failure' }]);
-  await f.status('abc', { context: 'c', state: 'pending', description: 'd' });
-  const i = execs.findIndex((a) => a[0] === 'api' && a.includes('repos/o/r/statuses/abc'));
+  await f.status('abcdef1', { context: 'c', state: 'pending', description: 'd' });
+  const i = execs.findIndex((a) => a[0] === 'api' && a.includes('repos/o/r/statuses/abcdef1'));
   assert.ok(i >= 0);
   assert.equal(envs[i], 'r', 'status runs with the review token');
   assert.equal(envs[0], 't', 'other verbs run with token_env');
@@ -117,7 +117,7 @@ const stdout = async (fn: () => Promise<unknown>) => {
 };
 
 const ghPull = { number: 7, html_url: 'u', title: 'T', head: { ref: 'b', sha: 'h' }, base: { ref: 'main', sha: 'm' }, draft: false, state: 'open', body: 'Closes 1', user: { login: 'ann' } };
-const ghExec = (a: string[]) => a[0] === 'api' && a.at(-1)!.endsWith('/pulls/7') ? JSON.stringify(ghPull) : /\/(check-runs|status)\b/.test(a[1] ?? '') ? '{}' : a[0] === 'api' ? (() => { throw new Error('HTTP 404'); })() : '';
+const ghExec = (a: string[]) => a[0] === 'api' && a.at(-1)!.endsWith('/pulls/7') ? JSON.stringify(ghPull) : /\/(check-runs|status)\b/.test(a.join(' ')) ? '' : a[0] === 'api' ? (() => { throw new Error('HTTP 404'); })() : '';
 
 test('cli: JSON on stdout, usage error is 2, failure is 1', async () => {
   const { ctx } = mk('github', { repo: 'o/r' }, () => ({}), ghExec);
@@ -172,7 +172,7 @@ test('cli: status refuses the contexts only a gate posts', async () => {
   const e = process.stderr.write; process.stderr.write = (() => true) as any;
   try {
     for (const c of ['human-approval', 'ticket-linkage', 'proofs-on-base'])
-      assert.equal(await cli(['status', 'abc', '--context', c, '--state', 'success', '--description', 'd'], base), 2, c);
+      assert.equal(await cli(['status', 'abcdef1', '--context', c, '--state', 'success', '--description', 'd'], base), 2, c);
   } finally { process.stderr.write = e; }
   assert.deepEqual(execs, []);
 });
@@ -180,7 +180,7 @@ test('cli: status refuses the contexts only a gate posts', async () => {
 test('two identities: status and approve need review_token_env and never use the implementer token; a missing token env fails naming the variable', async () => {
   const st = { context: 'review', state: 'success' as const, description: 'd' };
   const gh = mk('github', { repo: 'o/r', token_env: 'TOK', review_token_env: 'UNSET' }, () => ({}));
-  await assert.rejects(createForge(gh.ctx).status('abc', st), /review_token_env/);
+  await assert.rejects(createForge(gh.ctx).status('abcdef1', st), /review_token_env/);
   await assert.rejects(createForge(gh.ctx).approve('5'), /review_token_env/);
   assert.deepEqual(gh.envs, []);
   const { ctx } = mk('github', { repo: 'o/r', token_env: 'NOPE' }, () => ({}), ghExec);
@@ -190,8 +190,8 @@ test('two identities: status and approve need review_token_env and never use the
 test('one identity: status posts with the implementer token; approve is refused, since GitHub refuses the author', async () => {
   const st = { context: 'review', state: 'success' as const, description: 'd' };
   const gh = mk('github', { repo: 'o/r', token_env: 'TOK' }, () => ({}));
-  await createForge(gh.ctx).status('abc', st);
-  assert.ok(gh.execs[0].includes('repos/o/r/statuses/abc'));
+  await createForge(gh.ctx).status('abcdef1', st);
+  assert.ok(gh.execs[0].includes('repos/o/r/statuses/abcdef1'));
   assert.deepEqual(gh.envs, ['t']);
   await assert.rejects(createForge(gh.ctx).approve('5'), /one identity/);
 });
@@ -225,3 +225,38 @@ test('cut: dispatches the release workflow and returns the run newer than any be
   assert.ok(gh.execs.some((a) => a.join(' ').startsWith('workflow run agentic-sdlc-release.yml -f revision=abc -f version=1.2.0')));
 });
 
+
+test('github view reads every page of check runs and commit statuses', async () => {
+  const gh = mk('github', { repo: 'o/r' }, () => ({}), restExec);
+  await createForge(gh.ctx).view('5');
+  const at = (frag: string) => gh.execs.find((a) => a.some((x) => x.includes(frag)))!;
+  assert.ok(at('/check-runs').includes('--paginate'));
+  assert.ok(at('/status?').includes('--paginate'));
+});
+
+test('github viewBySha prefers the merge commit, then the head, then the first pull', async () => {
+  const pick = async (pulls: any[], sha: string) => {
+    const gh = mk('github', { repo: 'o/r' }, () => ({}), (a) => {
+      const path = a.find((x) => x.startsWith('repos/')) ?? '';
+      if (path.endsWith('/pulls')) return JSON.stringify(pulls);
+      if (path.includes('/check-runs') || path.includes('/status?') || path.includes('/check-suites')) return '';
+      return JSON.stringify({ ...pull, number: Number(path.split('/pulls/')[1]) });
+    });
+    return (await createForge(gh.ctx).viewBySha(sha)).n;
+  };
+  const sha = 'abcdef1234';
+  assert.equal(await pick([{ number: 1, head: { sha: 'x' } }, { number: 2, merge_commit_sha: sha }, { number: 3, head: { sha } }], sha), '2');
+  assert.equal(await pick([{ number: 1, head: { sha: 'x' } }, { number: 3, head: { sha } }], sha), '3');
+  assert.equal(await pick([{ number: 1, head: { sha: 'x' } }, { number: 4, head: { sha: 'y' } }], sha), '1');
+});
+
+test('github refuses a change request number or sha that is not an id before calling gh', async () => {
+  const gh = mk('github', { repo: 'o/r' }, () => ({}), restExec);
+  const f = createForge(gh.ctx);
+  await assert.rejects(f.view('5/../../x'), /not a change request number/);
+  await assert.rejects(f.diff('x'), /not a change request number/);
+  await assert.rejects(f.comments('1;2'), /not a change request number/);
+  await assert.rejects(f.viewBySha('../x'), /not a commit sha/);
+  await assert.rejects(f.status('xyz', { context: 'c', state: 'success', description: 'd' }), /not a commit sha/);
+  assert.equal(gh.execs.length, 0);
+});

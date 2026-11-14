@@ -81,6 +81,41 @@ Feature: Push guard
     When the guard hook reads the command
     Then the hook exits with code 2
 
+  # Source: hooks/guard.mjs, "cd", "-C", "--git-dir" and "--work-tree" handling
+  # Proof: test/guard.test.ts "a cd to another checkout is followed, or the push is refused"
+  Scenario: A push in another checkout is read from that checkout
+    Given the agent runs "cd ../repo-main && git push" and that checkout is on the trunk
+    When the guard hook reads the command
+    Then the hook exits with code 2
+    And a cd to a path that is not a literal, existing directory before a push also exits with code 2
+    And the agent sees a message to run the push from the change worktree without cd
+
+  # Source: hooks/guard.mjs, "shell expansion" and "alias" checks
+  # Proof: test/guard.test.ts "indirection in a push is blocked"
+  Scenario: A push built from a variable, an alias or a substitution is blocked
+    Given the agent runs "B=main; git push origin $B" or "git -c alias.p=push p origin main"
+    When the guard hook reads the command
+    Then the hook exits with code 2
+
+  # Source: hooks/guard.mjs, "CLI" match and verb check
+  # Proof: test/guard.test.ts "forge approve through another launcher or a variable is blocked"
+  Scenario: Another launcher or a variable does not hide forge approve
+    Given AGENTIC_SDLC_ROLE is not "review"
+    When the agent runs "npx agentic-sdlc@latest forge approve 1" or "agentic-sdlc forge $a 1"
+    Then the hook exits with code 2
+
+  # Source: hooks/guard.mjs, fail-closed checks
+  # Proof: test/guard.test.ts "ordinary commands still pass"
+  Scenario: Ordinary commands still pass
+    When the agent runs "git push", "cd sub && npm test" or "agentic-sdlc forge view 1"
+    Then the hook exits with code 0
+
+  # Source: hooks/hooks.json, "onFailure"
+  # Proof: test/guard.test.ts "both guard hook entries block when the hook fails"
+  Scenario: A guard that cannot run blocks the call
+    Given the guard hook times out or fails to start
+    Then Claude Code blocks the tool call because the hook entries set "onFailure" to "block"
+
   # Source: hooks/guard.mjs, trunk check (no refspec)
   # Proof: test/guard.test.ts "a push from a checkout of the trunk with at most one argument is blocked"
   Scenario: A push from a checkout of the trunk is blocked
@@ -117,3 +152,10 @@ Feature: Push guard
   Scenario: A change line name cannot be an option or a path out of the work folder
     When an agent starts or drops a change line named "--upload-pack=x", "../../x" or "a b"
     Then the vcs port refuses it before it runs git
+
+  # Source: src/vcs/git.ts, "changed", "tag", "cut", "snapshot" and "checkoutTests"
+  # Proof: test/vcs.test.ts "git refuses a revision, tag name or path that is an option, and lists non-ASCII paths unquoted"
+  Scenario: A revision, tag name or path cannot be a git option, and file names stay unquoted
+    When an agent passes "--output=/x" as a revision, tag name or path to a vcs command
+    Then the vcs port refuses it before it runs git
+    And a changed file named with non-ASCII characters is listed by its real name

@@ -113,12 +113,13 @@ One-time setup (private repos need a plan with Environments: Pro, Team or Enterp
    `approval-gate`, `carry-statuses` and the review job of the runner workflow (`github-actions-claude.yml`, `github-actions-codex.yml`) declare it, so no PR-ref run can read it.
 2. Add `AGENTIC_FORGE_TOKEN` as a repo secret (`proofs-on-base` falls back to the read-only job token and
    its status post fails by design; the job's exit code is the check).
-3. Release line only: create Environment `agentic-release` with the Product owner as required reviewer and deployment branches limited to the trunk. Store `AGENTIC_RELEASE_TOKEN` there: the release bot, the only bypass actor of `.github/rulesets/release.json`. The release skill starts `forge cut <revision> <version>`, which runs `agentic-sdlc-release.yml`; the Product owner's approval of that run is the go-ahead. The cycle never holds this token.
-4. `init` installs `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events to `human-approval`; it must stay in place or approvals do not update. A fork PR's review event carries no PR number, so its approval updates on the next PR event.
+3. Release line only: create Environment `agentic-release` with the Product owner as required reviewer and deployment branches limited to the trunk. Store `AGENTIC_RELEASE_TOKEN` there: the release bot, a bypass actor of `.github/rulesets/release.json`. The shipped ruleset lets repo admins bypass too (`RepositoryRole` 5); to make the bot the only bypass actor, replace that entry with your release GitHub App (`actor_type: Integration`, its `actor_id`) after you import the ruleset. The release skill starts `forge cut <revision> <version>`, which runs `agentic-sdlc-release.yml`; the Product owner's approval of that run is the go-ahead. The cycle never holds this token.
+4. Repo variables (Settings > Secrets and variables > Actions > Variables): `AGENTIC_SDLC_VERSION`, an exact version or a 40-hex commit SHA, which the workflows install when the repo does not pin `agentic-sdlc` as a devDependency; a SHA is the immutable choice, a tag can move. Without it those jobs fail. The runner workflows also read `AGENTIC_AGENT_CLI_VERSION`, an exact version of the Claude Code or Codex CLI, and fail without it.
+5. `init` installs `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events to `human-approval`; it must stay in place or approvals do not update. A fork PR's review event carries no PR number, so its approval updates on the next PR event.
 
 ## Secret exposure
 The review token is readable only in the trunk-only Environment `agentic-review`. The release token
-is readable only in `agentic-release`, after the Product owner approves the run. Delivery tokens are
+is readable only in `agentic-release`, after the Product owner approves the run. The release workflow hands it to the cut step only; checkout does not store it. The merge queue runs the queue commit's copy of the CR workflow with the review Environment, so keep `.github/**` in `paths.factory`. Delivery tokens are
 readable only by workflows on the trunk and the release lines. The trunk and release rulesets hold
 this.
 

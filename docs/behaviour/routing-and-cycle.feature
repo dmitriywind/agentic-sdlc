@@ -188,6 +188,15 @@ Feature: Routing and the unattended cycle
     Then the dispatch prints "{ skipped: true }"
     And the orchestrator leaves it
 
+  # Source: src/dispatch.ts, "cli" (re-read after the claim)
+  # Proof: test/dispatch.test.ts "dispatch: overlapping cycles on one key start one run; flags are checked; an unreadable time fails closed; the log dir is private"
+  Scenario: Two overlapping dispatches start one run
+    Given two cycles dispatch the same key at once and both post a marker
+    When each re-reads the markers
+    Then only the earliest unfinished marker starts the run and the other prints "{ skipped: true }"
+    And an unknown flag is a usage error with exit code 2
+    And the executor's log folder is private to the user
+
   # Source: src/dispatch.ts, "cli" (idempotency)
   # Proof: test/dispatch.test.ts "idempotency: a trusted marker for the same key inside cycle.dedupe_minutes skips; --cr and improve-factory use the heartbeat ticket"
   Scenario: A finished run never blocks a re-run
@@ -242,13 +251,14 @@ Feature: Routing and the unattended cycle
     Then the dispatch prints "{ skipped: true }"
     And the second cycle stops and writes no heartbeat
 
-  # Source: skills/sdlc/SKILL.md, "The needs-human hold"
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 1a
   # Proof: skill text only
   Scenario: An owner who only comments releases the hold
     Given a ticket is held with a "### Needs human" comment
-    And a trusted owner reply follows that comment
+    And a reply by owners.product or owners.factory follows that comment
     When the cycle reads the board
     Then the cycle removes the label board.labels.human
+    And it names the ticket in the heartbeat
     And the ticket is routed at its Status
 
   # Source: skills/sdlc/SKILL.md, "Routing"

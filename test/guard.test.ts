@@ -1,7 +1,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,6 +89,70 @@ test('a push from a checkout of the trunk with at most one argument is blocked',
   spawnSync('git', ['checkout', 'main'], { cwd: d });
   for (const c of ['git push', 'git push origin', 'git push -u origin']) assert.equal(run(c, {}, d), 2, c);
   assert.equal(run('git push origin feat', {}, d), 0);
+});
+
+test('a cd to another checkout is followed, or the push is refused', () => {
+  const main = repo('main', 'vcs:\n  trunk: main\n');
+  spawnSync('git', ['checkout', 'main'], { cwd: main });
+  const feat = repo('main', 'vcs:\n  trunk: main\n');
+  const at = join(feat, 'sub');
+  assert.equal(run(`cd ${main} && git push`, {}, at), 2, 'cd to a trunk checkout');
+  assert.equal(run(`cd ${main}; git push origin`, {}, at), 2);
+  assert.equal(run(`git -C ${main} push`, {}, at), 2, 'git -C to a trunk checkout');
+  assert.equal(run(`git --git-dir=${join(main, '.git')} push`, {}, at), 2, '--git-dir to a trunk checkout');
+  assert.equal(run(`pushd ${main} && git push`, {}, at), 2);
+  assert.equal(run(`cd ${feat} && git push origin feat`, {}, main), 0, 'cd to a feature checkout is fine');
+  assert.equal(run('cd $WT && git push origin feat', {}, at), 2, 'computed cd');
+  assert.equal(run('cd "$(pwd)/x" && git push origin feat', {}, at), 2);
+  assert.equal(run('cd nowhere-here && git push origin feat', {}, at), 2, 'cd to a missing path');
+  assert.equal(run('git -C $WT push origin feat', {}, at), 2, 'computed git -C');
+  assert.match(String(spawnSync('node', [guard], { input: JSON.stringify({ cwd: at, tool_name: 'Bash', tool_input: { command: 'cd $WT && git push' } }), encoding: 'utf8' }).stderr), /without cd/);
+});
+
+test('indirection in a push is blocked', () => {
+  for (const c of [
+    'B=main; git push origin $B',
+    'g=git; $g push origin main',
+    'git -c alias.p=push p origin main',
+    'git push origin feat#1:main',
+    'git push origin $(echo main)',
+    'git push origin `echo main`',
+    'git push "$REMOTE" feat',
+    'X=push; git $X origin main',
+    "eval 'g=git; $g push origin main'",
+    'bash -c "$CMD push origin main"',
+  ]) assert.equal(run(c), 2, c);
+});
+
+test('forge approve through another launcher or a variable is blocked', () => {
+  for (const c of [
+    'npx agentic-sdlc@latest forge approve 1',
+    'a=approve; agentic-sdlc forge $a 1',
+    'node node_modules/agentic-sdlc/dist/bin.js forge approve 1',
+    'node node_modules/agentic-sdlc/dist/cli.js forge approve 1',
+    'agentic-sdlc forge `echo approve` 1',
+  ]) assert.equal(run(c), 2, c);
+  assert.equal(run('npx agentic-sdlc@latest forge approve 1', { AGENTIC_SDLC_ROLE: 'review' }), 0);
+});
+
+test('ordinary commands still pass', () => {
+  for (const c of [
+    'git push',
+    'git push origin feat/x',
+    'cd sub && npm test',
+    'git -c user.name=x commit -m "fix #1"',
+    'git commit -m "wip # push" && git push origin feat',
+    'agentic-sdlc forge view 1',
+    'echo $HOME && ls "$PWD"',
+    'for f in a b; do echo $f; done',
+    'v=$(git rev-parse HEAD); echo $v',
+  ]) assert.equal(run(c), 0, c);
+});
+
+test('both guard hook entries block when the hook fails', () => {
+  const h = JSON.parse(readFileSync(fileURLToPath(new URL('../hooks/hooks.json', import.meta.url)), 'utf8')).hooks.PreToolUse;
+  assert.equal(h.length, 2);
+  for (const e of h) assert.equal(e.hooks[0].onFailure, 'block');
 });
 
 test('input that is not JSON is let through', () => {

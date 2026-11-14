@@ -1,6 +1,6 @@
 // agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one) [--workdir <d>] [--run-model <id>] [--unattended]: start the skill's executor.
 import { spawn } from 'node:child_process';
-import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
@@ -138,10 +138,15 @@ export const cli: PortCli = async (argv, ctx) => {
   try {
     const f: Record<string, string> = {};
     const pos: string[] = [];
+    const KNOWN = ['ticket', 'cr', 'workdir', 'run', 'run-model', 'unattended'];
     for (let i = 0; i < argv.length; i++) {
-      if (argv[i] === '--unattended') f.unattended = '1';
-      else if (argv[i].startsWith('--')) f[argv[i].slice(2)] = argv[++i];
-      else pos.push(argv[i]);
+      if (!argv[i].startsWith('--')) { pos.push(argv[i]); continue; }
+      const [name, inline] = argv[i].slice(2).split(/=(.*)/s, 2) as [string, string | undefined];
+      if (!KNOWN.includes(name)) { console.error(`unknown flag --${name}`); return 2; }
+      if (name === 'unattended') { f.unattended = '1'; continue; }
+      const v = inline ?? argv[++i];
+      if (v === undefined || (inline === undefined && v.startsWith('--'))) { console.error(`--${name} needs a value`); return 2; }
+      f[name] = v;
     }
     const [skill] = pos;
     // improve-factory works on the factory, not a ticket: its marker lives on the heartbeat ticket.
@@ -163,6 +168,7 @@ export const cli: PortCli = async (argv, ctx) => {
     const target = (skill === 'judge-run' ? '' : ticket) || b.heartbeat?.ticket;
     const window = Number(b.cycle?.dedupe_minutes) || 0; // unset or 0: no check (the binding template sets 10)
     let key: string | undefined;
+    let isBot: ((c: { author?: string }) => boolean) | undefined;
     if (window > 0 && target) {
       let head = '';
       if (cr) {
@@ -174,7 +180,7 @@ export const cli: PortCli = async (argv, ctx) => {
       key = [ticket || cr || 'factory', skill, f.run, head].filter(Boolean).join('-');
       const trusted = ownersFor(b.owners, 'board').bots.map((a) => a.toLowerCase());
       const closer = ex.kind === 'assign' ? String((ex as { user?: string }).user ?? '').toLowerCase() : '';
-      const bot = (c: { author?: string }) => trusted.includes(String(c.author).toLowerCase()) || (!!closer && String(c.author).toLowerCase() === closer);
+      const bot = isBot = (c: { author?: string }) => trusted.includes(String(c.author).toLowerCase()) || (!!closer && String(c.author).toLowerCase() === closer);
       const all = (await boardOf().comments(target)).filter(bot);
       const mine = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `)).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
       const at = mine ? Date.parse(mine.createdAt) : NaN;
@@ -184,7 +190,7 @@ export const cli: PortCli = async (argv, ctx) => {
       const later = (c: { id: string; createdAt: string }) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
       const finished = mine && all.some((c) => later(c) && c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`));
       const stall = Number(b.stall_minutes) || 0;
-      const age = (Date.now() - at) / 60_000;
+      const age = Number.isNaN(at) ? 0 : (Date.now() - at) / 60_000; // an unparseable time counts as just now: fail closed
       // A finished run never blocks: a re-run after it is a new run, not a double fire.
       if (mine && !finished && (age < window || age < stall)) {
         console.log(JSON.stringify({ skipped: true, key, since: mine.createdAt, comment: mine.id, reason: age < window ? 'double fire' : 'the previous run has not finished' }));
@@ -219,7 +225,24 @@ export const cli: PortCli = async (argv, ctx) => {
     if (key || ex.kind === 'assign') {
       marker = (await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->\nagentic-sdlc: run skill ${skill} (${ex.kind})${key ? `; close with <!-- ${DONE_MARKER} ${key} -->` : ''}`)).id;
       const k = key ?? `${ticket}-${skill}`;
-      // Only while nothing has left: once a request is sent, the remote run may exist, so no done line.
+      // Two overlapping cycles can both pass the check above. Re-read: the earliest unfinished marker inside
+      // the window owns the run, any later one stands down. Its own done line is not posted: it would end the owner's block.
+      if (key && isBot) {
+        const all = (await boardOf().comments(target!)).filter(isBot);
+        const markers = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `));
+        const order = (x: { createdAt: string; id: string }, y: { createdAt: string; id: string }) =>
+          (Date.parse(x.createdAt) - Date.parse(y.createdAt)) || String(x.id).localeCompare(String(y.id), undefined, { numeric: true });
+        const me = markers.find((c) => c.id === marker);
+        const owner = me && markers.find((c) => {
+          const age = (Date.now() - Date.parse(c.createdAt)) / 60_000;
+          const finished = all.some((d) => !markers.includes(d) && d.body.includes(`<!-- ${DONE_MARKER} ${key} -->`) && Date.parse(d.createdAt) >= Date.parse(c.createdAt));
+          return c !== me && order(c, me) < 0 && !finished && !(age >= window);
+        });
+        if (owner) {
+          console.log(JSON.stringify({ skipped: true, key, since: owner.createdAt, comment: owner.id, reason: 'double fire' }));
+          return 0;
+        }
+      }
       onFail = () => (sent ? Promise.resolve() : boardOf().comment(target!, `<!-- ${DONE_MARKER} ${k} -->\nagentic-sdlc: ${skill} did not start`));
     }
 
@@ -237,9 +260,13 @@ export const cli: PortCli = async (argv, ctx) => {
       const line = fill(ex.run, vars);
       const env = childEnv(ctx.env, stage.secrets);
       const logDir = join(tmpdir(), 'agentic-sdlc-runs');
-      mkdirSync(logDir, { recursive: true });
+      mkdirSync(logDir, { recursive: true, mode: 0o700 });
+      // The log dir is predictable: refuse a symlink or another user's folder, keep it private.
+      const st = lstatSync(logDir);
+      if (!st.isDirectory() || st.isSymbolicLink() || (process.getuid && st.uid !== process.getuid())) throw new Error(`${logDir} is not a folder of yours; remove it and retry`);
+      if (process.platform !== 'win32') chmodSync(logDir, 0o700);
       const log = join(logDir, `${startedAt}-${skill}-${ticket || `cr${cr}`}`.replace(/[^\w.-]/g, '_') + '.log');
-      const fd = openSync(log, 'a');
+      const fd = openSync(log, 'a', 0o600);
       try {
         const [cmd, args, childVars] = process.platform === 'win32'
           ? ['cmd', ['/d', '/v:off', '/c', '%AGENTIC_SDLC_CMD%'], { ...env, AGENTIC_SDLC_CMD: line }]

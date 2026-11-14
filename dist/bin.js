@@ -331,13 +331,13 @@ var require_directives = __commonJS({
               onError(0, "%YAML directive should contain exactly one part");
               return false;
             }
-            const [version2] = parts;
-            if (version2 === "1.1" || version2 === "1.2") {
-              this.yaml.version = version2;
+            const [version3] = parts;
+            if (version3 === "1.1" || version3 === "1.2") {
+              this.yaml.version = version3;
               return true;
             } else {
-              const isValid = /^\d+\.\d+$/.test(version2);
-              onError(6, `Unsupported YAML version ${version2}`, isValid);
+              const isValid = /^\d+\.\d+$/.test(version3);
+              onError(6, `Unsupported YAML version ${version3}`, isValid);
               return false;
             }
           }
@@ -3439,14 +3439,14 @@ var require_Document = __commonJS({
           version: "1.2"
         }, options);
         this.options = opt;
-        let { version: version2 } = opt;
+        let { version: version3 } = opt;
         if (options?._directives) {
           this.directives = options._directives.atDocument();
           if (this.directives.yaml.explicit)
-            version2 = this.directives.yaml.version;
+            version3 = this.directives.yaml.version;
         } else
-          this.directives = new directives.Directives({ version: version2 });
-        this.setSchema(version2, options);
+          this.directives = new directives.Directives({ version: version3 });
+        this.setSchema(version3, options);
         this.contents = value === void 0 ? null : this.createNode(value, _replacer, options);
       }
       /**
@@ -3626,11 +3626,11 @@ var require_Document = __commonJS({
        *
        * Overrides all previously set schema options.
        */
-      setSchema(version2, options = {}) {
-        if (typeof version2 === "number")
-          version2 = String(version2);
+      setSchema(version3, options = {}) {
+        if (typeof version3 === "number")
+          version3 = String(version3);
         let opt;
-        switch (version2) {
+        switch (version3) {
           case "1.1":
             if (this.directives)
               this.directives.yaml.version = "1.1";
@@ -3641,9 +3641,9 @@ var require_Document = __commonJS({
           case "1.2":
           case "next":
             if (this.directives)
-              this.directives.yaml.version = version2;
+              this.directives.yaml.version = version3;
             else
-              this.directives = new directives.Directives({ version: version2 });
+              this.directives = new directives.Directives({ version: version3 });
             opt = { resolveKnownTags: true, schema: "core" };
             break;
           case null:
@@ -3652,7 +3652,7 @@ var require_Document = __commonJS({
             opt = null;
             break;
           default: {
-            const sv = JSON.stringify(version2);
+            const sv = JSON.stringify(version3);
             throw new Error(`Expected '1.1', '1.2' or null as first argument, but found: ${sv}`);
           }
         }
@@ -7597,7 +7597,7 @@ var init_ports = __esm({
 // src/comments.ts
 function selectComments(list, o) {
   const w = o.owners;
-  let out = o.marker ? list.filter((c) => c.body.includes(o.marker)) : list;
+  let out = o.marker ? list.filter((c) => c.body.split("\n")[0].includes(o.marker)) : list;
   if (o.authors?.length || o.trusted) {
     const by = [...o.authors ?? [], ...o.trusted ? [...w?.bots ?? [], w?.product, w?.factory] : []].filter((x) => !!x).map((s) => s.toLowerCase());
     out = out.filter((c) => by.includes(c.author?.toLowerCase()));
@@ -7735,8 +7735,9 @@ function createGithubBoard(ctx) {
       return get(id);
     },
     async assign(id, user) {
-      if (user) gh(["issue", "edit", id, "--repo", o.repo, "--add-assignee", user]);
-      else for (const a of (await get(id)).assignees) gh(["issue", "edit", id, "--repo", o.repo, "--remove-assignee", a]);
+      const drop = (await get(id)).assignees.filter((a) => a !== user).flatMap((a) => ["--remove-assignee", a]);
+      const args = ["issue", "edit", id, "--repo", o.repo, ...user ? ["--add-assignee", user] : [], ...drop];
+      if (args.length > 5) gh(args);
       return get(id);
     },
     async comment(id, body) {
@@ -7879,8 +7880,7 @@ ${i.body ?? ""}`.toLowerCase().includes(w))).map(toItem).filter((i) => (!q.statu
       return get(id);
     },
     async assign(id, user) {
-      if (user) api("POST", `issues/${id}/assignees`, { assignees: [user] });
-      else api("PATCH", `issues/${id}`, { assignees: [] });
+      api("PATCH", `issues/${id}`, { assignees: user ? [user] : [] });
       return get(id);
     },
     async comment(id, body) {
@@ -7980,7 +7980,7 @@ function createJiraBoard(ctx) {
     await transition(id, status);
     return get(id);
   };
-  const quote2 = (s) => `"${s.replaceAll('"', '\\"')}"`;
+  const quote2 = (s) => `"${s.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
   return {
     async list(q = {}) {
       const jql = [`project = ${o.project_key}`];
@@ -8087,7 +8087,7 @@ function createLinearBoard(ctx) {
   const nativePriority = () => fieldName("priority").toLowerCase() === "priority";
   const priorities = () => ctx.binding?.priorities ?? [];
   let team;
-  const getTeam = async () => team ??= (await gql(`query($k:String!){ teams(filter:{key:{eq:$k}}){ nodes { id states { nodes { id name } } labels { nodes { id name } } } } }`, { k: o.team_key })).teams.nodes[0];
+  const getTeam = async () => team ??= (await gql(`query($k:String!){ teams(filter:{key:{eq:$k}}){ nodes { id states(first:250) { nodes { id name } } labels(first:250) { nodes { id name } } } } }`, { k: o.team_key })).teams.nodes[0];
   const state = async (name) => {
     const s = (await getTeam()).states.nodes.find((x) => x.name === name);
     if (!s) throw new Error(`Linear team ${o.team_key} has no state '${name}'`);
@@ -8137,8 +8137,9 @@ function createLinearBoard(ctx) {
     return toItem(r.issueUpdate.issue);
   };
   const withLabels = async (id, change) => {
-    const names = change((await raw(id)).labels.nodes.map((l) => l.name));
-    return update(id, { labelIds: await Promise.all(names.map(labelId)) });
+    const own = (await raw(id)).labels.nodes;
+    const names = change(own.map((l) => l.name));
+    return update(id, { labelIds: await Promise.all(names.map((n) => own.find((l) => l.name === n)?.id ?? labelId(n))) });
   };
   const move = async (id, status, onlyFrom) => {
     if (onlyFrom) {
@@ -8229,8 +8230,8 @@ var init_linear = __esm({
     "use strict";
     init_ports();
     LOGICAL3 = ["size", "priority", "lane", "shipped", "release_version"];
-    ISSUE = `id identifier title url description createdAt updatedAt priority state { name } labels { nodes { id name } }
-  assignee { id } parent { identifier } children { nodes { identifier } }`;
+    ISSUE = `id identifier title url description createdAt updatedAt priority state { name } labels(first:250) { nodes { id name } }
+  assignee { id } parent { identifier } children(first:250) { nodes { identifier } }`;
   }
 });
 
@@ -8362,7 +8363,9 @@ import { readFileSync as readFileSync3 } from "fs";
 function createBoard(ctx) {
   const make = { github: createGithubBoard, "github-issues": createGithubIssuesBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
   if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
-  const board = make(ctx);
+  const missing = validateBinding({ ...ctx.binding, board: { ...ctx.binding.board, options: ctx.options } }).map((m) => /^board\.options\.(\w+) is required/.exec(m)?.[1]).filter(Boolean).map((k) => `board.options.${k}`);
+  if (missing.length) throw new Error(`board adapter '${ctx.binding.board.adapter}' needs binding keys: ${missing.join(", ")}; run: agentic-sdlc validate`);
+  const board = checked(make(ctx), ctx);
   const scope = ctx.binding.board.scope;
   if (!scope?.label) return board;
   const pre = scope.label.slice(0, scope.label.indexOf(":") + 1);
@@ -8371,6 +8374,35 @@ function createBoard(ctx) {
     ...board,
     list: async (q) => (await board.list(q)).filter(mine),
     create: (t) => board.create({ ...t, labels: [.../* @__PURE__ */ new Set([...t.labels ?? [], scope.label])] })
+  };
+}
+function checked(b, ctx) {
+  const numeric = ctx.binding.board.adapter === "github" || ctx.binding.board.adapter === "github-issues";
+  const statuses = ctx.binding.board.statuses;
+  const id = (v) => {
+    if (numeric && v !== void 0 && !/^\d+$/.test(String(v))) throw new Error(`board: not an issue number: ${v}`);
+    return v;
+  };
+  const status = (s) => {
+    if (Array.isArray(statuses) && statuses.length && !statuses.includes(s)) throw new Error(`board: status '${s}' is not in board.statuses (${statuses.join(", ")})`);
+    return s;
+  };
+  return {
+    ...b,
+    get: async (i) => b.get(id(i)),
+    create: async (t) => {
+      id(t.parent);
+      status(t.status);
+      return b.create(t);
+    },
+    move: async (i, s, from) => b.move(id(i), status(s), from),
+    set: async (i, f, v) => b.set(id(i), f, v),
+    label: async (i, op, l) => b.label(id(i), op, l),
+    assign: async (i, u) => b.assign(id(i), u),
+    comment: async (i, body) => b.comment(id(i), body),
+    comments: async (i, q) => b.comments(id(i), q),
+    close: async (i, r) => b.close(id(i), r),
+    child: async (p, c) => b.child(id(p), id(c))
   };
 }
 function parse2(argv, bools = []) {
@@ -8395,6 +8427,7 @@ var init_board = __esm({
   "src/board/index.ts"() {
     "use strict";
     init_ports();
+    init_binding();
     init_comments();
     init_github();
     init_github_issues();
@@ -8560,6 +8593,14 @@ var init_util = __esm({
 function github(ctx) {
   const repo = ctx.options.repo;
   const api = `repos/${repo ?? "{owner}/{repo}"}`;
+  const num = (n) => {
+    if (!/^\d+$/.test(String(n))) throw new Error(`forge: not a change request number: ${n}`);
+    return String(n);
+  };
+  const hex = (sha2) => {
+    if (!/^[0-9a-f]{7,40}$/i.test(String(sha2))) throw new Error(`forge: not a commit sha: ${sha2}`);
+    return String(sha2);
+  };
   const withToken = (key) => ({ ...ctx.env, GH_TOKEN: secret(ctx, key) });
   const implementer = () => {
     const name = ctx.options.token_env;
@@ -8570,13 +8611,15 @@ function github(ctx) {
   const post2 = (path, data, env) => JSON.parse(gh(["api", "-X", "POST", `${api}/${path}`, "--input", "-"], JSON.stringify(data), env));
   const cloud = ctx.env.CLAUDE_CODE_REMOTE === "true";
   const oneIdentity = !ctx.binding.forge.review_identity;
+  const lines = (out) => out.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
   const ccr = (method, n, route, ...f) => gh(["api", "-X", method, `${api}/pulls/${n}/ccr/${route}`, ...f]);
   const labelled = (p) => (p.labels ?? []).some((l) => l.name === "draft");
   const label = (n) => post2(`issues/${n}/labels`, { labels: ["draft"] });
   const view = async (n) => {
+    n = num(n);
     const p = JSON.parse(gh(["api", `${api}/pulls/${n}`]));
-    const runs = JSON.parse(gh(["api", `${api}/commits/${p.head.sha}/check-runs?per_page=100`])).check_runs ?? [];
-    const statuses = JSON.parse(gh(["api", `${api}/commits/${p.head.sha}/status`])).statuses ?? [];
+    const runs = lines(gh(["api", "--paginate", `${api}/commits/${p.head.sha}/check-runs?per_page=100`, "--jq", ".check_runs[]"]));
+    const statuses = lines(gh(["api", "--paginate", `${api}/commits/${p.head.sha}/status?per_page=100`, "--jq", ".statuses[]"]));
     let pushedAt;
     try {
       pushedAt = gh(["api", `${api}/commits/${p.head.sha}/check-suites`, "--jq", "[.check_suites[].created_at] | min // empty"]).trim() || void 0;
@@ -8621,11 +8664,14 @@ function github(ctx) {
     },
     view,
     async viewBySha(sha2) {
-      const ps = JSON.parse(gh(["api", `${api}/commits/${sha2}/pulls`]));
+      const ps = JSON.parse(gh(["api", `${api}/commits/${hex(sha2)}/pulls`]));
       if (!ps.length) throw new Error(`no change request for ${sha2}`);
-      return view(String(ps[0].number));
+      const is = (a) => !!a && a.toLowerCase() === sha2.toLowerCase();
+      const hit = ps.find((p) => is(p.merge_commit_sha)) ?? ps.find((p) => is(p.head?.sha)) ?? ps[0];
+      return view(String(hit.number));
     },
     async diff(n) {
+      n = num(n);
       return gh(["api", `${api}/pulls/${n}`, "-H", "Accept: application/vnd.github.diff"]);
     },
     async list(q = {}) {
@@ -8639,12 +8685,14 @@ function github(ctx) {
       return (await Promise.all(rows.map((r) => view(String(r.number))))).filter((c) => c.closes.includes(id));
     },
     async ready(n) {
+      n = num(n);
       if (labelled(JSON.parse(gh(["api", `${api}/pulls/${n}`])))) gh(["api", "-X", "DELETE", `${api}/issues/${n}/labels/draft`]);
       else if (cloud) ccr("POST", n, "ready_for_review");
       else gh(["pr", "ready", n]);
       return view(n);
     },
     async draft(n) {
+      n = num(n);
       try {
         if (cloud) ccr("POST", n, "convert_to_draft");
         else gh(["pr", "ready", n, "--undo"]);
@@ -8654,10 +8702,12 @@ function github(ctx) {
       return view(n);
     },
     async sync(n) {
+      n = num(n);
       gh(["api", "-X", "PUT", `${api}/pulls/${n}/update-branch`]);
       return view(n);
     },
     async automerge(n) {
+      n = num(n);
       try {
         if (cloud) ccr("PUT", n, "auto_merge", "-f", "merge_method=squash");
         else gh(["pr", "merge", n, "--auto", "--squash"]);
@@ -8669,10 +8719,10 @@ function github(ctx) {
       }
       return view(n);
     },
-    async cut(revision, version2) {
+    async cut(revision, version3) {
       const list = () => JSON.parse(gh(["run", "list", "--workflow", "agentic-sdlc-release.yml", "--event", "workflow_dispatch", "-L", "5", "--json", "databaseId,url"]) || "[]");
       const before = Math.max(0, ...list().map((r) => r.databaseId));
-      gh(["workflow", "run", "agentic-sdlc-release.yml", "-f", `revision=${revision}`, "-f", `version=${version2}`]);
+      gh(["workflow", "run", "agentic-sdlc-release.yml", "-f", `revision=${revision}`, "-f", `version=${version3}`]);
       for (let i = 0; i < 10; i++) {
         const run = list().filter((r) => r.databaseId > before).sort((a, b) => a.databaseId - b.databaseId)[0];
         if (run) return { requested: true, run: String(run.databaseId), url: run.url };
@@ -8681,23 +8731,28 @@ function github(ctx) {
       return { requested: true };
     },
     async comment(n, body) {
+      n = num(n);
       const c = post2(`issues/${n}/comments`, { body });
       return { id: String(c.id), url: c.html_url };
     },
     async comments(n) {
+      n = num(n);
       const out = gh(["api", "--paginate", `${api}/issues/${n}/comments`, "--jq", ".[] | {id: (.id | tostring), author: .user.login, createdAt: .created_at, body: .body, url: .html_url}"]);
       return out.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     },
     async status(sha2, s, opts) {
+      hex(sha2);
       const a = ["api", "-X", "POST", `${api}/statuses/${sha2}`, "-f", `state=${s.state}`, "-f", `context=${s.context}`, "-f", `description=${s.description}`];
       if (s.url) a.push("-f", `target_url=${s.url}`);
       gh(a, void 0, opts?.as === "ci" || oneIdentity ? implementer() : withToken("review_token_env"));
     },
     async approve(n) {
+      n = num(n);
       if (oneIdentity) throw new Error("one identity (forge.review_identity is empty): GitHub refuses an approving review from the CR's author; review-pr skips forge approve");
       post2(`pulls/${n}/reviews`, { event: "APPROVE", body: "agentic-sdlc review: PASS" }, withToken("review_token_env"));
     },
     async approvals(n) {
+      n = num(n);
       const out = gh(["api", "--paginate", `${api}/pulls/${n}/reviews`, "--jq", ".[] | {user: .user.login, state: (.state | ascii_downcase), sha: .commit_id, assoc: .author_association}"]);
       return out.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     },
@@ -8820,6 +8875,11 @@ function git(ctx) {
   const { trunk, release_prefix } = ctx.binding.vcs;
   const g = (...a) => ctx.exec("git", a, { cwd: ctx.root }).trim();
   const lines = (s) => s.split("\n").map((l) => l.trim()).filter(Boolean);
+  const plain = (what, v) => {
+    if (typeof v !== "string" || !v || v.startsWith("-")) throw new Error(`vcs: ${what} not allowed: ${v}`);
+    return v;
+  };
+  const NAMES = ["-c", "core.quotepath=off"];
   const base = () => g("merge-base", "HEAD", `origin/${trunk}`);
   const safeName = (name) => {
     if (!name || name.startsWith("-") || name.includes("..") || /[\s\\~^:?*[]/.test(name)) throw new Error(`change line name not allowed: ${name}`);
@@ -8873,7 +8933,8 @@ function git(ctx) {
       return { ref: g("rev-parse", "--abbrev-ref", "HEAD"), sha: g("rev-parse", "HEAD") };
     },
     async changed(since) {
-      return lines(g("diff", "--name-only", `${since ?? `origin/${trunk}`}...HEAD`));
+      if (since !== void 0) plain("revision", since);
+      return lines(g(...NAMES, "diff", "--name-only", "--end-of-options", `${since ?? `origin/${trunk}`}...HEAD`));
     },
     async base() {
       return { sha: base() };
@@ -8884,12 +8945,16 @@ function git(ctx) {
       g("push", "-u", "origin", ref);
     },
     async cut(rev, release) {
+      plain("revision", rev);
+      plain("release", release);
       const ref = `refs/heads/${release_prefix}${release}`;
       g("push", "origin", `${rev}:${ref}`);
       return { ref };
     },
     async tag(name, rev) {
-      g("tag", "-a", name, rev, "-m", name);
+      plain("tag name", name);
+      plain("revision", rev);
+      g("tag", "-a", "-m", name, "--end-of-options", name, rev);
       g("push", "origin", `refs/tags/${name}`);
     },
     async tags(prefix) {
@@ -8908,10 +8973,13 @@ function git(ctx) {
       }
     },
     async checkoutTests(rev, paths) {
-      g("read-tree", "-u", "--reset", rev);
+      plain("revision", rev);
+      paths.forEach((p) => plain("path", p));
+      g("read-tree", "-u", "--reset", "--end-of-options", rev);
       if (paths.length) g("checkout", "HEAD", "--", ...paths);
     },
     async snapshot(rev) {
+      plain("revision", rev);
       const workdir = mkdtempSync(join3(tmpdir(), "agentic-bench-"));
       g("worktree", "add", "--detach", workdir, rev);
       const w = (...a) => ctx.exec("git", a, { cwd: workdir });
@@ -8919,7 +8987,7 @@ function git(ctx) {
         workdir,
         async changed() {
           w("add", "-A");
-          return lines(w("diff", "--cached", "--name-only", "--no-renames", rev));
+          return lines(w(...NAMES, "diff", "--cached", "--name-only", "--no-renames", "--end-of-options", rev));
         },
         async drop() {
           try {
@@ -9008,6 +9076,8 @@ __export(install_exports, {
   deliveryWorkflow: () => deliveryWorkflow,
   implementerToken: () => implementerToken,
   packageRoot: () => packageRoot,
+  probeFailure: () => probeFailure,
+  redact: () => redact,
   selfHostedRunner: () => selfHostedRunner,
   trunkProtection: () => trunkProtection,
   validate: () => validate
@@ -9015,7 +9085,7 @@ __export(install_exports, {
 import { execFileSync as execFileSync2 } from "child_process";
 import { createHash } from "crypto";
 import { chmodSync, cpSync, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync5, readdirSync, statSync, writeFileSync as writeFileSync2 } from "fs";
-import { dirname as dirname2, join as join4, relative, resolve } from "path";
+import { basename, dirname as dirname2, join as join4, relative, resolve } from "path";
 import { fileURLToPath } from "url";
 function packageRoot(env = process.env) {
   if (env.AGENTIC_SDLC_PACKAGE) return resolve(env.AGENTIC_SDLC_PACKAGE);
@@ -9098,7 +9168,7 @@ ${snippet.trim()}`);
     next = (cur ? cur.replace(/\n*$/, "\n\n") : "") + snippet;
   } else {
     const want = JSON.parse(snippet);
-    const doc = cur.trim() ? JSON.parse(cur) : {};
+    const doc = cur.trim() ? parseJson(cur, rel) : {};
     if (doc.mcpServers?.["agentic-sdlc"] && !force) {
       log.push(`kept ${rel}`);
       return;
@@ -9117,23 +9187,25 @@ function allowGit(root, log) {
   writeFileSync2(file, text + (text && !text.endsWith("\n") ? "\n" : "") + "allow-git=root\n");
   log.push("set allow-git=root in .npmrc (npm 12 refuses git dependencies by default)");
 }
-function pinCli(root, version2, force, log) {
+function pinCli(root, version3, force, log) {
   const file = join4(root, "package.json");
   if (!existsSync3(file)) {
-    log.push(`pin the CLI so CI and MCP run one version: npm i -D ${ALLOW_GIT} ${gitSpec(version2)}`);
+    log.push(`pin the CLI so CI and MCP run one version: npm i -D ${ALLOW_GIT} ${gitSpec(version3)}`);
     return false;
   }
   const text = readFileSync5(file, "utf8");
-  const doc = JSON.parse(text);
+  const doc = parseJson(text, "package.json");
   allowGit(root, log);
-  if (doc.devDependencies?.["agentic-sdlc"] && !force) {
+  const have = doc.devDependencies?.["agentic-sdlc"];
+  const ours = have !== void 0 && /^github:dmitriywind\/agentic-sdlc#v\d/.test(have);
+  if (have === gitSpec(version3) || have && !ours && !force) {
     log.push("kept devDependencies.agentic-sdlc in package.json");
     return true;
   }
-  doc.devDependencies = { ...doc.devDependencies, "agentic-sdlc": gitSpec(version2) };
+  doc.devDependencies = { ...doc.devDependencies, "agentic-sdlc": gitSpec(version3) };
   const indent = /^[ \t]+/m.exec(text)?.[0] ?? "  ";
   writeFileSync2(file, JSON.stringify(doc, null, indent) + "\n");
-  log.push(`set devDependencies.agentic-sdlc=${gitSpec(version2)} in package.json: run npm install`);
+  log.push(`set devDependencies.agentic-sdlc=${gitSpec(version3)} in package.json: run npm install`);
   return true;
 }
 function claudeSetup(root, force, log, noPlugin) {
@@ -9181,6 +9253,7 @@ async function init(root, argv, log) {
   const board = f.board ?? "github", forge = f.forge ?? "github", vcs = f.vcs ?? "git", harness = f.harness ?? "generic";
   const force = f.force === "true";
   const profile = f.profile ?? "individual";
+  if (!ADAPTERS.board.includes(board)) throw new Error(`--board must be one of ${ADAPTERS.board.join("|")}, got '${board}'`);
   if (!["individual", "individual-api", "organization"].includes(profile)) throw new Error(`--profile must be individual, individual-api or organization, got '${profile}'`);
   const org = profile === "organization";
   if (vcs !== "git") throw new Error(`--vcs must be git (v2 supports git only), got '${vcs}'`);
@@ -9188,13 +9261,14 @@ async function init(root, argv, log) {
   if (!MCP_FILES.has(harness)) throw new Error(`--harness must be one of ${[...MCP_FILES.keys()].join("|")}, got '${harness}'`);
   const pkg = packageRoot();
   const pkgJson = join4(pkg, "package.json");
-  const version2 = existsSync3(pkgJson) ? readJson(pkgJson).version : "next";
+  const version3 = existsSync3(pkgJson) ? readJson(pkgJson).version : "next";
+  if (existsSync3(join4(root, "package.json"))) readJson(join4(root, "package.json"));
   const skills = need(pkg, "skills");
   syncSkills(skills, root, ".agents/skills", force, log);
   const noPlugin = harness === "claude" && f["no-plugin"] === "true";
   if (noPlugin) syncSkills(skills, root, ".claude/skills", force, log);
-  const pinned = pinCli(root, version2, force, log);
-  if (harness !== "claude" || noPlugin) registerMcp(pkg, root, harness, pinned ? ["--no-install", "agentic-sdlc", "mcp"] : ["-y", ALLOW_GIT, gitSpec(version2), "mcp"], force, log);
+  const pinned = pinCli(root, version3, force, log);
+  if (harness !== "claude" || noPlugin) registerMcp(pkg, root, harness, pinned ? ["--no-install", "agentic-sdlc", "mcp"] : ["-y", ALLOW_GIT, gitSpec(version3), "mcp"], force, log);
   else log.push("MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)");
   const scorers = join4(pkg, "scorers");
   if (existsSync3(scorers)) {
@@ -9380,7 +9454,7 @@ function deliveryWorkflow(b, root) {
     if (wf?.env?.[k] !== v) return `fail delivery workflow: env.${k} is '${wf?.env?.[k] ?? ""}', not ${key} '${v}'; edit its 'set:' lines`;
   return `ok   delivery workflow: names trunk ${b.vcs.trunk}`;
 }
-var import_yaml2, START, END, POINTER, SKILLS_LOCK, TIERS2, FORGES, flagsOf, need, readJson, sha, filesUnder, MCP_FILES, gitSpec, ALLOW_GIT, redact, cli4;
+var import_yaml2, START, END, POINTER, SKILLS_LOCK, TIERS2, FORGES, INIT_FLAGS, flagsOf, need, parseJson, readJson, sha, filesUnder, MCP_FILES, gitSpec, ALLOW_GIT, envNames, redact, firstLines, probeFailure, cli4;
 var init_install = __esm({
   "src/install.ts"() {
     "use strict";
@@ -9399,11 +9473,13 @@ ${END}`;
     SKILLS_LOCK = ".agents/skills.lock.json";
     TIERS2 = ["fast", "balanced", "deep"];
     FORGES = ["github"];
+    INIT_FLAGS = ["board", "forge", "vcs", "harness", "profile", "force", "no-plugin"];
     flagsOf = (argv) => {
       const f = {};
       for (let i = 0; i < argv.length; i++) {
         if (!argv[i].startsWith("--")) throw new Error(`unexpected argument '${argv[i]}'`);
         const k = argv[i].slice(2);
+        if (!INIT_FLAGS.includes(k)) throw new Error(`unknown flag --${k} (init takes ${INIT_FLAGS.map((n) => "--" + n).join(", ")})`);
         if (k === "force" || k === "no-plugin") f[k] = "true";
         else if (i + 1 < argv.length) f[k] = argv[++i];
         else throw new Error(`--${k} needs a value`);
@@ -9415,7 +9491,14 @@ ${END}`;
       if (!existsSync3(p)) throw new Error(`package is missing ${rel} (looked in ${pkg})`);
       return p;
     };
-    readJson = (p) => JSON.parse(readFileSync5(p, "utf8"));
+    parseJson = (text, p) => {
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(`${p} is not valid JSON (${e.message}); fix it and run init again`);
+      }
+    };
+    readJson = (p) => parseJson(readFileSync5(p, "utf8"), basename(p));
     sha = (p) => createHash("sha256").update(readFileSync5(p)).digest("hex");
     filesUnder = (dir) => readdirSync(dir).flatMap((n) => statSync(join4(dir, n)).isDirectory() ? filesUnder(join4(dir, n)).map((f) => join4(n, f)) : [n]);
     MCP_FILES = /* @__PURE__ */ new Map([
@@ -9424,12 +9507,25 @@ ${END}`;
       ["codex", ".codex/config.toml"],
       ["generic", null]
     ]);
-    gitSpec = (version2) => `github:dmitriywind/agentic-sdlc#v${version2}`;
+    gitSpec = (version3) => `github:dmitriywind/agentic-sdlc#v${version3}`;
     ALLOW_GIT = "--allow-git=root";
-    redact = (msg, env) => {
-      for (const [k, v] of Object.entries(env)) if (v && v.length >= 8 && /TOKEN|KEY|SECRET|PASS|AUTH/i.test(k)) msg = msg.replaceAll(v, "***");
+    envNames = (x, out = []) => {
+      if (x && typeof x === "object")
+        for (const [k, v] of Object.entries(x)) {
+          if (/_env$/.test(k) && typeof v === "string") out.push(v);
+          else envNames(v, out);
+        }
+      return out;
+    };
+    redact = (msg, env, named = []) => {
+      for (const [k, v] of Object.entries(env)) if (v && v.length >= 8 && (named.includes(k) || /TOKEN|KEY|SECRET|PASS|AUTH|PAT$/i.test(k))) msg = msg.replaceAll(v, "***");
       return msg;
     };
+    firstLines = (msg) => {
+      const [head, ...more] = msg.split("\n").map((l) => l.trim()).filter(Boolean);
+      return more.length && /^Command failed/.test(head) ? `${head} (${more[0]})` : head ?? "";
+    };
+    probeFailure = (msg, env, binding) => firstLines(redact(msg, env, envNames(binding)));
     cli4 = async (argv, ctx) => {
       const [verb, ...rest] = argv;
       const out = (s) => console.log(s);
@@ -9485,7 +9581,7 @@ ${END}`;
               out(`ok   ${name}`);
             } catch (e) {
               bad++;
-              out(`fail ${name}: ${redact(e.message, ctx.env).split("\n")[0]}`);
+              out(`fail ${name}: ${probeFailure(e.message, ctx.env, binding)}`);
             }
           }
           return bad ? 1 : 0;
@@ -9614,7 +9710,7 @@ async function classify(d, cr, diff) {
 }
 function branchNames(b, names) {
   const v = b.vcs;
-  const ok = (n) => n === v.trunk || n.startsWith(v.release_prefix) || n.startsWith("dependabot/") || n.startsWith("renovate/") || patternRe(v.change_pattern).test(n) || patternRe(v.factory_change_pattern).test(n);
+  const ok = (n) => n === v.trunk || !!v.release_prefix && n.startsWith(v.release_prefix) || n.startsWith("dependabot/") || n.startsWith("renovate/") || patternRe(v.change_pattern).test(n) || patternRe(v.factory_change_pattern).test(n);
   return names.filter((n) => !ok(n));
 }
 function proofRunner(run) {
@@ -9671,7 +9767,8 @@ async function approval(d, n) {
   const diff = await readDiff(d, n);
   const cls = await classify(d, cr, diff);
   let klass;
-  if (cls !== "product") klass = cls;
+  if (!factoryGlobs(b).length) klass = "guardrail";
+  else if (cls !== "product") klass = cls;
   else {
     const item = cr.closes.length === 1 ? await d.board.get(cr.closes[0]).catch(() => void 0) : void 0;
     const areas = [b.paths.lane_areas ?? []].flat();
@@ -9689,7 +9786,7 @@ async function approval(d, n) {
   let by;
   if (need3 !== "none") {
     const reviews = await d.forge.approvals(n);
-    const member = new Set(reviews.filter((r) => !r.assoc || ["OWNER", "MEMBER", "COLLABORATOR"].includes(r.assoc)).map((r) => r.user.toLowerCase()));
+    const member = new Set(reviews.filter((r) => !!r.assoc && ["OWNER", "MEMBER", "COLLABORATOR"].includes(r.assoc)).map((r) => r.user.toLowerCase()));
     const ok = approvers(reviews, cr.headSha).filter((u) => member.has(u));
     by = need3 === "owner" ? ok.find((u) => !!owner && u === owner) : ok.find((u) => !bots.includes(u));
   }
@@ -9703,9 +9800,10 @@ async function review(d, n) {
   if (b.forge.review_identity) return { cr: n, skipped: "two identities: review-pr posts the review status" };
   const cr = await d.forge.view(n);
   const [report2] = selectComments((await d.forge.comments(n)).reverse(), { owners: ownersFor(b.owners, "forge"), trusted: true, marker: `<!-- review-pr ${cr.headSha}` });
-  const verdict = /^Verdict:\s*(PASS|REMEDIATION REQUIRED)\s*$/m.exec(report2?.body ?? "")?.[1];
+  const verdicts = new Set([...(report2?.body ?? "").matchAll(/^Verdict:\s*(PASS|REMEDIATION REQUIRED)\s*$/gm)].map((m) => m[1]));
+  const verdict = verdicts.size > 1 ? "CONFLICT" : [...verdicts][0];
   const state = verdict === "PASS" ? "success" : verdict ? "failure" : "pending";
-  const description = verdict ? `review-pr: ${verdict}` : "waits for a trusted review-pr report on this head";
+  const description = verdict === "CONFLICT" ? "review-pr: the report holds conflicting verdicts" : verdict ? `review-pr: ${verdict}` : "waits for a trusted review-pr report on this head";
   await d.forge.status(cr.headSha, { context: b.forge.review_check_name ?? "review", state, description, ...report2?.url ? { url: report2.url } : {} }, { as: "ci" });
   return { cr: cr.n, state, ...verdict ? { verdict } : {} };
 }
@@ -9792,7 +9890,7 @@ async function mergeShas(d, ids) {
   for (const id of rest) out.set(id, merged2.filter((c) => c.closes.includes(id)).map((c) => c.mergeSha));
   return out;
 }
-async function shipped(d, env, sha2, result, version2) {
+async function shipped(d, env, sha2, result, version3) {
   const envs = d.binding.product.environments;
   const i = envs.indexOf(env);
   if (i < 0) throw new UsageError(`unknown environment ${env}; one of ${envs.join(", ")}`);
@@ -9839,10 +9937,10 @@ environment: ${env}`,
       }
       if (anc.every(Boolean)) items.push(x);
     }
-    if (version2) {
-      for (const x of items) if (x.fields.release_version !== version2) {
-        await d.board.set(x.id, "release_version", version2);
-        x.fields.release_version = version2;
+    if (version3) {
+      for (const x of items) if (x.fields.release_version !== version3) {
+        await d.board.set(x.id, "release_version", version3);
+        x.fields.release_version = version3;
       }
     }
     const tags = [];
@@ -9905,8 +10003,9 @@ async function signalOnRed(d, id) {
   const runs = [...await d.forge.runs({ failed: true }), ...await d.forge.runs({})];
   const run = runs.find((r) => String(r.id) === id);
   if (!run) return { created: false, reason: `run ${redact2(id, 40)} not in the recent runs` };
+  if (run.state !== "failure") return { created: false, reason: `run ${redact2(id, 40)} did not fail (${redact2(run.state, 20)})` };
   const v = d.binding.vcs;
-  if (run.ref !== v.trunk && !run.ref.startsWith(v.release_prefix)) return { created: false, reason: `ref ${redact2(run.ref, 100)} is not trunk or a release line` };
+  if (run.ref !== v.trunk && !(v.release_prefix && run.ref.startsWith(v.release_prefix))) return { created: false, reason: `ref ${redact2(run.ref, 100)} is not trunk or a release line` };
   const title = redact2(`CI red: ${run.name} @ ${run.ref} (run ${run.id})`, 1e3).replace(/[^A-Za-z0-9 ._/:@()-]/g, "").slice(0, 100);
   const existing = await d.board.list({ label: "signal:ci" });
   if (existing.some((x) => x.title === title)) return { created: false };
@@ -10821,7 +10920,7 @@ __export(dispatch_exports, {
   skillTierOf: () => skillTierOf
 });
 import { spawn } from "child_process";
-import { closeSync, mkdirSync as mkdirSync4, mkdtempSync as mkdtempSync3, openSync, readFileSync as readFileSync9, writeFileSync as writeFileSync4 } from "fs";
+import { chmodSync as chmodSync2, closeSync, lstatSync, mkdirSync as mkdirSync4, mkdtempSync as mkdtempSync3, openSync, readFileSync as readFileSync9, writeFileSync as writeFileSync4 } from "fs";
 import { tmpdir as tmpdir3 } from "os";
 import { join as join8 } from "path";
 function judgeTier(b, runModel) {
@@ -10932,10 +11031,27 @@ var init_dispatch = __esm({
       try {
         const f = {};
         const pos = [];
+        const KNOWN = ["ticket", "cr", "workdir", "run", "run-model", "unattended"];
         for (let i = 0; i < argv.length; i++) {
-          if (argv[i] === "--unattended") f.unattended = "1";
-          else if (argv[i].startsWith("--")) f[argv[i].slice(2)] = argv[++i];
-          else pos.push(argv[i]);
+          if (!argv[i].startsWith("--")) {
+            pos.push(argv[i]);
+            continue;
+          }
+          const [name, inline] = argv[i].slice(2).split(/=(.*)/s, 2);
+          if (!KNOWN.includes(name)) {
+            console.error(`unknown flag --${name}`);
+            return 2;
+          }
+          if (name === "unattended") {
+            f.unattended = "1";
+            continue;
+          }
+          const v = inline ?? argv[++i];
+          if (v === void 0 || inline === void 0 && v.startsWith("--")) {
+            console.error(`--${name} needs a value`);
+            return 2;
+          }
+          f[name] = v;
         }
         const [skill] = pos;
         if (!skill || !f.ticket && !f.cr && skill !== "improve-factory") {
@@ -10956,6 +11072,7 @@ var init_dispatch = __esm({
         const target = (skill === "judge-run" ? "" : ticket) || b.heartbeat?.ticket;
         const window = Number(b.cycle?.dedupe_minutes) || 0;
         let key;
+        let isBot;
         if (window > 0 && target) {
           let head = "";
           if (cr) {
@@ -10968,14 +11085,14 @@ var init_dispatch = __esm({
           key = [ticket || cr || "factory", skill, f.run, head].filter(Boolean).join("-");
           const trusted = ownersFor(b.owners, "board").bots.map((a) => a.toLowerCase());
           const closer = ex.kind === "assign" ? String(ex.user ?? "").toLowerCase() : "";
-          const bot = (c) => trusted.includes(String(c.author).toLowerCase()) || !!closer && String(c.author).toLowerCase() === closer;
+          const bot = isBot = (c) => trusted.includes(String(c.author).toLowerCase()) || !!closer && String(c.author).toLowerCase() === closer;
           const all = (await boardOf().comments(target)).filter(bot);
           const mine = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `)).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
           const at = mine ? Date.parse(mine.createdAt) : NaN;
           const later = (c) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
           const finished = mine && all.some((c) => later(c) && c.body.includes(`<!-- ${DONE_MARKER} ${key} -->`));
           const stall = Number(b.stall_minutes) || 0;
-          const age = (Date.now() - at) / 6e4;
+          const age = Number.isNaN(at) ? 0 : (Date.now() - at) / 6e4;
           if (mine && !finished && (age < window || age < stall)) {
             console.log(JSON.stringify({ skipped: true, key, since: mine.createdAt, comment: mine.id, reason: age < window ? "double fire" : "the previous run has not finished" }));
             return 0;
@@ -11008,6 +11125,21 @@ agentic-sdlc: cycle claimed`);
           marker = (await boardOf().comment(target, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->
 agentic-sdlc: run skill ${skill} (${ex.kind})${key ? `; close with <!-- ${DONE_MARKER} ${key} -->` : ""}`)).id;
           const k = key ?? `${ticket}-${skill}`;
+          if (key && isBot) {
+            const all = (await boardOf().comments(target)).filter(isBot);
+            const markers = all.filter((c) => c.body.trimStart().startsWith(`<!-- ${DISPATCH_MARKER} ${key} `));
+            const order = (x, y) => Date.parse(x.createdAt) - Date.parse(y.createdAt) || String(x.id).localeCompare(String(y.id), void 0, { numeric: true });
+            const me = markers.find((c) => c.id === marker);
+            const owner = me && markers.find((c) => {
+              const age = (Date.now() - Date.parse(c.createdAt)) / 6e4;
+              const finished = all.some((d) => !markers.includes(d) && d.body.includes(`<!-- ${DONE_MARKER} ${key} -->`) && Date.parse(d.createdAt) >= Date.parse(c.createdAt));
+              return c !== me && order(c, me) < 0 && !finished && !(age >= window);
+            });
+            if (owner) {
+              console.log(JSON.stringify({ skipped: true, key, since: owner.createdAt, comment: owner.id, reason: "double fire" }));
+              return 0;
+            }
+          }
           onFail = () => sent ? Promise.resolve() : boardOf().comment(target, `<!-- ${DONE_MARKER} ${k} -->
 agentic-sdlc: ${skill} did not start`);
         }
@@ -11025,9 +11157,12 @@ agentic-sdlc: ${skill} did not start`);
           const line = fill(ex.run, vars);
           const env = childEnv(ctx.env, stage.secrets);
           const logDir = join8(tmpdir3(), "agentic-sdlc-runs");
-          mkdirSync4(logDir, { recursive: true });
+          mkdirSync4(logDir, { recursive: true, mode: 448 });
+          const st = lstatSync(logDir);
+          if (!st.isDirectory() || st.isSymbolicLink() || process.getuid && st.uid !== process.getuid()) throw new Error(`${logDir} is not a folder of yours; remove it and retry`);
+          if (process.platform !== "win32") chmodSync2(logDir, 448);
           const log = join8(logDir, `${startedAt}-${skill}-${ticket || `cr${cr}`}`.replace(/[^\w.-]/g, "_") + ".log");
-          const fd = openSync(log, "a");
+          const fd = openSync(log, "a", 384);
           try {
             const [cmd, args, childVars] = process.platform === "win32" ? ["cmd", ["/d", "/v:off", "/c", "%AGENTIC_SDLC_CMD%"], { ...env, AGENTIC_SDLC_CMD: line }] : ["sh", ["-c", line], env];
             const child = spawnChild(cmd, args, { cwd: workdir, env: childVars, detached: true, stdio: ["ignore", fd, fd], windowsHide: true });
@@ -11073,6 +11208,7 @@ agentic-sdlc: ${skill} did not start`);
 var mcp_exports = {};
 __export(mcp_exports, {
   GUARDED: () => GUARDED,
+  PROTOCOL_VERSIONS: () => PROTOCOL_VERSIONS,
   allowList: () => allowList,
   cli: () => cli9,
   handle: () => handle
@@ -11088,6 +11224,20 @@ function allowList(arg) {
     out.add(GUARDED[w]);
   }
   return out;
+}
+function badArgument(s, args) {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) return "arguments must be an object";
+  const a = args;
+  const sch = schema(s);
+  for (const k of sch.required) if (a[k] === void 0 || a[k] === null) return `missing required argument '${k}'`;
+  for (const [k, v] of Object.entries(a)) {
+    const p = sch.properties[k];
+    if (!p) return `unknown argument '${k}'`;
+    if (v === null) continue;
+    const okType = p.type === "string" ? typeof v === "string" : p.type === "boolean" ? typeof v === "boolean" : p.type === "integer" ? Number.isInteger(v) : p.type === "number" ? typeof v === "number" && Number.isFinite(v) : Array.isArray(v) && v.every((x) => typeof x === "string");
+    if (!okType) return `argument '${k}' must be ${p.type === "array" ? "an array of strings" : `a ${p.type}`}`;
+  }
+  return void 0;
 }
 function capture(fn) {
   const run = async () => {
@@ -11136,7 +11286,16 @@ async function callTool(name, args, ctx, allow) {
   try {
     const { cli: cli10 } = await MODULES[s.group]();
     const r = await capture(() => cli10(argv, ctx));
-    return r.code === 0 ? { content: [{ type: "text", text: r.out }] } : fail((r.err || r.out).trim() || `exit ${r.code}`);
+    if (r.code === 0) {
+      let structured;
+      try {
+        structured = JSON.parse(r.out);
+      } catch {
+      }
+      const obj = structured && typeof structured === "object" && !Array.isArray(structured);
+      return { content: [{ type: "text", text: r.out }], ...obj ? { structuredContent: structured } : {} };
+    }
+    return fail((r.err || r.out).trim() || `exit ${r.code}`);
   } finally {
     if (dir) rmSync3(dir, { recursive: true, force: true });
   }
@@ -11149,18 +11308,24 @@ async function handle(msg, ctx, allow = /* @__PURE__ */ new Set()) {
   if (id === void 0) return null;
   switch (msg.method) {
     case "initialize":
-      return ok({ protocolVersion: "2025-06-18", serverInfo: { name: "agentic-sdlc", version: version() }, capabilities: { tools: {} } });
+      return ok({ protocolVersion: PROTOCOL_VERSIONS.includes(msg.params?.protocolVersion) ? msg.params.protocolVersion : PROTOCOL_VERSIONS[0], serverInfo: { name: "agentic-sdlc", version: version() }, capabilities: { tools: {} } });
     case "ping":
       return ok({});
     case "tools/list":
-      return ok({ tools: served(allow).map((name) => ({ name, description: TOOLS[name].doc, inputSchema: schema(TOOLS[name]) })) });
-    case "tools/call":
-      return ok(await callTool(String(msg.params?.name), msg.params?.arguments ?? {}, ctx, allow));
+      return ok({ tools: served(allow).map((name) => ({ name, description: TOOLS[name].doc, title: annotations(name).title, inputSchema: schema(TOOLS[name]), annotations: annotations(name) })) });
+    case "tools/call": {
+      const name = msg.params?.name;
+      const s = typeof name === "string" && served(allow).includes(name) ? TOOLS[name] : void 0;
+      if (!s) return err(-32602, `unknown tool '${String(name)}'`);
+      const bad = badArgument(s, msg.params?.arguments ?? {});
+      if (bad) return err(-32602, `${name}: ${bad}`);
+      return ok(await callTool(name, msg.params?.arguments ?? {}, ctx, allow));
+    }
     default:
       return err(-32601, `method not found: ${msg.method}`);
   }
 }
-var MODULES, S, TOOLS, GUARDED, served, schema, wire, queue, realWrite, version, cli9;
+var MODULES, S, TOOLS, GUARDED, served, PROTOCOL_VERSIONS, READ, DESTRUCTIVE, IDEMPOTENT, LOCAL, annotations, schema, wire, queue, realWrite, version, cli9;
 var init_mcp = __esm({
   "src/mcp.ts"() {
     "use strict";
@@ -11217,6 +11382,54 @@ var init_mcp = __esm({
     };
     GUARDED = { approve: "forge_approve", status: "forge_status" };
     served = (allow) => Object.keys(TOOLS).filter((n) => !Object.values(GUARDED).includes(n) || allow.has(n));
+    PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
+    READ = /* @__PURE__ */ new Set([
+      "board_list",
+      "board_get",
+      "board_comments",
+      "forge_view",
+      "forge_diff",
+      "forge_list",
+      "forge_approvals",
+      "forge_comments",
+      "forge_runs",
+      "vcs_head",
+      "vcs_changed",
+      "vcs_base",
+      "vcs_tags",
+      "ledger_runs",
+      "ledger_summary",
+      "ledger_plan",
+      "ledger_hash",
+      "ledger_stale"
+    ]);
+    DESTRUCTIVE = /* @__PURE__ */ new Set(["board_close", "vcs_drop"]);
+    IDEMPOTENT = /* @__PURE__ */ new Set([
+      "board_move",
+      "board_set",
+      "board_label",
+      "board_assign",
+      "board_close",
+      "forge_ready",
+      "forge_draft",
+      "forge_sync",
+      "forge_automerge",
+      "forge_approve",
+      "forge_status",
+      "vcs_push",
+      "vcs_drop",
+      "ledger_record"
+    ]);
+    LOCAL = /* @__PURE__ */ new Set(["vcs_start", "vcs_head", "vcs_changed", "vcs_base", "vcs_tags", "vcs_drop", "ledger_hash"]);
+    annotations = (name) => {
+      const readOnlyHint = READ.has(name);
+      return {
+        title: name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, " "),
+        readOnlyHint,
+        ...readOnlyHint ? {} : { destructiveHint: DESTRUCTIVE.has(name), idempotentHint: IDEMPOTENT.has(name) },
+        openWorldHint: !LOCAL.has(name)
+      };
+    };
     schema = (s) => {
       const properties = {};
       for (const p of s.pos) properties[p] = { type: "string" };
@@ -11269,6 +11482,7 @@ var init_mcp = __esm({
 
 // src/cli.ts
 init_binding();
+import { readFileSync as readFileSync11 } from "fs";
 
 // src/exec.ts
 import { execFileSync } from "child_process";
@@ -11296,9 +11510,15 @@ var http = async (method, url, opts = {}) => {
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS)
     });
     const text = await res.text();
-    if (res.ok) return text ? JSON.parse(text) : {};
+    if (res.ok) {
+      try {
+        return text ? JSON.parse(text) : {};
+      } catch {
+        return { raw: text };
+      }
+    }
     const retry = res.status === 429 || res.status >= 500 && method.toUpperCase() !== "POST";
-    if (!retry || attempt >= TRIES) throw new Error(`${method} ${new URL(url).pathname} -> ${res.status}: ${text.slice(0, 300)}`);
+    if (!retry || attempt >= TRIES) throw new Error(`${method} ${new URL(url).host} -> ${res.status}: ${text.slice(0, 300)}`);
     await sleep(retryWait(res.headers.get("retry-after"), attempt));
   }
 };
@@ -11312,35 +11532,56 @@ var GROUPS = {
   forge: [() => Promise.resolve().then(() => (init_forge(), forge_exports)), true, "open view diff list ready draft sync automerge cut approve approvals comment comments status runs"],
   vcs: [() => Promise.resolve().then(() => (init_vcs(), vcs_exports)), true, "start head changed base push cut tag tags drop checkout-tests"],
   dispatch: [() => Promise.resolve().then(() => (init_dispatch(), dispatch_exports)), true, "dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>]"],
-  gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red skill-regression"],
+  gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red skill-regression review"],
   ledger: [() => Promise.resolve().then(() => (init_ledger(), ledger_exports)), true, "runs summary plan record stale hash: the run ledger from heartbeats"],
   bench: [() => Promise.resolve().then(() => (init_bench(), bench_exports)), true, "build propose run report compare"],
   mcp: [() => Promise.resolve().then(() => (init_mcp(), mcp_exports)), true, "serve the port verbs as MCP tools over stdio; --allow approve,status"]
 };
-var INIT_FLAGS = "[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github|github-issues|jira|linear|local] [--forge github] [--vcs git] [--no-plugin] [--force]";
-var help = () => ["usage: agentic-sdlc [--root <dir>] <group> <verb> ...", ...Object.entries(GROUPS).map(([g, v]) => `  ${g.padEnd(9)} ${v[2]}`)].join("\n");
+var INIT_FLAGS2 = "[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github|github-issues|jira|linear|local] [--forge github] [--vcs git] [--no-plugin] [--force]";
+var version2 = () => {
+  try {
+    return JSON.parse(readFileSync11(new URL("../package.json", import.meta.url), "utf8")).version;
+  } catch {
+    return "unknown";
+  }
+};
+var help = () => ["usage: agentic-sdlc [--root <dir>] [--version] <group> <verb> ...", ...Object.entries(GROUPS).map(([g, v]) => `  ${g.padEnd(9)} ${v[2]}`)].join("\n");
 async function main(argv, env = process.env) {
   let root = process.cwd();
   const args = [...argv];
-  const at = args.indexOf("--root");
-  if (at >= 0) {
-    root = args[at + 1] ?? root;
-    args.splice(at, 2);
+  while (args[0] === "--root" || args[0]?.startsWith("--root=")) {
+    const [flag] = args.splice(0, 1);
+    const v = flag === "--root" ? args.shift() : flag.slice(7);
+    if (!v || v.startsWith("-") || Object.hasOwn(GROUPS, v)) {
+      console.error(`--root needs a directory
+${help()}`);
+      return 2;
+    }
+    root = v;
   }
   const [group, ...rest] = args;
-  if (!group || group === "--help" || group === "-h") {
-    console.log(help());
-    return group ? 0 : 2;
+  if (group === "--version" || group === "-v") {
+    console.log(version2());
+    return 0;
   }
-  const entry = GROUPS[group];
-  if (!entry) {
+  if (group === "help" || group === "--help" || group === "-h") {
+    console.log(help());
+    return 0;
+  }
+  if (!group) {
+    console.log(help());
+    return 2;
+  }
+  if (!Object.hasOwn(GROUPS, group)) {
     console.error(`unknown group '${group}'
 ${help()}`);
     return 2;
   }
-  const usage = `usage: agentic-sdlc ${group} ${group === "init" ? INIT_FLAGS : entry[1] ? "<verb> ..." : ""}
+  const entry = GROUPS[group];
+  const usage = `usage: agentic-sdlc ${group} ${group === "init" ? INIT_FLAGS2 : entry[1] ? "<verb> ..." : ""}
   ${entry[2]}`;
-  if (rest.includes("--help") || rest[0] === "-h") {
+  const isHelp = (a) => a === "--help" || a === "-h";
+  if (isHelp(rest[0]) || entry[1] && isHelp(rest[1])) {
     console.log(usage);
     return 0;
   }

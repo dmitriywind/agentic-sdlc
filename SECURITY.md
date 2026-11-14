@@ -31,8 +31,8 @@ the contract (`references/architecture.md`, sections 3.4 and 10) is the full sta
   command. Pin each required check to the app that posts it; `doctor` warns when one is not
   pinned.
 - **A release bot cuts the release line.** On GitHub the release workflow runs in Environment `agentic-release`.
-  The Product owner is its required reviewer. `AGENTIC_RELEASE_TOKEN` is the release bot, the only bypass actor
-  of the release ruleset. The cycle never holds it.
+  The Product owner is its required reviewer. `AGENTIC_RELEASE_TOKEN` is the release bot, a bypass actor
+  of the release ruleset; the shipped ruleset also lets repo admins bypass (replace that entry with the bot's App to narrow it). The cycle never holds it.
 - **Humans approve what agents must not.** A Full-lane CR needs a human approval per
   `forge.human_approval`; a `guardrail` factory change needs the factory owner; agents never
   approve the last environment.
@@ -44,6 +44,10 @@ Also: secrets live only as env var names in the binding; an executor receives on
 lists; unattended runs refuse a `local` sandbox unless the stage names it and the runner sets
 `AGENTIC_SDLC_LOCAL=1`; the MCP server is stdio only and leaves out `forge_approve` and
 `forge_status` unless started with `--allow`.
+
+The plugin's guard hook and any `--disallowedTools` list are string matches on the command, not a
+security boundary: a determined agent can phrase around them. The boundary is the trunk ruleset and
+the absence of the review token from every agent runtime.
 
 ## Known limits
 

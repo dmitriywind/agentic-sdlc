@@ -1,4 +1,9 @@
-# Profile: organization or individual-api (API key). One identity (forge.review_identity empty): delete the `review` job.
+# Profile: organization or individual-api (API key). One identity (forge.review_identity empty): delete the `review` job
+# (`dead-man` needs only `cycle`, so the file stays valid; with two identities add `review` to its needs).
+# Repo variables: AGENTIC_SDLC_VERSION (an exact version or a 40-hex commit SHA; a SHA is the immutable
+# choice) and AGENTIC_AGENT_CLI_VERSION (an exact Codex CLI version); a job fails when one is unset.
+# The agent CLI installs in a step with no secrets in its env; each secret reaches only the steps that need it.
+# GitHub disables scheduled workflows after 60 days without repo activity, so `dead-man` stops with the cycle.
 # Install at: .github/workflows/factory-cycle-codex.yml
 # Secrets: CODEX_API_KEY (an OpenAI API key), AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_REVIEW_TOKEN.
 # Two jobs: `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
@@ -13,9 +18,7 @@ on:
   workflow_dispatch:
 concurrency: factory-cycle
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: read   # pushes use AGENTIC_FORGE_TOKEN, not this token
 env:
   AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
 defaults:
@@ -27,8 +30,6 @@ jobs:
     timeout-minutes: 60
     env:
       AGENTIC_SDLC_UNATTENDED: "1"
-      AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
-      AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
     steps:
       # pin to a commit SHA (actions/checkout, actions/setup-node)
       - uses: actions/checkout@v4
@@ -37,13 +38,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # set: confirm the install method in the Codex docs
-      - run: npm i -g @openai/codex
-      - run: sh .agents/runner-setup.sh
+      - name: Install the agent CLI (no secrets in this step)
+        env:
+          AGENTIC_AGENT_CLI_VERSION: ${{ vars.AGENTIC_AGENT_CLI_VERSION }}
+        run: |
+          case "$AGENTIC_AGENT_CLI_VERSION" in ""|-*) echo "::error::set the repo variable AGENTIC_AGENT_CLI_VERSION to an exact Codex CLI version"; exit 1 ;; esac
+          npm i -g "@openai/codex@$AGENTIC_AGENT_CLI_VERSION"
+      - name: Set up the runner
+        run: sh .agents/runner-setup.sh
+        env:
+          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+          AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
       - name: Run one cycle
         # exec's default sandbox is read-only; workspace-write lets the cycle edit and push.
         run: codex exec --sandbox workspace-write "$(sed '1,/^---$/d' .agents/cycle-prompt.md)"
         env:
+          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+          AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
           CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
   review:
     needs: cycle
@@ -54,9 +65,6 @@ jobs:
     env:
       AGENTIC_SDLC_UNATTENDED: "1"
       AGENTIC_SDLC_ROLE: review
-      AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
-      AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
-      AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,24 +72,52 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm i -g @openai/codex
-      - run: sh .agents/runner-setup.sh
+      - name: Install the agent CLI (no secrets in this step)
+        env:
+          AGENTIC_AGENT_CLI_VERSION: ${{ vars.AGENTIC_AGENT_CLI_VERSION }}
+        run: |
+          case "$AGENTIC_AGENT_CLI_VERSION" in ""|-*) echo "::error::set the repo variable AGENTIC_AGENT_CLI_VERSION to an exact Codex CLI version"; exit 1 ;; esac
+          npm i -g "@openai/codex@$AGENTIC_AGENT_CLI_VERSION"
+      - name: Set up the runner
+        run: sh .agents/runner-setup.sh
+        env:
+          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+          AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
+          AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
       - name: Review open CRs
         run: codex exec --sandbox workspace-write "$(sed '1,/^---$/d' .agents/review-prompt.md)"
         env:
+          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+          AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
+          AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
           CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
   dead-man:
-    needs: [cycle, review]
+    needs: [cycle]   # two identities: add review, so the check waits for the review run
     if: ${{ always() }}
     runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
     timeout-minutes: 10
-    env:
-      AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: sh .agents/runner-setup.sh   # installs the pinned agentic-sdlc
+      # Not runner-setup.sh: its doctor probes the forge too, which this job has no token for, so it would stay red.
+      - name: Install agentic-sdlc
+        run: |
+          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
+            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+          else
+            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
+            v="$AGENTIC_SDLC_VERSION"
+            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
+            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
+            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
+            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
+          fi
       # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
-      - run: npx --no agentic-sdlc ledger stale --max-hours 3   # set: a few cadences
+      - name: Heartbeat is fresh
+        env:
+          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+        run: agentic-sdlc ledger stale --max-hours 3   # set: a few cadences

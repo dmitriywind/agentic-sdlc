@@ -104,9 +104,11 @@ Feature: Release to the last environment
     When the release skill continues
     Then it sets release_version on each selected ticket
     And it sets Shipped "In release" on each selected ticket
-    And it runs "agentic-sdlc forge cut <revision> <version>" from the chosen revision
+    And, when no tag or run of this version exists, it runs "agentic-sdlc forge cut <revision> <version>" from the chosen revision
     And the Product owner approves the release workflow run in Environment "agentic-release"
-    And it closes the request as completed
+    And it reads the run for at most 15 minutes, then posts one "<!-- release-cut <version> -->" comment and stops
+    And the next run resumes at the cut step without cutting again
+    And once the release line exists it closes the request with "board close --reason completed"
 
   # Source: skills/release/SKILL.md, "Rules"
   # Proof: skill text only

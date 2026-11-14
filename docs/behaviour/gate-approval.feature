@@ -108,3 +108,17 @@ Feature: Gate human-approval
     Then ".agents/skills/a/SKILL.md" matches the first glob
     And "a/b.md" matches the second glob
     And "a/b/c.md" does not match the second glob
+
+  # Source: src/gates.ts, "approval"
+  # Proof: test/gates.test.ts "approval: a binding with no paths.factory fails closed to guardrail"
+  Scenario: A binding with no paths.factory classes every CR as guardrail
+    Given paths.factory is missing or empty
+    When the approval gate runs
+    Then the class is guardrail and the status "human-approval" waits for owners.factory
+
+  # Source: src/gates.ts, "approval"
+  # Proof: test/gates.test.ts "approval: classes and the human-approval status per forge.human_approval"
+  Scenario: A review with no author association is not a human approval
+    Given the forge reports no author association for the approving review
+    When the approval gate runs
+    Then the approval does not count

@@ -32,3 +32,10 @@ Feature: Gate branch-names
     Given the pre-push hook sends a line with an all-zero local object name
     When the gate reads the lines with --stdin-prepush
     Then the gate ignores that line
+
+  # Source: src/gates.ts, "branchNames"
+  # Proof: test/gates.test.ts "signal-on-red: a run that did not fail opens no Signal; an unset release_prefix matches no ref or branch"
+  Scenario: Without a release prefix no line counts as a release line
+    Given vcs.release_prefix is unset
+    When the gate checks a change line named "undefinedwip"
+    Then the gate fails with "branch name not allowed: undefinedwip"

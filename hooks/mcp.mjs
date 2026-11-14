@@ -11,5 +11,7 @@ const bin = [join(project, 'node_modules', 'agentic-sdlc', 'dist', 'bin.js'), jo
 if (!bin) { console.error(`agentic-sdlc: no dist/bin.js in ${pkg}; reinstall the plugin`); process.exit(1); }
 // The review runtime (AGENTIC_SDLC_ROLE=review) gets the guarded tools; nothing else does.
 const allow = process.env.AGENTIC_SDLC_ROLE === 'review' ? ['--allow', 'approve,status'] : [];
-spawn(process.execPath, [bin, 'mcp', ...allow, ...process.argv.slice(2)], { cwd: project, stdio: 'inherit' })
-  .on('exit', (code) => process.exit(code ?? 1));
+const child = spawn(process.execPath, [bin, 'mcp', ...allow, ...process.argv.slice(2)], { cwd: project, stdio: 'inherit' });
+child.on('error', (e) => { console.error(`agentic-sdlc: cannot start ${bin}: ${e.message}`); process.exit(1); });
+child.on('exit', (code) => process.exit(code ?? 1));
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));

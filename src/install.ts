@@ -2,10 +2,10 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, parseDocument } from 'yaml';
-import { BINDING_PATH, bindingWarnings, loadBinding, validateBinding } from './binding.ts';
+import { ADAPTERS, BINDING_PATH, bindingWarnings, loadBinding, validateBinding } from './binding.ts';
 import { createBoard } from './board/index.ts';
 import { createForge } from './forge/index.ts';
 import { createVcs } from './vcs/index.ts';
@@ -34,11 +34,13 @@ export function packageRoot(env: NodeJS.ProcessEnv = process.env): string {
   return d;
 }
 
+const INIT_FLAGS = ['board', 'forge', 'vcs', 'harness', 'profile', 'force', 'no-plugin'];
 const flagsOf = (argv: string[]) => {
   const f: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
     if (!argv[i].startsWith('--')) throw new Error(`unexpected argument '${argv[i]}'`);
     const k = argv[i].slice(2);
+    if (!INIT_FLAGS.includes(k)) throw new Error(`unknown flag --${k} (init takes ${INIT_FLAGS.map((n) => '--' + n).join(', ')})`);
     if (k === 'force' || k === 'no-plugin') f[k] = 'true';
     else if (i + 1 < argv.length) f[k] = argv[++i];
     else throw new Error(`--${k} needs a value`);
@@ -52,7 +54,10 @@ const need = (pkg: string, rel: string) => {
   return p;
 };
 
-const readJson = (p: string) => JSON.parse(readFileSync(p, 'utf8'));
+const parseJson = (text: string, p: string) => {
+  try { return JSON.parse(text); } catch (e) { throw new Error(`${p} is not valid JSON (${(e as Error).message}); fix it and run init again`); }
+};
+const readJson = (p: string) => parseJson(readFileSync(p, 'utf8'), basename(p));
 const sha = (p: string) => createHash('sha256').update(readFileSync(p)).digest('hex');
 
 function copyFile(from: string, to: string, force: boolean, log: string[]) {
@@ -118,7 +123,7 @@ function registerMcp(pkg: string, root: string, harness: string, args: string[],
     next = (cur ? cur.replace(/\n*$/, '\n\n') : '') + snippet;
   } else {
     const want = JSON.parse(snippet);
-    const doc = cur.trim() ? JSON.parse(cur) : {};
+    const doc = cur.trim() ? parseJson(cur, rel) : {};
     // The project may have tuned its entry (args, env): keep it unless --force.
     if (doc.mcpServers?.['agentic-sdlc'] && !force) { log.push(`kept ${rel}`); return; }
     doc.mcpServers = { ...doc.mcpServers, ...want.mcpServers };
@@ -151,9 +156,12 @@ function pinCli(root: string, version: string, force: boolean, log: string[]): b
     return false;
   }
   const text = readFileSync(file, 'utf8');
-  const doc = JSON.parse(text);
+  const doc = parseJson(text, 'package.json');
   allowGit(root, log);
-  if (doc.devDependencies?.['agentic-sdlc'] && !force) { log.push('kept devDependencies.agentic-sdlc in package.json'); return true; }
+  const have: string | undefined = doc.devDependencies?.['agentic-sdlc'];
+  // A pin this init wrote for another version follows the package; any other spec (a fork, a sha, a path) is the project's choice.
+  const ours = have !== undefined && /^github:dmitriywind\/agentic-sdlc#v\d/.test(have);
+  if (have === gitSpec(version) || (have && !ours && !force)) { log.push('kept devDependencies.agentic-sdlc in package.json'); return true; }
   doc.devDependencies = { ...doc.devDependencies, 'agentic-sdlc': gitSpec(version) };
   const indent = /^[ \t]+/m.exec(text)?.[0] ?? '  ';
   writeFileSync(file, JSON.stringify(doc, null, indent) + '\n');
@@ -205,6 +213,7 @@ async function init(root: string, argv: string[], log: string[]) {
   const board = f.board ?? 'github', forge = f.forge ?? 'github', vcs = f.vcs ?? 'git', harness = f.harness ?? 'generic';
   const force = f.force === 'true';
   const profile = f.profile ?? 'individual';
+  if (!ADAPTERS.board.includes(board)) throw new Error(`--board must be one of ${ADAPTERS.board.join('|')}, got '${board}'`);
   if (!['individual', 'individual-api', 'organization'].includes(profile)) throw new Error(`--profile must be individual, individual-api or organization, got '${profile}'`);
   const org = profile === 'organization';
   if (vcs !== 'git') throw new Error(`--vcs must be git (v2 supports git only), got '${vcs}'`);
@@ -214,6 +223,7 @@ async function init(root: string, argv: string[], log: string[]) {
   const pkgJson = join(pkg, 'package.json');
   const version: string = existsSync(pkgJson) ? readJson(pkgJson).version : 'next';
 
+  if (existsSync(join(root, 'package.json'))) readJson(join(root, 'package.json')); // fail before anything is written
   const skills = need(pkg, 'skills');
   syncSkills(skills, root, '.agents/skills', force, log);
   // Claude Code gets skills and the MCP server from the plugin, unless --no-plugin
@@ -335,10 +345,24 @@ export function validate(root: string, warnings: string[] = []): string[] {
   return problems;
 }
 
-const redact = (msg: string, env: NodeJS.ProcessEnv) => {
-  for (const [k, v] of Object.entries(env)) if (v && v.length >= 8 && /TOKEN|KEY|SECRET|PASS|AUTH/i.test(k)) msg = msg.replaceAll(v, '***');
+/** Env var names the binding gives under any `*_env` key: their values are secrets whatever the name says. */
+const envNames = (x: unknown, out: string[] = []): string[] => {
+  if (x && typeof x === 'object')
+    for (const [k, v] of Object.entries(x)) { if (/_env$/.test(k) && typeof v === 'string') out.push(v); else envNames(v, out); }
+  return out;
+};
+export const redact = (msg: string, env: NodeJS.ProcessEnv, named: string[] = []) => {
+  for (const [k, v] of Object.entries(env)) if (v && v.length >= 8 && (named.includes(k) || /TOKEN|KEY|SECRET|PASS|AUTH|PAT$/i.test(k))) msg = msg.replaceAll(v, '***');
   return msg;
 };
+/** A failed command's message is "Command failed: <cmd>" then its stderr: keep the first stderr line, which says why. */
+const firstLines = (msg: string) => {
+  const [head, ...more] = msg.split('\n').map((l) => l.trim()).filter(Boolean);
+  return more.length && /^Command failed/.test(head) ? `${head} (${more[0]})` : head ?? '';
+};
+
+/** One line for a failed doctor probe: why it failed, with no secret in it. */
+export const probeFailure = (msg: string, env: NodeJS.ProcessEnv, binding: unknown) => firstLines(redact(msg, env, envNames(binding)));
 
 /** Trunk rules: required checks exist and each is pinned to the app that posts it. */
 export function trunkProtection(b: any, ctx: any): string[] {
@@ -461,7 +485,7 @@ export const cli: PortCli = async (argv, ctx) => {
       for (const [name, run] of probes) {
         try { await run(); out(`ok   ${name}`); }
         catch (e) {
-          bad++; out(`fail ${name}: ${redact((e as Error).message, ctx.env).split('\n')[0]}`);
+          bad++; out(`fail ${name}: ${probeFailure((e as Error).message, ctx.env, binding)}`);
         }
       }
       return bad ? 1 : 0;

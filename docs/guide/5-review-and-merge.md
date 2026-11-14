@@ -43,7 +43,7 @@ sequenceDiagram
 
 | Finding | Where it goes |
 |---|---|
-| A criterion not met, a bug, a security issue | The ticket goes back to In progress with the findings. |
+| A criterion not met, a bug, a security issue | The ticket goes back to In progress with the findings, until `cycle.max_rework` reports have asked for it; then a person is asked. |
 | The spec or scope is wrong | The pull request goes back to draft; the ticket goes to Backlog. |
 | A pull request a person opened | Back to draft with the report; that person fixes it. |
 | A red check | Back to draft. A cause in the code goes to In progress; a cause elsewhere becomes a Signal. |

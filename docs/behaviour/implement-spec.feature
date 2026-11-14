@@ -29,9 +29,10 @@ Feature: Implement a spec
 
   # Source: skills/implement-spec/SKILL.md, intro paragraph
   # Proof: skill text only
-  Scenario: A Full-lane ticket with no trusted spec goes back to shape
-    Given a Full-lane ticket at Status Ready
+  Scenario: A ticket with no trusted spec goes back to shape
+    Given a ticket at Status Ready, in either lane
     And no trusted comment starts with the spec marker
+    And the ticket body lists criteria
     When the factory runs implement-spec
     Then the ticket moves to Backlog with "--only-from Ready"
     And one comment names the missing spec
@@ -105,11 +106,10 @@ Feature: Implement a spec
 
   # Source: skills/implement-spec/SKILL.md, "Rules"
   # Proof: skill text only
-  Scenario: A fix fails twice for the same reason
-    Given a fix has failed twice for the same reason
-    When the factory meets the second failure
-    Then it stops
-    And it calls escalate-to-human
+  Scenario: A cause that is not known goes to shape
+    Given a fix fails and its cause is not known
+    When the factory meets the failure
+    Then the diagnosis belongs to shape, not to implement-spec
 
   # Source: references/architecture.md, "Adapter"; src/board/
   # Proof: test/board-adapters.test.ts "a board adapter without its credential fails naming the variable, and github passes token_env as GH_TOKEN on every call"
@@ -173,6 +173,14 @@ Feature: Implement a spec
     When the adapter makes the call
     Then the call fails after the time limit
 
+  # Source: src/exec.ts, "http"
+  # Proof: test/exec.test.ts "http returns the raw text of a 2xx that is not JSON, and keeps the URL path out of an error"
+  Scenario: A success answer that is not JSON still counts, and an error shows no URL path
+    Given a webhook that answers 200 with plain text, and one that answers 403
+    When the adapter makes each call
+    Then the first call succeeds and returns the text
+    And the second error names the method, the host and the status, never the path, which may hold a secret
+
   # Source: src/mcp.ts
   # Proof: test/mcp.test.ts "tools/list has board_move with a schema; unknown method is -32601"
   # Proof: test/mcp.test.ts "board tools create, move with only_from (a refusal is isError), set and assign"
@@ -182,6 +190,20 @@ Feature: Implement a spec
     Then the tools match the board verbs and carry the same arguments
     And a refused move returns an error result
     And an unknown method returns the JSON-RPC error -32601
+
+  # Source: src/mcp.ts
+  # Proof: test/mcp.test.ts "initialize answers the requested protocol version when supported, else the latest"
+  # Proof: test/mcp.test.ts "every tool carries annotations from one table: reads are read-only, close and drop destructive, vcs reads closed-world"
+  # Proof: test/mcp.test.ts "tools/call checks arguments against the inputSchema: -32602 naming the argument; unknown tool is -32602; a failing tool is isError"
+  # Proof: test/mcp.test.ts "a request with a non-string method answers -32600 with the request id"
+  # Proof: test/mcp.test.ts "a verb whose output is a JSON object also returns structuredContent; arrays and text stay text only"
+  Scenario: The MCP server tells a client what each tool does and refuses a bad call
+    Given a client that asks for a protocol version the server supports
+    When it initializes, lists the tools and calls one
+    Then the server answers with the client's version
+    And each tool says whether it only reads, whether it destroys, and whether it reaches an outside system
+    And a call with a missing, unknown or wrongly typed argument, or to an unknown tool, returns the JSON-RPC error -32602 naming it
+    And a result that is a JSON object is also returned as structured content
 
   # Source: src/mcp.ts, "--allow"
   # Proof: test/mcp.test.ts "--allow approve,status serves the review-identity tools, they are refused otherwise, and --help prints usage"

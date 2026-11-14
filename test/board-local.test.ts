@@ -81,3 +81,14 @@ test('board.scope: many repos on one board; a repo lists its own label, the home
   assert.deepEqual(await titles(home), ['B work', 'New signal']);
   assert.equal((await at(undefined).list()).length, 3);
 });
+
+test('create and move refuse a status the binding does not list', async () => {
+  const f = fakeCtx(mkdtempSync(join(tmpdir(), 'bl-')), {}, () => ({}));
+  f.ctx.binding = { ...f.ctx.binding, board: { ...f.ctx.binding.board, statuses: ['Backlog', 'Ready', 'Done', 'Cancelled'] } } as any;
+  const b = createBoard(f.ctx);
+  await assert.rejects(b.create({ title: 't', body: '', status: 'Nope' }), /status 'Nope' is not in board\.statuses/);
+  await b.create({ title: 't', body: '', status: 'Backlog' });
+  await assert.rejects(b.move('1', 'Nope'), /not in board\.statuses/);
+  assert.equal((await b.get('1')).status, 'Backlog');
+  assert.equal((await b.move('1', 'Ready')).status, 'Ready');
+});

@@ -21,7 +21,7 @@ flowchart LR
 | Ideas | A thought you park. Skills never touch it. | You | Your note. |
 | Signals | Raw input: an alert, feedback, a red CI run, a scanner finding. | `triage-signal` | A decision comment: accepted, parked or rejected, with the reason. |
 | Backlog | Accepted work. It gets a Priority; duplicates are merged. | `backlog-grooming` | A Priority, sometimes children under an initiative. |
-| Ready | Acceptance criteria, each with a proof; a Size and a Lane; a spec in the Full lane. | `shape` | The criteria comment; Size and Lane. |
+| Ready | Acceptance criteria, each with a proof; a Size and a Lane; a spec comment (criteria and proofs only in the Fast lane). | `shape` | The spec comment; Size and Lane. |
 | In progress | The proof first, then the code, on a short-lived branch. | `implement-spec` | A branch named after the ticket. |
 | In review | A draft pull request, graded against the criteria and CI. | `review-pr`, CI checks | The review report on the pull request. |
 | Done | The change merged. Done is final. | The `merged` check | The ticket closed; Shipped "Not shipped". |

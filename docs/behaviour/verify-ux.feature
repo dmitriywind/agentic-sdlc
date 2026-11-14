@@ -26,6 +26,7 @@ Feature: Verify the product as a user
     And the comment has a row per criterion marked PASS or FAIL
     And each row has evidence links
     And the comment is posted by an account in owners.bots
+    And it posts one short ticket comment with the done line from its task, since dispatch looks for the done line on the ticket
 
   # Source: skills/verify-ux/SKILL.md, "Criteria"
   # Proof: skill text only

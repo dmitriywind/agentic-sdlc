@@ -109,8 +109,7 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
       return get(id);
     },
     async assign(id, user) {
-      if (user) api('POST', `issues/${id}/assignees`, { assignees: [user] });
-      else api('PATCH', `issues/${id}`, { assignees: [] });
+      api('PATCH', `issues/${id}`, { assignees: user ? [user] : [] });
       return get(id);
     },
     async comment(id, body) {

@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, wri
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cli, cloudBoard, deliveryWorkflow, implementerToken, selfHostedRunner, trunkProtection, validate } from '../src/install.ts';
+import { cli, probeFailure, cloudBoard, deliveryWorkflow, implementerToken, selfHostedRunner, trunkProtection, validate } from '../src/install.ts';
 import { parse } from 'yaml';
 import { fakeCtx } from './helpers.ts';
 
@@ -394,4 +394,38 @@ test('doctor: a Claude cloud session fails a GitHub Projects board and names the
   assert.match(cloudBoard({ board: { adapter: 'github' } }, { CLAUDE_CODE_REMOTE: 'true' })!, /^fail board: .*cannot reach GitHub Projects.*github-issues, jira or linear.*GitHub Actions/);
   assert.equal(cloudBoard({ board: { adapter: 'github' } }, {}), undefined);
   assert.equal(cloudBoard({ board: { adapter: 'jira' } }, { CLAUDE_CODE_REMOTE: 'true' }), undefined);
+});
+
+test('init refuses an unknown board, an unknown flag and a package.json that is not JSON, before it writes anything', async () => {
+  for (const args of [['--board', 'bogus'], ['--forse']]) {
+    const root = fixture();
+    assert.equal(await quiet(() => cli(['init', ...args], fakeCtx(root, {}, () => ({})).ctx)), 1);
+    assert.ok(!existsSync(join(root, '.agents')));
+  }
+  const root = fixture();
+  w(join(root, 'package.json'), '{ // comment\n}');
+  const errs: string[] = [];
+  const e = console.error; console.error = (s: string) => errs.push(s);
+  try { assert.equal(await cli(['init', '--board', 'local'], fakeCtx(root, {}, () => ({})).ctx), 1); } finally { console.error = e; }
+  assert.match(errs.join('\n'), /package\.json is not valid JSON/);
+  assert.ok(!existsSync(join(root, '.agents')));
+});
+
+test('init moves its own older CLI pin to the package version and keeps a pin the project chose', async () => {
+  const run = async (have: string) => {
+    const root = fixture();
+    w(join(root, 'package.json'), JSON.stringify({ devDependencies: { 'agentic-sdlc': have } }));
+    await quiet(() => cli(['init', '--board', 'local'], fakeCtx(root, {}, () => ({})).ctx));
+    return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).devDependencies['agentic-sdlc'];
+  };
+  assert.equal(await run('github:dmitriywind/agentic-sdlc#v0.0.1'), 'github:dmitriywind/agentic-sdlc#v9.9.9');
+  const sha = 'github:dmitriywind/agentic-sdlc#' + 'a'.repeat(40);
+  assert.equal(await run(sha), sha);
+  assert.equal(await run('file:../fork'), 'file:../fork');
+});
+
+test('doctor: a failed probe shows the command\'s first stderr line and hides the value of every env var the binding names', () => {
+  const line = probeFailure('Command failed: gh api repos/acme/shop/pulls\nHTTP 403: bad credentials hunter2hunter2\nmore', { GH_PAT_X: 'hunter2hunter2' }, { forge: { options: { token_env: 'GH_PAT_X' } } });
+  assert.equal(line, 'Command failed: gh api repos/acme/shop/pulls (HTTP 403: bad credentials ***)');
+  assert.equal(probeFailure('plain reason\nsecond line', {}, {}), 'plain reason');
 });

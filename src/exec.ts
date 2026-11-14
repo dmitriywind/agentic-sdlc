@@ -44,9 +44,10 @@ export const http: Http = async (method, url, opts = {}) => {
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });
     const text = await res.text();
-    if (res.ok) return text ? JSON.parse(text) : {};
+    // A 2xx whose body is not JSON (a webhook answering `accepted`) still succeeded: the write is not repeated.
+    if (res.ok) { try { return text ? JSON.parse(text) : {}; } catch { return { raw: text }; } }
     const retry = res.status === 429 || (res.status >= 500 && method.toUpperCase() !== 'POST');
-    if (!retry || attempt >= TRIES) throw new Error(`${method} ${new URL(url).pathname} -> ${res.status}: ${text.slice(0, 300)}`);
+    if (!retry || attempt >= TRIES) throw new Error(`${method} ${new URL(url).host} -> ${res.status}: ${text.slice(0, 300)}`);
     await sleep(retryWait(res.headers.get('retry-after'), attempt));
   }
 };

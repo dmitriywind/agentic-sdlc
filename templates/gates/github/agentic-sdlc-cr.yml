@@ -11,6 +11,8 @@ name: agentic-sdlc CR gate
 # read it: a review event reaches `human-approval` through the no-secret `agentic-sdlc review event` workflow
 # (agentic-sdlc-review-event.yml, installed by init) and workflow_run, which runs from the default branch. A fork PR's approval status updates
 # on the next pull_request_target event or a re-run.
+# merge_group runs the queue commit's own copy of this file, with the review Environment: a change to
+# .github/** takes effect there. Keep `.github/**` in paths.factory (the guardrail class: factory-owner approval).
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, edited]
@@ -25,8 +27,10 @@ permissions: {}
 
 concurrency:
   # No job here moves the board (skills and the trunk-push merged gate do), so a newer event replaces an older run.
-  group: agentic-cr-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.merge_group.head_sha }}-${{ github.event_name }}
-  cancel-in-progress: true
+  # A fork's workflow_run has no PR number: its run id keeps fork review events apart. An issue_comment run is
+  # never cancelled and has its own group (any commenter could otherwise cancel a review gate).
+  group: agentic-cr-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.id || github.event.merge_group.head_sha }}-${{ github.event_name }}${{ github.event.comment.id && format('-{0}', github.event.comment.id) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'issue_comment' }}
 
 defaults:
   run:
@@ -68,13 +72,20 @@ jobs:
           if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
             npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           else
-            # set: repo variable AGENTIC_SDLC_VERSION to an exact version, or add agentic-sdlc as a devDependency
-            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-0.1.0}"
+            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
+            v="$AGENTIC_SDLC_VERSION"
+            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
+            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
+            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
+            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
           fi
 
       - name: Branch names
         if: github.event_name != 'merge_group'
-        run: agentic-sdlc gate branch-names --ref "$HEAD_REF"
+        run: |
+          # A ref that starts with - could be read as an option.
+          case "$HEAD_REF" in -*) echo "::error::branch name starts with -"; exit 1 ;; esac
+          agentic-sdlc gate branch-names --ref "$HEAD_REF"
 
       - name: Ticket linkage on the queue commit
         # A merge queue commit needs every required context; linkage was proven on the PR head.
@@ -136,8 +147,12 @@ jobs:
           if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
             npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           else
-            # set: repo variable AGENTIC_SDLC_VERSION to an exact version, or add agentic-sdlc as a devDependency
-            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-0.1.0}"
+            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
+            v="$AGENTIC_SDLC_VERSION"
+            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
+            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
+            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
+            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
           fi
       - name: Human approval
         if: env.CR != ''
@@ -176,8 +191,12 @@ jobs:
           if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
             npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           else
-            # set: repo variable AGENTIC_SDLC_VERSION to an exact version, or add agentic-sdlc as a devDependency
-            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-0.1.0}"
+            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
+            v="$AGENTIC_SDLC_VERSION"
+            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
+            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
+            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
+            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
           fi
       - name: Review status from the report
         run: agentic-sdlc gate review --cr "$CR"

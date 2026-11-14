@@ -215,3 +215,58 @@ test('github-issues get refuses a pull request or an issue with no status label:
   await assert.rejects(board.get('2'), /not on the board/);
   await assert.rejects(board.get('3'), /not on the board/);
 });
+
+test('assign sets or clears the one assignee on github and github-issues: it replaces, never adds', async () => {
+  const g = mk('github', gh, (c) => (c.includes('issue view') ? { body: '', createdAt: '', updatedAt: '', assignees: [{ login: 'old' }], labels: [] } : ghAnswer('Ready')(c)));
+  await g.board.assign('7', 'new');
+  assert.ok(g.calls.some((c) => c.includes('issue edit 7') && c.includes('--add-assignee new') && c.includes('--remove-assignee old')));
+  await g.board.assign('7', null);
+  assert.ok(g.calls.some((c) => c.includes('issue edit 7') && !c.includes('--add-assignee') && c.includes('--remove-assignee old')));
+  const { board, calls } = issuesRepo([iss(7, ['status:Ready'], { assignees: [{ login: 'old' }] })]);
+  await board.assign('7', 'new');
+  const patch = calls.find((c) => c.args[3] === 'PATCH')!;
+  assert.deepEqual(patch.input.assignees, ['new']);
+  assert.ok(!calls.some((c) => c.args[4]?.endsWith('/assignees')));
+});
+
+test('jira escapes a backslash before a quote in JQL', async () => {
+  const bodies: string[] = [];
+  const { board } = mk('jira', jira, (c) => { if (c.includes('/search/jql')) { bodies.push(c); return { issues: [], isLast: true }; } return jiraAnswer('Ready')(c); }, jEnv);
+  await board.list({ search: 'a\\"b' });
+  assert.ok(JSON.parse(bodies[0].slice(bodies[0].indexOf('{'))).jql.includes('text ~ "a\\\\\\"b"'));
+});
+
+test('linear reads up to 250 labels, states and children, and keeps the ids of the issue\'s own labels', async () => {
+  const issue = { ...lIssue('LIN-9'), id: 'U1', labels: { nodes: [{ id: 'WS1', name: 'bug' }] } };
+  const { board, calls } = mk('linear', linCfg, (c) => {
+    if (c.includes('teams(')) return { data: { teams: { nodes: [{ id: 'T1', states: { nodes: [{ id: 'S1', name: 'Ready' }] }, labels: { nodes: [] } }] } } };
+    if (c.includes('issueUpdate')) return { data: { issueUpdate: { issue } } };
+    return { data: { issue } };
+  }, { LT: 'k' });
+  await board.move('LIN-9', 'Ready');
+  await board.label('LIN-9', 'add', 'bug');
+  assert.ok(!calls.some((c) => c.includes('issueLabelCreate')), 'a workspace label was re-created');
+  const upd = JSON.parse(calls.find((c) => c.includes('labelIds'))!.replace(/^POST \S+ /, ''));
+  assert.deepEqual(upd.variables.i.labelIds, ['WS1']);
+  const q = calls.join('\n');
+  assert.match(q, /states\(first:250\)/);
+  assert.match(q, /labels\(first:250\)/);
+  assert.match(q, /children\(first:250\)/);
+});
+
+test('the GitHub boards refuse an id that is not an issue number before calling gh', async () => {
+  const g = mk('github', gh, ghAnswer('Ready'));
+  await assert.rejects(g.board.get('7/../x'), /not an issue number/);
+  await assert.rejects(g.board.move('x', 'Ready'), /not an issue number/);
+  assert.equal(g.calls.length, 0);
+  const { board, calls } = issuesRepo([]);
+  await assert.rejects(board.comments('1/../../user', {}), /not an issue number/);
+  assert.equal(calls.length, 0);
+});
+
+test('a board verb with a missing required option fails naming the binding key and validate, not a raw gh call', async () => {
+  const f = fakeCtx('.', { owner: 'o', repo: 'o/r' }, ghAnswer('Ready'));
+  f.ctx.binding = { ...binding, board: { ...binding.board, adapter: 'github' } } as any;
+  assert.throws(() => createBoard(f.ctx), /board\.options\.project_number.*agentic-sdlc validate/);
+  assert.equal(f.calls.length, 0);
+});

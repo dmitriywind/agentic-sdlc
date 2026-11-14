@@ -26,8 +26,11 @@ Needs Node 22.18 or later. npm 12 refuses Git dependencies without `--allow-git`
 that do not know the flag can drop it. The CLI installs from Git only. Warning: the npm package
 `agentic-sdlc` is a different project; do not install it. Before `doctor` passes, set `heartbeat.ticket` in `.agents/binding.yml` (and the board options for Jira,
 Linear or a GitHub Project; `init` reads the repo from `git remote origin`). `npx --no agentic-sdlc` lists
-every group and `npx --no agentic-sdlc <group> --help` its verbs; every verb prints JSON. Exit 0 is
+every group and `npx --no agentic-sdlc <group> --help` its verbs; `--version` prints the version. The board, forge, vcs and gate verbs print JSON; `init`, `validate` and `doctor` print text. Exit 0 is
 success, 1 is a refused or failed action, 2 is a usage error.
+
+On Claude Code, also install the plugin (skills, the guard hook, the MCP server):
+`/plugin install agentic-sdlc --marketplace dmitriywind/agentic-sdlc`.
 
 ## Read the guide
 

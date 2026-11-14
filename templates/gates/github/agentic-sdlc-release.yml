@@ -2,9 +2,13 @@ name: agentic-sdlc release
 # The release cut. The release skill starts it with `agentic-sdlc forge cut <revision> <version>` after the
 # Product owner's go-ahead on the release request; the Environment below makes that approval a forge rule:
 # set Environment `agentic-release` with the Product owner as a required reviewer, deployment branches
-# limited to the trunk, and secret AGENTIC_RELEASE_TOKEN: a release bot that is the only bypass actor of
-# .github/rulesets/release.json. The cycle never holds that token. `forge cut` only starts this workflow;
+# limited to the trunk, and secret AGENTIC_RELEASE_TOKEN: a release bot that can bypass
+# .github/rulesets/release.json (ruleset.release.json also lets repo admins bypass; see SECURITY.md to narrow
+# it to the bot's App). The cycle never holds that token. `forge cut` only starts this workflow;
 # the cut itself is `vcs cut` below, run with the release bot's credential.
+# The token is not stored by checkout (persist-credentials: false, so the install step cannot read it from
+# .git/config). Only the cut step receives it, as a git http.extraheader set through GIT_CONFIG_* env,
+# which the `git push` inside `vcs cut` reads.
 on:
   workflow_dispatch:
     inputs:
@@ -35,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.AGENTIC_RELEASE_TOKEN }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -44,7 +48,22 @@ jobs:
           if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
             npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           else
-            npm i -g --allow-git=root "github:dmitriywind/agentic-sdlc#v${AGENTIC_SDLC_VERSION:-0.1.0}"
+            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
+            v="$AGENTIC_SDLC_VERSION"
+            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
+            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
+            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
+            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
           fi
       - name: Cut the release line
-        run: agentic-sdlc vcs cut "$REVISION" "$VERSION"
+        env:
+          RELEASE_TOKEN: ${{ secrets.AGENTIC_RELEASE_TOKEN }}
+        run: |
+          # A value that starts with - could be read as an option.
+          for v in "$REVISION" "$VERSION"; do
+            case "$v" in -*|"") echo "::error::revision and version must be non-empty and not start with -"; exit 1 ;; esac
+          done
+          header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$RELEASE_TOKEN" | base64 -w0)"
+          echo "::add-mask::$header"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="$header"
+          agentic-sdlc vcs cut "$REVISION" "$VERSION"
