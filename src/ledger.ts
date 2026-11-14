@@ -22,7 +22,6 @@ export interface LedgerRun {
   executor?: string; // executor kind: harness (default) | command | webhook | managed | assign
   ref?: string; // what dispatch printed: session id, bot run, assignment
   tokens?: number;
-  cost_usd?: number;
   minutes?: number;
   outcome: string; // done | sent_back | failed | escalated | timeout
   score?: number; // 0-4: the done-conditions scorer from judge-run
@@ -38,7 +37,7 @@ export const SCORE_SCORER = 'done-conditions';
 /** A scorer value that counts as a failure: `fail`, or 0-1 on the 0-4 scale (a condition not met). */
 export const isFail = (v: ScoreValue): boolean => v === 'fail' || (typeof v === 'number' && v <= 1);
 
-export interface Stats { runs: number; medianScore: number | null; failureRate: number; cost_usd: number; minutes: number }
+export interface Stats { runs: number; medianScore: number | null; failureRate: number; minutes: number }
 /** A repeated failure: by normalised `error`, or by `scorer` fail. */
 export interface Cluster { skill: string; error?: string; scorer?: string; count: number; tickets: string[] }
 export interface ScorerStats { runs: number; failRate: number; median: number | null }
@@ -130,13 +129,11 @@ export function median(xs: number[]): number | null {
 }
 
 export function stats(rows: LedgerRun[]): Stats {
-  const sum = (k: 'cost_usd' | 'minutes') => Math.round(rows.reduce((t, r) => t + (r[k] ?? 0), 0) * 100) / 100;
   return {
     runs: rows.length,
     medianScore: median(rows.flatMap((r) => (typeof r.score === 'number' ? [r.score] : []))),
     failureRate: rows.length ? rows.filter((r) => r.outcome !== 'done').length / rows.length : 0,
-    cost_usd: sum('cost_usd'),
-    minutes: sum('minutes'),
+    minutes: Math.round(rows.reduce((t, r) => t + (r.minutes ?? 0), 0) * 100) / 100,
   };
 }
 
@@ -174,32 +171,13 @@ export function byScorer(rows: LedgerRun[]): Record<string, ScorerStats> {
   }]));
 }
 
-export const LEARNING_SKILLS = ['judge-run', 'improve-factory', 'bench'];
-
-/**
- * The measures the rows alone give (the rest come from the board: heartbeat.md Measures).
- * costPerCR: cost of the runs whose `cr` is merged over the distinct merged CRs (`merged` when known, else every cr).
- */
-export function measures(rows: LedgerRun[], merged?: string[]) {
-  const cost = (rs: LedgerRun[]) => rs.reduce((t, r) => t + (r.cost_usd ?? 0), 0);
-  const round = (n: number) => Math.round(n * 1000) / 1000;
-  const withCr = rows.filter((r) => r.cr);
-  const crs = new Set(withCr.map((r) => r.cr!).filter((n) => !merged || merged.includes(n)));
-  const total = cost(rows);
-  return {
-    ...(crs.size ? { costPerCR: round(cost(withCr.filter((r) => crs.has(r.cr!))) / crs.size) } : {}),
-    ...(total ? { learningSpendShare: round(cost(rows.filter((r) => LEARNING_SKILLS.includes(r.skill))) / total) } : {}),
-  };
-}
-
-export const summarise = (rows: LedgerRun[], merged?: string[]) => ({
+export const summarise = (rows: LedgerRun[]) => ({
   total: stats(rows),
   bySkill: groupStats(rows, (r) => r.skill),
   byModel: groupStats(rows, (r) => r.model),
   byExecutor: groupStats(rows, (r) => r.executor ?? 'harness'),
   byScorer: byScorer(rows),
   failureClusters: clusters(rows),
-  measures: measures(rows, merged),
 });
 
 /** Content hash of a skill folder: sorted relative paths and LF-normalised contents. 12 hex chars. */
@@ -239,20 +217,16 @@ export async function readRuns(board: Board, ticket: string, authors: string[], 
 /**
  * The learning trigger, from the ledger alone: cyclesSince counts heartbeats newer than the one
  * holding the last improve-factory run (all of them when there is none); due at
- * learning.every_cycles; spentWeekUsd sums judge-run, improve-factory and bench runs of 7 days.
+ * learning.every_cycles. Off unless learning.enabled: then neither due nor judge.
  */
-export function learningState(comments: Comment[], everyCycles: number, now = Date.now(), budgetUsd?: number) {
+export function learningState(comments: Comment[], everyCycles: number, enabled = false) {
   // newest first; review and learn runtimes write their own heartbeats (kind), which count no cycle
   const beats = comments.map((c) => parseHeartbeat(c.body)).filter((hb) => hb && (hb.kind ?? 'cycle') === 'cycle');
   const learnAt = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean).findIndex((hb) => (hb.runs ?? []).some((r: LedgerRun) => r.skill === 'improve-factory'));
   // Cycles since the newest heartbeat (of any kind) that carries an improve-factory run.
   const all = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean);
   const cyclesSince = learnAt < 0 ? beats.length : all.slice(0, learnAt).filter((hb) => (hb.kind ?? 'cycle') === 'cycle').length;
-  const week = flattenRuns(comments, { sinceDays: 7, now }).filter((r) => LEARNING_SKILLS.includes(r.skill));
-  const spentWeekUsd = Math.round(week.reduce((t, r) => t + (r.cost_usd ?? 0), 0) * 100) / 100;
-  // Unset: no cap. 0: learning is off. Otherwise: under the week's budget.
-  const underBudget = budgetUsd === undefined || budgetUsd === null ? true : Number(budgetUsd) > 0 && spentWeekUsd < Number(budgetUsd);
-  return { due: Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles) && underBudget, judge: underBudget, cyclesSince, spentWeekUsd };
+  return { due: enabled && Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles), judge: enabled, cyclesSince };
 }
 
 export interface Scorer { name: string; scale: 'pass-fail' | '0-4'; applies_to: '*' | string[] }
@@ -377,12 +351,7 @@ export const cli: PortCli = async (argv, ctx) => {
     }
     const rows = flattenRuns(comments, { sinceDays, skill: a.values.skill });
     if (verb === 'runs') return (console.log(JSON.stringify(rows, null, 2)), 0);
-    let merged: string[] | undefined;
-    try {
-      // ponytail: the forge list caps merged CRs per call (e.g. 100), so older merged CRs drop out of costPerCR; page the list when the ledger outgrows it
-      merged = (await (await forge())!.list({ state: 'merged' })).filter((c) => c.state === 'merged').map((c) => c.n);
-    } catch { /* forge unreachable: costPerCR counts every cr */ }
-    console.log(JSON.stringify({ ...summarise(rows, merged), learning: learningState(comments, b.learning?.every_cycles, Date.now(), b.learning?.budget_usd_per_week) }, null, 2));
+    console.log(JSON.stringify({ ...summarise(rows), learning: learningState(comments, b.learning?.every_cycles, b.learning?.enabled === true) }, null, 2));
     return 0;
   } catch (e) {
     console.error((e as Error).message);

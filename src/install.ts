@@ -99,8 +99,7 @@ function syncSkills(src: string, root: string, dest: string, force: boolean, log
 }
 
 const MCP_FILES = new Map<string, string | null>([
-  ['claude', '.mcp.json'], ['cursor', '.cursor/mcp.json'], ['antigravity', '.agents/mcp_config.json'],
-  ['codex', '.codex/config.toml'], ['grok', null], ['generic', null],
+  ['claude', '.mcp.json'], ['cursor', '.cursor/mcp.json'], ['codex', '.codex/config.toml'], ['generic', null],
 ]);
 
 /** Register the agentic-sdlc stdio server in the harness's project MCP file, keeping other servers. */
@@ -206,9 +205,9 @@ async function init(root: string, argv: string[], log: string[]) {
 
   const skills = need(pkg, 'skills');
   syncSkills(skills, root, '.agents/skills', force, log);
-  // Grok reads .claude/skills. Claude Code gets skills and the MCP server from the plugin, unless --no-plugin.
+  // Claude Code gets skills and the MCP server from the plugin, unless --no-plugin.
   const noPlugin = harness === 'claude' && f['no-plugin'] === 'true';
-  if (harness === 'grok' || noPlugin) syncSkills(skills, root, '.claude/skills', force, log);
+  if (noPlugin) syncSkills(skills, root, '.claude/skills', force, log);
   const pinned = pinCli(root, version, force, log);
   if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, pinned ? ['--no-install', 'agentic-sdlc', 'mcp'] : ['-y', ALLOW_GIT, gitSpec(version), 'mcp'], force, log);
   else log.push('MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)');

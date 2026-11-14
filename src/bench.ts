@@ -17,8 +17,8 @@ export interface BenchCase {
   mergedAt?: string; // the ticket's last update, as the merge time
 }
 /** scorerInput: the prompt and the agent's changed files, for judge-run to score later. */
-export interface CaseResult { id: string; trial?: number; pass: boolean; minutes: number; cost_usd?: number; error?: string; scorerInput?: string }
-export interface BenchResult { model: string; executor: string; executorKind?: string; factory?: string; suite?: string; at: string; cases: CaseResult[]; passRate: number; cost_usd: number; minutes: number; stopped?: 'budget' }
+export interface CaseResult { id: string; trial?: number; pass: boolean; minutes: number; error?: string; scorerInput?: string }
+export interface BenchResult { model: string; executor: string; executorKind?: string; factory?: string; suite?: string; at: string; cases: CaseResult[]; passRate: number; minutes: number }
 export interface Suite { name: string; cases: BenchCase[] }
 
 export const CASES_FILE = '.agents/bench/cases.json';
@@ -55,18 +55,6 @@ export function agentCommand(e: Executor, binding: Binding, vars: { model: strin
 /** Paths a unified diff adds (old side /dev/null). */
 export const addedFiles = (diff: string): string[] =>
   [...diff.matchAll(/^--- \/dev\/null\r?\n\+\+\+ (?:b\/)?(.+?)\s*$/gm)].map((m) => m[1]);
-
-/** The last stdout line that is JSON with a numeric cost_usd. */
-export function parseCost(stdout: string): number | undefined {
-  for (const line of stdout.split(/\r?\n/).reverse()) {
-    if (!line.includes('"cost_usd"')) continue;
-    try {
-      const v = JSON.parse(line.trim()).cost_usd;
-      if (typeof v === 'number') return v;
-    } catch { /* not JSON */ }
-  }
-  return undefined;
-}
 
 /**
  * Files that decide what `verify` runs (scripts, lockfiles, test config, the factory itself). The
@@ -197,7 +185,7 @@ function carry(from: string, to: string, p: string) {
  */
 export async function runBench(
   cases: BenchCase[],
-  o: { model: string; executor?: Executor; executorName?: string; factory?: string; suite?: string; root: string; binding: Binding; dryRun?: boolean; scorerDir?: string; trials?: number; budget?: number },
+  o: { model: string; executor?: Executor; executorName?: string; factory?: string; suite?: string; root: string; binding: Binding; dryRun?: boolean; scorerDir?: string; trials?: number },
   deps: BenchDeps,
 ): Promise<BenchResult | { dryRun: { id: string; command: string }[] }> {
   const executor = o.executor ?? { kind: 'harness' };
@@ -211,7 +199,6 @@ export async function runBench(
   // --factory: the candidate's skills AND binding, so binding-value tuning is exercised too.
   const factory = o.factory ? await snap(o.factory) : undefined;
   const results: CaseResult[] = [];
-  let stopped: 'budget' | undefined;
   try {
     const binding = factory ? loadBinding(factory.workdir) : o.binding;
     if (cases[0]) command(binding, cases[0], '<scratch>', '<workdir>'); // a bad executor fails before any case starts
@@ -219,29 +206,21 @@ export async function runBench(
     const isProof = rule(binding, 'proof_pattern', PROOF_FILE);
     const isConfig = rule(binding, 'verify_config_pattern', VERIFY_CONFIG);
     const scratch = mkdtempSync(join(tmpdir(), 'agentic-bench-prompts-'));
-    // The caller passes the week's remaining learning budget; without it, the whole weekly budget.
-    const budget = o.budget ?? binding.learning.budget_usd_per_week;
-    let spent = 0;
     const trials = o.trials ?? 1;
-    for (const c of cases) for (let trial = 1; trial <= trials && !stopped; trial++) {
-      if (budget !== undefined && budget !== null && spent >= budget) { stopped = 'budget'; break; }
+    for (const c of cases) for (let trial = 1; trial <= trials; trial++) {
       const trees: Tree[] = [];
       try {
         const agent = await snap(c.baseSha);
         trees.push(agent);
         writeFileSync(promptFile(scratch, c), prompt(c, skillPath, agent.workdir, binding.commands.fast_check));
         const t0 = now();
-        let out = '';
         let error: string | undefined;
         try {
-          out = shell(deps.exec, command(binding, c, scratch, agent.workdir), agent.workdir);
+          shell(deps.exec, command(binding, c, scratch, agent.workdir), agent.workdir);
         } catch (e) {
-          out = String((e as { stdout?: unknown }).stdout ?? '');
           error = `agent: ${(e as Error).message.split('\n')[0]}`;
         }
         const minutes = Math.round(((now() - t0) / 60000) * 10) / 10;
-        const cost_usd = parseCost(out);
-        spent += cost_usd ?? 0;
         const touched = await agent.changed();
         const verify = await snap(c.baseSha);
         trees.push(verify);
@@ -258,7 +237,7 @@ export async function runBench(
           if (binding.commands.install) shell(deps.exec, binding.commands.install, verify.workdir);
           shell(deps.exec, binding.commands.verify, verify.workdir);
         } catch { pass = false; }
-        results.push({ id: c.id, ...(trials > 1 ? { trial } : {}), pass, minutes, ...(cost_usd === undefined ? {} : { cost_usd }), ...(error ? { error } : {}), ...(scorerInput ? { scorerInput } : {}) });
+        results.push({ id: c.id, ...(trials > 1 ? { trial } : {}), pass, minutes, ...(error ? { error } : {}), ...(scorerInput ? { scorerInput } : {}) });
       } finally {
         await dropAll(trees);
       }
@@ -267,7 +246,6 @@ export async function runBench(
   } finally {
     if (factory) await dropAll([factory]);
   }
-  const total = (k: 'cost_usd' | 'minutes') => Math.round(results.reduce((t, r) => t + (r[k] ?? 0), 0) * 100) / 100;
   return {
     model: o.model,
     executor: o.executorName ?? (o.executor ? 'inline' : 'harness'),
@@ -277,9 +255,7 @@ export async function runBench(
     at: new Date(now()).toISOString(),
     cases: results,
     passRate: results.length ? results.filter((r) => r.pass).length / results.length : 0,
-    cost_usd: total('cost_usd'),
-    minutes: total('minutes'),
-    ...(stopped ? { stopped } : {}),
+    minutes: Math.round(results.reduce((t, r) => t + r.minutes, 0) * 100) / 100,
   };
 }
 
@@ -300,9 +276,9 @@ function writeScorerInput(dir: string, root: string, c: BenchCase, trial: number
   return relative(root, file).replaceAll('\\', '/');
 }
 
-export interface ReportRow { model: string; executor: string; executorKind?: string; factory?: string; passRate: number; medianCost: number | null; medianMinutes: number | null; n: number; pareto: boolean }
+export interface ReportRow { model: string; executor: string; executorKind?: string; factory?: string; passRate: number; medianMinutes: number | null; n: number; pareto: boolean }
 
-/** Per model, executor and factory over every result given: pass rate, median case cost and minutes; `pareto` marks the non-dominated set (max passRate, min cost). */
+/** Per model, executor and factory over every result given: pass rate and median case minutes; `pareto` marks the non-dominated set (max passRate, min minutes). */
 export function report(results: BenchResult[]): ReportRow[] {
   const g = new Map<string, { r: BenchResult; cases: CaseResult[] }>();
   for (const r of results) {
@@ -315,12 +291,11 @@ export function report(results: BenchResult[]): ReportRow[] {
     ...(r.executorKind ? { executorKind: r.executorKind } : {}),
     ...(r.factory ? { factory: r.factory } : {}),
     passRate: cases.length ? cases.filter((c) => c.pass).length / cases.length : 0,
-    medianCost: median(cases.flatMap((c) => (typeof c.cost_usd === 'number' ? [c.cost_usd] : []))),
     medianMinutes: median(cases.map((c) => c.minutes)),
     n: cases.length,
     pareto: false,
   }));
-  const cost = (x: ReportRow) => x.medianCost ?? Infinity; // unknown cost is never cheap
+  const cost = (x: ReportRow) => x.medianMinutes ?? Infinity;
   for (const a of rows) a.pareto = !rows.some((b) => b !== a && b.passRate >= a.passRate && cost(b) <= cost(a) && (b.passRate > a.passRate || cost(b) < cost(a)));
   return rows.sort((a, b) => b.passRate - a.passRate || cost(a) - cost(b));
 }
@@ -344,10 +319,9 @@ export function compare(a: BenchResult, b: BenchResult, o: { minCases?: number; 
   const side = (r: BenchResult) => {
     const cs = r.cases.filter((c) => common.includes(c.id));
     const pass = cs.filter((c) => c.pass).length;
-    const sum = (k: 'cost_usd' | 'minutes') => Math.round(cs.reduce((t, c) => t + (c[k] ?? 0), 0) * 100) / 100;
     const minTrials = common.length ? Math.min(...common.map((id) => cs.filter((c) => c.id === id).length)) : 0;
     const round = (x: number) => Math.round(x * 1000) / 1000;
-    return { model: r.model, executor: r.executor, factory: r.factory, passRate: cs.length ? pass / cs.length : 0, lower: round(wilsonLower(pass, cs.length)), trials: minTrials, cost_usd: sum('cost_usd'), minutes: sum('minutes') };
+    return { model: r.model, executor: r.executor, factory: r.factory, passRate: cs.length ? pass / cs.length : 0, lower: round(wilsonLower(pass, cs.length)), trials: minTrials, minutes: Math.round(cs.reduce((t, c) => t + c.minutes, 0) * 100) / 100 };
   };
   const [sa, sb] = [side(a), side(b)];
   const d = (x: number, y: number) => Math.round((y - x) * 1000) / 1000;
@@ -360,7 +334,7 @@ export function compare(a: BenchResult, b: BenchResult, o: { minCases?: number; 
     cases: common.length,
     a: sa,
     b: sb,
-    delta: { passRate: d(sa.passRate, sb.passRate), lower: d(sa.lower, sb.lower), cost_usd: d(sa.cost_usd, sb.cost_usd), minutes: d(sa.minutes, sb.minutes) },
+    delta: { passRate: d(sa.passRate, sb.passRate), lower: d(sa.lower, sb.lower), minutes: d(sa.minutes, sb.minutes) },
     // Too little evidence proves nothing: fail closed.
     ...(short.length ? { insufficient: short } : {}),
     regressed: short.length > 0 || sb.lower < sa.lower,
@@ -385,7 +359,7 @@ export const cli: PortCli = async (argv, ctx) => {
       args: rest,
       options: {
         limit: { type: 'string' }, model: { type: 'string' }, executor: { type: 'string' }, factory: { type: 'string' }, cases: { type: 'string' }, 'dry-run': { type: 'boolean' },
-        suite: { type: 'string' }, paths: { type: 'string', multiple: true }, 'per-size': { type: 'string' }, n: { type: 'string' }, trials: { type: 'string' }, budget: { type: 'string' },
+        suite: { type: 'string' }, paths: { type: 'string', multiple: true }, 'per-size': { type: 'string' }, n: { type: 'string' }, trials: { type: 'string' },
       },
       allowPositionals: true,
     });
@@ -456,14 +430,14 @@ export const cli: PortCli = async (argv, ctx) => {
       const { createVcs } = await import('./vcs/index.ts');
       const r = await runBench(
         cases,
-        { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values['dry-run'], scorerDir: join(root, RESULTS_DIR, stem), trials, budget: a.values.budget !== undefined ? (a.values.budget.trim() !== '' && Number.isFinite(Number(a.values.budget)) ? Number(a.values.budget) : (() => { throw new Error(`--budget must be a number, got '${a.values.budget}'`); })()) : undefined },
+        { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values['dry-run'], scorerDir: join(root, RESULTS_DIR, stem), trials },
         { exec: ctx.exec, vcs: await createVcs(with_(binding.vcs.options)) },
       );
       if ('cases' in r) {
         const file = `${RESULTS_DIR}/${stem}.json`;
         mkdirSync(join(root, RESULTS_DIR), { recursive: true });
         writeFileSync(join(root, file), JSON.stringify(r, null, 2) + '\n');
-        console.log(JSON.stringify({ file, passRate: r.passRate, cost_usd: r.cost_usd, minutes: r.minutes, stopped: r.stopped }));
+        console.log(JSON.stringify({ file, passRate: r.passRate, minutes: r.minutes }));
       } else console.log(JSON.stringify(r, null, 2));
       return 0;
     }

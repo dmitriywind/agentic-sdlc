@@ -12,7 +12,7 @@ runner of its own.
 
 - **Boards:** GitHub Projects, Jira, Linear, or a local JSON file.
 - **Forge:** GitHub. **VCS:** Git, trunk-based.
-- **Harnesses:** Claude Code (as a plugin), Codex, Cursor, Antigravity, Grok, or any agent with a
+- **Harnesses:** Claude Code (as a plugin), Codex, Cursor, or any agent with a
   shell or MCP.
 - **Executors per stage:** a harness subagent, a command bot, a webhook bot, a managed agent, or
   a hosted coding agent by assignment.
@@ -23,7 +23,7 @@ runner of its own.
 |---|---|
 | [Docs index](docs/README.md) | Every guide. |
 | [Components](docs/architecture/components.md) and [flows](docs/architecture/flows.md) | Diagrams of the parts, trust boundaries, the cycle, review, release and learning. |
-| [Claude](docs/ecosystems/claude-code.md), [Codex](docs/ecosystems/codex.md), [Cursor](docs/ecosystems/cursor.md), [Antigravity](docs/ecosystems/antigravity.md), [Grok](docs/ecosystems/grok.md), [any other](docs/ecosystems/generic.md) | Install and run in each ecosystem. |
+| [Claude](docs/ecosystems/claude-code.md), [Codex](docs/ecosystems/codex.md), [Cursor](docs/ecosystems/cursor.md), [any other](docs/ecosystems/generic.md) | Install and run in each ecosystem. |
 | [Individual](docs/profiles/individual.md) and [enterprise](docs/profiles/enterprise.md) | Pick a profile. |
 | [Forge](docs/forges.md) | GitHub checks, approval, tokens and one-time setup. |
 | [The contract](references/architecture.md) | Normative: ports, gates, binding, executors, runtimes. |
@@ -62,7 +62,7 @@ Eleven skills, each with a model tier in `metadata.tier`:
 The self-improvement loop is described in the contract, section 6. In short: every run is a
 ledger row, scorers grade it, and `improve-factory` proposes one change at a time, proved on a
 bench built from your own merged work. Until a bench baseline exists, nothing merges without the
-factory owner. Learning is off until you set `learning.budget_usd_per_week` above 0 and an
+factory owner. Learning is off until you set `learning.enabled: true` and an
 `agent_command` for the bench.
 
 ## Install
@@ -80,7 +80,7 @@ The CLI installs from Git only. Warning: the npm package `agentic-sdlc` is a dif
 | Flag | Values | Default |
 |---|---|---|
 | `--profile` | `individual`, `enterprise` | `individual` |
-| `--harness` | `claude`, `codex`, `cursor`, `antigravity`, `grok`, `generic` | `generic` |
+| `--harness` | `claude`, `codex`, `cursor`, `generic` | `generic` |
 | `--board` | `github`, `jira`, `linear`, `local` | `github` |
 | `--forge` | `github` | `github` |
 | `--vcs` | `git` | `git` |
@@ -97,8 +97,7 @@ review prompts in `.agents/`, and a pointer block in `AGENTS.md`. Per harness:
 | `claude` | none: install the plugin (`--no-plugin`: `.claude/skills/`) | `@AGENTS.md` import in `CLAUDE.md`; tier subagents in `.claude/agents/` | the plugin's (`--no-plugin`: `.mcp.json`) |
 | `codex` | `.agents/skills/` | `AGENTS.md` | `.codex/config.toml` |
 | `cursor` | `.agents/skills/` | `AGENTS.md` | `.cursor/mcp.json` |
-| `antigravity` | `.agents/skills/` | `AGENTS.md` | `.agents/mcp_config.json` |
-| `grok`, `generic` | `.agents/skills/` (see the ecosystem guide) | `AGENTS.md` | printed for you to add |
+| `generic` | `.agents/skills/` (see the ecosystem guide) | `AGENTS.md` | printed for you to add |
 
 The init log is the exact list. Then fill in the binding and run `doctor` until every port is ok.
 Prerequisites for the GitHub adapters: `gh` logged in, a token with Projects v2 scope for the
