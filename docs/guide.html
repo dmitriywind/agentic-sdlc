@@ -50,6 +50,8 @@ kbd { font-size: 12px; border: 1px solid var(--rule); border-bottom-width: 2px; 
 .rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; display: grid; gap: 16px; max-height: calc(100vh - 48px); overflow-y: auto; }
 .brand { display: flex; align-items: center; gap: 8px; padding: 0 10px; text-decoration: none; color: var(--ink); }
 .brand b { font-size: 18px; letter-spacing: -.01em; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.theme { font-size: 13px; padding: 4px 10px; min-height: 32px; white-space: nowrap; }
 .pill { font: 500 11px var(--mono); padding: 1px 7px; border-radius: 999px; background: var(--you-soft); color: var(--you); }
 .rail .grp { display: grid; gap: 2px; }
 .rail .grp > span { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding: 0 10px 4px; }
@@ -153,16 +155,18 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
   .rail { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--paper); padding-block: 8px; grid-template-columns: auto minmax(0, 1fr); align-items: center; max-height: none; overflow: visible; border-bottom: 1px solid var(--rule); }
   #toc { display: none; }
   .brand { padding: 0; }
+  .top { gap: 10px; }
   .rail select { display: block; width: 100%; font: 15px var(--font); padding: 8px; border-radius: 8px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); }
 }
 @media (max-width: 600px) { .prose td code { white-space: normal; } .prose table:has(th:nth-child(3)) { min-width: 520px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 </style>
+<script>try { var t = localStorage.getItem('guide-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 </head>
 <body>
 <div class="shell">
   <nav class="rail" aria-label="Guide">
-    <a class="brand" href="#overview"><b>agentic-sdlc</b><span class="pill">v0.1</span></a>
+    <div class="top"><a class="brand" href="#overview"><b>agentic-sdlc</b><span class="pill">v0.1</span></a><button class="btn theme" id="theme" type="button" aria-label="Colour theme: system. Change">◐ System</button></div>
     <div id="toc"></div>
     <select id="pick" aria-label="Chapter"></select>
   </nav>
@@ -738,7 +742,7 @@ function ticks(steps) {
   return segs;
 }
 
-const tags = (list) => list.map((t) => '<span class="tag' + (t === 'needs-human' ? ' hold' : '') + '">' + esc(t).replace(':', ':<wbr>') + '</span>').join('');
+const tags = (list) => list.map((t) => '<span class="tag' + (t === 'needs-human' ? ' hold' : '') + '">' + esc(t) + '</span>').join('');
 const comment = (by, body, you) => '<div class="jr-cm"><span class="jr-by"><i class="' + (you ? 'you' : '') + '"></i>' + by + '</span><div>' + body + '</div></div>';
 const head = (kind, title) => '<div class="jr-ah"><span class="jr-kind">' + kind + '</span><b>' + title + '</b></div>';
 const ART = {
@@ -1584,6 +1588,20 @@ otp.addEventListener('click', (e) => { const a = e.target.closest('[data-to]'); 
 addEventListener('popstate', () => show());
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawDiagrams);
 new MutationObserver(drawDiagrams).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+// The theme button cycles System, Light, Dark; the choice is remembered in this browser only.
+const THEMES = ['system', 'light', 'dark'], LABEL = { system: '◐ System', light: '☀ Light', dark: '☾ Dark' };
+const themeBtn = $('#theme');
+let theme = 'system';
+try { theme = localStorage.getItem('guide-theme') || 'system'; } catch {}
+if (!THEMES.includes(theme)) theme = 'system';
+function setTheme(t, save) {
+  if (t === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  themeBtn.textContent = LABEL[t];
+  themeBtn.setAttribute('aria-label', 'Colour theme: ' + t + '. Change');
+  if (save) { try { localStorage.setItem('guide-theme', t); } catch {} }
+}
+setTheme(theme, false);
+themeBtn.addEventListener('click', () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; setTheme(theme, true); });
 show();
 </script>
 </body>

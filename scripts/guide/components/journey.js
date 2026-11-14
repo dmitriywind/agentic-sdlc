@@ -135,7 +135,7 @@ function ticks(steps) {
   return segs;
 }
 
-const tags = (list) => list.map((t) => '<span class="tag' + (t === 'needs-human' ? ' hold' : '') + '">' + esc(t).replace(':', ':<wbr>') + '</span>').join('');
+const tags = (list) => list.map((t) => '<span class="tag' + (t === 'needs-human' ? ' hold' : '') + '">' + esc(t) + '</span>').join('');
 const comment = (by, body, you) => '<div class="jr-cm"><span class="jr-by"><i class="' + (you ? 'you' : '') + '"></i>' + by + '</span><div>' + body + '</div></div>';
 const head = (kind, title) => '<div class="jr-ah"><span class="jr-kind">' + kind + '</span><b>' + title + '</b></div>';
 const ART = {
