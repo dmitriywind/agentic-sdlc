@@ -96,6 +96,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      checks: read      # forge view reads the head's check runs
+      statuses: read
     env:
       AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
       AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
