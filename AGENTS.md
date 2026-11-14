@@ -26,7 +26,7 @@ A portable software factory: a Claude Code plugin and a CLI, shipped from Git (n
 - A skill calls `agentic-sdlc board|forge|vcs <verb>`, never a vendor CLI.
 - A change to a port, a binding key or a skill's interface changes `references/architecture.md` in the same change.
 - A change to what a skill, gate, hook or `init` does changes its `docs/behaviour/*.feature` in the same change, and `docs/architecture/flows.md` or `docs/use-cases.md` when a flow or a use case changes. The source holds the rule; the docs state the behaviour and point to the source.
-- `docs/roadmap.md` is this repo's backlog. A finished item moves to `CHANGELOG.md`.
+- `docs/roadmap.md` is this repo's backlog. A finished item leaves it; the git log and the release tags are the history. Keep no audit, changelog or history file: a rule lives in the source, a plan in the roadmap.
 - Keep `.claude-plugin/plugin.json` `version` equal to `package.json` `version`.
 - Git only, no npm: the npm name `agentic-sdlc` is another project. `dist/` is committed (the plugin and `github:` installs run it), so run `npm run build` and commit `dist/` with every `src/` change. A release is a `v<version>` tag.
 - Git only, trunk-based. No long-lived branch.

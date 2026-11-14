@@ -11,8 +11,6 @@
 | [Forge](forges.md) | GitHub checks, approval, tokens, secrets and one-time setup. |
 | [Operating baseline](operating-baseline.md) | Team shapes, repo and board baseline, and how a product should operate in 2026-27 (recommendations). |
 | [The contract](../references/architecture.md) | Normative. Section 3 ports and gates, executors in `skills/sdlc/references/executors.md`, section 10 runtimes and profiles. |
-| [Stress test 2026-11-13](audits/2026-11-13-stress-test.md) | Nine journeys traced end to end; who writes each board field; breaks by priority; verdict per automation. |
-| [Audit record 2026-11-09](audits/2026-11-09-v2-audit.md) | Why v2 changed after the first audit. Superseded by the contract. |
 | [Binding template](../templates/binding.yml) | Every project value, documented. |
 
 ## Pick a profile
@@ -36,8 +34,6 @@ network access runs one cycle. Gates always run in the forge's CI.
 | xAI Grok | [ecosystems/grok.md](ecosystems/grok.md) |
 | Anything else (shell, MCP only, vendor MCP tools only) | [ecosystems/generic.md](ecosystems/generic.md) |
 
-Vendor facts were checked against official docs on 2026-11-09 and each carries its source link.
-Vendors change fast; re-check before you depend on a limit. "Not documented at the time of
-writing" means the official pages read said nothing.
+Each vendor fact carries its source link. Re-check it before you depend on a limit.
 
 Runner templates live in [`templates/runner/`](../templates/runner/).

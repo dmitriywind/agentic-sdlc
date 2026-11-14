@@ -1,31 +1,36 @@
 # Roadmap
 
 What comes next for agentic-sdlc, in order. This repo does not run its own factory, so this file
-is its backlog. A finished item moves to the CHANGELOG and leaves this file.
+is its backlog. A finished item leaves this file; the git log holds it.
 
 ```mermaid
 flowchart LR
-  N1["Pilot on a real product"] --> N2["Fix what the pilot finds"]
+  C["Cloud as a first-class runtime"] --> O["Cut cycle overhead"] --> N1["Pilot on a real product"] --> N2["Fix what the pilot finds"]
   N2 --> X["Next"]
   X --> L["Later"]
 ```
 
 ## Now
 
+The factory serves any project. A Claude cloud scheduled task on a subscription is a first-class
+runtime, not a fallback. Facts from the Claude Code docs (cloud environments, scheduled tasks):
+the GitHub proxy rejects every GraphQL call, whatever the token, so `gh pr`, `gh issue` and
+Projects v2 fail; repo plugins do not load; a foreground command stops at 10 minutes; scheduled
+runs use the same subscription limits as interactive work; claude.ai connectors and network
+secrets are available.
+
 | Item | Why | Done when |
 |---|---|---|
-| Pilot on a real product repo | v2 has 179 passing tests but has never run against a real product. | Three scheduled cycles in a row write a heartbeat with no `errors`, and a ticket goes from Backlog to Shipped. |
-
-### WalletMate pilot plan
-
-Agreed on 2026-11-14 with the WalletMate sessions and the owner.
-
-- **When:** after WalletMate's M0 is proven locally (the owner's rule: no CI billing before that; M0 is due 2026-12-31). A self-hosted runner bills no minutes, so the owner may choose to start earlier. Install at a quiet point: no open PR, In review empty, Ready intake paused.
-- **Runners:** the cycle and the gates run in GitHub Actions on two self-hosted runners on the owner's PC (`AGENTIC_RUNS_ON` for code, `AGENTIC_RUNS_ON_TRUSTED` for secrets), because a cloud routine cannot reach Project 1. One code runner keeps one Playwright run at a time.
-- **Merge rule:** v2's risk classes replace "the owner merges every PR". `forge.human_approval: full-lane`: Fast-lane CRs auto-merge; Full-lane CRs (Size above S, or `lane_areas` custody, redaction and sync, or `walletmate-3.0-marketing/app/legal/**`) wait for the owner's approval; factory CRs wait for `owners.factory`.
-- **Skills:** from the plugin (`--harness claude`); the repo keeps only the binding, workflows, rulesets and hook. Retire `.agents/skills`. Move `.agents/rules/test-pyramid.md` and `review-checklist.md` to `paths.test_standard` and `paths.review_checklist`.
-- **Binding values to carry:** `commands.verify: pnpm run verify` (about 22 minutes, Docker, the Playwright lock), the light verify for `.agents`, `.github`, wiki and `*.md` as `paths.no_proof`, 18 locales and the screenshot rule in the review checklist, environments staging and production with `test:smoke` and `test:live`.
-- **First tickets:** #2080 (Fast lane, test only), then #1862 (marketing, no other origins), then one Size S design child of #1420. Avoid #1767, #1637 and #1518 (Full lane, high risk) for the pilot.
+| GitHub adapters on REST only | `src/forge/github.ts` and `src/board/github.ts` call `gh pr` and `gh issue` (GraphQL) about 15 times. | No adapter call uses GraphQL, except Projects v2 field writes. |
+| Draft and auto-merge without GraphQL | "Ready for review", "draft" and auto-merge exist only in GraphQL. | Draft is a label; the review run merges with `PUT /pulls/{n}/merge` after green checks; contract §3.2 says so. |
+| A board a cloud run can reach on GitHub | Projects v2 is GraphQL only. | A `github-issues` board (labels for Status, Size, Priority, Lane, Shipped), or the GitHub MCP connector through `board.mcp`, whichever the cloud probe proves. Jira and Linear stay: their hosts are outside the GitHub proxy; their tokens go in network secrets. |
+| Skills in a cloud session | Plugins from `.claude/settings.json` do not load; `templates/runner/claude-routine.md` says to enable one. | `init --harness claude` can write the skills to `.claude/skills/`; the routine template names that path. |
+| Long verify out of the agent run | A cloud foreground command stops at 10 minutes. | The routine runs `commands.fast_check`; `Required` runs `commands.verify` in CI; the template says so. |
+| `doctor` names unenforced gates | On a private GitHub Free repo, rulesets and branch protection return 403, so no gate blocks a merge. | `doctor` warns when the trunk has no enforced ruleset. |
+| Cut cycle overhead | An idle cycle still writes a full heartbeat and starts a review session (about 12k tokens); every subagent re-loads the 3.7k-token navigator; the heartbeat holds 17 measures no code reads. | Idle exit; the review fires only for an unreviewed CR; heartbeat `at`, `factory`, `runs`, `errors`; a 1k contract file for step skills; Sonnet as the routine model, Opus for `shape`. |
+| Learning loop behind one switch | A subscription reports no cost per run, so the USD fields are always empty. | Learning is off unless enabled; the USD cost fields are gone; the bench stays for API-billed setups. |
+| Delete what no runtime test covers | Grok and Antigravity harness files, `mcp --http`, the `tuning` class with no bench. | Each harness the docs list has a test, or it is deleted. |
+| Pilot on a real product repo | 179 tests, no run against a real product. | Three scheduled cloud runs in a row write a heartbeat with no `errors`, and one ticket goes from Ready to Done with no hand fix. |
 
 ## Next
 

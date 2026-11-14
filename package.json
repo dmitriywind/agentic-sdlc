@@ -21,7 +21,6 @@
     "templates",
     "references",
     "docs",
-    "!docs/audits",
     ".claude-plugin",
     "hooks",
     "LICENSE"

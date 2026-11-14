@@ -20,8 +20,7 @@ flowchart TD
   S --> SC["templates/runner/routine.md<br/>picks the template"]
 ```
 
-The forge is GitHub only. GitLab, Azure DevOps and Bitbucket were removed in 2.0.0-alpha.5: their
-gates ran from a pipeline file the CR could change. See [forges.md](forges.md).
+The forge is GitHub only. See [forges.md](forges.md).
 
 ## Adopt on one repo
 
@@ -95,7 +94,7 @@ flowchart LR
 
 ## Upgrade
 
-1. Read the CHANGELOG entries between your version and the new tag.
+1. Read `git log v<yours>..v<new>` and the contract diff for the new tag.
 2. Bump the pinned version, then run `npm ci`.
 3. Run `init` again without `--force`. It keeps your files and logs what it skipped.
 4. Run `validate` and `doctor`.

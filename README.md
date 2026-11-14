@@ -141,26 +141,12 @@ starts nothing. Open the folder in your agent and ask it to run the `sdlc` skill
 `board create` and `board comment` take bodies only from `--body-file`; `board close` needs
 `--reason completed|not_planned`. Forge verbs and gates need a real forge.
 
-## Upgrading from v1
-
-v2 is a rewrite (`feat!`). Nothing from v1 is read.
-
-| v1 | v2 |
-|---|---|
-| `agentic-sdlc-policy.json` | `.agents/binding.yml`, written by `init` from `templates/binding.yml`. |
-| `agentic-sdlc supervise [--once --read-only]` | No supervisor. A scheduler (routine, CI cron, managed agent) runs your harness with the cycle prompt, which loads the `sdlc` skill. See `templates/runner/`. |
-| The TypeScript SDK (`supervise` and friends) | Removed. Use the CLI verbs or the MCP server (`agentic-sdlc mcp`). |
-| The Docker sandbox | Each executor declares `sandbox`; unattended runs refuse `local`. The sandbox itself is your scheduler's. |
-
-Delete the v1 policy file and any `supervise` job after `doctor` passes.
-
 ## This repository
 
 This repo does not run its own factory yet: it has no `.agents/`, board or CI gates, and changes
 are made by hand. The reason is order: the gates and the review runtime have to be proved on
 sandbox repos first, and a broken factory gating its own repo could not be fixed through itself.
-Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Security: [SECURITY.md](SECURITY.md). Changes:
-[CHANGELOG.md](CHANGELOG.md).
+Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Security: [SECURITY.md](SECURITY.md).
 
 ## CLI
 

@@ -1,7 +1,7 @@
-# agentic-sdlc architecture (v2: the software factory)
+# agentic-sdlc architecture (the software factory)
 
 Status: normative. This file is the contract every part of the package is built against. A change
-here changes the parts in the same CR. It supersedes the 2026-11-09 audit record in `docs/audits/`.
+here changes the parts in the same CR.
 
 ## 1. What the package is
 
@@ -131,8 +131,7 @@ The forge may implement `closing(id)`: the merged CRs whose body closes ticket `
 `CR = { n, url, title, source, target, headSha, baseSha, mergeSha?, draft, state: 'open'|'merged'|'closed', behind, closes: string[], checks: {name, state}[], body, author, pushedAt? }`.
 `closes` is parsed from the body by the shared rule: exactly the lines `Closes <id>`. `author` is the forge login that opened the CR, in the form comment authors use. `pushedAt` is when the head reached the forge: the creation time of the first check suite on `headSha` (absent before CI starts). Stall clocks after a push (`stall_minutes`) count from it.
 
-Adapter: `github` (`gh`), the one forge. GitLab, Azure DevOps and Bitbucket were removed in 2.0.0-alpha.5: a CR there
-could change the pipeline file that ran its own gates.
+Adapter: `github` (`gh`), the one forge: on other forges a CR can change the pipeline file that runs its own gates.
 
 ### 3.3 VCS (`agentic-sdlc vcs <verb>`): Git
 

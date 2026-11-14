@@ -1,7 +1,7 @@
 # Forge: GitHub
 
-v2 is Git only, and GitHub is the one forge. GitLab, Azure DevOps and Bitbucket were removed in
-2.0.0-alpha.5: a CR there could change the pipeline file that ran its own gates. The adapter is
+Git only, and GitHub is the one forge: on other forges a CR can change the pipeline file that runs
+its own gates. The adapter is
 unit-tested against a fake process runner, not against GitHub itself yet.
 Secrets everywhere: `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN`, `AGENTIC_REVIEW_TOKEN` (the
 review identity).

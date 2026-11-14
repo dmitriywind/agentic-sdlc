@@ -1,4 +1,4 @@
-# Project binding for the sdlc skills (v2): every project value they read. Names and commands only.
+# Project binding for the sdlc skills: every project value they read. Names and commands only.
 # Another project replaces this file and keeps .agents/skills/. Secrets never go here: name env vars.
 version: 2
 # profile picks the defaults init writes and what validate warns about (architecture.md section 10):
@@ -57,7 +57,7 @@ forge:
   planned_checks: []            # wanted checks not supplied yet; review-pr names each absent one
 
 vcs:
-  adapter: git                  # git (v2 supports git only)
+  adapter: git                  # git only
   trunk: main                   # the one trunk; delivery is trunk-based
   change_pattern: "feature/<ticket>-<name>" # product change line; <name>: lowercase words joined by hyphens
   factory_change_pattern: "sdlc/<name>"     # a CR that changes only paths.factory

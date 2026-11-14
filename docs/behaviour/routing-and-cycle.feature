@@ -155,7 +155,7 @@ Feature: Routing and the unattended cycle
     And the ticket is routed at its Status
 
   # Source: skills/sdlc/SKILL.md, "Routing"
-  Scenario Outline: CR states that used to strand a ticket are routed
+  Scenario Outline: CR states that could strand a ticket are routed
     Given <state>
     When the cycle routes the board
     Then <skill> is dispatched
