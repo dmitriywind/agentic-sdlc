@@ -131,7 +131,7 @@ The forge may implement `closing(id)`: the merged CRs whose body closes ticket `
 `CR = { n, url, title, source, target, headSha, baseSha, mergeSha?, draft, state: 'open'|'merged'|'closed', behind, closes: string[], checks: {name, state}[], body, author, pushedAt? }`.
 `closes` is parsed from the body by the shared rule: exactly the lines `Closes <id>`. `author` is the forge login that opened the CR, in the form comment authors use. `pushedAt` is when the head reached the forge: the creation time of the first check suite on `headSha` (absent before CI starts). Stall clocks after a push (`stall_minutes`) count from it.
 
-Adapter: `github` (`gh`), the one forge: on other forges a CR can change the pipeline file that runs its own gates.
+Adapter: `github` (`gh`), the one forge: on other forges a CR can change the pipeline file that runs its own gates. Every verb calls REST under `repos/{owner}/{repo}/…` through `gh api`, because a Claude cloud session's GitHub proxy refuses GraphQL and every path outside the attached repos. `checks` come from the head's check runs and commit statuses. In a cloud session (`CLAUDE_CODE_REMOTE=true`) `ready`, `draft` and `automerge` use the proxy's routes `POST pulls/{n}/ccr/ready_for_review`, `POST pulls/{n}/ccr/convert_to_draft` and `PUT pulls/{n}/ccr/auto_merge`; elsewhere they use `gh pr ready`, `gh pr ready --undo` and `gh pr merge --auto --squash`. `runs` and `cut` use `gh run` and `gh workflow` (REST). `closing` uses `search/issues`, which a cloud session refuses; gates run in CI, where it works.
 
 ### 3.3 VCS (`agentic-sdlc vcs <verb>`): Git
 

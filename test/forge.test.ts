@@ -28,23 +28,57 @@ test('parseCloses never reads an id from the next line and dedupes', () => {
   assert.deepEqual(parseCloses('Closes #12\nCloses #12'), ['12']);
 });
 
-test('github: uses gh with body on stdin, draft = ready --undo, status via api', async () => {
-  const pull = { number: 5, html_url: 'u', title: 'T', head: { ref: 'b', sha: 'h' }, base: { ref: 'main', sha: 'm' }, draft: false, state: 'open', body: 'Closes 1', mergeable_state: 'behind' };
-  const { ctx, execs, envs } = mk('github', { repo: 'o/r', token_env: 'TOK', review_token_env: 'REV' }, () => ({}), (a) =>
-    a[0] === 'api' ? JSON.stringify(pull) : a[0] === 'pr' && a[1] === 'view' ? JSON.stringify({ statusCheckRollup: [{ __typename: 'CheckRun', name: 'ci', status: 'COMPLETED', conclusion: 'SUCCESS' }] }) : '');
+const pull = { number: 5, html_url: 'u', title: 'T', head: { ref: 'b', sha: 'h' }, base: { ref: 'main', sha: 'm' }, draft: false, state: 'open', body: 'Closes 1', mergeable_state: 'behind' };
+const restExec = (a: string[]) => {
+  const path = a.find((x) => x.startsWith('repos/')) ?? '';
+  if (path.includes('/check-runs')) return JSON.stringify({ check_runs: [{ name: 'ci', status: 'completed', conclusion: 'success' }, { name: 'e2e', status: 'in_progress', conclusion: null }] });
+  if (path.endsWith('/status')) return JSON.stringify({ statuses: [{ context: 'review', state: 'error' }] });
+  if (path.includes('/check-suites') || a.includes('--paginate')) return '';
+  if (path.includes('/pulls?')) return JSON.stringify([{ number: 5, merged_at: 'x' }, { number: 6, merged_at: null }]);
+  if (path.endsWith('/comments')) return JSON.stringify({ id: 9, html_url: 'cu' });
+  return JSON.stringify(pull);
+};
+
+test('github: draft = ready --undo outside the cloud, checks from REST, status via api', async () => {
+  const { ctx, execs, envs } = mk('github', { repo: 'o/r', token_env: 'TOK', review_token_env: 'REV' }, () => ({}), restExec);
   const f = createForge(ctx);
   const cr = await f.draft('5');
   assert.ok(execs.some((a) => a.join(' ').startsWith('pr ready 5 --undo')));
   assert.equal(cr.behind, true);
-  assert.deepEqual(cr.checks, [{ name: 'ci', state: 'success' }]);
+  assert.deepEqual(cr.checks, [{ name: 'ci', state: 'success' }, { name: 'e2e', state: 'pending' }, { name: 'review', state: 'failure' }]);
   await f.status('abc', { context: 'c', state: 'pending', description: 'd' });
   const i = execs.findIndex((a) => a[0] === 'api' && a.includes('repos/o/r/statuses/abc'));
   assert.ok(i >= 0);
   assert.equal(envs[i], 'r', 'status runs with the review token');
   assert.equal(envs[0], 't', 'other verbs run with token_env');
   await f.approve('5');
-  assert.deepEqual(execs.at(-1)!.slice(0, 4), ['pr', 'review', '5', '--approve']);
+  assert.deepEqual(execs.at(-1), ['api', '-X', 'POST', 'repos/o/r/pulls/5/reviews', '--input', '-']);
   assert.equal(envs.at(-1), 'r');
+});
+
+test('github: in a cloud session every verb is REST under repos/ and ready, draft, automerge use the ccr routes', async () => {
+  const inputs: (string | undefined)[] = [];
+  const { ctx, execs } = mk('github', { review_token_env: 'REV' }, () => ({}), restExec);
+  ctx.env.CLAUDE_CODE_REMOTE = 'true';
+  const exec = ctx.exec;
+  ctx.exec = (c, a, o: any = {}) => (inputs.push(o.input), exec(c, a, o));
+  const f = createForge(ctx);
+  assert.equal((await f.open({ source: 'b', title: 'T', body: 'Closes 1', draft: true })).n, '5');
+  assert.deepEqual(JSON.parse(inputs[0]!), { head: 'b', base: 'main', title: 'T', body: 'Closes 1', draft: true });
+  await f.view('5'); await f.diff('5'); await f.list(); await f.ready('5'); await f.draft('5'); await f.sync('5'); await f.automerge('5');
+  assert.deepEqual(await f.comment('5', 'hi'), { id: '9', url: 'cu' });
+  await f.approve('5'); await f.comments('5'); await f.approvals('5');
+  for (const a of execs) {
+    assert.equal(a[0], 'api', a.join(' '));
+    assert.ok(a.some((x) => x.startsWith('repos/{owner}/{repo}/')), a.join(' '));
+    assert.ok(!a.some((x) => /graphql/.test(x)), a.join(' '));
+  }
+  const has = (s: string) => execs.some((a) => a.join(' ').includes(s));
+  assert.ok(has('-X POST repos/{owner}/{repo}/pulls/5/ccr/ready_for_review'));
+  assert.ok(has('-X POST repos/{owner}/{repo}/pulls/5/ccr/convert_to_draft'));
+  assert.ok(has('-X PUT repos/{owner}/{repo}/pulls/5/ccr/auto_merge'));
+  assert.ok(has('-X PUT repos/{owner}/{repo}/pulls/5/update-branch'));
+  assert.ok(has('repos/{owner}/{repo}/pulls/5 -H Accept: application/vnd.github.diff'));
 });
 
 const stdout = async (fn: () => Promise<unknown>) => {
@@ -63,7 +97,7 @@ test('comments: github follows pages from gh api', async () => {
 });
 
 const ghPull = { number: 7, html_url: 'u', title: 'T', head: { ref: 'b', sha: 'h' }, base: { ref: 'main', sha: 'm' }, draft: false, state: 'open', body: 'Closes 1', user: { login: 'ann' } };
-const ghExec = (a: string[]) => a[0] === 'api' && a.at(-1)!.endsWith('/pulls/7') ? JSON.stringify(ghPull) : a[0] === 'pr' && a[1] === 'view' ? '{"statusCheckRollup":[]}' : a[0] === 'api' ? (() => { throw new Error('HTTP 404'); })() : '';
+const ghExec = (a: string[]) => a[0] === 'api' && a.at(-1)!.endsWith('/pulls/7') ? JSON.stringify(ghPull) : /\/(check-runs|status)\b/.test(a[1] ?? '') ? '{}' : a[0] === 'api' ? (() => { throw new Error('HTTP 404'); })() : '';
 
 test('cli: JSON on stdout, usage error is 2, failure is 1', async () => {
   const { ctx } = mk('github', { repo: 'o/r' }, () => ({}), ghExec);
@@ -112,10 +146,10 @@ test('cli: status refuses the contexts only a gate posts', async () => {
   assert.deepEqual(execs, []);
 });
 
-test('list: merged CRs come from gh pr list --state merged', async () => {
-  const gh = mk('github', {}, () => ({}), () => '[]');
-  await createForge(gh.ctx).list({ state: 'merged' });
-  assert.ok(gh.execs.some((a) => a.join(' ').includes('--state merged')));
+test('list: merged CRs are the closed pulls with a merge', async () => {
+  const gh = mk('github', { repo: 'o/r' }, () => ({}), restExec);
+  assert.equal((await createForge(gh.ctx).list({ state: 'merged' })).length, 1);
+  assert.ok(gh.execs[0].includes('repos/o/r/pulls?state=closed&per_page=100'));
 });
 
 test('status and approve need review_token_env and never use the implementer token', async () => {
