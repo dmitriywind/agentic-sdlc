@@ -98,6 +98,11 @@ In order:
    - Ready from the top, at most `cycle.max_implementations` new claims;
    - Backlog: grooming for items with no Priority; shape while Ready plus the shapes under way hold
      fewer than `cycle.min_ready` tickets.
+
+   When a run finishes, read its ticket again (`board get <id>`). When the ticket now matches another
+   row the cycle dispatches (groomed to shape, shaped to Ready), dispatch that next step in this cycle,
+   under the same caps. Start no new step after `cycle.time_budget_minutes`. Done when no finished
+   ticket matches a further row, or the time budget is spent.
 7. **Report.** Write one heartbeat as [`references/heartbeat.md`](references/heartbeat.md) says. Its
    runs include the judge runs of step 3; the `improve-factory` run is in its own `learn` heartbeat, and
    the review runtime writes a `review` heartbeat for its runs, so every run is in the ledger once.

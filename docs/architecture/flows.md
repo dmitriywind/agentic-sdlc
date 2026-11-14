@@ -71,6 +71,9 @@ sequenceDiagram
   W->>B: Move to Ideas, Backlog or Cancelled
   O->>W: 6. Route: releases, hand-offs, rework, Ready, Backlog
   W->>B: Draft CR, ticket In review, shaped ticket Ready
+  loop While the time budget lasts: a finished ticket that matches another row
+    O->>W: Dispatch its next step (groomed to shape, shaped to implement)
+  end
   O->>B: 7. Report: write the cycle heartbeat with ledger rows
   opt 8. Review hand-off: forge list shows a CR that needs a review
     O->>R: Fire the review runtime once

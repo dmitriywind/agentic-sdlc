@@ -137,6 +137,14 @@ Feature: Routing and the unattended cycle
     Then the cycle routes the next Backlog ticket to shape
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 6
+  Scenario: A ticket moves on to its next step in the same cycle
+    Given the cycle groomed a Backlog ticket and the run finished
+    And "cycle.time_budget_minutes" is not spent
+    When the ticket now matches the shape row
+    Then the cycle dispatches shape for it in the same cycle
+    And after shape makes it Ready, implement-spec may claim it under "cycle.max_implementations"
+
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 6
   Scenario: A full Ready queue never starves releases or rework
     Given Ready holds at least "cycle.min_ready" tickets
     And a release request is at Backlog
