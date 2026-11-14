@@ -31,9 +31,12 @@ env:
   DELIVERY: release-line   # set: your product.delivery (doctor checks it)
   VERSION: ""   # set: an artifact version expression for continuous delivery, e.g. ${{ github.run_number }}; empty for none
 
+defaults:
+  run:
+    shell: bash   # self-hosted Windows runners default to PowerShell
 jobs:
   delivery:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
     timeout-minutes: 10
     steps:
       # pin to a commit SHA (actions/checkout, actions/setup-node)

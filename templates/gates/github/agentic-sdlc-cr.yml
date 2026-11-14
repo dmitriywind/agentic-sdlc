@@ -26,12 +26,15 @@ concurrency:
   group: agentic-cr-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.merge_group.head_sha }}-${{ github.event_name }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash   # self-hosted Windows runners default to PowerShell
 jobs:
   ticket-linkage:
     # Posts status ticket-linkage on the head with this job's GITHUB_TOKEN (the Actions app the ruleset pins).
     name: linkage-gate
     if: github.event_name != 'workflow_run'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
     timeout-minutes: 10
     permissions:
       contents: read
@@ -88,7 +91,7 @@ jobs:
     name: approval-gate
     if: github.event_name == 'pull_request_target' || github.event_name == 'workflow_run'
     environment: agentic-review
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
     timeout-minutes: 10
     permissions:
       contents: read
@@ -135,7 +138,7 @@ jobs:
     name: carry-statuses
     if: github.event_name == 'merge_group'
     environment: agentic-review
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
     timeout-minutes: 10
     permissions:
       contents: read

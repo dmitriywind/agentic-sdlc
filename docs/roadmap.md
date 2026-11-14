@@ -15,14 +15,13 @@ flowchart LR
 | Item | Why | Done when |
 |---|---|---|
 | Pilot on a real product repo | v2 has 179 passing tests but has never run against a real product. | Three scheduled cycles in a row write a heartbeat with no `errors`, and a ticket goes from Backlog to Shipped. |
-| A cycle runner that reaches GitHub Projects | Claude cloud sessions cannot call the Projects GraphQL or REST API, so a cloud routine cannot read a `github` board (found on WalletMate). | `routine.md` names a runner that works with a `github` board (a desktop scheduled task on the owner's PC, or Actions), and doctor fails a cloud runner with a `github` board. |
-| Gates on a self-hosted runner | WalletMate allows no billed CI minutes until M0 is proven, and the gates run in Actions. | The gate templates take `runs-on` from one place, and `docs/forges.md` states the trust limits of a self-hosted runner. |
 
 ### WalletMate pilot plan
 
 Agreed on 2026-11-14 with the WalletMate sessions and the owner.
 
-- **When:** after WalletMate's M0 is proven locally (the owner's rule: no CI billing before that; M0 is due 2026-12-31). Install at a quiet point: no open PR, In review empty, Ready intake paused.
+- **When:** after WalletMate's M0 is proven locally (the owner's rule: no CI billing before that; M0 is due 2026-12-31). A self-hosted runner bills no minutes, so the owner may choose to start earlier. Install at a quiet point: no open PR, In review empty, Ready intake paused.
+- **Runners:** the cycle and the gates run in GitHub Actions on two self-hosted runners on the owner's PC (`AGENTIC_RUNS_ON` for code, `AGENTIC_RUNS_ON_TRUSTED` for secrets), because a cloud routine cannot reach Project 1. One code runner keeps one Playwright run at a time.
 - **Merge rule:** v2's risk classes replace "the owner merges every PR". `forge.human_approval: full-lane`: Fast-lane CRs auto-merge; Full-lane CRs (Size above S, or `lane_areas` custody, redaction and sync, or `walletmate-3.0-marketing/app/legal/**`) wait for the owner's approval; factory CRs wait for `owners.factory`.
 - **Skills:** from the plugin (`--harness claude`); the repo keeps only the binding, workflows, rulesets and hook. Retire `.agents/skills`. Move `.agents/rules/test-pyramid.md` and `review-checklist.md` to `paths.test_standard` and `paths.review_checklist`.
 - **Binding values to carry:** `commands.verify: pnpm run verify` (about 22 minutes, Docker, the Playwright lock), the light verify for `.agents`, `.github`, wiki and `*.md` as `paths.no_proof`, 18 locales and the screenshot rule in the review checklist, environments staging and production with `test:smoke` and `test:live`.

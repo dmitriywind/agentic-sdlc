@@ -173,3 +173,21 @@ Feature: Install and validate the binding
     When the adopter runs "agentic-sdlc doctor"
     Then a warning says to use a fine-grained token with Commit statuses: no access
     And a fine-grained token prints no warning
+
+  # Source: src/install.ts, "selfHostedRunner"
+  # Proof: test/install.test.ts "doctor: a self-hosted runner fails on a public repo and warns when CR code and secrets share it"
+  Scenario: doctor checks the self-hosted runner setup
+    Given the repo variable AGENTIC_RUNS_ON names a self-hosted runner
+    When the adopter runs "agentic-sdlc doctor"
+    Then on a public repo the runner check fails
+    And on a private repo with no separate AGENTIC_RUNS_ON_TRUSTED runner a warning says CR code and the secret jobs share one runner
+    And with two separate runners the runner check is ok
+
+  # Source: src/install.ts, "cloudBoard"
+  # Proof: test/install.test.ts "doctor: a Claude cloud session with a GitHub board names the runner that can reach Projects"
+  Scenario: doctor in a Claude cloud session names a runner that can reach the GitHub board
+    Given a binding with board adapter "github"
+    And doctor runs in a Claude cloud session
+    When the board probe fails
+    Then doctor says a cloud session cannot reach GitHub Projects
+    And it names GitHub Actions as the runner for the cycle

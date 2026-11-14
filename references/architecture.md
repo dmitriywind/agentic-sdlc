@@ -339,6 +339,17 @@ prompt in `templates/runner/cycle-prompt.md`.
 
 Gates always run in the forge's CI, so trunk guarantees never depend on the runtime.
 
+**Runners.** The GitHub templates read `runs-on` from two repo variables, as JSON: `AGENTIC_RUNS_ON` for the
+jobs that run CR or agent code (`agentic-sdlc-verify.yml`, the runner's `cycle` job) and
+`AGENTIC_RUNS_ON_TRUSTED` for the jobs that hold secrets (default: `AGENTIC_RUNS_ON`, then
+`"ubuntu-latest"`). A self-hosted runner bills no minutes. `doctor` fails a self-hosted runner on a public
+repo and warns when both variables name the same runner. Every job runs `bash`.
+
+**A board the runtime cannot reach.** A Claude cloud session reaches the repo but not GitHub Projects, so a
+cloud routine cannot run the cycle on a `github` board. With that board, run the cycle from GitHub Actions
+(`templates/runner/github-actions-claude.yml`). `doctor` in a cloud session (`CLAUDE_CODE_REMOTE=true`) says so when
+`board.list` fails.
+
 **Packaging per harness.** For Claude Code the package is a plugin (`.claude-plugin/`: skills,
 hooks, the MCP server), so skills are named `/agentic-sdlc:<skill>`. `init --harness claude`
 copies no skills; it generates one subagent per tier and adds an `@AGENTS.md` import to

@@ -5,13 +5,15 @@ Every scheduler runs two prompts, one run of each at a time:
 - the review, started when the cycle ends: `review-prompt.md` (installed at `.agents/review-prompt.md`), the only run holding `AGENTIC_REVIEW_TOKEN` and `AGENTIC_SDLC_ROLE=review`.
 
 The cycle never holds the review token, so an implementer cannot approve its own CR. Both runs set `AGENTIC_SDLC_UNATTENDED=1`.
+A `github` board needs a runtime that can reach GitHub Projects: GitHub Actions works, on a GitHub-hosted or a
+self-hosted runner (`AGENTIC_RUNS_ON`; no billed minutes). A Claude cloud routine cannot reach it.
 Setup step everywhere: `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_API_KEY` under the individual profile). Gates run in the forge's CI whatever the runtime.
 
 | Runtime | Template | Profile |
 |---|---|---|
 | GitHub Actions + Claude Code CLI | `github-actions-claude.yml` | individual (OAuth token) or enterprise (API key) |
 | GitHub Actions + Codex CLI | `github-actions-codex.yml` | enterprise |
-| Claude cloud scheduled task (routine) | `claude-routine.md` | individual |
+| Claude cloud scheduled task (routine) | `claude-routine.md` (not with a `github` board) | individual |
 | Claude Managed Agents scheduled deployment | `claude-managed-deployment.json` (below) | enterprise |
 | Cursor automation | `cursor-automation.md` | individual or enterprise |
 | Antigravity remote agent / Gemini API | `antigravity-remote-agent.md` | individual or enterprise |

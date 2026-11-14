@@ -16,10 +16,13 @@ concurrency:
   group: agentic-verify-${{ github.event.pull_request.number || github.event.merge_group.head_sha }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash   # self-hosted Windows runners default to PowerShell
 jobs:
   Required:
     name: Required
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that run CR or agent code
     timeout-minutes: 30
     steps:
       # pin to a commit SHA (actions/checkout, actions/setup-node)
@@ -39,7 +42,7 @@ jobs:
     # The CR's new or changed proofs run against the merge base's product code: each must fail there.
     # On a merge queue commit the proofs already passed this check on the PR head.
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that run CR or agent code
     timeout-minutes: 30
     permissions:
       contents: read
@@ -69,7 +72,7 @@ jobs:
   skill-regression:
     name: skill-regression
     # Always runs, so the required check is green on a CR that does not touch .agents/**.
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that run CR or agent code
     timeout-minutes: 15
     env:
       AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}

@@ -18,9 +18,12 @@ concurrency:
   group: agentic-release
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: bash   # self-hosted Windows runners default to PowerShell
 jobs:
   cut:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
     timeout-minutes: 10
     environment: agentic-release
     env:

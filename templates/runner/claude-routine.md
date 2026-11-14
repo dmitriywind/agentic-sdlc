@@ -2,6 +2,8 @@
 
 Profile: individual (also works on Team/Enterprise seats). Research preview; needs a claude.ai login (not an API key, Bedrock or Vertex).
 Install at: claude.ai/code/routines, or `/schedule` in Claude Code. The task belongs to, and acts as, one claude.ai account.
+Warning: a cloud session cannot reach GitHub Projects (GraphQL or the Projects REST API). With a `github`
+board, use `github-actions-claude.yml` instead; a self-hosted runner bills no minutes.
 Secrets: none for the model. The repo needs the Claude GitHub App or `/web-setup`.
 Two routines, two cloud environments:
 - cycle environment: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_SDLC_UNATTENDED=1, AGENTIC_REVIEW_FIRE_CMD. Never AGENTIC_REVIEW_TOKEN.

@@ -8776,9 +8776,11 @@ var init_vcs = __esm({
 var install_exports = {};
 __export(install_exports, {
   cli: () => cli4,
+  cloudBoard: () => cloudBoard,
   deliveryWorkflow: () => deliveryWorkflow,
   implementerToken: () => implementerToken,
   packageRoot: () => packageRoot,
+  selfHostedRunner: () => selfHostedRunner,
   trunkProtection: () => trunkProtection,
   validate: () => validate
 });
@@ -9072,6 +9074,27 @@ function implementerToken(b, ctx) {
   const wide = scopes.filter((s) => s === "repo" || s === "repo:status");
   return wide.length ? `warn: the implementer token (${name ?? "gh login"}) has scope ${wide.join(", ")}, so code a cycle runs can post commit statuses; use a fine-grained token with Commit statuses: no access, and pin every required check to its app` : void 0;
 }
+function selfHostedRunner(b, ctx) {
+  const repo = b.forge.options?.repo;
+  if (!repo) return void 0;
+  let vars;
+  let visibility;
+  try {
+    vars = Object.fromEntries(JSON.parse(ctx.exec("gh", ["variable", "list", "-R", repo, "--json", "name,value"])).map((v) => [v.name, v.value]));
+    visibility = ctx.exec("gh", ["api", `repos/${repo}`, "--jq", ".visibility"]).trim();
+  } catch {
+    return void 0;
+  }
+  const code = vars.AGENTIC_RUNS_ON ?? "", trusted = vars.AGENTIC_RUNS_ON_TRUSTED ?? code;
+  if (![code, trusted].some((v) => v.includes("self-hosted"))) return void 0;
+  if (visibility === "public") return "fail runner: a self-hosted runner on a public repo runs fork code on your machine; use GitHub-hosted runners";
+  if (code.includes("self-hosted") && trusted === code) return "warn: runner: CR code and the secret jobs share one self-hosted runner; set AGENTIC_RUNS_ON_TRUSTED to a separate runner (see docs/forges.md, Self-hosted runners)";
+  return `ok   runner: self-hosted, code on ${code || "ubuntu-latest"}, secrets on ${trusted || "ubuntu-latest"}`;
+}
+function cloudBoard(b, env = {}) {
+  if (b.board?.adapter !== "github" || env.CLAUDE_CODE_REMOTE !== "true") return void 0;
+  return "fail board.list: a Claude cloud session cannot reach GitHub Projects; run the cycle from GitHub Actions (templates/runner/github-actions-claude.yml), on a self-hosted runner for no billed minutes";
+}
 function deliveryWorkflow(b, root) {
   const f = join4(root, ".github", "workflows", "agentic-sdlc-delivery.yml");
   if (!existsSync3(f)) return void 0;
@@ -9171,6 +9194,11 @@ ${END}`;
           trunkProtection(binding, ctx).forEach(out);
           const it = implementerToken(binding, ctx);
           if (it) out(it);
+          const rn = selfHostedRunner(binding, ctx);
+          if (rn) {
+            out(rn);
+            if (rn.startsWith("fail")) bad++;
+          }
           const dw = deliveryWorkflow(binding, ctx.root);
           if (dw) {
             out(dw);
@@ -9183,6 +9211,8 @@ ${END}`;
             } catch (e) {
               bad++;
               out(`fail ${name}: ${redact(e.message, ctx.env).split("\n")[0]}`);
+              const hint = name === "board.list" ? cloudBoard(binding, ctx.env) : void 0;
+              if (hint) out(hint);
             }
           }
           return bad ? 1 : 0;

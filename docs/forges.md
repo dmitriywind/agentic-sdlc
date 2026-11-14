@@ -99,6 +99,24 @@ is readable only in `agentic-release`, after the Product owner approves the run.
 readable only by workflows on the trunk and the release lines. The trunk and release rulesets hold
 this.
 
+## Self-hosted runners
+Set the repo variables `AGENTIC_RUNS_ON` and `AGENTIC_RUNS_ON_TRUSTED` (Settings > Secrets and variables >
+Actions > Variables) to a JSON label list, for example `["self-hosted","wm-code"]` and
+`["self-hosted","wm-trusted"]`. Unset, both jobs run on `ubuntu-latest`. A self-hosted runner bills no
+minutes, and one runner runs one job at a time.
+
+Trust limits:
+- Use a self-hosted runner only on a private repo. On a public repo a fork's CR runs its code on your machine.
+  `doctor` fails this case.
+- `AGENTIC_RUNS_ON` jobs run CR and agent code with the runner's OS user. Run that runner as its own OS user,
+  or in a container or VM, with no access to your files, credentials, browser or other repos.
+- `AGENTIC_RUNS_ON_TRUSTED` jobs hold the review, board, forge and release tokens. Give them a second runner
+  with a second OS user, so CR code never reads what a secret job leaves on disk. `doctor` warns when one
+  runner takes both kinds.
+- Register each runner with `--ephemeral` where you can, so no job sees the workspace of the previous one.
+- The Environments `agentic-review` and `agentic-release` still gate which jobs get those secrets. On a
+  shared runner they no longer isolate the secrets on the machine itself.
+
 ## Search lag
 `forge closing <id>` uses GitHub search, and the search index can trail a merge. When the search
 finds no merge for a ticket, `gate shipped` also reads the newest merged CRs, so a fresh merge

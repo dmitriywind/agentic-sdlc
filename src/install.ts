@@ -331,6 +331,33 @@ export function implementerToken(b: any, ctx: { env?: Record<string, string | un
     : undefined;
 }
 
+/**
+ * The runner variables the GitHub templates read: AGENTIC_RUNS_ON for jobs that run CR or agent code,
+ * AGENTIC_RUNS_ON_TRUSTED for jobs that hold secrets. A self-hosted runner on a public repo runs a fork's
+ * code on your machine; one runner for both kinds lets CR code read what the secret jobs leave behind.
+ */
+export function selfHostedRunner(b: any, ctx: { exec: (c: string, a: string[], o?: any) => string }): string | undefined {
+  const repo = b.forge.options?.repo;
+  if (!repo) return undefined;
+  let vars: Record<string, string>;
+  let visibility: string;
+  try {
+    vars = Object.fromEntries((JSON.parse(ctx.exec('gh', ['variable', 'list', '-R', repo, '--json', 'name,value'])) as { name: string; value: string }[]).map((v) => [v.name, v.value]));
+    visibility = ctx.exec('gh', ['api', `repos/${repo}`, '--jq', '.visibility']).trim();
+  } catch { return undefined; } // forge.list reports access problems
+  const code = vars.AGENTIC_RUNS_ON ?? '', trusted = vars.AGENTIC_RUNS_ON_TRUSTED ?? code;
+  if (![code, trusted].some((v) => v.includes('self-hosted'))) return undefined;
+  if (visibility === 'public') return 'fail runner: a self-hosted runner on a public repo runs fork code on your machine; use GitHub-hosted runners';
+  if (code.includes('self-hosted') && trusted === code) return 'warn: runner: CR code and the secret jobs share one self-hosted runner; set AGENTIC_RUNS_ON_TRUSTED to a separate runner (see docs/forges.md, Self-hosted runners)';
+  return `ok   runner: self-hosted, code on ${code || 'ubuntu-latest'}, secrets on ${trusted || 'ubuntu-latest'}`;
+}
+
+/** Claude cloud sessions reach the repo but not GitHub Projects (GraphQL and the Projects REST API). */
+export function cloudBoard(b: any, env: Record<string, string | undefined> = {}): string | undefined {
+  if (b.board?.adapter !== 'github' || env.CLAUDE_CODE_REMOTE !== 'true') return undefined;
+  return 'fail board.list: a Claude cloud session cannot reach GitHub Projects; run the cycle from GitHub Actions (templates/runner/github-actions-claude.yml), on a self-hosted runner for no billed minutes';
+}
+
 /** The stock delivery workflow's push branches must name this project's trunk and release lines. */
 export function deliveryWorkflow(b: any, root: string): string | undefined {
   const f = join(root, '.github', 'workflows', 'agentic-sdlc-delivery.yml');
@@ -378,11 +405,17 @@ export const cli: PortCli = async (argv, ctx) => {
       trunkProtection(binding, ctx).forEach(out);
       const it = implementerToken(binding, ctx);
       if (it) out(it);
+      const rn = selfHostedRunner(binding, ctx);
+      if (rn) { out(rn); if (rn.startsWith('fail')) bad++; }
       const dw = deliveryWorkflow(binding, ctx.root);
       if (dw) { out(dw); if (dw.startsWith('fail')) bad++; }
       for (const [name, run] of probes) {
         try { await run(); out(`ok   ${name}`); }
-        catch (e) { bad++; out(`fail ${name}: ${redact((e as Error).message, ctx.env).split('\n')[0]}`); }
+        catch (e) {
+          bad++; out(`fail ${name}: ${redact((e as Error).message, ctx.env).split('\n')[0]}`);
+          const hint = name === 'board.list' ? cloudBoard(binding, ctx.env) : undefined;
+          if (hint) out(hint);
+        }
       }
       return bad ? 1 : 0;
     }

@@ -3,6 +3,11 @@
 All notable changes to this package. Versions follow semver. A release is a `v<version>` Git tag; the package is
 not on npm.
 
+## Unreleased
+
+- GitHub templates read `runs-on` from the repo variables `AGENTIC_RUNS_ON` (jobs that run CR or agent code) and `AGENTIC_RUNS_ON_TRUSTED` (jobs that hold secrets), and run `bash` on every runner, so a self-hosted runner (no billed minutes, Windows too) works. `doctor` fails a self-hosted runner on a public repo and warns when one runner takes both kinds of job.
+- A Claude cloud routine cannot reach GitHub Projects: the runner docs say to use GitHub Actions with a `github` board, and `doctor` in a cloud session says so when the board probe fails.
+
 ## 2.0.0-alpha.5 (2026-11-14)
 
 - Breaking: GitHub is the one forge. The GitLab, Azure DevOps and Bitbucket adapters, their gate templates and `gitlab-ci-cycle.yml` are removed, because a CR there could change the pipeline file that ran its own gates. `gate approval --fail-pending` is removed; `forge cut` is a required port verb and the release skill always cuts through it.

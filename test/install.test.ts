@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, wri
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cli, deliveryWorkflow, implementerToken, trunkProtection, validate } from '../src/install.ts';
+import { cli, cloudBoard, deliveryWorkflow, implementerToken, selfHostedRunner, trunkProtection, validate } from '../src/install.ts';
 import { fakeCtx } from './helpers.ts';
 
 const w = (p: string, s: string) => { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, s); };
@@ -322,4 +322,22 @@ test('doctor: a classic implementer token with repo scope warns; a fine-grained 
   assert.equal(implementerToken(b, { env: {}, exec: exec('read:org') }), undefined);
   assert.equal(implementerToken(b, { env: {}, exec: exec() }), undefined);
   assert.equal(implementerToken(b, { env: {}, exec: () => { throw new Error('401'); } }), undefined);
+});
+
+test('doctor: a self-hosted runner fails on a public repo and warns when CR code and secrets share it', () => {
+  const b = { forge: { adapter: 'github', options: { repo: 'o/r' } } };
+  const at = (vars: Record<string, string>, visibility = 'private') => ({ exec: (_c: string, a: string[]) =>
+    a[0] === 'variable' ? JSON.stringify(Object.entries(vars).map(([name, value]) => ({ name, value }))) : `${visibility}\n` });
+  assert.equal(selfHostedRunner(b, at({})), undefined);
+  assert.equal(selfHostedRunner(b, at({ AGENTIC_RUNS_ON: '"ubuntu-latest"' })), undefined);
+  assert.match(selfHostedRunner(b, at({ AGENTIC_RUNS_ON: '["self-hosted"]' }, 'public'))!, /^fail runner: .*public repo/);
+  assert.match(selfHostedRunner(b, at({ AGENTIC_RUNS_ON: '["self-hosted"]' }))!, /^warn: runner: CR code and the secret jobs share/);
+  assert.match(selfHostedRunner(b, at({ AGENTIC_RUNS_ON: '["self-hosted","code"]', AGENTIC_RUNS_ON_TRUSTED: '["self-hosted","trusted"]' }))!, /^ok   runner: self-hosted/);
+  assert.equal(selfHostedRunner(b, { exec: () => { throw new Error('403'); } }), undefined);
+});
+
+test('doctor: a Claude cloud session with a GitHub board names the runner that can reach Projects', () => {
+  assert.match(cloudBoard({ board: { adapter: 'github' } }, { CLAUDE_CODE_REMOTE: 'true' })!, /cannot reach GitHub Projects.*GitHub Actions/);
+  assert.equal(cloudBoard({ board: { adapter: 'github' } }, {}), undefined);
+  assert.equal(cloudBoard({ board: { adapter: 'jira' } }, { CLAUDE_CODE_REMOTE: 'true' }), undefined);
 });

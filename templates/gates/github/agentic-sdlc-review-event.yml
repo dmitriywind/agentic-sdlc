@@ -5,9 +5,12 @@ name: agentic-sdlc review event
 on:
   pull_request_review: { types: [submitted, dismissed] }
 permissions: {}
+defaults:
+  run:
+    shell: bash   # self-hosted Windows runners default to PowerShell
 jobs:
   relay:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
     timeout-minutes: 2
     steps:
       - run: "true"

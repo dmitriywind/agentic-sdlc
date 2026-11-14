@@ -16,9 +16,12 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+defaults:
+  run:
+    shell: bash   # self-hosted Windows runners default to PowerShell
 jobs:
   cycle:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that run CR or agent code
     timeout-minutes: 60
     env:
       AGENTIC_SDLC_UNATTENDED: "1"
@@ -44,7 +47,7 @@ jobs:
     needs: cycle
     if: ${{ !cancelled() }}  # review even when the cycle failed
     environment: agentic-review   # AGENTIC_REVIEW_TOKEN lives only here (trunk-only deployment branches)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
     timeout-minutes: 60
     env:
       AGENTIC_SDLC_UNATTENDED: "1"
@@ -68,7 +71,7 @@ jobs:
   dead-man:
     needs: [cycle, review]
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
     timeout-minutes: 10
     env:
       AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
