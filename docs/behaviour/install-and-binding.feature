@@ -125,6 +125,33 @@ Feature: Install and validate the binding
     When the board adapter lists the board
     Then it returns only the issue of board.options.repo
 
+  # Source: src/board/github-issues.ts, "createGithubIssuesBoard"
+  # Proof: test/board-adapters.test.ts "github-issues list reads status and fields from labels, pages by 100, skips PRs and unlabelled issues"
+  Scenario: The github-issues board reads Status and fields from labels over repo REST only
+    Given board.adapter is "github-issues" and an issue has the labels "status:Ready" and "size:S"
+    When the board adapter lists the board
+    Then the item has status Ready and field size S
+    And issues without a status label and pull requests are left out
+    And every call is "gh api" under "repos/<owner>/<repo>/", never GraphQL, "gh issue" or "gh project"
+
+  # Source: src/board/github-issues.ts, "move"
+  # Proof: test/board-adapters.test.ts "github-issues move swaps the status label, and refuses with --only-from when the status differs"
+  Scenario: A github-issues move swaps the status label
+    Given an issue with the label "status:Backlog"
+    When the factory runs "board move <id> "In progress" --only-from Ready"
+    Then the move is refused and the labels do not change
+    When the factory runs "board move <id> "In progress" --only-from Backlog"
+    Then the issue has "status:In progress" and no other status label
+
+  # Source: src/board/github-issues.ts, "create" and "close"
+  # Proof: test/board-adapters.test.ts "github-issues create ensures every label exists, then sets the milestone and the parent"
+  # Proof: test/board-adapters.test.ts "github-issues set and label edit labels; close sets the state reason and Cancelled"
+  Scenario: github-issues create makes missing labels, and close closes the issue
+    When the factory creates a ticket with a status and labels the repo lacks
+    Then the repo gets those labels before the issue is opened
+    When the factory closes a ticket with reason not_planned
+    Then the issue is closed as not planned and has "status:Cancelled"
+
   # Source: src/binding.ts, "validateBinding" and "bindingWarnings" (product.evidence)
   # Proof: test/binding.test.ts "product.evidence: known kinds only; evidence without commands.evidence_check warns"
   Scenario: Release evidence needs a command that proves it

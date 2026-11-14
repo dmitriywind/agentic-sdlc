@@ -104,7 +104,11 @@ Logical fields: `size`, `priority`, `lane`, `shipped`, `release_version`. The bi
 the tracker's field name (Jira custom field, Linear label group or custom field, GitHub Projects
 field, local JSON key).
 
-Adapters: `github` (Projects v2 via `gh`), `jira` (Cloud REST v3, transitions for Status), `linear`
+Adapters: `github` (Projects v2 via `gh`, for CI runtimes), `github-issues` (the repo's issues through
+`gh api repos/{owner}/{repo}/…` REST only, so a Claude cloud session reaches it: Status and each logical
+field are labels `<name>:<value>`, `status:` and the lower-cased field name, e.g. `status:Ready`, `size:S`;
+an issue without a status label is off the board; `create` and every label write create missing labels;
+`close` also closes the issue with its state reason; option `repo`), `jira` (Cloud REST v3, transitions for Status), `linear`
 (GraphQL API, workflow states for Status), `local` (`.agents/board.json`, for tests and solo
 projects). Credentials only from env vars the binding names; never from a file in the repo.
 

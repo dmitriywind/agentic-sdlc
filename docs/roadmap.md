@@ -30,7 +30,6 @@ runtime, not a fallback. Facts from a probe in a cloud session (2026-11-14) and 
 
 | Item | Why | Done when |
 |---|---|---|
-| A GitHub board a cloud run can reach | Projects v2 is unreachable from a cloud session by GraphQL, REST and the connector. | A `github-issues` board: Status, Size, Priority, Lane and Shipped as labels, all through `repos/…`. The `github` (Projects v2) board stays for CI runtimes. |
 | Jira and Linear from the cloud | Both hosts are refused at the default network level. | The routine template adds the host to the environment's allowed domains and the token as a network secret; one cloud run lists the board. |
 | Skills in a cloud session | Plugins from `.claude/settings.json` do not load; `templates/runner/claude-routine.md` says to enable one. | `init --harness claude` can write the skills to `.claude/skills/`; the routine template names that path. |
 | Verify out of the agent run | A cloud session has no Docker and stops a foreground command at 10 minutes. | The routine runs `commands.fast_check`; `Required` runs `commands.verify` in CI; the template says so. |

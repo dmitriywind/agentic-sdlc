@@ -13,7 +13,7 @@ export function loadBinding(root: string): Binding {
 }
 
 const ADAPTERS = {
-  board: ['github', 'jira', 'linear', 'local'],
+  board: ['github', 'github-issues', 'jira', 'linear', 'local'],
   forge: ['github'],
   vcs: ['git'],
 };
@@ -21,6 +21,7 @@ const ADAPTERS = {
 const OPTIONS: Record<string, Record<string, [string[], string[]]>> = {
   board: {
     github: [['owner', 'project_number', 'repo'], ['token_env']],
+    'github-issues': [['repo'], []],
     jira: [['base_url', 'project_key', 'email_env', 'token_env'], []],
     linear: [['team_key', 'token_env'], []],
     local: [[], []],
@@ -131,7 +132,7 @@ export function bindingWarnings(b: Binding): string[] {
   if (x?.product?.kind !== undefined) w.push('product.kind is unused; remove it');
   if (x?.board?.milestone !== undefined) w.push('board.milestone is unused; remove it');
   const hb = String(x?.heartbeat?.ticket ?? '');
-  if (['github', 'local'].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
+  if (['github', 'github-issues', 'local'].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
   const envs: string[] = x?.product?.environments ?? [];
   for (const l of x?.board?.env_labels ?? []) if (String(l).startsWith('env:') && !envs.includes(String(l).slice(4))) w.push(`board.env_labels '${l}' names no product.environments entry`);
   if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push('product.evidence is set but commands.evidence_check is unset: no release can show its evidence');
