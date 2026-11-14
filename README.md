@@ -74,6 +74,8 @@ npx --no agentic-sdlc doctor
 ```
 
 The CLI installs from Git only. Warning: the npm package `agentic-sdlc` is a different project; do not install it.
+To move to another revision, run `npm uninstall agentic-sdlc` first, then the `npm i` line above with the new ref, then `init`
+again. npm 12 refuses to change an installed Git dependency in place (`EALLOWGIT`).
 
 `init` flags:
 

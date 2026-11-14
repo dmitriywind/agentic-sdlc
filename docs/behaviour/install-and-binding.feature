@@ -240,3 +240,11 @@ Feature: Install and validate the binding
     When doctor runs in a Claude cloud session (CLAUDE_CODE_REMOTE=true)
     Then doctor fails, saying a cloud session cannot reach GitHub Projects
     And it names the github-issues, jira and linear boards, and GitHub Actions as the runner for a github board
+
+  # Source: src/install.ts, "init" (continuous)
+  # Proof: test/install.test.ts "init writes no release workflow or release ruleset when the binding delivers continuously"
+  Scenario: Init writes no release line files for continuous delivery
+    Given the binding sets product.delivery to continuous
+    When the adopter runs "agentic-sdlc init --forge github"
+    Then init writes the gate workflows
+    And init writes no release workflow and no release ruleset

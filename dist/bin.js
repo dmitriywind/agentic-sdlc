@@ -9178,15 +9178,16 @@ async function init(root, argv, log) {
   }
   const gates = join4(pkg, "templates", "gates");
   const dir = need(pkg, `templates/gates/${forge}`);
+  const continuous = (0, import_yaml2.parse)(readFileSync5(bindingFile, "utf8"))?.product?.delivery === "continuous";
   {
-    for (const n of readdirSync(dir).filter((n2) => n2.endsWith(".yml"))) copyFile(join4(dir, n), join4(root, ".github", "workflows", n), force, log);
+    for (const n of readdirSync(dir).filter((n2) => n2.endsWith(".yml") && !(continuous && n2 === "agentic-sdlc-release.yml"))) copyFile(join4(dir, n), join4(root, ".github", "workflows", n), force, log);
     if (existsSync3(join4(dir, "pull_request_template.md"))) copyFile(join4(dir, "pull_request_template.md"), join4(root, ".github", "pull_request_template.md"), force, log);
     if (existsSync3(join4(dir, "ruleset.trunk.json"))) {
       copyFile(join4(dir, "ruleset.trunk.json"), join4(root, ".github", "rulesets", "trunk.json"), force, log);
       log.push("import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk");
       log.push("its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
     }
-    if (existsSync3(join4(dir, "ruleset.release.json"))) {
+    if (!continuous && existsSync3(join4(dir, "ruleset.release.json"))) {
       copyFile(join4(dir, "ruleset.release.json"), join4(root, ".github", "rulesets", "release.json"), force, log);
       log.push("import .github/rulesets/release.json (Rules > Rulesets) and add the release bot (app or role) as a bypass actor; set its include to your vcs.release_prefix");
     }

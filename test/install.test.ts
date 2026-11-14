@@ -321,6 +321,19 @@ test('init on github installs the release-lines ruleset', async () => {
   assert.ok(existsSync(join(root, '.github/rulesets/release.json')));
 });
 
+test('init writes no release workflow or release ruleset when the binding delivers continuously', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  w(join(pkg, 'templates/gates/github/ruleset.release.json'), '{}');
+  w(join(pkg, 'templates/gates/github/agentic-sdlc-release.yml'), 'on: workflow_dispatch\n');
+  w(join(root, '.agents/binding.yml'), 'version: 2\nboard: { adapter: github }\nforge: { adapter: github }\nvcs: { adapter: git }\nproduct: { delivery: continuous }\n');
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init', '--forge', 'github'], ctx));
+  assert.ok(existsSync(join(root, '.github/workflows/gate.yml')));
+  assert.ok(!existsSync(join(root, '.github/workflows/agentic-sdlc-release.yml')));
+  assert.ok(!existsSync(join(root, '.github/rulesets/release.json')));
+});
+
 test('doctor: env.DELIVERY must match product.delivery; continuous needs no release prefix', () => {
   const root = mkdtempSync(join(tmpdir(), 'dwd-'));
   w(join(root, '.github/workflows/agentic-sdlc-delivery.yml'), 'on:\n  push:\n    branches: [main]\nenv:\n  TRUNK: main\n  DELIVERY: continuous\n');
