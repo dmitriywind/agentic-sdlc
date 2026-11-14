@@ -24,6 +24,7 @@ runner of its own.
 
 | Start here | |
 |---|---|
+| [Guide page](docs/guide.html) | One HTML page: set up, every flow and every part, with the diagrams drawn. Open it in a browser. |
 | [Docs index](docs/README.md) | Every guide. |
 | [Components](docs/architecture/components.md) and [flows](docs/architecture/flows.md) | Diagrams of the parts, trust boundaries, the cycle, review, release and learning. |
 | [Claude](docs/ecosystems/claude-code.md), [Codex](docs/ecosystems/codex.md), [Cursor](docs/ecosystems/cursor.md), [any other](docs/ecosystems/generic.md) | Install and run in each ecosystem. |
@@ -47,21 +48,22 @@ Full-lane CR also needs one human approval.
 
 ## Skills
 
-Eleven skills, each with a model tier in `metadata.tier`:
+Eleven skills, each with a model tier in `metadata.tier`. Seven run in every project; four run only
+when the binding asks for them (the last column).
 
-| Skill | Tier | Does |
-|---|---|---|
-| `sdlc` | fast | The navigator: routing, the cycle, the hold, branches. |
-| `triage-signal` | fast | One raw signal to one decision: Backlog, Ideas or Cancelled. |
-| `backlog-grooming` | balanced | Priority, dedupe, initiatives, decluttering. |
-| `shape` | deep | Backlog to Ready: size, split, criteria with proof, lane, spec. |
-| `implement-spec` | balanced | Proof first on one change line, then a draft CR. |
-| `review-pr` | balanced | Independent review from CI results, then ready and auto-merge (an approving review only with two identities), or send back. |
-| `verify-ux` | balanced | Drive a preview of the CR head for `computer-use` criteria. |
-| `release` | balanced | Choose what ships, set the version, cut the release branch. |
-| `escalate-to-human` | fast | Decide whether a person must act; hold the ticket with one structured ask. |
-| `judge-run` | fast (dispatch picks `learning.judge_tier`) | Grade one finished run with the scorers `ledger plan` names. |
-| `improve-factory` | deep | Find the worst repeated failure and propose one factory change, with bench proof. |
+| Skill | Tier | Does | Runs |
+|---|---|---|---|
+| `sdlc` | fast | The navigator: routing, the cycle, the hold, branches. | always |
+| `triage-signal` | fast | One raw signal to one decision: Backlog, Ideas or Cancelled. | always |
+| `backlog-grooming` | balanced | Priority, dedupe, initiatives, decluttering. | always |
+| `shape` | deep | Backlog to Ready: size, split, criteria with proof, lane, spec. | always |
+| `implement-spec` | balanced | Proof first on one change line, then a draft CR. | always |
+| `review-pr` | balanced | Independent review from CI results, then ready and auto-merge (an approving review only with two identities), or send back. | always |
+| `verify-ux` | balanced | Uses the running CR head as a user for `computer-use` criteria and posts evidence. Apart from `review-pr` because it runs CR code, which the review never does. | a criterion names `computer-use` and `commands.preview` is set |
+| `release` | balanced | Choose what ships, set the version, cut the release branch. | `product.delivery: release-line` |
+| `escalate-to-human` | fast | Decide whether a person must act; hold the ticket with one structured ask. | always |
+| `judge-run` | fast (dispatch picks `learning.judge_tier`) | Grade one finished run with the scorers `ledger plan` names. | `learning.enabled` |
+| `improve-factory` | deep | Find the worst repeated failure and propose one factory change, with bench proof. | `learning.enabled` |
 
 The self-improvement loop is described in the contract, section 6. In short: every run is a
 ledger row, scorers grade it, and `improve-factory` proposes one change at a time, proved on a

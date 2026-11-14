@@ -38,12 +38,19 @@ test('command spawns detached with output to a run log and prints the pid', asyn
   assert.ok(r.out.log.startsWith(join(tmpdir(), 'agentic-sdlc-runs')) && r.out.log.endsWith('-release-5.log'), r.out.log);
 });
 
-test('executor lookup ignores inherited keys; an unknown kind is an error', async () => {
-  const r = await run({ default: { kind: 'harness' } }, ['constructor', '--ticket', '1']);
-  assert.equal(r.code, 0);
-  assert.equal(r.out.kind, 'harness');
+test('each executor kind starts a run; a bad kind, an unset env var, a board failure or a usage error stops it', async () => {
+  const ok = await run({ default: { kind: 'harness' } }, ['constructor', '--ticket', '1']); // inherited keys are not executors
+  assert.equal(ok.out.kind, 'harness');
   assert.equal((await run({ default: { kind: 'bogus' } }, ['x', '--ticket', '1'])).code, 1);
   assert.equal((await run({ default: { kind: 'harness' }, x: { kind: 'bogus' } }, ['x', '--ticket', '1'])).code, 1);
+  const hook = { default: { kind: 'webhook', url_env: 'U', token_env: 'T' } };
+  assert.equal((await run(hook, ['x', '--ticket', '1'], { U: 'https://h/x', T: 'tok' })).out.ref, 'r1');
+  assert.equal((await run(hook, ['x', '--ticket', '1'], { U: 'https://h/x' })).code, 1);
+  const m = await run({ default: { kind: 'managed', agent_env: 'A', token_env: 'T', endpoint_env: 'E' } }, ['x', '--ticket', '1'], { A: 'ag', T: 't', E: 'https://api/' });
+  assert.ok(m.calls[0].startsWith('POST https://api/sessions'));
+  assert.equal(m.out.kind, 'managed');
+  assert.equal((await run({ default: { kind: 'assign', user: 'bot' } }, ['implement-spec', '--ticket', '1'])).code, 1); // the board refuses
+  assert.equal((await run({ default: { kind: 'harness' } }, [])).code, 2);
 });
 
 test('judge-run: binding judge_tier, stepped off the judged model; one model everywhere skips', async () => {
@@ -57,27 +64,6 @@ test('judge-run: binding judge_tier, stepped off the judged model; one model eve
   const r = await run({ default: { kind: 'harness' } }, ['judge-run', '--ticket', '1', '--run-model', 'x'], {}, undefined, { learning: { judge_tier: 'fast' }, models: { fast: 'x', balanced: 'x', deep: 'x' } });
   assert.equal(r.code, 0);
   assert.equal(r.out.skip, true);
-});
-
-test('webhook posts and a missing env var exits 1', async () => {
-  const ex = { default: { kind: 'webhook', url_env: 'U', token_env: 'T' } };
-  assert.equal((await run(ex, ['x', '--ticket', '1'], { U: 'https://h/x', T: 'tok' })).out.ref, 'r1');
-  assert.equal((await run(ex, ['x', '--ticket', '1'], { U: 'https://h/x' })).code, 1);
-});
-
-test('managed posts a session', async () => {
-  const r = await run({ default: { kind: 'managed', agent_env: 'A', token_env: 'T', endpoint_env: 'E' } }, ['x', '--ticket', '1'], { A: 'ag', T: 't', E: 'https://api/' });
-  assert.ok(r.calls[0].startsWith('POST https://api/sessions'));
-  assert.equal(r.out.kind, 'managed');
-});
-
-test('assign surfaces a board failure as exit 1', async () => {
-  const r = await run({ default: { kind: 'assign', user: 'bot' } }, ['implement-spec', '--ticket', '1']);
-  assert.equal(r.code, 1);
-});
-
-test('usage error exits 2', async () => {
-  assert.equal((await run({ default: { kind: 'harness' } }, [])).code, 2);
 });
 
 const mcps = { docs: { url: 'https://docs/mcp', token_env: 'DOCS_TOKEN' }, db: { command: 'db-mcp' } };
@@ -108,14 +94,6 @@ test('model: id wins over tier; judge-run keeps its judge tier', async () => {
   assert.equal(j.out.model, 'b');
 });
 
-test('unattended (flag or env) refuses sandbox local', async () => {
-  const ex = { default: { kind: 'command', run: 'bot', sandbox: 'local' } };
-  assert.equal((await run(ex, ['x', '--ticket', '1', '--unattended'])).code, 1);
-  assert.equal((await run(ex, ['x', '--ticket', '1'], { AGENTIC_SDLC_UNATTENDED: '1' })).code, 1);
-  assert.equal((await run(ex, ['x', '--ticket', '1'])).code, 0);
-  assert.equal((await run({ default: { kind: 'command', run: 'bot', sandbox: 'container' } }, ['x', '--ticket', '1', '--unattended'])).code, 0);
-});
-
 test('local execution: unattended accepts sandbox local only with AGENTIC_SDLC_LOCAL=1; an unset sandbox stays refused', async () => {
   const u = ['x', '--ticket', '1', '--unattended'];
   const env = { AGENTIC_SDLC_LOCAL: '1' };
@@ -123,14 +101,13 @@ test('local execution: unattended accepts sandbox local only with AGENTIC_SDLC_L
   assert.equal((await run({ default: { kind: 'command', run: 'bot', sandbox: 'local' } }, u, env)).code, 0);
   assert.equal((await run({ default: { kind: 'harness' } }, u, env)).code, 1);
   assert.equal((await run({ default: { kind: 'harness', sandbox: 'local' } }, u, { AGENTIC_SDLC_LOCAL: 'yes' })).code, 1);
-});
-
-test('unattended treats an unset sandbox as local for command and harness; skills inherit the default sandbox', async () => {
-  const u = ['x', '--ticket', '1', '--unattended'];
-  assert.equal((await run({ default: { kind: 'command', run: 'bot' } }, u)).code, 1);
-  assert.equal((await run({ default: { kind: 'harness' } }, u)).code, 1);
-  assert.equal((await run({ default: { kind: 'harness' } }, ['x', '--ticket', '1'], { AGENTIC_SDLC_UNATTENDED: '1' })).code, 1);
+  // the flag and the env var both mean unattended; another sandbox is not local
+  assert.equal((await run({ default: { kind: 'command', run: 'bot', sandbox: 'local' } }, ['x', '--ticket', '1'], { AGENTIC_SDLC_UNATTENDED: '1' })).code, 1);
+  assert.equal((await run({ default: { kind: 'command', run: 'bot', sandbox: 'local' } }, ['x', '--ticket', '1'])).code, 0); // attended
+  assert.equal((await run({ default: { kind: 'command', run: 'bot', sandbox: 'container' } }, u)).code, 0);
   assert.equal((await run({ default: { kind: 'webhook', url_env: 'U' } }, u, { U: 'https://h/x' })).code, 0);
+  assert.equal((await run({ default: { kind: 'command', run: 'bot' } }, u)).code, 1);
+  // a stage without its own sandbox takes the default stage's sandbox
   assert.equal((await run({ default: { kind: 'harness', sandbox: 'container' }, x: { kind: 'command', run: 'bot' } }, u)).code, 0);
   assert.equal((await run({ default: { kind: 'harness', sandbox: 'local' }, x: { kind: 'command', run: 'bot' } }, u)).code, 1);
 });
@@ -156,7 +133,6 @@ test('harness prints the resolved stage', async () => {
 });
 
 test('managedRequest builds each vendor start-a-run call and never needs a model for claude', async () => {
-  const { managedRequest } = await import('../src/dispatch.ts');
   const env = { TOK: 't', AG: 'agent_1', ENV: 'env_1' };
   const t = { skill: 'implement-spec', ticket: '7', cr: '' };
   const [, url, c] = managedRequest({ kind: 'managed', api: 'claude', token_env: 'TOK', agent_env: 'AG', environment_env: 'ENV' }, env, t, undefined, {});
@@ -171,10 +147,7 @@ test('managedRequest builds each vendor start-a-run call and never needs a model
   assert.match(aurl, /\/v1beta\/interactions$/);
   assert.equal(ac.headers['x-goog-api-key'], 't');
   assert.throws(() => managedRequest({ kind: 'managed', api: 'claude', token_env: 'TOK' }, env, t, undefined, {}), /agent_env/);
-});
-
-test('managed claude and antigravity refuse a stage that pins a model', () => {
-  const env = { TOK: 't', AG: 'agent_1', ENV: 'env_1' };
+  // claude and antigravity run the agent's own model: a pinned model is refused
   const judge = { skill: 'judge-run', ticket: '7', cr: '' };
   for (const api of ['claude', 'antigravity'] as const) {
     const ex = { kind: 'managed', api, token_env: 'TOK', agent_env: 'AG', environment_env: 'ENV' } as const;

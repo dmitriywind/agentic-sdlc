@@ -7,6 +7,7 @@ Feature: Escalate to a human
   So that I decide only what needs a person and the rest goes on
 
   # Source: skills/escalate-to-human/SKILL.md, "Classify" and "Hold"
+  # Proof: skill text only
   Scenario: A trigger holds the ticket
     Given a ticket at a working status
     And a trigger holds, for example Money
@@ -17,6 +18,7 @@ Feature: Escalate to a human
     And the Status stays
 
   # Source: skills/escalate-to-human/SKILL.md, "Hold" and "Needs human"
+  # Proof: skill text only
   Scenario: The ask is one structured comment
     Given the result is escalate
     When the skill posts the comment
@@ -27,6 +29,7 @@ Feature: Escalate to a human
     And the ask goes to owners.product, or to owners.factory for a factory change or an Access gap
 
   # Source: skills/escalate-to-human/SKILL.md, "Classify" and "Record"
+  # Proof: skill text only
   Scenario: No trigger means proceed
     Given no trigger holds
     When escalate-to-human classifies the ticket
@@ -35,6 +38,7 @@ Feature: Escalate to a human
     And the line names the sources that settled it
 
   # Source: skills/escalate-to-human/SKILL.md, "Classify"
+  # Proof: skill text only
   Scenario: A routine step or an oversize item is not escalated
     Given the step is a sync, a retry or a cosmetic choice, or the item is above the size limit
     When escalate-to-human classifies it
@@ -42,6 +46,7 @@ Feature: Escalate to a human
     And an oversize item goes back to shape
 
   # Source: skills/escalate-to-human/SKILL.md, "Search first"
+  # Proof: skill text only
   Scenario: A source settles only a Ruling question
     Given a file in paths.sources_before_question answers a Ruling question
     And another source supplies options for a Security trigger
@@ -62,6 +67,7 @@ Feature: Escalate to a human
     And a new diff or a later run alone is not a new fact
 
   # Source: skills/escalate-to-human/SKILL.md, "Search first"
+  # Proof: skill text only
   Scenario: New facts reopen a settled trigger
     Given a trusted owner reply followed the last hold comment
     And the Size, the Lane or the acceptance criteria changed since
@@ -70,6 +76,7 @@ Feature: Escalate to a human
     And the skill classifies again
 
   # Source: skills/escalate-to-human/SKILL.md, "Hold"
+  # Proof: skill text only
   Scenario: A held ticket gets a comment only for new facts
     Given the ticket already has the board.labels.human label
     And no new facts appeared
@@ -77,6 +84,7 @@ Feature: Escalate to a human
     Then it posts no new comment
 
   # Source: skills/escalate-to-human/SKILL.md, "Classify" (P0)
+  # Proof: skill text only
   Scenario: An owner reply settles P0 without naming it
     Given a ticket is held for the P0 trigger
     When owners.product posts a trusted reply after the hold comment
@@ -85,12 +93,14 @@ Feature: Escalate to a human
     And the reply need not name P0
 
   # Source: skills/escalate-to-human/SKILL.md, "Record"
+  # Proof: skill text only
   Scenario: A run with no ticket records proceed on its CR
     Given review-pr runs on a factory CR with no ticket
     When escalate-to-human returns proceed
     Then the line "escalate-to-human: proceed" goes in the review-pr report on the CR
 
   # Source: skills/escalate-to-human/SKILL.md, "Hold"
+  # Proof: skill text only
   Scenario: A factory CR with no ticket is held on the CR
     Given a run dispatched with only --cr
     And a trigger holds
@@ -101,7 +111,7 @@ Feature: Escalate to a human
     And the CR stays draft
 
   # Source: skills/escalate-to-human/SKILL.md, "Search first" and "Hold"
-  # Proof: test/forge.test.ts "cli: comments --trusted --last 1 returns the newest trusted comment past a newer untrusted one"
+  # Proof: test/forge.test.ts "cli: comments --trusted keeps the owners and bots by forge name, --last counts after the filter, and pages come from gh api"
   Scenario: A factory CR resumes on a trusted owner reply
     Given a factory CR held with a "### Needs human" comment
     When a trusted owner reply appears on the CR after that comment

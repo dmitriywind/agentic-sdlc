@@ -22,4 +22,4 @@ jobs:
       - run: npm test
       - name: dist/ matches src/
         run: |
-          git diff --exit-code -- dist || { echo "::error::dist/ is stale. Run npm run build, then commit dist/."; exit 1; }
+          git diff --exit-code -- dist docs/guide.html || { echo "::error::dist/ or docs/guide.html is stale. Run npm run build, then commit them."; exit 1; }

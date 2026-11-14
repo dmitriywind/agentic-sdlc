@@ -59,7 +59,7 @@ sequenceDiagram
   O->>O: 1. Claim: dispatch sdlc (skipped means another cycle runs: stop)
   O->>B: 1. board list, forge list, trusted heartbeats, ledger summary
   alt 2. Idle: nothing to dispatch, no CR needs a review, nothing to judge or learn
-    O->>B: Heartbeat with at, factory, empty runs, errors; stop
+    O->>B: Heartbeat with at, factory, empty runs and errors, then stop
   end
   O->>W: 3. Judge: judge-run per unscored run
   W->>B: One scores comment per run

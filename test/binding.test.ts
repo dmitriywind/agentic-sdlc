@@ -91,11 +91,6 @@ test('bindingWarnings: bench_size below bench_min_cases can never pass bench com
   assert.deepEqual(bindingWarnings({ ...good, learning: { bench_size: 5, bench_min_cases: 5 } } as any), []);
 });
 
-test('learning.enabled must be a boolean', () => {
-  assert.match(validateBinding({ ...good, learning: { enabled: 'yes' } } as any).join('\n'), /learning\.enabled must be true or false/);
-  assert.deepEqual(validateBinding({ ...good, learning: { enabled: true } } as any), []);
-});
-
 test('bindingWarnings accepts Windows trace paths with either slash', () => {
   for (const uri of ['C:\\traces\\{run_id}.jsonl', 'C:/traces/{run_id}.jsonl']) assert.deepEqual(bindingWarnings({ ...good, traces: { uri } } as any), []);
   assert.equal(bindingWarnings({ ...good, traces: { uri: 's3://b/{run_id}' } } as any).length, 1);
@@ -154,14 +149,15 @@ test('board.scope: a prefixed label; the home repo lists every repo label, its o
   assert.deepEqual(validateBinding(b), []);
 });
 
-test('new keys validate; product.kind and board.milestone only warn as unused', () => {
+test('new keys validate (approval, learning, proofs); product.kind and board.milestone only warn as unused', () => {
   const b = structuredClone(good) as any;
   b.forge.human_approval = 'sometimes'; b.learning.bench_min_cases = 0; b.learning.bench_trials = 2.5; b.commands.proofs_on_base = 3;
   const p = validateBinding(b).join('\n');
   for (const s of ["forge.human_approval 'sometimes'", 'bench_min_cases must be', 'bench_trials must be', 'commands.proofs_on_base must be']) assert.match(p, new RegExp(s));
+  assert.match(validateBinding({ ...good, learning: { enabled: 'yes' } } as any).join('\n'), /learning\.enabled must be true or false/);
   const ok = structuredClone(good) as any;
   Object.assign(ok.forge, { human_approval: 'full-lane' });
-  Object.assign(ok.learning, { bench_min_cases: 20, bench_trials: 3 });
+  Object.assign(ok.learning, { enabled: true, bench_min_cases: 20, bench_trials: 3 });
   Object.assign(ok.commands, { preview: 'deploy {cr}', proofs_on_base: 'npx vitest run {files}' });
   ok.product.kind = 'web'; ok.board.milestone = 'required';
   assert.deepEqual(validateBinding(ok), []);

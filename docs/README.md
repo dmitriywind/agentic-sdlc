@@ -2,6 +2,7 @@
 
 | Read | For |
 |---|---|
+| [Guide page](guide.html) | All of the below on one HTML page, with the diagrams drawn. |
 | [Adoption](adoption.md) | Choose the setup; adopt on one repo, on many repos; move from a hand-made process; upgrade. |
 | [Use cases](use-cases.md) | Actors, the use-case catalogue, and who does what in each team shape. |
 | [Behaviour specs](behaviour/README.md) | Gherkin scenarios for every skill, gate, the push guard and the binding. |

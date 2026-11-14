@@ -7,6 +7,7 @@ Feature: Routing and the unattended cycle
   So that the factory moves tickets without a human and stops when it must
 
   # Source: skills/sdlc/SKILL.md, "Routing"
+  # Proof: skill text only
   Scenario Outline: A ticket state routes to one skill
     Given a ticket is in state "<state>"
     When the orchestrator routes the ticket
@@ -32,6 +33,7 @@ Feature: Routing and the unattended cycle
       | Any working status, authority unclear                                                       | escalate-to-human                  |
 
   # Source: skills/sdlc/SKILL.md, "Routing" (rule: pick the first row that matches)
+  # Proof: skill text only
   Scenario: A release request goes to release, not to backlog-grooming
     Given a ticket is at Status Backlog
     And the ticket has the label "board.labels.release"
@@ -42,6 +44,7 @@ Feature: Routing and the unattended cycle
     And the dispatch uses "--ticket <request>"
 
   # Source: skills/sdlc/SKILL.md, "The needs-human hold"
+  # Proof: skill text only
   Scenario: A held ticket is skipped, keeps its Status and resumes when the label goes
     Given a ticket at Status Ready has the label "board.labels.human"
     When the orchestrator routes the ticket
@@ -53,6 +56,7 @@ Feature: Routing and the unattended cycle
     Then the next run resumes the ticket at the Status Ready
 
   # Source: skills/sdlc/SKILL.md, "Routing" (Status Backlog row)
+  # Proof: skill text only
   Scenario Outline: A Backlog ticket with a Priority is not routed to shape
     Given a ticket is at Status Backlog with a Priority
     And the ticket <condition>
@@ -66,6 +70,7 @@ Feature: Routing and the unattended cycle
       | has children, so it is an initiative             |
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle"
+  # Proof: skill text only
   Scenario: One cycle runs its steps in order
     Given a scheduler starts one unattended run
     When the cycle runs
@@ -78,6 +83,7 @@ Feature: Routing and the unattended cycle
     And then, with a forge.review_identity, it fires the review runtime only when a CR needs a review
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 2
+  # Proof: skill text only
   Scenario: An idle cycle exits with a minimal heartbeat
     Given no unheld ticket routes to a skill the cycle dispatches
     And no held ticket has a trusted owner reply after its hold
@@ -90,6 +96,7 @@ Feature: Routing and the unattended cycle
     And it does not fire the review runtime
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 8
+  # Proof: skill text only
   Scenario Outline: The review runtime fires only for a CR that needs a review
     Given forge.review_identity is set
     And the cycle has written its heartbeat
@@ -109,6 +116,7 @@ Feature: Routing and the unattended cycle
       | no open CR                                                           | is not fired    |
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle"
+  # Proof: skill text only
   Scenario: With two identities the cycle never reviews
     Given forge.review_identity is set
     When the cycle runs
@@ -117,6 +125,7 @@ Feature: Routing and the unattended cycle
     And the cycle never holds the review token
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", steps 6 and 8
+  # Proof: skill text only
   Scenario: With one identity the cycle reviews in the same cycle
     Given forge.review_identity is empty
     And implement-spec opened a draft CR in this cycle
@@ -126,7 +135,7 @@ Feature: Routing and the unattended cycle
     And the cycle fires no review runtime
 
   # Source: skills/sdlc/references/heartbeat.md, "Shape"
-  # Proof: test/ledger.test.ts "flattenRuns filters by age and skill and applies the newest rescore" (heartbeats of only "at" and "runs")
+  # Proof: test/ledger.test.ts "flattenRuns filters by age and skill and applies the newest rescore"
   Scenario: A heartbeat holds only the required fields by default
     When the cycle writes its heartbeat
     Then it holds "at", "factory", "runs" and "errors"
@@ -135,6 +144,7 @@ Feature: Routing and the unattended cycle
     And "ledger runs" reads its rows
 
   # Source: templates/runner/review-prompt.md
+  # Proof: skill text only
   Scenario: A review run with nothing to review writes nothing
     Given no open CR needs a review
     When the review runtime runs
@@ -142,6 +152,7 @@ Feature: Routing and the unattended cycle
     And it writes no heartbeat
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 6
+  # Proof: skill text only
   Scenario: The cycle caps implementations and keeps Ready filled
     Given the Ready queue holds tickets
     When the cycle routes the board
@@ -151,6 +162,7 @@ Feature: Routing and the unattended cycle
     Then the cycle routes the next Backlog ticket to shape
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 6
+  # Proof: skill text only
   Scenario: A ticket moves on to its next step in the same cycle
     Given the cycle groomed a Backlog ticket and the run finished
     And "cycle.time_budget_minutes" is not spent
@@ -159,6 +171,7 @@ Feature: Routing and the unattended cycle
     And after shape makes it Ready, implement-spec may claim it under "cycle.max_implementations"
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 6
+  # Proof: skill text only
   Scenario: A full Ready queue never starves releases or rework
     Given Ready holds at least "cycle.min_ready" tickets
     And a release request is at Backlog
@@ -183,6 +196,7 @@ Feature: Routing and the unattended cycle
     Then the dispatch is not skipped
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle" (rules for every step)
+  # Proof: skill text only
   Scenario: The time budget stops new work
     Given "cycle.time_budget_minutes" has passed since the cycle started
     When the cycle has more work to start
@@ -192,6 +206,7 @@ Feature: Routing and the unattended cycle
     And the next cycle judges the runs that have no score
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle" (rules for every step)
+  # Proof: skill text only
   Scenario: A step that keeps failing is escalated, not retried
     Given a step failed in a cycle
     Then the failure goes into the "errors" of the heartbeat
@@ -204,6 +219,7 @@ Feature: Routing and the unattended cycle
     And the heartbeat is always written
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", rules (failure_limit)
+  # Proof: skill text only
   Scenario: A factory change gives a failing step a fresh start
     Given the step failed in the last "cycle.failure_limit" heartbeats under an older factory sha
     When the cycle runs on a newer trunk sha
@@ -219,6 +235,7 @@ Feature: Routing and the unattended cycle
     And the cycle starts no judge-run and no improve-factory run
 
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 1
+  # Proof: skill text only
   Scenario: A second cycle that starts while one runs writes nothing
     Given a cycle is running and has not written its heartbeat
     When a second cycle runs "dispatch sdlc --ticket <heartbeat.ticket>"
@@ -226,6 +243,7 @@ Feature: Routing and the unattended cycle
     And the second cycle stops and writes no heartbeat
 
   # Source: skills/sdlc/SKILL.md, "The needs-human hold"
+  # Proof: skill text only
   Scenario: An owner who only comments releases the hold
     Given a ticket is held with a "### Needs human" comment
     And a trusted owner reply follows that comment
@@ -234,6 +252,7 @@ Feature: Routing and the unattended cycle
     And the ticket is routed at its Status
 
   # Source: skills/sdlc/SKILL.md, "Routing"
+  # Proof: skill text only
   Scenario Outline: CR states that could strand a ticket are routed
     Given <state>
     When the cycle routes the board
@@ -247,6 +266,7 @@ Feature: Routing and the unattended cycle
       | an open dependency CR with no ticket                          | review-pr with --cr                    |
 
   # Source: src/dispatch.ts, "idempotency"
+  # Proof: test/dispatch.test.ts "dispatch: an unfinished run blocks until stall_minutes; only its own done line ends it; sdlc only claims; a failed start writes the done line"
   Scenario: A run that has not finished blocks a second start until stall_minutes
     Given implement-spec was dispatched for a ticket more than cycle.dedupe_minutes ago
     And no bot comment followed the dispatch marker
@@ -275,3 +295,55 @@ Feature: Routing and the unattended cycle
     When the cycle dispatches a stage
     Then dispatch starts it when the stage names sandbox local and AGENTIC_SDLC_LOCAL is 1
     And dispatch refuses it when the stage's sandbox is unset, or AGENTIC_SDLC_LOCAL is not 1
+    And a stage with no sandbox of its own takes the sandbox of the default stage
+    And a stage with sandbox container or cloud, and a webhook stage, never need the opt-ins
+
+  # Source: src/dispatch.ts, "command" (executor)
+  # Proof: test/dispatch.test.ts "command fills quoted placeholders and runs through the platform shell"
+  # Proof: test/dispatch.test.ts "command spawns detached with output to a run log and prints the pid"
+  Scenario: A command stage starts a detached bot with quoted values
+    Given a stage of kind command with a run template
+    When dispatch starts the stage
+    Then it puts each value into the template as one quoted word
+    And it refuses a value that holds a newline
+    And it starts the bot detached with its output in a run log
+    And it prints the process id as the run reference and the log path
+
+  # Source: src/dispatch.ts, "command" (secrets and mcps)
+  # Proof: test/dispatch.test.ts "command: minimal env plus listed secrets, {model} and {mcps_file}; no secret value on disk"
+  Scenario: A command stage gets only the secrets it lists
+    Given a stage lists secrets and mcps
+    When dispatch starts the stage
+    Then the bot environment holds the minimal variables and the listed secrets only
+    And the mcps file holds the listed servers without any token value
+    And dispatch fails when a listed secret is unset
+
+  # Source: src/dispatch.ts, "model"
+  # Proof: test/dispatch.test.ts "model: id wins over tier; judge-run keeps its judge tier"
+  # Proof: test/dispatch.test.ts "harness prints the resolved stage"
+  Scenario: A stage resolves its model, mcps, secrets and sandbox
+    Given a stage with a model id, a model tier, mcps, secrets and a sandbox
+    When dispatch starts the stage
+    Then the model id wins over the model tier
+    And for judge-run the judge tier wins over the stage model
+    And a harness stage prints the resolved model, mcps, secrets and sandbox
+
+  # Source: src/dispatch.ts, "webhook" and "managed" (executors)
+  # Proof: test/dispatch.test.ts "each executor kind starts a run; a bad kind, an unset env var, a board failure or a usage error stops it"
+  Scenario: Each executor kind starts a run, and a bad stage stops it
+    Given a stage of kind harness, command, webhook, managed or assign
+    When dispatch starts the stage
+    Then a webhook or managed stage posts one request and prints the run reference
+    And dispatch exits 1 for an unknown kind, an unset env var or a board failure
+    And dispatch exits 2 when the arguments are wrong
+
+  # Source: src/dispatch.ts, "webhook" and "managed" (request body)
+  # Proof: test/dispatch.test.ts "webhook and managed bodies carry model, mcps (names and urls) and sandbox, never secrets"
+  # Proof: test/dispatch.test.ts "managedRequest builds each vendor start-a-run call and never needs a model for claude"
+  Scenario: A managed or webhook request carries the stage but no secret
+    Given a webhook or managed stage with model, mcps, secrets and sandbox
+    When dispatch posts the request
+    Then the body holds the model, the mcp names and urls and the sandbox
+    And the body holds no secret value
+    And each managed vendor gets its own start-a-run call
+    And a managed claude or antigravity stage that pins a model is refused

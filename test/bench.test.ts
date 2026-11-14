@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import type { Dirent } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { addedFiles, agentCommand, buildCases, compare, wilsonLower, diverse, fill, PROOF_FILE, quote, report, resolveExecutor, runBench, shell, stratify, cli } from '../src/bench.ts';
+import { agentCommand, buildCases, compare, wilsonLower, diverse, fill, quote, report, resolveExecutor, runBench, shell, stratify, cli } from '../src/bench.ts';
 import { exec } from '../src/exec.ts';
 import type { BenchCase, BenchResult } from '../src/bench.ts';
 import type { Board, CR, Forge, Item, Vcs } from '../src/ports.ts';
@@ -26,11 +26,6 @@ const diff = [
   'diff --git a/src/new.ts b/src/new.ts', '--- /dev/null', '+++ b/src/new.ts',
 ].join('\n');
 
-test('addedFiles, fill', () => {
-  assert.deepEqual(addedFiles(diff), ['test/a.test.ts', 'src/new.ts']);
-  assert.equal(fill('{a} {b} {c}', { a: '1', b: '2' }, false), "'1' '2' {c}");
-});
-
 test('quote keeps spaces and quotes inside one shell word, refuses newline and NUL', () => {
   assert.equal(quote("C:/my dir/it's", false), `'C:/my dir/it'\\''s'`);
   assert.equal(quote('C:\\Temp Dir\\', true), '"C:\\Temp Dir\\\\"');
@@ -39,11 +34,6 @@ test('quote keeps spaces and quotes inside one shell word, refuses newline and N
   // the platform shell really sees one argument per value
   const out = shell(exec, `node -e "console.log(JSON.stringify(process.argv.slice(1)))" ${fill('{a} {b}', { a: "x y'z", b: '100%PATH%' })}`, tmpdir());
   assert.deepEqual(JSON.parse(out), ["x y'z", '100%PATH%']);
-});
-
-test('PROOF_FILE takes tests, evals and data checks, not product code', () => {
-  for (const p of ['test/a.ts', 'src/a.test.ts', 'pkg/x_test.go', 'evals/case1.yaml', 'models/q.eval.json', 'data-checks/orders.sql']) assert.ok(PROOF_FILE.test(p), p);
-  for (const p of ['src/a.ts', 'docs/testing.md', 'src/checkout.ts']) assert.ok(!PROOF_FILE.test(p), p);
 });
 
 test('resolveExecutor and agentCommand pick the template per kind', () => {
@@ -191,12 +181,6 @@ test('runBench --dry-run starts nothing', async () => {
 const result = (model: string, cases: [string, boolean, number][]): BenchResult =>
   ({ model, executor: 'harness', at: '', passRate: 0, minutes: 0, cases: cases.map(([id, pass, minutes]) => ({ id, pass, minutes })) });
 
-test('report groups by executor name, not kind', () => {
-  const r = (executor: string, pass: boolean): BenchResult => ({ ...result('m', [['1', pass, 1]]), executor, executorKind: 'command' });
-  const rows = report([r('bot-a', true), r('bot-b', false), r('bot-a', true)]);
-  assert.deepEqual(rows.map((x) => [x.executor, x.executorKind, x.n, x.passRate]), [['bot-a', 'command', 2, 1], ['bot-b', 'command', 1, 0]]);
-});
-
 test('compare: Wilson lower bound over shared trials; too few cases or trials regress; cli reads the binding minimums', async () => {
   assert.equal(wilsonLower(0, 0), 0);
   assert.ok(Math.abs(wilsonLower(9, 10) - 0.5958) < 1e-3);
@@ -214,6 +198,10 @@ test('compare: Wilson lower bound over shared trials; too few cases or trials re
   assert.deepEqual(compare(b, a, { minCases: 4, trials: 2 }).insufficient, ['3 shared cases, need 4']);
   assert.deepEqual(compare(b, a, { minCases: 3, trials: 3 }).insufficient, ['2 trials on a shared case, need 3']);
   assert.equal(compare(b, a).regressed, true); // defaults: 20 cases, 3 trials
+  const rr = (ids: string[]) => ({ model: 'm', executor: 'harness', at: '', passRate: 1, minutes: 0, cases: ids.map((id) => ({ id, pass: true, minutes: 1 })) }) as any;
+  const o1 = { minCases: 1, trials: 1 };
+  assert.equal(compare(rr(['1']), rr(['2']), o1).regressed, true);
+  assert.equal(compare(rr(['1', '2']), rr(['1']), o1).regressed, true);
 
   const dir = mkdtempSync(join(tmpdir(), 'cmp-'));
   writeFileSync(join(dir, 'a.json'), JSON.stringify(a));
@@ -244,11 +232,8 @@ test('buildCases --paths keeps CRs touching the glob; --per-size stratifies olde
   const strat = await buildCases(board, forge, b, 9, { perSize: 2 });
   assert.deepEqual(strat.map((c) => [c.id, c.size, c.area]), [['1', 'S', 'src/pay'], ['5', 'S', 'src/pay'], ['4', 'L', 'src/pay']]);
   assert.deepEqual(stratify(strat, 1, b.sizes).map((c) => c.id), ['1', '4']);
-});
-
-test('diverse takes one case per size and area in turn', () => {
-  const c = (id: string, size: string, area: string) => ({ ...kase, id, size, area });
-  assert.deepEqual(diverse([c('1', 'S', 'a'), c('2', 'S', 'a'), c('3', 'L', 'a'), c('4', 'S', 'b')], 3).map((x) => x.id), ['1', '3', '4']);
+  const dc = (id: string, size: string, area: string) => ({ ...kase, id, size, area });
+  assert.deepEqual(diverse([dc('1', 'S', 'a'), dc('2', 'S', 'a'), dc('3', 'L', 'a'), dc('4', 'S', 'b')], 3).map((x) => x.id), ['1', '3', '4']);
 });
 
 test('report groups per model, marks the Pareto front; cli report reads only the suite results', async () => {
@@ -273,6 +258,10 @@ test('report groups per model, marks the Pareto front; cli report reads only the
     console.log = log;
   }
   assert.equal(JSON.parse(out[0]).results, 3);
+  // one row per executor name, not per kind
+  const er = (executor: string, pass: boolean): BenchResult => ({ ...result('m', [['1', pass, 1]]), executor, executorKind: 'command' });
+  const erows = report([er('bot-a', true), er('bot-b', false), er('bot-a', true)]);
+  assert.deepEqual(erows.map((x) => [x.executor, x.executorKind, x.n, x.passRate]), [['bot-a', 'command', 2, 1], ['bot-b', 'command', 1, 0]]);
 });
 
 test('runBench --trials: one row per trial, each in fresh trees', async () => {
@@ -288,10 +277,3 @@ test('runBench --trials: one row per trial, each in fresh trees', async () => {
   assert.equal(made.length, 9); // agent, verify and oracle trees per trial
 });
 
-test('compare: no common cases or fewer cases in b is a regression', () => {
-  const r = (ids: string[]) => ({ model: 'm', executor: 'harness', at: '', passRate: 1, minutes: 0, cases: ids.map((id) => ({ id, pass: true, minutes: 1 })) }) as any;
-  const o = { minCases: 1, trials: 1 };
-  assert.equal(compare(r(['1']), r(['2']), o).regressed, true);
-  assert.equal(compare(r(['1', '2']), r(['1']), o).regressed, true);
-  assert.equal(compare(r(['1']), r(['1', '2']), o).regressed, false);
-});

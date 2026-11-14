@@ -18,6 +18,7 @@ Feature: Groom the backlog
     And it marks the item "new", "merge into <id>" or "duplicate of <id>"
 
   # Source: skills/backlog-grooming/SKILL.md, "Steps" 2 "Group"
+  # Proof: skill text only
   Scenario: Items that cannot ship apart merge into one deliverable
     Given two items change the same behaviour
     When the skill groups
@@ -35,6 +36,7 @@ Feature: Groom the backlog
     And grouping is settled before any shape
 
   # Source: skills/backlog-grooming/SKILL.md, "Steps" 2 "Group"
+  # Proof: skill text only
   Scenario Outline: An open parent whose children are all closed is closed
     Given an open parent has children
     And all children are closed
@@ -48,6 +50,7 @@ Feature: Groom the backlog
       | not every child was Cancelled | Done, with Shipped the lowest among its Done children | completed   |
 
   # Source: skills/backlog-grooming/SKILL.md, "Steps" 3 "Prioritise"
+  # Proof: skill text only
   Scenario: Backlog items get a Priority and a milestone
     Given unheld Backlog items have no Priority
     When the skill prioritises
@@ -58,6 +61,7 @@ Feature: Groom the backlog
     And every unheld Backlog item has a Priority, and a milestone where the board has milestones
 
   # Source: skills/backlog-grooming/SKILL.md, "Steps" 3 "Prioritise"
+  # Proof: skill text only
   Scenario: A new project with no docs still gets priorities
     Given no roadmap, narrative or importance doc ranks an item
     When the skill prioritises
@@ -65,12 +69,14 @@ Feature: Groom the backlog
     And it does not escalate for the missing docs
 
   # Source: skills/backlog-grooming/SKILL.md, "Rules"
+  # Proof: skill text only
   Scenario: The skill never sets P0
     Given an item looks urgent
     When the skill sets the Priority
     Then the Priority is not the first priority, P0
 
   # Source: skills/backlog-grooming/SKILL.md, "Steps" 4 "New work from a plan or an Idea"
+  # Proof: skill text only
   Scenario: A plan becomes one ticket per item
     Given a plan or conversation must become tickets
     When the skill creates the tickets
@@ -79,6 +85,7 @@ Feature: Groom the backlog
     And each ticket has the label "bug" or "feature"
 
   # Source: skills/backlog-grooming/SKILL.md, "Steps" 4 "New work from a plan or an Idea"
+  # Proof: skill text only
   Scenario: An Idea a human moved to Backlog is rewritten
     Given a human moved an item out of Ideas to Backlog
     When the skill rewrites the body
@@ -86,6 +93,7 @@ Feature: Groom the backlog
     And the body has outcome, who it is for, success metric, constraints and open questions
 
   # Source: skills/backlog-grooming/SKILL.md, "Steps" 4 "New work from a plan or an Idea"
+  # Proof: skill text only
   Scenario: A missing outcome or metric becomes one question to the Product owner
     Given the outcome or metric cannot be derived from the item and "paths.importance_doc"
     When the skill handles the item
@@ -93,6 +101,7 @@ Feature: Groom the backlog
     And it stops on that item
 
   # Source: skills/backlog-grooming/SKILL.md, "Rules"
+  # Proof: skill text only
   Scenario Outline: Rules for tech debt, flags, duplicates and conflicts
     Given <case>
     When the skill grooms

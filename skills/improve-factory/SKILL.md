@@ -1,6 +1,6 @@
 ---
 name: improve-factory
-description: The self-improvement loop. Read the run ledger and the measures, find the worst repeated failure, and propose exactly one factory change (a skill sentence, a binding value, a gate or an executor) with bench proof in a draft factory CR. Use when `ledger summary` shows `learning.due`, or when the factory owner asks for a proposal.
+description: The self-improvement loop. Read the run ledger and the measures, find the worst repeated failure, and propose exactly one factory change (a skill sentence, a binding value, a gate or an executor) with bench proof in a draft factory CR. Off unless `learning.enabled` is true. Use when `ledger summary` shows `learning.due`, or when the factory owner asks for a proposal.
 disable-model-invocation: true
 metadata:
   tier: deep

@@ -29,6 +29,5 @@ Cloud runtime facts live in [contract section 10](../references/architecture.md)
 | Item | Why |
 |---|---|
 | Scorers for shape quality and triage accuracy | `improve-factory` has no evidence for those two skills. |
-| Fold `verify-ux` into `review-pr` | Shorter skills, one home per rule. |
 | OpenTelemetry GenAI attributes and CDEvents on factory and deploy records | Standard telemetry for agent runs and deploys. |
 | `signal-on-red` through a `forge run <id>` verb | Today it searches a window of 30 runs. |

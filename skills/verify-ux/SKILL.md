@@ -1,12 +1,18 @@
 ---
 name: verify-ux
-description: Verify a change request's acceptance criteria that name proof `computer-use` by driving a preview deployment of the CR head as a user and posting evidence on the CR. Use when review-pr dispatches it for a CR whose ticket has such criteria.
+description: Run each acceptance criterion that names proof `computer-use` as a user would, on a preview deployment of the CR head, and post the evidence for review-pr to grade. It is a skill of its own because it runs the CR's code in a browser with test credentials, which the review runtime must never do. Generic for any product with a user interface; it never runs unless a criterion names `computer-use` and the binding sets `commands.preview`. Use only when review-pr dispatches it.
 user-invocable: false
 metadata:
   tier: balanced
 ---
 
 # Verify the product as a user
+
+Why it exists: `review-pr` reads CI and never runs CR code, and with two identities it holds the
+review token. A `computer-use` criterion can only be proven by using the running product. So this
+step runs apart, as its own executor (`executors.verify-ux`: a browser MCP, test credentials, a
+container sandbox), with no review token, and hands `review-pr` evidence, not a verdict. Scripted
+UI checks need no agent: they are proof `visual` or `test`, and CI runs them.
 
 Follow the [common contract](../sdlc/references/contract.md). You observe; you never change code,
 the ticket or the board, except through `escalate-to-human`. [`review-pr`](../review-pr/SKILL.md) grades what you post. Scripted UI

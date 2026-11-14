@@ -10,7 +10,7 @@ A portable software factory: a Claude Code plugin and a CLI, shipped from Git (n
 - `src/` the CLI (`agentic-sdlc`): board, forge and VCS ports, gates, dispatch, ledger, bench, MCP server, init/validate/doctor.
 - `templates/` what `init` installs: `binding.yml`, `gates/` (CI per forge, the pre-push hook), `runner/` (schedulers, prompts, setup), `mcp/`.
 - `.claude-plugin/` the plugin and marketplace manifests; `hooks/` the plugin's guard hook and MCP launcher.
-- `references/`, `docs/` the contract and the guides. `test/` node:test suites (`*.test.ts`).
+- `references/`, `docs/` the contract and the guides. `docs/guide.html` is generated from the README and the docs by `scripts/guide.mjs` (`npm run build`): edit the Markdown, never the page. `test/` node:test suites (`*.test.ts`).
 
 ## Commands
 

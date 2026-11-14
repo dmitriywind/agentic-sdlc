@@ -1,6 +1,6 @@
 ---
 name: release
-description: Decide whether the trunk is ready for the last environment, choose what ships, set Release Version and cut the release line. Use on a release request (a Backlog ticket labelled board.labels.release) or when a P0 fix is On <env before last>.
+description: "Decide whether the trunk is ready for the last environment, choose what ships, set Release Version and cut the release line. Only for `product.delivery: release-line`; continuous delivery ships every merge and needs no release. Use on a release request (a Backlog ticket labelled board.labels.release) or when a P0 fix is On <env before last>."
 disable-model-invocation: true
 metadata:
   tier: balanced

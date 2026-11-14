@@ -571,3 +571,32 @@ test('gate review: with one identity the newest trusted review-pr report for the
   assert.ok((await review(f.d, '5')).skipped);
   assert.equal(posted.length, 3);
 });
+
+test('gate evidence: runs commands.evidence_check with the sha; empty product.evidence passes; evidence without the command is an error', async () => {
+  const { cli } = await import('../src/gates.ts');
+  const ran: string[] = [];
+  const run = (b: any) => {
+    const exec: any = (c: string, a: string[], o: any) => { ran.push([c, ...a, o?.env?.AGENTIC_SDLC_CMD ?? ''].join(' ')); return ''; };
+    const out: string[] = [];
+    const w = process.stdout.write, e = process.stderr.write;
+    process.stdout.write = ((s: string) => { out.push(String(s)); return true; }) as any;
+    process.stderr.write = (() => true) as any;
+    return Promise.resolve(cli(['evidence', '--sha', 'abc123'], { binding: b, root: '.', exec, env: {} } as any))
+      .then((code) => ({ code, out: out.join('') }))
+      .finally(() => { process.stdout.write = w; process.stderr.write = e; });
+  };
+  assert.equal((await run({ ...binding, product: { ...binding.product, evidence: [] } })).code, 0);
+  assert.deepEqual(ran, []);
+  const b = { ...binding, product: { ...binding.product, evidence: ['report'] } };
+  assert.equal((await run({ ...b, commands: {} })).code, 1);
+  assert.equal((await run({ ...b, commands: { evidence_check: 'check {sha}' } })).code, 0);
+  assert.ok((ran as string[]).some((c) => c.includes('check abc123')), ran.join('|'));
+});
+
+test('shipped: a failure with one environment returns the tickets of the failed revision to Not shipped', async () => {
+  const f = fakes([item('1', 'Done', { shipped: 'In release', release_version: '1' })], { m1: { state: 'merged', closes: ['1'], mergeSha: 'm1' } });
+  f.d.binding = { ...binding, product: { environments: ['production'] } } as any;
+  f.d.isAncestor = () => true;
+  await shipped(f.d, 'production', 'sha1', 'failure');
+  assert.equal(f.items[0].fields.shipped, 'Not shipped');
+});

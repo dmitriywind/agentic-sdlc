@@ -21,7 +21,7 @@ test('tools/list has board_move with a schema; unknown method is -32601', async 
   assert.equal(((await handle(rpc('nope'), ctx)) as any).error.code, -32601);
 });
 
-test('board_create then board_move; only_from refusal is isError', async () => {
+test('board tools create, move with only_from (a refusal is isError), set and assign', async () => {
   const { ctx } = fakeCtx(mkdtempSync(join(tmpdir(), 'mcp-')), {}, () => ({}));
   const c = await call(ctx, 'board_create', { title: 'T', body: 'b', status: 'Backlog' });
   assert.equal(JSON.parse(c.result.content[0].text).id, '1');
@@ -30,30 +30,22 @@ test('board_create then board_move; only_from refusal is isError', async () => {
   const bad = await call(ctx, 'board_move', { id: '1', status: 'Done', only_from: 'Backlog' });
   assert.equal(bad.result.isError, true);
   assert.match(bad.result.content[0].text, /not moved/);
-});
-
-test('board_set and board_assign pass value and user as positionals', async () => {
-  const { ctx } = fakeCtx(mkdtempSync(join(tmpdir(), 'mcp-')), {}, () => ({}));
-  await call(ctx, 'board_create', { title: 'T', body: 'b', status: 'Backlog' });
-  for (const [name, args] of [
-    ['board_set', { id: '1', field: 'size', value: 'M' }],
-    ['board_assign', { id: '1', user: 'bot' }],
-    ['board_set', { id: '1', field: 'size', value: 'M', clear: true }],
-    ['board_assign', { id: '1', none: true }],
-  ] as const) {
-    const res = await call(ctx, name, args);
-    assert.equal(res.result.isError, undefined, `${name}: ${res.result.content[0].text}`);
+  {
+    const { ctx } = fakeCtx(mkdtempSync(join(tmpdir(), 'mcp-')), {}, () => ({}));
+    await call(ctx, 'board_create', { title: 'T', body: 'b', status: 'Backlog' });
+    for (const [name, args] of [
+      ['board_set', { id: '1', field: 'size', value: 'M' }],
+      ['board_assign', { id: '1', user: 'bot' }],
+      ['board_set', { id: '1', field: 'size', value: 'M', clear: true }],
+      ['board_assign', { id: '1', none: true }],
+    ] as const) {
+      const res = await call(ctx, name, args);
+      assert.equal(res.result.isError, undefined, `${name}: ${res.result.content[0].text}`);
+    }
   }
 });
 
-test('mcp --help prints usage and exits 0 instead of reading stdin', async () => {
-  const { ctx } = fakeCtx('.', {}, () => ({}));
-  const orig = console.log; let out = ''; console.log = (s: string) => { out += s; };
-  try { assert.equal(await cli(['--help'], ctx), 0); } finally { console.log = orig; }
-  assert.match(out, /--allow/);
-});
-
-test('--allow approve,status serves the review-identity tools; they are refused otherwise', async () => {
+test('--allow approve,status serves the review-identity tools, they are refused otherwise, and --help prints usage', async () => {
   const { ctx } = fakeCtx('.', {}, () => ({}));
   const names = async (allow?: Set<string>) => ((await handle(rpc('tools/list'), ctx, allow)) as any).result.tools.map((t: any) => t.name);
   assert.ok((await names(allowList('approve,status'))).includes('forge_status'));
@@ -64,4 +56,10 @@ test('--allow approve,status serves the review-identity tools; they are refused 
   assert.throws(() => allowList('merge'), /--allow takes approve,status/);
   const err = console.error; console.error = () => {};
   try { assert.equal(await cli(['--allow', 'merge'], ctx), 2); } finally { console.error = err; }
+  {
+    const { ctx } = fakeCtx('.', {}, () => ({}));
+    const orig = console.log; let out = ''; console.log = (s: string) => { out += s; };
+    try { assert.equal(await cli(['--help'], ctx), 0); } finally { console.log = orig; }
+    assert.match(out, /--allow/);
+  }
 });

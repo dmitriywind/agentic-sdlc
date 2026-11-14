@@ -115,13 +115,6 @@ const stdout = async (fn: () => Promise<unknown>) => {
   return JSON.parse(out.join(''));
 };
 
-test('comments: github follows pages from gh api', async () => {
-  const row = (id: number, author: string) => JSON.stringify({ id: String(id), author, createdAt: String(id), body: `b${id}`, url: 'u' });
-  const { ctx, execs } = mk('github', { repo: 'o/r' }, () => '', () => `${row(1, 'a')}\n${row(2, 'b')}\n${row(3, 'c')}\n`);
-  assert.deepEqual((await createForge(ctx).comments('4')).map((c) => c.author), ['a', 'b', 'c']);
-  assert.ok(execs[0].includes('--paginate') && execs[0].includes('repos/o/r/issues/4/comments'));
-});
-
 const ghPull = { number: 7, html_url: 'u', title: 'T', head: { ref: 'b', sha: 'h' }, base: { ref: 'main', sha: 'm' }, draft: false, state: 'open', body: 'Closes 1', user: { login: 'ann' } };
 const ghExec = (a: string[]) => a[0] === 'api' && a.at(-1)!.endsWith('/pulls/7') ? JSON.stringify(ghPull) : /\/(check-runs|status)\b/.test(a[1] ?? '') ? '{}' : a[0] === 'api' ? (() => { throw new Error('HTTP 404'); })() : '';
 
@@ -147,18 +140,29 @@ test('cli: JSON on stdout, usage error is 2, failure is 1', async () => {
   assert.equal(JSON.parse(out[0]).author, 'ann');
 });
 
-test('github: missing token env fails without leaking', async () => {
-  const { ctx } = mk('github', { repo: 'o/r', token_env: 'NOPE' }, () => ({}), ghExec);
-  await assert.rejects(createForge(ctx).view('7'), /NOPE/);
-});
-
-test('cli: comments --trusted --last 1 returns the newest trusted comment past a newer untrusted one', async () => {
-  const row = (id: number, author: string) => JSON.stringify({ id: String(id), author, createdAt: String(id), body: `b${id}`, url: 'u' });
-  const { ctx } = mk('github', { repo: 'o/r' }, () => ({}), () => [row(1, 'owner'), row(2, 'Bot'), row(3, 'mallory')].join(String.fromCharCode(10)));
-  (ctx.binding as any).owners = { product: 'owner', factory: 'fac', bots: ['bot'] };
-  const base = { root: ctx.root, binding: ctx.binding, env: ctx.env, exec: ctx.exec, http: ctx.http };
-  const out = await stdout(() => cli(['comments', '7', '--trusted', '--last', '1'], base));
-  assert.deepEqual(out.map((c: any) => c.id), ['2']);
+test('cli: comments --trusted keeps the owners and bots by forge name, --last counts after the filter, and pages come from gh api', async () => {
+  {
+    const row = (id: number, author: string) => JSON.stringify({ id: String(id), author, createdAt: String(id), body: `b${id}`, url: 'u' });
+    const { ctx } = mk('github', { repo: 'o/r' }, () => ({}), () => [row(1, 'owner'), row(2, 'Bot'), row(3, 'mallory')].join(String.fromCharCode(10)));
+    (ctx.binding as any).owners = { product: 'owner', factory: 'fac', bots: ['bot'] };
+    const base = { root: ctx.root, binding: ctx.binding, env: ctx.env, exec: ctx.exec, http: ctx.http };
+    const out = await stdout(() => cli(['comments', '7', '--trusted', '--last', '1'], base));
+    assert.deepEqual(out.map((c: any) => c.id), ['2']);
+  }
+  {
+    const row = (id: number, author: string) => JSON.stringify({ id: String(id), author, createdAt: String(id), body: `b${id}`, url: 'u' });
+    const { ctx, execs } = mk('github', { repo: 'o/r' }, () => '', () => `${row(1, 'a')}\n${row(2, 'b')}\n${row(3, 'c')}\n`);
+    assert.deepEqual((await createForge(ctx).comments('4')).map((c) => c.author), ['a', 'b', 'c']);
+    assert.ok(execs[0].includes('--paginate') && execs[0].includes('repos/o/r/issues/4/comments'));
+  }
+  {
+    const row = (id: number, author: string) => JSON.stringify({ id: String(id), author, createdAt: String(id), body: `b${id}`, url: 'u' });
+    const { ctx } = mk('github', { repo: 'o/r' }, () => ({}), () => [row(1, 'ann-gh'), row(2, 'acc-123')].join(String.fromCharCode(10)));
+    (ctx.binding as any).owners = { product: { board: 'acc-123', forge: 'ann-gh' }, factory: 'fac', bots: [{ board: 'acc-bot', forge: 'bot[bot]' }] };
+    const base = { root: ctx.root, binding: ctx.binding, env: ctx.env, exec: ctx.exec, http: ctx.http };
+    const out = await stdout(() => cli(['comments', '7', '--trusted'], base));
+    assert.deepEqual(out.map((c: any) => c.id), ['1']);
+  }
 });
 
 test('cli: status refuses the contexts only a gate posts', async () => {
@@ -172,18 +176,14 @@ test('cli: status refuses the contexts only a gate posts', async () => {
   assert.deepEqual(execs, []);
 });
 
-test('list: merged CRs are the closed pulls with a merge', async () => {
-  const gh = mk('github', { repo: 'o/r' }, () => ({}), restExec);
-  assert.equal((await createForge(gh.ctx).list({ state: 'merged' })).length, 1);
-  assert.ok(gh.execs[0].includes('repos/o/r/pulls?state=closed&per_page=100'));
-});
-
-test('two identities: status and approve need review_token_env and never use the implementer token', async () => {
+test('two identities: status and approve need review_token_env and never use the implementer token; a missing token env fails naming the variable', async () => {
   const st = { context: 'review', state: 'success' as const, description: 'd' };
   const gh = mk('github', { repo: 'o/r', token_env: 'TOK', review_token_env: 'UNSET' }, () => ({}));
   await assert.rejects(createForge(gh.ctx).status('abc', st), /review_token_env/);
   await assert.rejects(createForge(gh.ctx).approve('5'), /review_token_env/);
   assert.deepEqual(gh.envs, []);
+  const { ctx } = mk('github', { repo: 'o/r', token_env: 'NOPE' }, () => ({}), ghExec);
+  await assert.rejects(createForge(ctx).view('7'), /NOPE/);
 });
 
 test('one identity: status posts with the implementer token; approve is refused, since GitHub refuses the author', async () => {
@@ -195,11 +195,25 @@ test('one identity: status posts with the implementer token; approve is refused,
   await assert.rejects(createForge(gh.ctx).approve('5'), /one identity/);
 });
 
-test('approvals: { user, state, sha } from the PR reviews', async () => {
-  const gh = mk('github', { repo: 'o/r' }, () => ({}), (a) =>
-    a.includes('--paginate') ? '{"user":"ann","state":"approved","sha":"h1"}\n{"user":"bob","state":"changes_requested","sha":"h0"}\n' : '');
-  assert.deepEqual(await createForge(gh.ctx).approvals('5'), [{ user: 'ann', state: 'approved', sha: 'h1' }, { user: 'bob', state: 'changes_requested', sha: 'h0' }]);
-  assert.ok(gh.execs[0].includes('repos/o/r/pulls/5/reviews'));
+test('github reads: merged CRs are the closed pulls with a merge, approvals are { user, state, sha }, pushedAt is the first check suite on the head', async () => {
+  {
+    const gh = mk('github', { repo: 'o/r' }, () => ({}), restExec);
+    assert.equal((await createForge(gh.ctx).list({ state: 'merged' })).length, 1);
+    assert.ok(gh.execs[0].includes('repos/o/r/pulls?state=closed&per_page=100'));
+  }
+  {
+    const gh = mk('github', { repo: 'o/r' }, () => ({}), (a) =>
+      a.includes('--paginate') ? '{"user":"ann","state":"approved","sha":"h1"}\n{"user":"bob","state":"changes_requested","sha":"h0"}\n' : '');
+    assert.deepEqual(await createForge(gh.ctx).approvals('5'), [{ user: 'ann', state: 'approved', sha: 'h1' }, { user: 'bob', state: 'changes_requested', sha: 'h0' }]);
+    assert.ok(gh.execs[0].includes('repos/o/r/pulls/5/reviews'));
+  }
+  {
+    const at = (a: string[]) => a.join(' ').includes('/check-suites') ? '2026-11-14T10:00:00Z\n' : ghExec(a);
+    const { ctx, execs } = mk('github', { repo: 'o/r' }, () => ({}), at);
+    assert.equal((await createForge(ctx).view('7')).pushedAt, '2026-11-14T10:00:00Z');
+    assert.ok(execs.some((a) => a.includes('repos/o/r/commits/h/check-suites')));
+    assert.equal((await createForge(mk('github', { repo: 'o/r' }, () => ({}), ghExec).ctx).view('7')).pushedAt, undefined);
+  }
 });
 
 test('cut: dispatches the release workflow and returns the run newer than any before it', async () => {
@@ -210,19 +224,3 @@ test('cut: dispatches the release workflow and returns the run newer than any be
   assert.ok(gh.execs.some((a) => a.join(' ').startsWith('workflow run agentic-sdlc-release.yml -f revision=abc -f version=1.2.0')));
 });
 
-test('view: pushedAt is the first check suite on the head; absent when none can be read', async () => {
-  const at = (a: string[]) => a.join(' ').includes('/check-suites') ? '2026-11-14T10:00:00Z\n' : ghExec(a);
-  const { ctx, execs } = mk('github', { repo: 'o/r' }, () => ({}), at);
-  assert.equal((await createForge(ctx).view('7')).pushedAt, '2026-11-14T10:00:00Z');
-  assert.ok(execs.some((a) => a.includes('repos/o/r/commits/h/check-suites')));
-  assert.equal((await createForge(mk('github', { repo: 'o/r' }, () => ({}), ghExec).ctx).view('7')).pushedAt, undefined);
-});
-
-test('cli: forge comments --trusted uses the forge name of an owner with { board, forge }', async () => {
-  const row = (id: number, author: string) => JSON.stringify({ id: String(id), author, createdAt: String(id), body: `b${id}`, url: 'u' });
-  const { ctx } = mk('github', { repo: 'o/r' }, () => ({}), () => [row(1, 'ann-gh'), row(2, 'acc-123')].join(String.fromCharCode(10)));
-  (ctx.binding as any).owners = { product: { board: 'acc-123', forge: 'ann-gh' }, factory: 'fac', bots: [{ board: 'acc-bot', forge: 'bot[bot]' }] };
-  const base = { root: ctx.root, binding: ctx.binding, env: ctx.env, exec: ctx.exec, http: ctx.http };
-  const out = await stdout(() => cli(['comments', '7', '--trusted'], base));
-  assert.deepEqual(out.map((c: any) => c.id), ['1']);
-});

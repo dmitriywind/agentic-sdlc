@@ -14,6 +14,7 @@ Feature: Gate branch-names
     Then the gate passes
 
   # Source: src/gates.ts, "branchNames"
+  # Proof: test/gates.test.ts "branch-names"
   Scenario: A dependency bot line is allowed
     When the gate checks a change line that starts with "dependabot/" or "renovate/"
     Then the gate passes

@@ -81,15 +81,7 @@ test('init without package templates fails clearly', async () => {
   assert.equal(await quiet(() => cli(['init'], ctx)), 1);
 });
 
-test('validate fails on a skill without frontmatter', async () => {
-  const root = fixture();
-  const { ctx } = fakeCtx(root, {}, () => ({}));
-  await quiet(() => cli(['init'], ctx));
-  w(join(root, '.agents/skills/bad/SKILL.md'), 'no frontmatter');
-  assert.equal(await quiet(() => cli(['validate'], ctx)), 1);
-});
-
-test('validate warns on a top-level skill tier and fails when no tier exists', async () => {
+test('validate warns on a top-level skill tier, fails when no tier exists or frontmatter is missing', async () => {
   const root = fixture();
   await quiet(() => cli(['init'], fakeCtx(root, {}, () => ({})).ctx));
   w(join(root, '.agents/skills/old/SKILL.md'), '---\nname: old\ndescription: d\ntier: deep\n---\n');
@@ -99,6 +91,8 @@ test('validate warns on a top-level skill tier and fails when no tier exists', a
   assert.ok(warnings.some((m) => m.includes("skill old: top-level 'tier'")), warnings.join('|'));
   assert.ok(problems.some((m) => /skill none: .*metadata\.tier/.test(m)), problems.join('|'));
   assert.ok(!problems.some((m) => /skill (old|sdlc):/.test(m)), problems.join('|'));
+  w(join(root, '.agents/skills/bad/SKILL.md'), 'no frontmatter');
+  assert.equal(await quiet(() => cli(['validate'], fakeCtx(root, {}, () => ({})).ctx)), 1);
 });
 
 test('init --profile organization writes two identities, traces and a container sandbox; the ruleset asks for an approving review', async () => {
@@ -228,16 +222,7 @@ test('init keeps an existing agentic-sdlc MCP entry unless --force', async () =>
   assert.notEqual(read().command, 'mine');
 });
 
-test('init --harness codex keeps a quoted TOML table', async () => {
-  const root = fixture();
-  const mine = 'x = 1\n[mcp_servers."agentic-sdlc"]\ncommand = "mine"\n';
-  w(join(root, '.codex/config.toml'), mine);
-  const { ctx } = fakeCtx(root, {}, () => ({}));
-  await quiet(() => cli(['init', '--harness', 'codex'], ctx));
-  assert.equal(readFileSync(join(root, '.codex/config.toml'), 'utf8'), mine);
-});
-
-test('init --harness codex appends the TOML table once', async () => {
+test('init --harness codex appends the TOML table once and keeps one the adopter wrote', async () => {
   const root = fixture();
   w(join(root, '.codex/config.toml'), 'model = "x"\n');
   const { ctx } = fakeCtx(root, {}, () => ({}));
@@ -248,6 +233,11 @@ test('init --harness codex appends the TOML table once', async () => {
   assert.equal(t.split("[mcp_servers.agentic-sdlc]").length - 1, 1);
   assert.ok(t.includes('args = ["-y","--allow-git=root","github:dmitriywind/agentic-sdlc#v9.9.9","mcp"]'), t);
   assert.ok(!existsSync(join(root, '.claude/skills')));
+  const own = fixture();
+  const mine = 'x = 1\n[mcp_servers."agentic-sdlc"]\ncommand = "mine"\n';
+  w(join(own, '.codex/config.toml'), mine);
+  await quiet(() => cli(['init', '--harness', 'codex'], fakeCtx(own, {}, () => ({})).ctx));
+  assert.equal(readFileSync(join(own, '.codex/config.toml'), 'utf8'), mine);
 });
 
 test('init --harness cursor writes .cursor/mcp.json; unknown harness fails', async () => {
@@ -324,16 +314,18 @@ env:
   const b = (trunk: string) => ({ forge: { adapter: 'github' }, vcs: { trunk, release_prefix: 'release/' } });
   assert.match(deliveryWorkflow(b('master'), root)!, /^fail delivery workflow:.*trunk master/);
   assert.match(deliveryWorkflow(b('main'), root)!, /^ok   delivery workflow: names trunk main/);
-});
-
-test('doctor: delivery workflow env.TRUNK and env.RELEASE_PREFIX must match the binding', () => {
-  const root = mkdtempSync(join(tmpdir(), 'dwe-'));
-  const wf = (trunk: string) => `on:\n  push:\n    branches: [main, "release/**"]\nenv:\n  TRUNK: ${trunk}\n  RELEASE_PREFIX: release/\n  DELIVERY: release-line\n`;
+  const wf = (trunk: string) => `on:
+  push:
+    branches: [main, "release/**"]
+env:
+  TRUNK: ${trunk}
+  RELEASE_PREFIX: release/
+  DELIVERY: release-line
+`;
   w(join(root, '.github/workflows/agentic-sdlc-delivery.yml'), wf('trunk'));
-  const b = { forge: { adapter: 'github' }, vcs: { trunk: 'main', release_prefix: 'release/' } };
-  assert.match(deliveryWorkflow(b, root)!, /^fail delivery workflow: env\.TRUNK/);
+  assert.match(deliveryWorkflow(b('main'), root)!, /^fail delivery workflow: env.TRUNK/);
   w(join(root, '.github/workflows/agentic-sdlc-delivery.yml'), wf('main'));
-  assert.match(deliveryWorkflow(b, root)!, /^ok   delivery workflow/);
+  assert.match(deliveryWorkflow(b('main'), root)!, /^ok   delivery workflow/);
 });
 
 test('init on github installs the release-lines ruleset', async () => {

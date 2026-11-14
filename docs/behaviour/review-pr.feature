@@ -7,7 +7,7 @@ Feature: Review a change request
   So that only a proven, correct CR is marked ready and auto-merged
 
   # Source: skills/review-pr/SKILL.md, "Decide" (PASS)
-  # Proof: test/forge.test.ts "two identities: status and approve need review_token_env and never use the implementer token"
+  # Proof: test/forge.test.ts "two identities: status and approve need review_token_env and never use the implementer token; a missing token env fails naming the variable"
   Scenario: PASS with two identities marks the CR ready with auto-merge
     Given forge.review_identity is set
     And a draft CR for a ticket at In review
@@ -59,6 +59,7 @@ Feature: Review a change request
     And no status is posted
 
   # Source: skills/review-pr/SKILL.md, "Send back"
+  # Proof: skill text only
   Scenario: Findings on a CR a person opened go back to that person
     Given a CR opened by an author outside owners.bots
     And the review finds an Important finding
@@ -69,6 +70,7 @@ Feature: Review a change request
     And the reviewer reviews again when the CR head changes
 
   # Source: skills/review-pr/SKILL.md, "Report" and "Send back"
+  # Proof: skill text only
   Scenario: An Important finding sends the ticket back
     Given a product CR with a criterion graded NOT DONE
     When the reviewer decides
@@ -78,6 +80,7 @@ Feature: Review a change request
     And the ticket moves to In progress for implement-spec
 
   # Source: skills/review-pr/SKILL.md, "Report"
+  # Proof: skill text only
   Scenario: A Nit never blocks PASS
     Given the only findings are Nits
     And every hunt line is a Nit and not a bug
@@ -86,6 +89,7 @@ Feature: Review a change request
     And the verdict is PASS
 
   # Source: skills/review-pr/SKILL.md, "Spec pass"
+  # Proof: skill text only
   Scenario: A manual criterion waits for an owner
     Given a criterion with proof manual
     And no trusted owner comment confirms it for this head
@@ -96,6 +100,7 @@ Feature: Review a change request
     And the reviewer posts no report, no status and no approval
 
   # Source: skills/review-pr/SKILL.md, "CI results"
+  # Proof: skill text only
   Scenario: A pending or missing check stops the review
     Given a required check is pending on the head
     When the reviewer reads the CI results
@@ -123,6 +128,7 @@ Feature: Review a change request
     And the reviewer posts nothing else
 
   # Source: skills/review-pr/SKILL.md, "Behind the trunk"
+  # Proof: test/forge.test.ts "github: in a cloud session every verb is REST under repos/ and ready, draft, automerge use the ccr routes; an unset token_env falls back to the proxy"
   Scenario: A ready CR behind the trunk is synced
     Given a ready CR at In review
     And its change line is behind the trunk
@@ -148,6 +154,7 @@ Feature: Review a change request
     Then the check shows once, with the state of the newest run
 
   # Source: skills/review-pr/SKILL.md, intro paragraph and "Send back"
+  # Proof: skill text only
   Scenario: A factory CR is graded without a ticket
     Given a draft CR dispatched with --cr
     And only paths.factory changed
@@ -157,6 +164,7 @@ Feature: Review a change request
     And a finding keeps the CR draft with the report on the CR
 
   # Source: skills/review-pr/SKILL.md, "Red or stalled gate"
+  # Proof: skill text only
   Scenario: A pending human approval is not a stalled check
     Given a ready CR whose "human-approval" status is pending for longer than stall_minutes
     And every other required check is green
@@ -165,6 +173,7 @@ Feature: Review a change request
     And the reviewer files no Signal and no escalation
 
   # Source: skills/review-pr/SKILL.md, "CI results" and "Red or stalled gate"
+  # Proof: skill text only
   Scenario: A red check on a draft CR sends the work back
     Given a draft CR opened by the factory whose "Required" check is red
     When the reviewer reads the CI results
@@ -172,6 +181,7 @@ Feature: Review a change request
     And with the cause in the diff, the ticket moves to In progress with the cause
 
   # Source: skills/review-pr/SKILL.md, "Red or stalled gate"
+  # Proof: skill text only
   Scenario: A ready CR with a check that never reported is escalated, not sent back
     Given a ready CR whose required check "Required" is missing for longer than stall_minutes after the CR's pushedAt
     When the reviewer checks for red or stalled gates
@@ -179,6 +189,7 @@ Feature: Review a change request
     And the reviewer calls escalate-to-human once with the Access trigger, naming the check
 
   # Source: skills/review-pr/SKILL.md, "Report"
+  # Proof: skill text only
   Scenario: A deviation written back into the spec is not a finding
     Given a criterion graded DEVIATED
     And the spec comment was updated to match the change
@@ -187,6 +198,7 @@ Feature: Review a change request
     And it is neither a finding nor a Nit
 
   # Source: skills/review-pr/SKILL.md, "Spec pass"
+  # Proof: skill text only
   Scenario: Only a bot's verify-ux comment is evidence
     Given a criterion with proof computer-use
     And a "<!-- verify-ux -->" comment for this head by an account outside owners.bots
@@ -195,6 +207,7 @@ Feature: Review a change request
     And with no verify-ux comment by a bot after stall_minutes, the reviewer calls escalate-to-human once with the Access trigger
 
   # Source: skills/review-pr/SKILL.md, "Once per head"
+  # Proof: skill text only
   Scenario: A head that already has a report is not reviewed again
     Given the newest review-pr report is for the current head
     And no trusted comment came after it
@@ -202,6 +215,7 @@ Feature: Review a change request
     Then it posts nothing and stops
 
   # Source: skills/review-pr/SKILL.md, "Behind the trunk"
+  # Proof: skill text only
   Scenario: The factory never pushes a sync onto a person's CR
     Given a ready CR a person opened is behind the trunk
     When review-pr handles it
@@ -209,8 +223,39 @@ Feature: Review a change request
     And it runs no "forge sync"
 
   # Source: skills/review-pr/SKILL.md, "Green but open"; skills/sdlc/SKILL.md, Routing
+  # Proof: test/forge.test.ts "github: a repo without draft PRs marks drafts with the draft label; an unprotected trunk merges once required checks are green"
   Scenario: A ready CR with every required check green that is still open is merged
     Given a ready CR at In review whose every forge.required_checks entry is green on its head
     And the CR is still open
     When the cycle routes it to review-pr
     Then review-pr runs "forge automerge <n>"
+
+  # Source: src/ports.ts, "parseCloses"
+  # Proof: test/forge.test.ts "parseCloses never reads an id from the next line and dedupes"
+  Scenario: A CR names its ticket with a Closes line on one line
+    Given a CR body with "Closes" at the end of a line and a title on the next line
+    Then the CR links no ticket
+    And a repeated "Closes <id>" line links the ticket once
+
+  # Source: src/forge/index.ts, "cli"
+  # Proof: test/forge.test.ts "cli: JSON on stdout, usage error is 2, failure is 1"
+  Scenario: The forge CLI answers JSON and sets the exit code
+    When a skill runs a forge verb
+    Then the result is JSON on stdout and the exit code is 0
+    And a missing argument or an unknown verb exits with 2
+    And a failed call exits with 1
+
+  # Source: src/forge/github.ts, "list", "approvals" and "view"
+  # Proof: test/forge.test.ts "github reads: merged CRs are the closed pulls with a merge, approvals are { user, state, sha }, pushedAt is the first check suite on the head"
+  Scenario: The forge reads merged CRs, approvals and the push time of a head
+    When a skill runs "forge list --state merged", "forge approvals <n>" or "forge view <n>"
+    Then a merged CR is a closed CR with a merge
+    And an approval holds the user, the state and the head sha of the review
+    And the push time is the first check suite on the head, or absent when none can be read
+
+  # Source: src/forge/github.ts, "cut"
+  # Proof: test/forge.test.ts "cut: dispatches the release workflow and returns the run newer than any before it"
+  Scenario: A release cut starts the release workflow and returns its run
+    When the release skill runs "forge cut <revision> <version>"
+    Then the forge dispatches the release workflow for that revision and version
+    And the result names the run that is newer than every run before the dispatch

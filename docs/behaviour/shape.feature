@@ -7,6 +7,7 @@ Feature: Shape a ticket
   So that an implementer gets a sized ticket with criteria, a proof for each and a lane
 
   # Source: skills/shape/SKILL.md, intro
+  # Proof: skill text only
   Scenario: A ticket with children is an initiative and is not shaped
     Given a ticket at Status Backlog has children
     When the skill starts
@@ -14,6 +15,7 @@ Feature: Shape a ticket
     And its only comment is the closing comment, which names the ticket as an initiative
 
   # Source: skills/shape/SKILL.md, "Steps" 1 "Diagnose (failure-born tickets only)"
+  # Proof: skill text only
   Scenario: A failure-born ticket needs a confirmed cause
     Given the ticket was made from a failure Signal
     When the skill diagnoses
@@ -24,6 +26,7 @@ Feature: Shape a ticket
     And the cause is shown by a command and its output, not inferred
 
   # Source: skills/shape/SKILL.md, "Steps" 1 "Diagnose (failure-born tickets only)"
+  # Proof: skill text only
   Scenario Outline: A failure without a confirmed cause stops the pass
     Given the ticket was made from a failure Signal
     And <case>
@@ -41,6 +44,7 @@ Feature: Shape a ticket
       | no run confirms a cause because an environment is missing | it calls "escalate-to-human" with the reason Access                         |
 
   # Source: skills/shape/SKILL.md, "Steps" 2 "Orient" and 3 "Independent read"
+  # Proof: skill text only
   Scenario: The skill reads the code and forms its own view of scope
     When the skill orients
     Then it opens every file and line the ticket cites at the trunk tip
@@ -53,6 +57,7 @@ Feature: Shape a ticket
     And it settles every disagreement
 
   # Source: skills/shape/SKILL.md, "Steps" 4 "Size, milestone and split"
+  # Proof: skill text only
   Scenario: A ticket above the size limit is split into children
     Given the Size of the ticket is above "ready_size_limit"
     When the skill splits
@@ -63,6 +68,7 @@ Feature: Shape a ticket
     And the original becomes the initiative, keeps its Priority and stays at Backlog
 
   # Source: skills/shape/SKILL.md, "Steps" 5 "Criteria"
+  # Proof: skill text only
   Scenario: Each acceptance criterion names its proof
     When the skill writes the criteria
     Then they are plain bullets, never checkboxes
@@ -74,6 +80,7 @@ Feature: Shape a ticket
     And when "commands.preview" is not set, the skill picks "manual" for that criterion
 
   # Source: skills/shape/SKILL.md, "Steps" 6 "Lane"
+  # Proof: skill text only
   Scenario Outline: The lane follows the size, the triggers and the touched paths
     Given the Size is "<size>"
     And an escalation trigger of "escalate-to-human" "<trigger>"
@@ -91,6 +98,7 @@ Feature: Shape a ticket
       | at or below "fast_lane_max_size" | fires not | is touched     | Full |
 
   # Source: skills/shape/SKILL.md, "Steps" 6 "Lane" and 7 "Spec (Full lane only)"
+  # Proof: skill text only
   Scenario: A Full-lane ticket gets one spec comment and a Fast-lane ticket gets a proof list
     Given the Lane is Full
     When the skill writes the spec
@@ -118,6 +126,7 @@ Feature: Shape a ticket
     And the board shows the Status Ready
 
   # Source: skills/shape/SKILL.md, "Steps" 8 "Pass the checklist"
+  # Proof: skill text only
   Scenario Outline: A ticket that fails the checklist is not moved to Ready
     Given the checklist fails because "<failure>"
     When the skill finishes

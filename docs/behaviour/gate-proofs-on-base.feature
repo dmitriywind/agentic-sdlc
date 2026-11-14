@@ -68,3 +68,11 @@ Feature: Gate proofs-on-base
     When the gate runs
     Then the gate passes with "no proof needed"
     And a CR that also changes code still needs a new proof file
+
+  # Source: src/gates.ts, "proofFiles"
+  # Proof: test/gates.test.ts "proofFiles: new and changed proof paths, deletions skipped"
+  Scenario: A deleted proof file is not run on the merge base
+    Given a CR deletes one proof file and adds another
+    When the gate picks the proof files
+    Then it runs the added file
+    And it skips the deleted file

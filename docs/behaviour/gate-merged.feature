@@ -56,13 +56,14 @@ Feature: Gate merged
     And Shipped stays "On staging"
 
   # Source: src/gates.ts, "merged"
-  # Proof: test/gates.test.ts "merged: a forge error fails the gate; only \"no change request\" is a direct push"
+  # Proof: test/gates.test.ts "merged: a forge error fails the gate; only "no change request" is a direct push"
   Scenario: A forge error fails the gate
     Given the forge answers the merge sha lookup with an error
     When "gate merged" runs
     Then the gate fails, so the run is red and can be re-run
 
   # Source: templates/gates/github/agentic-sdlc-delivery.yml (workflow_dispatch)
+  # Proof: skill text only
   Scenario: A merge whose delivery run failed is replayed by hand
     Given the delivery run for a trunk commit failed before "gate merged" moved its ticket
     When the factory owner starts the delivery workflow by hand with that commit's sha

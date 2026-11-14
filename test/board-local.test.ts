@@ -26,17 +26,7 @@ test('create, list, move with only-from, set, label, close', async () => {
   assert.equal((await b.close('1', 'not_planned')).status, 'Cancelled');
 });
 
-test('comments newest first with marker and last', async () => {
-  const b = mk();
-  await b.create({ title: 't', body: '', status: 'Backlog' });
-  await b.comment('1', '<!-- heartbeat -->\none');
-  await b.comment('1', 'plain');
-  assert.equal((await b.comments('1'))[0].body, 'plain');
-  assert.equal((await b.comments('1', { marker: 'heartbeat' })).length, 1);
-  assert.equal((await b.comments('1', { last: 1 })).length, 1);
-});
-
-test('cli comments --author keeps only those authors, and --last counts after the filter', async () => {
+test('comments come newest first and narrow by marker, last and author, with --last counted after the filter', async () => {
   const { cli } = await import('../src/board/index.ts');
   const f = fakeCtx(mkdtempSync(join(tmpdir(), 'bl-')), {}, () => ({}));
   const b = createBoard(f.ctx);

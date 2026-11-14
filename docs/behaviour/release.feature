@@ -7,6 +7,7 @@ Feature: Release to the last environment
   So that nothing reaches the last environment without my approval
 
   # Source: skills/release/SKILL.md, "Steps 0a. P0 entry"
+  # Proof: skill text only
   Scenario: A Done P0 fix starts a release request
     Given a P0 ticket is Done with Shipped On the environment before the last
     And no open release request has the title "Release for P0 #<id>"
@@ -16,6 +17,7 @@ Feature: Release to the last environment
     And the run continues on that ticket
 
   # Source: skills/release/SKILL.md, "Steps 0a. P0 entry" (the title is the dedupe key)
+  # Proof: skill text only
   Scenario: A second run for the same P0 reuses the open request
     Given an open release request has the title "Release for P0 #<id>"
     When the release skill runs again for that P0 ticket
@@ -23,6 +25,7 @@ Feature: Release to the last environment
     And it continues on the open request
 
   # Source: skills/release/SKILL.md, "Steps 3. Ready check"
+  # Proof: skill text only
   Scenario: A failed ready check stops the release
     Given a ticket in the release range is held, or a P0 is open
     When the release skill does the ready check
@@ -30,6 +33,7 @@ Feature: Release to the last environment
     And it stops without a proposal
 
   # Source: skills/release/SKILL.md, "Steps 3. Ready check"
+  # Proof: skill text only
   Scenario: Rollback proof is part of the ready check
     Given commands.rollback is named
     And no rollback run is recorded in the environment before the last since the previous release tag
@@ -38,12 +42,14 @@ Feature: Release to the last environment
     And the release skill names the missing rollback run
 
   # Source: skills/release/SKILL.md, "Steps 4. Version"
+  # Proof: skill text only
   Scenario: A version is never reused
     Given a version was used by a failed release
     When the release skill picks a version
     Then it picks a version that is not a tag and not a release line
 
   # Source: skills/release/SKILL.md, "Steps 5. Propose"
+  # Proof: skill text only
   Scenario: The proposal goes to the Product owner and the run stops
     Given the ready check passed
     When the release skill proposes the release
@@ -53,6 +59,7 @@ Feature: Release to the last environment
     And the run stops
 
   # Source: skills/release/SKILL.md, "Steps 5. Propose" (P0 case)
+  # Proof: skill text only
   Scenario: A P0 proposal names the P0
     Given the request is for a P0 fix
     When the release skill proposes the release
@@ -60,6 +67,7 @@ Feature: Release to the last environment
     And the comment says that only the commits needed for the P0 are in the proposal
 
   # Source: skills/release/SKILL.md, "Steps 0. Resume"
+  # Proof: skill text only
   Scenario: Resume without a reply does nothing
     Given the newest comment with "<!-- release-proposal" has no trusted Product owner reply after it
     When the release skill is dispatched again
@@ -68,6 +76,7 @@ Feature: Release to the last environment
     And it reads nothing more
 
   # Source: skills/release/SKILL.md, "Steps 0. Resume" and "Steps 6. Mark"
+  # Proof: skill text only
   Scenario Outline: A trusted Product owner reply picks the entry step
     Given the newest proposal has a trusted Product owner reply that <reply>
     When the release skill is dispatched again
@@ -80,6 +89,7 @@ Feature: Release to the last environment
       | asks to refresh      | step 1, Gather      |
 
   # Source: skills/release/SKILL.md, "Steps 0. Resume" and "Steps 6. Mark"
+  # Proof: skill text only
   Scenario: Only the Product owner gives the go-ahead
     Given the proposal has a later comment by a bot or by the Factory owner
     And no comment by owners.product follows the proposal
@@ -88,6 +98,7 @@ Feature: Release to the last environment
     And it stops without a cut
 
   # Source: skills/release/SKILL.md, "Steps 6. Mark" and "Steps 7. Cut"
+  # Proof: skill text only
   Scenario: The go-ahead leads to a cut from one trunk revision
     Given a trusted Product owner approved the proposal
     When the release skill continues
@@ -98,6 +109,7 @@ Feature: Release to the last environment
     And it closes the request as completed
 
   # Source: skills/release/SKILL.md, "Rules"
+  # Proof: skill text only
   Scenario: The skill never approves the last environment
     Given a release request is open
     When the release skill runs
@@ -105,6 +117,7 @@ Feature: Release to the last environment
     And it never commits to a release line
 
   # Source: skills/release/SKILL.md, "Rules"
+  # Proof: skill text only
   Scenario: A failed release leaves its line untouched
     Given a release failed in the last environment
     And the fix is Done with Shipped On the environment before the last
@@ -112,7 +125,8 @@ Feature: Release to the last environment
     Then it cuts the next version
     And it does not change the failed release line
 
-  # Source: skills/release/SKILL.md, "Steps 3. Ready check"
+  # Source: skills/release/SKILL.md, "Steps 3. Ready check"; src/gates.ts, gate evidence
+  # Proof: test/gates.test.ts "gate evidence: runs commands.evidence_check with the sha; empty product.evidence passes; evidence without the command is an error"
   Scenario: A release with required evidence is ready only when the evidence check passes
     Given product.evidence lists kinds
     When the release skill runs the ready check on the chosen revision
@@ -120,6 +134,7 @@ Feature: Release to the last environment
     And it stops and names the failure when the command does not exit 0
 
   # Source: skills/release/SKILL.md, "Steps 6. Mark" and "Steps 7. Cut"
+  # Proof: skill text only
   Scenario: The tickets show In release before the cut, and the ready check runs again
     Given the Product owner approved the proposal
     When the release skill marks and cuts

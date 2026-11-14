@@ -1,6 +1,6 @@
 ---
 name: judge-run
-description: Grade one finished run with the scorers the ledger plans for it, on a model independent of the run, and record the scores. Use when the cycle dispatches it for a run in the last heartbeat or for a bench case result.
+description: Grade one finished run with the scorers the ledger plans for it, on a model independent of the run, and record the scores, so improve-factory has evidence of what fails. Part of the learning loop; off unless `learning.enabled` is true. Use when the cycle dispatches it for a run in the last heartbeat or for a bench case result.
 user-invocable: false
 metadata:
   tier: fast

@@ -103,3 +103,11 @@ Feature: Push guard
     When a developer pushes a branch
     Then git runs "agentic-sdlc gate branch-names --stdin-prepush"
     And a branch outside the binding patterns is refused
+
+  # Source: src/vcs/git.ts, "push"
+  # Proof: test/install.test.ts "vcs push refuses the trunk and a detached HEAD"
+  Scenario: The vcs push command refuses the trunk and a detached HEAD
+    Given the checkout is on the trunk, or on a detached HEAD
+    When a skill runs "agentic-sdlc vcs push"
+    Then the command fails and names the trunk or the detached HEAD
+    And a push from a change line succeeds

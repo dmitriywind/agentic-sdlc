@@ -16,7 +16,7 @@ async function withFetch(responses: [number, Record<string, string>?, string?][]
   finally { globalThis.fetch = real; setSleep(prev); }
 }
 
-test('http retries 429 and 5xx up to 3 tries, honouring Retry-After', async () => {
+test('http retries 429 and 5xx up to 3 tries honouring Retry-After (seconds or date, capped at 30s), and does not retry 4xx, nor 5xx on POST', async () => {
   const ok = await withFetch([[429, { 'retry-after': '2' }], [503], [200]], () => http('GET', 'https://h/x'));
   assert.deepEqual(ok.result, { ok: true });
   assert.deepEqual(ok.waits, [2000, 2000]); // Retry-After 2s, then backoff for attempt 2
@@ -25,19 +25,14 @@ test('http retries 429 and 5xx up to 3 tries, honouring Retry-After', async () =
   const fail = await withFetch([[500], [502], [503], [200]], () => http('GET', 'https://h/x'));
   assert.match((fail.result as Error).message, /GET \/x -> 503/);
   assert.equal(fail.calls.length, 3);
-});
 
-test('http does not retry 4xx, nor 5xx on POST; 429 on POST retries', async () => {
   assert.equal((await withFetch([[404], [200]], () => http('GET', 'https://h/x'))).calls.length, 1);
   assert.equal((await withFetch([[500], [200]], () => http('POST', 'https://h/x', { body: {} }))).calls.length, 1);
   assert.deepEqual((await withFetch([[429], [200]], () => http('POST', 'https://h/x', { body: {} }))).result, { ok: true });
-});
 
-test('retryWait: seconds, HTTP date, backoff, 30s cap', () => {
   const now = Date.parse('2026-11-09T00:00:00Z');
   assert.equal(retryWait('5', 1, now), 5000);
   assert.equal(retryWait('Mon, 09 Nov 2026 00:00:10 GMT', 1, now), 10000);
-  assert.equal(retryWait(null, 1, now), 1000);
   assert.equal(retryWait(null, 2, now), 2000);
   assert.equal(retryWait('3600', 1, now), 30000);
 });

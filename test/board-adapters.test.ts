@@ -21,30 +21,6 @@ const ghAnswer = (status: string) => (c: string) => {
 };
 const gh = { owner: 'o', project_number: 1, repo: 'o/r' };
 
-test('github move refuses when status differs, and writes nothing', async () => {
-  const { board, calls } = mk('github', gh, ghAnswer('Backlog'));
-  await assert.rejects(board.move('7', 'In progress', 'Ready'), MovedError);
-  assert.ok(!calls.some((c) => c.includes('item-edit')));
-});
-
-test('github move issues item-edit with resolved ids', async () => {
-  const { board, calls } = mk('github', gh, ghAnswer('Ready'));
-  await board.move('7', 'In progress', 'Ready');
-  assert.ok(calls.includes('gh project item-edit --project-id P1 --id I7 --field-id F1 --single-select-option-id O2'));
-});
-
-test('github board passes GH_TOKEN from token_env to every gh call, and fails naming the var when unset', async () => {
-  const f = fakeCtx('.', { ...gh, token_env: 'BT' }, ghAnswer('Ready'), { BT: 'pat' });
-  f.ctx.binding = { ...binding, board: { ...binding.board, adapter: 'github' } } as any;
-  const tokens: (string | undefined)[] = [];
-  const exec = f.ctx.exec;
-  f.ctx.exec = (c, a, o) => { tokens.push(o?.env?.GH_TOKEN); return exec(c, a, o); };
-  await createBoard(f.ctx).move('7', 'In progress');
-  assert.ok(tokens.length > 0 && tokens.every((t) => t === 'pat'));
-  const { board } = mk('github', { ...gh, token_env: 'BT' }, ghAnswer('Ready'));
-  await assert.rejects(board.move('7', 'In progress'), /BT/);
-});
-
 // jira
 const jira = { base_url: 'https://x.atlassian.net', project_key: 'PROJ', email_env: 'JE', token_env: 'JT' };
 const jiraAnswer = (status: string) => (c: string) => {
@@ -54,23 +30,6 @@ const jiraAnswer = (status: string) => (c: string) => {
   return {};
 };
 
-test('jira move refuses when status differs', async () => {
-  const { board, calls } = mk('jira', jira, jiraAnswer('Backlog'), { JE: 'a@b', JT: 'secret' });
-  await assert.rejects(board.move('PROJ-1', 'In progress', 'Ready'), MovedError);
-  assert.ok(!calls.some((c) => c.startsWith('POST') && c.includes('/transitions')));
-});
-
-test('jira move posts the matching transition', async () => {
-  const { board, calls } = mk('jira', jira, jiraAnswer('Ready'), { JE: 'a@b', JT: 'secret' });
-  await board.move('PROJ-1', 'In progress', 'Ready');
-  assert.ok(calls.some((c) => c.startsWith('POST') && c.includes('/issue/PROJ-1/transitions') && c.includes('{"transition":{"id":"31"}}')));
-});
-
-test('jira without credentials names the env vars', async () => {
-  const { board } = mk('jira', jira, jiraAnswer('Ready'));
-  await assert.rejects(board.get('PROJ-1'), /JE and JT/);
-});
-
 // linear
 const linearAnswer = (status: string) => (c: string) => {
   const issue = { id: 'U1', identifier: 'LIN-9', title: 't', url: 'u', createdAt: '', updatedAt: '', priority: 0, state: { name: status }, labels: { nodes: [] }, parent: null, children: { nodes: [] } };
@@ -79,62 +38,6 @@ const linearAnswer = (status: string) => (c: string) => {
   return { data: { issue } };
 };
 
-test('linear move refuses when state differs', async () => {
-  const { board, calls } = mk('linear', { team_key: 'LIN', token_env: 'LT' }, linearAnswer('Backlog'), { LT: 'k' });
-  await assert.rejects(board.move('LIN-9', 'In progress', 'Ready'), MovedError);
-  assert.ok(!calls.some((c) => c.includes('issueUpdate')));
-});
-
-test('linear move sends the state id', async () => {
-  const { board, calls } = mk('linear', { team_key: 'LIN', token_env: 'LT' }, linearAnswer('Ready'), { LT: 'k' });
-  await board.move('LIN-9', 'In progress', 'Ready');
-  assert.ok(calls.some((c) => c.includes('issueUpdate') && c.includes('"stateId":"S2"')));
-});
-
-// paging
-const jIssue = (k: string) => ({ key: k, fields: { summary: k, status: { name: 'Ready' }, labels: [], subtasks: [] } });
-test('jira list follows nextPageToken until isLast', async () => {
-  const { board, calls } = mk('jira', jira, (c) => {
-    if (c.includes('/field')) return [{ id: 'cf1', name: 'Size' }, { id: 'cf2', name: 'Priority' }];
-    if (c.includes('"nextPageToken":"t2"')) return { issues: [jIssue('PROJ-2')], isLast: true };
-    if (c.includes('/search/jql')) return { issues: [jIssue('PROJ-1')], nextPageToken: 't2' };
-  }, { JE: 'a@b', JT: 's' });
-  assert.deepEqual((await board.list()).map((i) => i.id), ['PROJ-1', 'PROJ-2']);
-  assert.equal(calls.filter((c) => c.includes('/search/jql')).length, 2);
-});
-
-test('jira comments pages through the total, so a marker on page 2 is found', async () => {
-  const page = (from: number, n: number) => Array.from({ length: n }, (_, i) => ({
-    id: String(from + i), created: '', body: { type: 'doc', content: [{ type: 'text', text: from + i === 120 ? 'marker-x' : 'hi' }] },
-  }));
-  const answer = (c: string) => (c.includes('startAt=100') ? { total: 150, comments: page(100, 50) } : { total: 150, comments: page(0, 100) });
-  const { board } = mk('jira', jira, answer, { JE: 'a@b', JT: 's' });
-  assert.equal((await board.comments('PROJ-1')).length, 150);
-  assert.deepEqual((await board.comments('PROJ-1', { marker: 'marker-x' })).map((c) => c.id), ['120']);
-});
-
-test('linear list and comments follow endCursor', async () => {
-  const issue = (id: string) => ({ id, identifier: id, title: 't', url: 'u', createdAt: '', updatedAt: '', priority: 0, state: { name: 'Ready' }, labels: { nodes: [] }, parent: null, children: { nodes: [] } });
-  const comment = (id: string) => ({ id, body: 'b', createdAt: id, url: 'u', user: null });
-  const answer = (c: string) => {
-    const second = c.includes('"a":"c1"');
-    const info = { hasNextPage: !second, endCursor: 'c1' };
-    if (c.includes('comments(')) return { data: { issue: { comments: { nodes: [comment(second ? 'k2' : 'k1')], pageInfo: info } } } };
-    return { data: { issues: { nodes: [issue(second ? 'L2' : 'L1')], pageInfo: info } } };
-  };
-  const { board } = mk('linear', { team_key: 'LIN', token_env: 'LT' }, answer, { LT: 'k' });
-  assert.deepEqual((await board.list()).map((i) => i.id), ['L1', 'L2']);
-  assert.deepEqual((await board.comments('LIN-1')).map((c) => c.id).sort(), ['k1', 'k2']);
-});
-
-test('github refuses a board read at the 5000-item cap', async () => {
-  const items = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `I${i}`, status: 'Ready', content: { number: i + 1, title: 't', url: 'u' } }));
-  const answer = (n: number) => (c: string) => (c.includes('item-list') ? { items: items(n) } : ghAnswer('Ready')(c));
-  const full = mk('github', gh, answer(5000)).board;
-  await assert.rejects(full.list(), /archive/);
-  await assert.rejects(full.get('1'), /archive/);
-  assert.equal((await mk('github', gh, answer(4999)).board.list()).length, 4999);
-});
 
 test('github: a Project shared by two repos yields only the issues of this repo', async () => {
   const mine = String((gh as any).repo);
@@ -144,16 +47,6 @@ test('github: a Project shared by two repos yields only the issues of this repo'
   ] } : ghAnswer('Ready')(c));
   const list = await mk('github', gh, answer).board.list();
   assert.deepEqual(list.map((i) => i.title), ['mine']);
-});
-
-test('jira list throws on a repeated token; linear list throws on an unchanged cursor', async () => {
-  const { board } = mk('jira', jira, (c) => {
-    if (c.includes('/field')) return [{ id: 'cf1', name: 'Size' }, { id: 'cf2', name: 'Priority' }];
-    if (c.includes('/search/jql')) return { issues: [jIssue('PROJ-1')], nextPageToken: 't1' };
-  }, { JE: 'a@b', JT: 's' });
-  await assert.rejects(board.list(), /jira: list does not advance/);
-  const lin = mk('linear', { team_key: 'LIN', token_env: 'LT' }, () => ({ data: { issues: { nodes: [{ id: 'x' }], pageInfo: { hasNextPage: true, endCursor: 'c1' } } } }), { LT: 'k' });
-  await assert.rejects(lin.board.list(), /linear: list does not advance/);
 });
 
 // github-issues: a fake REST repo behind `gh api`; every call is recorded with its JSON input.
@@ -243,4 +136,75 @@ test('github-issues comments page, newest first, and filter by marker', async ()
   assert.equal(all[0].id, '119');
   assert.deepEqual((await board.comments('7', { marker: 'hb' })).map((c) => c.id), ['110']);
   onlyRepoRest(calls);
+});
+
+// github, jira and linear: one behaviour, three adapters
+const linCfg = { team_key: 'LIN', token_env: 'LT' };
+const jEnv = { JE: 'a@b', JT: 'secret' };
+const jFields = [{ id: 'cf1', name: 'Size' }, { id: 'cf2', name: 'Priority' }];
+const jIssue = (k: string) => ({ key: k, fields: { summary: k, status: { name: 'Ready' }, labels: [], subtasks: [] } });
+const lIssue = (id: string) => ({ id, identifier: id, title: 't', url: 'u', createdAt: '', updatedAt: '', priority: 0, state: { name: 'Ready' }, labels: { nodes: [] }, parent: null, children: { nodes: [] } });
+
+test('board move on github, jira and linear refuses when the status differs and writes nothing, else writes the resolved id', async () => {
+  const cases = [
+    { make: (s: string) => mk('github', gh, ghAnswer(s)), id: '7', writes: (c: string) => c.includes('item-edit'), resolved: (cs: string[]) => cs.includes('gh project item-edit --project-id P1 --id I7 --field-id F1 --single-select-option-id O2') },
+    { make: (s: string) => mk('jira', jira, jiraAnswer(s), jEnv), id: 'PROJ-1', writes: (c: string) => c.startsWith('POST') && c.includes('/transitions'), resolved: (cs: string[]) => cs.some((c) => c.startsWith('POST') && c.includes('/issue/PROJ-1/transitions') && c.includes('{"transition":{"id":"31"}}')) },
+    { make: (s: string) => mk('linear', linCfg, linearAnswer(s), { LT: 'k' }), id: 'LIN-9', writes: (c: string) => c.includes('issueUpdate'), resolved: (cs: string[]) => cs.some((c) => c.includes('issueUpdate') && c.includes('"stateId":"S2"')) },
+  ];
+  for (const t of cases) {
+    const stale = t.make('Backlog');
+    await assert.rejects(stale.board.move(t.id, 'In progress', 'Ready'), MovedError);
+    assert.ok(!stale.calls.some(t.writes), 'a refused move wrote');
+    const ok = t.make('Ready');
+    await ok.board.move(t.id, 'In progress', 'Ready');
+    assert.ok(t.resolved(ok.calls), 'the move did not write the resolved id');
+  }
+});
+
+test('a board adapter without its credential fails naming the variable, and github passes token_env as GH_TOKEN on every call', async () => {
+  const f = fakeCtx('.', { ...gh, token_env: 'BT' }, ghAnswer('Ready'), { BT: 'pat' });
+  f.ctx.binding = { ...binding, board: { ...binding.board, adapter: 'github' } } as any;
+  const tokens: (string | undefined)[] = [];
+  const exec = f.ctx.exec;
+  f.ctx.exec = (c, a, o) => { tokens.push(o?.env?.GH_TOKEN); return exec(c, a, o); };
+  await createBoard(f.ctx).move('7', 'In progress');
+  assert.ok(tokens.length > 0 && tokens.every((t) => t === 'pat'));
+  await assert.rejects(mk('github', { ...gh, token_env: 'BT' }, ghAnswer('Ready')).board.move('7', 'In progress'), /BT/);
+  await assert.rejects(mk('jira', jira, jiraAnswer('Ready')).board.get('PROJ-1'), /JE and JT/);
+});
+
+test('board reads on jira, linear and github follow every page, and fail instead of returning a partial list', async () => {
+  const jiraBoard = (answer: (c: string) => unknown) => mk('jira', jira, (c) => (c.includes('/field') ? jFields : answer(c)), jEnv);
+  // jira list: nextPageToken until isLast
+  const paged = jiraBoard((c) => (c.includes('"nextPageToken":"t2"') ? { issues: [jIssue('PROJ-2')], isLast: true } : c.includes('/search/jql') ? { issues: [jIssue('PROJ-1')], nextPageToken: 't2' } : undefined));
+  assert.deepEqual((await paged.board.list()).map((i) => i.id), ['PROJ-1', 'PROJ-2']);
+  assert.equal(paged.calls.filter((c) => c.includes('/search/jql')).length, 2);
+  // jira comments: a marker on page 2 is found
+  const page = (from: number, n: number) => Array.from({ length: n }, (_, i) => ({
+    id: String(from + i), created: '', body: { type: 'doc', content: [{ type: 'text', text: from + i === 120 ? 'marker-x' : 'hi' }] },
+  }));
+  const jc = mk('jira', jira, (c) => (c.includes('startAt=100') ? { total: 150, comments: page(100, 50) } : { total: 150, comments: page(0, 100) }), jEnv).board;
+  assert.equal((await jc.comments('PROJ-1')).length, 150);
+  assert.deepEqual((await jc.comments('PROJ-1', { marker: 'marker-x' })).map((c) => c.id), ['120']);
+  // linear: list and comments follow endCursor
+  const comment = (id: string) => ({ id, body: 'b', createdAt: id, url: 'u', user: null });
+  const lin = mk('linear', linCfg, (c) => {
+    const second = c.includes('"a":"c1"');
+    const info = { hasNextPage: !second, endCursor: 'c1' };
+    if (c.includes('comments(')) return { data: { issue: { comments: { nodes: [comment(second ? 'k2' : 'k1')], pageInfo: info } } } };
+    return { data: { issues: { nodes: [lIssue(second ? 'L2' : 'L1')], pageInfo: info } } };
+  }, { LT: 'k' }).board;
+  assert.deepEqual((await lin.list()).map((i) => i.id), ['L1', 'L2']);
+  assert.deepEqual((await lin.comments('LIN-1')).map((c) => c.id).sort(), ['k1', 'k2']);
+  // a page that does not advance is an error, not a partial list
+  await assert.rejects(jiraBoard((c) => (c.includes('/search/jql') ? { issues: [jIssue('PROJ-1')], nextPageToken: 't1' } : undefined)).board.list(), /jira: list does not advance/);
+  const stuck = mk('linear', linCfg, () => ({ data: { issues: { nodes: [{ id: 'x' }], pageInfo: { hasNextPage: true, endCursor: 'c1' } } } }), { LT: 'k' });
+  await assert.rejects(stuck.board.list(), /linear: list does not advance/);
+  // github: a Project at the 5000-item cap is refused
+  const items = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `I${i}`, status: 'Ready', content: { number: i + 1, title: 't', url: 'u' } }));
+  const answer = (n: number) => (c: string) => (c.includes('item-list') ? { items: items(n) } : ghAnswer('Ready')(c));
+  const full = mk('github', gh, answer(5000)).board;
+  await assert.rejects(full.list(), /archive/);
+  await assert.rejects(full.get('1'), /archive/);
+  assert.equal((await mk('github', gh, answer(4999)).board.list()).length, 4999);
 });

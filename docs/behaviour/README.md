@@ -15,9 +15,11 @@ Scenario: PASS with two identities marks the CR ready with auto-merge
 ```
 
 - `# Source:` names the file and section that hold the rule. The source wins when the two differ.
-- `# Proof:` names the `node:test` test that proves the CLI mechanism behind the scenario. A
-  scenario without a Proof line is a rule that an agent follows; `judge-run` and the scorers grade
-  it after each run, not a unit test.
+- `# Proof:` on every scenario. Either it names the one `node:test` test that proves the CLI
+  mechanism behind it, or it says `skill text only`: a rule an agent follows, which `judge-run` and
+  the scorers grade after each run. Every test proves at least one scenario; a test that proves none
+  is deleted. The tests follow the pyramid: units for pure functions, the CLI and adapters against a
+  fake process runner (`test/helpers.ts`), and one end-to-end test of the built CLI (`dist-smoke`).
 - Binding values appear as keys (`cycle.min_ready`), so a scenario holds for every project.
 - Tags: `@skill:<name>`, `@gate:<name>`, `@cli:<verb>`.
 

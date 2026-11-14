@@ -99,3 +99,11 @@ Feature: Gate human-approval
     When "fo" approves the head
     Then the human-approval status is success
     And an approval by the board name "acc-7" does not count
+
+  # Source: src/gates.ts, "globToRegExp"
+  # Proof: test/gates.test.ts "globToRegExp: **, *, ?"
+  Scenario: A path glob matches one folder with * and any depth with **
+    Given paths.factory lists ".agents/**" and "a/*.md"
+    Then ".agents/skills/a/SKILL.md" matches the first glob
+    And "a/b.md" matches the second glob
+    And "a/b/c.md" does not match the second glob

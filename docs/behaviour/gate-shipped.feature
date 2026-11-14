@@ -64,6 +64,7 @@ Feature: Gate shipped
     And a Signal with the labels "signal:deploy" and board.labels.human opens
 
   # Source: src/gates.ts, "shipped" (back is opts[0] when there is one environment)
+  # Proof: test/gates.test.ts "shipped: a failure with one environment returns the tickets of the failed revision to Not shipped"
   Scenario: A failure with one environment returns the tickets to Not shipped
     Given product.environments names one environment
     When "gate shipped" runs for it with --result failure

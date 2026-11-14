@@ -277,3 +277,143 @@ Feature: Install and validate the binding
     When the adopter runs "agentic-sdlc init --forge github"
     Then init writes the gate workflows
     And init writes no release workflow and no release ruleset
+
+  # Source: src/install.ts, "init" (package templates)
+  # Proof: test/install.test.ts "init without package templates fails clearly"
+  Scenario: Init fails when the package has no templates
+    Given the installed package has no templates folder
+    When the adopter runs "agentic-sdlc init"
+    Then the command exits with code 1
+
+  # Source: src/install.ts, "validate" (skills)
+  # Proof: test/install.test.ts "validate warns on a top-level skill tier, fails when no tier exists or frontmatter is missing"
+  Scenario: Validate checks each installed skill
+    Given an installed skill with a top-level tier, one with no tier, and one with no frontmatter
+    When the adopter runs "agentic-sdlc validate"
+    Then the top-level tier gives a warning
+    And the skill with no tier and the skill with no frontmatter give a problem
+    And the command exits with code 1
+
+  # Source: src/install.ts, "validate"
+  # Proof: test/install.test.ts "validate prints warn: lines and exits 0 when only warnings exist"
+  Scenario: Validate with only warnings exits with code 0
+    Given a binding with a warning and no problem
+    When the adopter runs "agentic-sdlc validate"
+    Then validate prints a "warn:" line
+    And the command exits with code 0
+
+  # Source: src/install.ts, "init" (claude harness)
+  # Proof: test/install.test.ts "init --harness claude: tier subagents from binding.models, @AGENTS.md import once, no skills copy"
+  Scenario: Init for Claude Code writes tier subagents and one AGENTS.md import
+    Given the binding sets models for the fast and deep tiers
+    When the adopter runs "agentic-sdlc init --harness claude" twice
+    Then init writes one subagent per tier with the model from the binding
+    And CLAUDE.md imports "@AGENTS.md" once
+    And init copies no skills
+
+  # Source: src/install.ts, "init" (package.json)
+  # Proof: test/install.test.ts "init pins the CLI as a devDependency when package.json exists, and the MCP entry follows"
+  Scenario: Init pins the CLI when the project has a package.json
+    Given the project has a package.json
+    When the adopter runs "agentic-sdlc init --harness cursor"
+    Then package.json lists the CLI as a devDependency at the release tag
+    And the MCP entry runs the installed CLI
+
+  # Source: src/install.ts, "init" (MCP entry)
+  # Proof: test/install.test.ts "init keeps an existing agentic-sdlc MCP entry unless --force"
+  Scenario: Init keeps an MCP entry that the adopter wrote
+    Given .mcp.json has its own "agentic-sdlc" entry
+    When the adopter runs "agentic-sdlc init --no-plugin"
+    Then the entry stays
+    And "--force" replaces it
+
+  # Source: src/install.ts, "init" (codex harness)
+  # Proof: test/install.test.ts "init --harness codex appends the TOML table once and keeps one the adopter wrote"
+  Scenario: Init for Codex writes the TOML table once
+    Given .codex/config.toml exists
+    When the adopter runs "agentic-sdlc init --harness codex" twice
+    Then the file holds one "mcp_servers.agentic-sdlc" table
+    And a table the adopter wrote stays unchanged
+
+  # Source: src/install.ts, "init" (harness)
+  # Proof: test/install.test.ts "init --harness cursor writes .cursor/mcp.json; unknown harness fails"
+  Scenario: Init for Cursor writes the MCP file, and an unknown harness fails
+    When the adopter runs "agentic-sdlc init --harness cursor"
+    Then init writes .cursor/mcp.json with the "agentic-sdlc" entry
+    And "--harness nope" exits with code 1
+
+  # Source: src/install.ts, "init" (release ruleset)
+  # Proof: test/install.test.ts "init on github installs the release-lines ruleset"
+  Scenario: Init on GitHub installs the release-lines ruleset
+    When the adopter runs "agentic-sdlc init --forge github"
+    Then init writes .github/rulesets/release.json
+
+  # Source: src/binding.ts, "loadBinding"
+  # Proof: test/binding.test.ts "loadBinding reads yaml and a good binding has no problems"
+  Scenario: A good binding has no problems
+    Given .agents/binding.yml holds a complete binding
+    When validate loads it
+    Then validate lists no problem
+
+  # Source: src/binding.ts, "validateBinding" (factory)
+  # Proof: test/binding.test.ts "validateBinding requires the factory owner and factory path globs"
+  Scenario: The factory owner and the factory paths are required
+    Given paths.factory is empty, or owners.factory is missing
+    When the adopter runs "agentic-sdlc validate"
+    Then validate names the missing key
+
+  # Source: src/binding.ts, "shippedOptions"
+  # Proof: test/binding.test.ts "shippedOptions derives from environments"
+  Scenario: The Shipped options come from the environments
+    Given product.environments is staging and production
+    Then the Shipped options are Not shipped, On staging, In release and On production
+
+  # Source: src/binding.ts, "validateBinding" (executors, traces, mcps)
+  # Proof: test/binding.test.ts "validateBinding checks executor stage fields, traces and computer-use"
+  Scenario: Validate checks executor stages, traces and MCP names
+    Given an executor stage names an unknown MCP, a bad secret name, a bad sandbox or a bad model
+    And traces.uri has no run id
+    When the adopter runs "agentic-sdlc validate"
+    Then validate names each bad field
+
+  # Source: src/binding.ts, "bindingWarnings" (bench_size)
+  # Proof: test/binding.test.ts "bindingWarnings: bench_size below bench_min_cases can never pass bench compare"
+  Scenario: A bench size below the minimum cases warns
+    Given learning.bench_size is below learning.bench_min_cases
+    When the adopter runs "agentic-sdlc validate"
+    Then validate prints a warning that bench compare can never pass
+
+  # Source: src/binding.ts, "bindingWarnings" (traces)
+  # Proof: test/binding.test.ts "bindingWarnings accepts Windows trace paths with either slash"
+  Scenario: A Windows trace path with either slash is accepted
+    Given traces.uri is a Windows path with a backslash or a slash
+    When the adopter runs "agentic-sdlc validate"
+    Then validate prints no warning
+
+  # Source: src/binding.ts, "validateBinding" (profile)
+  # Proof: test/binding.test.ts "profile is required and must be known"
+  Scenario: A binding needs a known profile
+    Given the binding has no profile, or the profile "team"
+    When the adopter runs "agentic-sdlc validate"
+    Then validate fails and names the profile
+
+  # Source: src/binding.ts, "validateBinding" (human_approval, learning, commands)
+  # Proof: test/binding.test.ts "new keys validate (approval, learning, proofs); product.kind and board.milestone only warn as unused"
+  Scenario: Validate checks the approval, learning and proof keys
+    Given forge.human_approval is unknown, or a learning number is out of range, or learning.enabled is not a boolean
+    When the adopter runs "agentic-sdlc validate"
+    Then validate names each bad key
+    And product.kind and board.milestone only warn as unused
+
+  # Source: src/binding.ts, "validateBinding" (adapters)
+  # Proof: test/binding.test.ts "v2 is Git only: hg, p4 and swarm adapters are rejected"
+  Scenario: Only the Git VCS and the GitHub forge are supported
+    Given vcs.adapter is "hg" and forge.adapter is "swarm"
+    When the adopter runs "agentic-sdlc validate"
+    Then validate fails and names both adapters
+
+  # Source: src/binding.ts, "validateBinding" (keys the gates read)
+  # Proof: test/binding.test.ts "validate checks the keys the gates read unguarded, the judge tier, auto-merge classes, mcps and managed api fields"
+  Scenario: Validate fails a binding that a gate or a stage would read wrong
+    When a binding has a non-list done_statuses, a missing bug, feature or human label, an unknown version_scheme or judge_tier, an auto-merge class other than tuning, an MCP server with both url and command, or a managed executor without its api's fields
+    Then validate names each problem and exits with code 1
