@@ -7378,6 +7378,36 @@ var require_dist = __commonJS({
   }
 });
 
+// src/ports.ts
+function limitsOf(b, ex) {
+  const out = {};
+  for (const k of LIMIT_KEYS) {
+    const v = ex[k] ?? b.executors?.default?.[k];
+    if (v !== void 0) out[k] = v;
+  }
+  return out;
+}
+function ownersFor(o, side) {
+  const list = (w) => (w === void 0 || w === null ? [] : Array.isArray(w) ? w : [w]).map((x) => typeof x === "object" && x ? x[side] : x).filter((x) => !!x);
+  return { product: list(o?.product), factory: list(o?.factory), operator: list(o?.operator), security: list(o?.security), compliance: list(o?.compliance), bots: list(o?.bots) };
+}
+var MovedError, parseCloses, LIMIT_KEYS, esc, patternRe, isChangeLine;
+var init_ports = __esm({
+  "src/ports.ts"() {
+    "use strict";
+    MovedError = class extends Error {
+      constructor(id, expected, actual) {
+        super(`${id} is at ${actual}, not ${expected}; not moved`);
+      }
+    };
+    parseCloses = (body) => [...new Set([...body.matchAll(/^[ \t]*Closes[ \t]+#?([A-Za-z0-9_-]+)[ \t]*$/gim)].map((m) => m[1]))];
+    LIMIT_KEYS = ["max_turns", "max_tokens", "max_minutes"];
+    esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    patternRe = (p) => new RegExp("^" + p.split(/(<ticket>|<name>)/).map((x) => x === "<ticket>" ? "[A-Za-z0-9_-]+" : x === "<name>" ? "[a-z0-9]+(?:-[a-z0-9]+)*" : esc(x)).join("") + "$");
+    isChangeLine = (b, n) => patternRe(b.vcs.change_pattern).test(n) || patternRe(b.vcs.factory_change_pattern).test(n);
+  }
+});
+
 // src/binding.ts
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -7532,6 +7562,11 @@ function bindingWarnings(b) {
   for (const k of Object.keys(x?.owners ?? {})) if (!["product", "factory", "operator", "security", "compliance", "bots"].includes(k)) w.push(`owners.${k} is not a known owner role (product, factory, operator, security, compliance, bots); remove it`);
   if (x?.product?.kind !== void 0) w.push("product.kind is unused; remove it");
   if (x?.board?.milestone !== void 0) w.push("board.milestone is unused; remove it");
+  const ha = x?.forge?.human_approval ?? "full-lane";
+  if (ha !== "never" && x?.owners) {
+    const o = ownersFor(x.owners, "forge");
+    if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved; add a second account to owners.product, or merge those CRs as admin`);
+  }
   const hb = String(x?.heartbeat?.ticket ?? "");
   if (["github", "github-issues", "local"].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
   const envs = x?.product?.environments ?? [];
@@ -7565,6 +7600,7 @@ var init_binding = __esm({
   "src/binding.ts"() {
     "use strict";
     import_yaml = __toESM(require_dist(), 1);
+    init_ports();
     BINDING_PATH = ".agents/binding.yml";
     ADAPTERS = {
       board: ["github", "github-issues", "jira", "linear", "local"],
@@ -7711,36 +7747,6 @@ var init_exec = __esm({
     failureText = (e) => `${e?.message ?? ""}
 ${String(e?.stderr ?? "")}`;
     retryAfterOf = (text) => /retry[- ]after[:= ]+(\d+)/i.exec(text)?.[1] ?? null;
-  }
-});
-
-// src/ports.ts
-function limitsOf(b, ex) {
-  const out = {};
-  for (const k of LIMIT_KEYS) {
-    const v = ex[k] ?? b.executors?.default?.[k];
-    if (v !== void 0) out[k] = v;
-  }
-  return out;
-}
-function ownersFor(o, side) {
-  const list = (w) => (w === void 0 || w === null ? [] : Array.isArray(w) ? w : [w]).map((x) => typeof x === "object" && x ? x[side] : x).filter((x) => !!x);
-  return { product: list(o?.product), factory: list(o?.factory), operator: list(o?.operator), security: list(o?.security), compliance: list(o?.compliance), bots: list(o?.bots) };
-}
-var MovedError, parseCloses, LIMIT_KEYS, esc, patternRe, isChangeLine;
-var init_ports = __esm({
-  "src/ports.ts"() {
-    "use strict";
-    MovedError = class extends Error {
-      constructor(id, expected, actual) {
-        super(`${id} is at ${actual}, not ${expected}; not moved`);
-      }
-    };
-    parseCloses = (body) => [...new Set([...body.matchAll(/^[ \t]*Closes[ \t]+#?([A-Za-z0-9_-]+)[ \t]*$/gim)].map((m) => m[1]))];
-    LIMIT_KEYS = ["max_turns", "max_tokens", "max_minutes"];
-    esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    patternRe = (p) => new RegExp("^" + p.split(/(<ticket>|<name>)/).map((x) => x === "<ticket>" ? "[A-Za-z0-9_-]+" : x === "<name>" ? "[a-z0-9]+(?:-[a-z0-9]+)*" : esc(x)).join("") + "$");
-    isChangeLine = (b, n) => patternRe(b.vcs.change_pattern).test(n) || patternRe(b.vcs.factory_change_pattern).test(n);
   }
 });
 

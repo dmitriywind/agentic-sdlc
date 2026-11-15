@@ -15,3 +15,16 @@ Feature: Setups that fail at run time are warned about
       When the binding is validated
       Then the warnings mention "env_labels 'env:qa' names no product.environments entry"
       And the warnings do not mention "env:staging"
+
+  Rule: A human approval needs an approver outside the bots
+
+    Scenario: One account that is both product owner and bot can never approve a Full-lane CR
+      Given a complete binding
+      And the binding value "owners" is '{"product":"me","factory":"me","bots":["me"]}'
+      When the binding is validated
+      Then the warnings mention "every owners.product account is also in owners.bots"
+
+    Scenario: A product owner outside the bots raises no such warning
+      Given a complete binding
+      When the binding is validated
+      Then the warnings do not mention "every owners.product account is also in owners.bots"

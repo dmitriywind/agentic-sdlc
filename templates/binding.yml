@@ -57,7 +57,8 @@ forge:
   adapter: github               # github
   options:                      # adapter-specific; credentials only as env var names; validate rejects unknown keys
     # github:    { repo: my-org/my-repo, token_env: AGENTIC_FORGE_TOKEN, review_token_env: AGENTIC_REVIEW_TOKEN }
-    #            token_env (optional): passed to gh as GH_TOKEN; unset = gh's own login (in a Claude cloud session, the proxy).
+    #            token_env (optional): passed to gh as GH_TOKEN; key omitted = gh's own login. A named var that is unset fails
+    #            everywhere but a Claude cloud session, where gh's login (the proxy) is used: one binding serves CI and the cloud.
     #            review_token_env: only with review_identity: the review identity's token; forge status and approve use it.
     #            With two identities give token_env Commit statuses: no access, so an implementer cannot green its own review.
     {}
@@ -67,7 +68,8 @@ forge:
                                 #   the review runtime only. organization requires it.
   human_approval: full-lane     # full-lane | always | never. Which product CRs need one approving review by a human
                                 #   (not owners.bots, not review_identity) on the head: gate approval posts status human-approval.
-                                #   With one identity a collaborator approves, or you merge the CR as admin
+                                #   One account in both owners.product and owners.bots can never approve: validate warns. Add a
+                                #   second account to owners.product (it approves), or merge Full-lane CRs as admin
   provenance: off               # off | warn | require. Agent commits (author or committer in owners.bots) carry the trailers
                                 #   Agent-Run and Agent-Model; gate provenance posts status agent-provenance on the CR head.
                                 #   warn reports and passes. require fails a CR whose agent commit lacks them: add agent-provenance

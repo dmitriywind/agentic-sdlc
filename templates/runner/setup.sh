@@ -12,5 +12,5 @@ fi
 # The CLI is the pin in .agents/cli.json; the launcher installs it on first use. Later steps (and the agent) call `agentic-sdlc`.
 [ -z "${GITHUB_PATH:-}" ] || echo "$PWD/.agents/bin" >> "$GITHUB_PATH"
 .agents/bin/agentic-sdlc validate   # binding and skill pack are well-formed
-.agents/bin/agentic-sdlc doctor     # board, forge and vcs are reachable, tokens are present
+.agents/bin/agentic-sdlc doctor     # board, forge and vcs are reachable (with the tokens this runner holds)
 # set: your dependency install and toolchain (the binding's commands.install)
