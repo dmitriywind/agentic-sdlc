@@ -27,7 +27,6 @@ Feature: Dispatch takes step ids and finds the step's executor
         | default    | dflt        |
         | plan       | whole-skill |
         | plan/shape | one-step    |
-        | review-pr  | old-name    |
 
     Scenario: A step of its own gets the command of its own entry, not the default's
       Given the executor "default" is '{"kind":"command","run":"bot {skill}"}'

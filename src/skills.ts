@@ -7,21 +7,6 @@ import { parse } from 'yaml';
 
 export const TIER_NAMES = ['fast', 'balanced', 'deep'];
 
-/** Old skill names -> the step that replaced them. Old heartbeat rows, executors keys and scorers still read. */
-export const OLD_STEP_IDS: Record<string, string> = {
-  'implement-spec': 'build',
-  'review-pr': 'review/review',
-  shape: 'plan/shape',
-  'triage-signal': 'plan/triage',
-  'backlog-grooming': 'plan/groom',
-  'verify-ux': 'review/verify',
-  release: 'ship',
-  'judge-run': 'learn/judge',
-  'improve-factory': 'learn/improve',
-  'escalate-to-human': 'escalate',
-};
-/** A step id for a name that may be an old skill name. */
-export const stepIdOf = (name: string): string => (Object.hasOwn(OLD_STEP_IDS, name) ? OLD_STEP_IDS[name] : name);
 /** The skill a step id belongs to. */
 export const skillOf = (id: string): string => id.split('/')[0];
 /** The package's skill name for an installed folder name (copied installs write `sdlc-<name>`; `sdlc` stays). */

@@ -13,7 +13,7 @@ import { createForge, VERBS as FORGE_VERBS } from './forge/index.ts';
 import { createVcs, VERBS as VCS_VERBS } from './vcs/index.ts';
 import { GROUPS } from './cli.ts';
 import { matches, selectComments, verdictOf } from './comments.ts';
-import { forbiddenHits, frontmatter, logicalName, readSkills, scorerTargets, skillOf, stepIdOf, TIER_NAMES } from './skills.ts';
+import { forbiddenHits, frontmatter, logicalName, readSkills, scorerTargets, skillOf, TIER_NAMES } from './skills.ts';
 import { BENCH_STEP, OPTIONS as BENCH_OPTIONS } from './bench.ts';
 import { OPTIONS as LEDGER_OPTIONS } from './ledger.ts';
 import { FLAGS as DISPATCH_FLAGS } from './dispatch.ts';
@@ -85,7 +85,7 @@ export function benchedSkills(root: string): Set<string> {
   for (const f of readdirSync(dir).filter((n) => n.endsWith('.json'))) {
     try {
       const suite = JSON.parse(readFileSync(join(dir, f), 'utf8'));
-      if (Array.isArray(suite?.cases) && suite.cases.length) out.add(skillOf(stepIdOf(typeof suite.skill === 'string' ? suite.skill : BENCH_STEP)));
+      if (Array.isArray(suite?.cases) && suite.cases.length) out.add(skillOf(typeof suite.skill === 'string' ? suite.skill : BENCH_STEP));
     } catch { /* an unreadable suite benches nothing */ }
   }
   return out;

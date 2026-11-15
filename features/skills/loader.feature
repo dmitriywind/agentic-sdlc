@@ -1,4 +1,4 @@
-# Source: src/skills.ts "readSkills", "stepIdOf"; src/gates.ts "skillPackCheck"
+# Source: src/skills.ts "readSkills"; src/gates.ts "skillPackCheck"
 @skill:loader
 Feature: The skill loader and the pack check catch a broken pack
   One loader reads the pack for validate, dispatch, skill-regression, the ledger and bench. A step is the unit that runs;

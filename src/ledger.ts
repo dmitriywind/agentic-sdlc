@@ -7,13 +7,13 @@ import { parse } from 'yaml';
 import type { Binding, Board, Comment, CR, Forge, Item, PortCli } from './ports.ts';
 import { ownersFor } from './ports.ts';
 import { isMarked, stamp } from './comments.ts';
-import { findStep, hashSkill, readSkills, skillOf, stepIdOf } from './skills.ts';
+import { findStep, hashSkill, readSkills, skillOf } from './skills.ts';
 export { hashSkill };
 import { cdEventsFromRuns, otlpTraces, repoOf, sendCdEvent, sendOtlp, sinkOf, type CycleMeta } from './telemetry.ts';
 
 export const HEARTBEAT_MARKER = stamp('heartbeat');
 
-/** One step run: a row of the heartbeat's `runs`. `skill` holds the step id (`build`, `review/review`); an old skill name in a stored row reads as its step id (OLD_STEP_IDS in skills.ts). */
+/** One step run: a row of the heartbeat's `runs`. `skill` holds the step id (`build`, `review/review`). */
 export interface LedgerRun {
   id: string;
   at: string;
@@ -106,7 +106,7 @@ export const parseGrades = (body: string): Rescore[] =>
  */
 export function flattenRuns(comments: Comment[], q: { sinceDays?: number; skill?: string; now?: number } = {}): LedgerRun[] {
   // `skill` filters by step id, or by skill name for all of its steps.
-  const want = q.skill === undefined ? undefined : stepIdOf(q.skill);
+  const want = q.skill;
   const cutoff = q.sinceDays === undefined ? -Infinity : (q.now ?? Date.now()) - q.sinceDays * 864e5;
   const beats = comments.map((c) => ({ c, hb: parseHeartbeat(c.body) })).filter((x) => x.hb);
   const rescore = pickRescores(comments.flatMap((c) => {
@@ -115,7 +115,7 @@ export function flattenRuns(comments: Comment[], q: { sinceDays?: number; skill?
   }));
   return beats
     .flatMap(({ c, hb }) => (hb.runs ?? []).map((r: LedgerRun) => ({ ...r, at: r.at ?? hb.at ?? c.createdAt })))
-    .map((r) => applyRescores({ ...r, skill: stepIdOf(String(r.skill)) }, rescore.get(r.id)))
+    .map((r) => applyRescores(r, rescore.get(r.id)))
     .filter((r) => Date.parse(r.at) >= cutoff && (!want || r.skill === want || skillOf(r.skill) === want));
 }
 
@@ -198,7 +198,7 @@ export function ticketUse(rows: LedgerRun[], maxTokens?: number, top = 20) {
   for (const r of rows) if (r.ticket) g.set(r.ticket, [...(g.get(r.ticket) ?? []), r]);
   const all: TicketUse[] = [...g].map(([ticket, rs]) => {
     const tokens = rs.reduce((t, r) => t + (r.tokens ?? 0), 0);
-    const reworks = Math.max(0, rs.filter((r) => stepIdOf(r.skill) === 'build').length - 1);
+    const reworks = Math.max(0, rs.filter((r) => r.skill === 'build').length - 1);
     return { ticket, runs: rs.length, tokens, minutes: Math.round(rs.reduce((t, r) => t + (r.minutes ?? 0), 0) * 100) / 100, ...(reworks ? { reworks } : {}), ...(maxTokens && tokens > maxTokens ? { overBudget: true as const } : {}) };
   }).sort((a, b) => b.tokens - a.tokens || b.minutes - a.minutes);
   return {
@@ -248,7 +248,7 @@ export async function readRuns(board: Board, ticket: string, authors: string[], 
 export function learningState(comments: Comment[], everyCycles: number, enabled = false) {
   // newest first; review and learn runtimes write their own heartbeats (kind), which count no cycle
   const beats = comments.map((c) => parseHeartbeat(c.body)).filter((hb) => hb && (hb.kind ?? 'cycle') === 'cycle');
-  const learnAt = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean).findIndex((hb) => (hb.runs ?? []).some((r: LedgerRun) => stepIdOf(String(r.skill)) === 'learn/improve'));
+  const learnAt = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean).findIndex((hb) => (hb.runs ?? []).some((r: LedgerRun) => String(r.skill) === 'learn/improve'));
   // Cycles since the newest heartbeat (of any kind) that carries a learn/improve run.
   const all = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean);
   const cyclesSince = learnAt < 0 ? beats.length : all.slice(0, learnAt).filter((hb) => (hb.kind ?? 'cycle') === 'cycle').length;
@@ -259,14 +259,14 @@ export interface Scorer { name: string; scale: 'pass-fail' | '0-4'; applies_to: 
 
 /** `.agents/scorers/*.md` that apply to a step (by its id, its skill's name, or `*`); done-conditions always (0-4) even without its file. */
 export function scorersFor(root: string, id: string): Scorer[] {
-  const ids = [stepIdOf(id), skillOf(stepIdOf(id))];
+  const ids = [id, skillOf(id)];
   const dir = join(root, '.agents', 'scorers');
   const out: Scorer[] = [];
   for (const f of existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith('.md')) : []) {
     let fm: any;
     try { fm = parse(/^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(join(dir, f), 'utf8'))?.[1] ?? ''); } catch { continue; }
     if (!fm?.name || !['pass-fail', '0-4'].includes(fm.scale)) continue;
-    if (fm.applies_to === '*' || (Array.isArray(fm.applies_to) && fm.applies_to.some((a: unknown) => ids.includes(stepIdOf(String(a)))))) out.push({ name: fm.name, scale: fm.scale, applies_to: fm.applies_to });
+    if (fm.applies_to === '*' || (Array.isArray(fm.applies_to) && fm.applies_to.some((a: unknown) => ids.includes(String(a))))) out.push({ name: fm.name, scale: fm.scale, applies_to: fm.applies_to });
   }
   if (!out.some((s) => s.name === SCORE_SCORER)) out.unshift({ name: SCORE_SCORER, scale: '0-4', applies_to: '*' });
   return out;
@@ -285,8 +285,8 @@ export function hardFacts(run: LedgerRun, cr?: CR, required: string[] = []): { s
 
 /** The installed file a step id names, relative to the root; the conventional path when the pack cannot say. */
 function stepFile(root: string, id: string): string {
-  const step = findStep(readSkills(join(root, '.agents', 'skills')), stepIdOf(id));
-  return step ? relative(root, step.file).replaceAll('\\', '/') : `.agents/skills/${stepIdOf(id)}`;
+  const step = findStep(readSkills(join(root, '.agents', 'skills')), id);
+  return step ? relative(root, step.file).replaceAll('\\', '/') : `.agents/skills/${id}`;
 }
 
 /** What learn/judge needs for one run: the scorers that apply, evidence refs, and the cap. */
