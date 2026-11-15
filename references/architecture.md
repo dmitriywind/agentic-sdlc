@@ -539,7 +539,7 @@ it reads the pin and installs that ref once with
 (into a temporary folder, then renamed; npm's output goes to stderr), then execs
 `node .agents/.cli/<ref>/node_modules/agentic-sdlc/dist/bin.js "$@"`. It refuses a ref or package that could read as
 an option or leave the folder, and ends with one line when node or npm is missing or the ref cannot be fetched.
-`init` adds `.agents/.cli/` (the launcher cache) and `.agents/work/` (the `vcs start` workdirs) to `.gitignore` once. Everything that runs the CLI goes through the launcher: every workflow
+`init` adds `.cli/` (the launcher cache) and `work/` (the `vcs start` workdirs) to `.agents/.gitignore` once. Everything that runs the CLI goes through the launcher: every workflow
 job, the pre-push hook, `runner-setup.sh` (which also puts `.agents/bin` on `PATH` in GitHub Actions) and the MCP entry
 (`command: ".agents/bin/agentic-sdlc", args: ["mcp"]`). A job that holds a secret checks out the base ref only, so its
 launcher and pin are the trunk's, never the CR's. `init` writes no dependency and no `.npmrc` into the product; when
@@ -558,7 +558,7 @@ allows `forge approve` and `forge status`, and its MCP launcher serves `forge_ap
 `AGENTIC_SDLC_PACKAGE` (the package root `init` copies from; tests set it). `dispatch` sets
 `AGENTIC_SDLC_MAX_TURNS`, `AGENTIC_SDLC_MAX_TOKENS` and `AGENTIC_SDLC_MAX_MINUTES` in a `command` executor's child (section 7).
 
-**Install and upgrade.** `init --upgrade` without `--harness` reuses the install's harness: `.claude/skills` means `claude --no-plugin`, tier agents `.claude/agents/sdlc-*.md` mean `claude`. A generated tier agent with no lock entry is regenerated when it names `npx --no agentic-sdlc`, and an `npx` agentic-sdlc entry in `.mcp.json` moves to the launcher (other servers untouched). `init` records the sha256 of every file it copies from the package (skills,
+**Install and upgrade.** `init --upgrade` without `--harness` reuses the install's harness: `.claude/skills` means `claude --no-plugin`, tier agents `.claude/agents/sdlc-*.md` mean `claude`. A generated tier agent with no lock entry is regenerated when it names `npx --no agentic-sdlc`, `init --upgrade` writes only under `paths.factory`, so the ticket-linkage gate sees a factory CR: a change it would make to a root file (the `AGENTS.md` block, an `npx` agentic-sdlc entry in `.mcp.json`, the `@AGENTS.md` import in `CLAUDE.md`) is reported as a `kept <file>: ...` line to make in a product change. A first `init` writes those files. `init` records the sha256 of every file it copies from the package (skills,
 scorers, workflows, rulesets as patched, the pre-push hook, runner files, generated tier agents) in
 `.agents/install.lock.json`; it reads the older `.agents/skills.lock.json` once and removes it. A re-run (`init --upgrade`
 is the same run) updates a file still at its recorded hash, keeps an edited one and names the package file

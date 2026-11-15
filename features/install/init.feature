@@ -31,18 +31,19 @@ Feature: Init installs the factory
       And the installed file "AGENTS.md" matches "^# Mine"
       And the installed file "AGENTS.md" contains "agentic-sdlc:start" exactly 1 times
       And the installed file "AGENTS.md" contains "/agentic-sdlc:sdlc"
-      And the installed file "AGENTS.md" contains ".agents/bin/agentic-sdlc"
 
-    Scenario Outline: Init adds .agents/.cli/ and .agents/work/ to .gitignore once and keeps the rest of the file
-      Given the project has the file ".gitignore" holding "<before>"
+    Scenario Outline: Init adds .cli/ and work/ to .agents/.gitignore once, keeps the rest of it, and leaves the root .gitignore alone
+      Given the project has the file ".agents/.gitignore" holding "<before>"
+      And the project has the file ".gitignore" holding "node_modules"
       When I run the install command "init"
       And I run the install command "init"
-      Then the installed file ".gitignore" holds "<after>"
+      Then the installed file ".agents/.gitignore" holds "<after>"
+      And the installed file ".gitignore" holds "node_modules"
 
       Examples:
         | before        | after                         |
-        | node_modules  | node_modules\n.agents/.cli/\n.agents/work/\n |
-        | /.agents/.cli\n.agents/work | /.agents/.cli\n.agents/work |
+        | tmp           | tmp\n.cli/\nwork/\n |
+        | /.cli\nwork  | /.cli\nwork |
 
   Rule: Init refuses what it does not support, before it writes anything
 

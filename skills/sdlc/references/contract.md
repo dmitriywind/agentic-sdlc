@@ -26,6 +26,9 @@ rules below; a step points here and never restates them.
   ticket is not a ticket: it stays off the board and outside every route.
 - **`score`**: the capped `done-conditions` value; **`scores`**: every scorer's value.
 
+The CLI the skills call as `agentic-sdlc <group> <verb>` is `.agents/bin/agentic-sdlc` (pinned in
+`.agents/cli.json`).
+
 ## Roles
 
 - **Product owner** (`owners.product`): the product, its narrative, priorities, P0, releases, the

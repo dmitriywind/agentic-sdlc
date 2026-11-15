@@ -96,11 +96,22 @@ Feature: Init upgrades an install
       When I run the install command "init --upgrade"
       Then the installed file ".claude/skills/sdlc-plan/steps/triage.md" holds "new triage\n"
 
-    Scenario: Init --upgrade regenerates a tier agent an older release wrote and moves the old MCP entry to the launcher
+    Scenario: Init --upgrade regenerates a tier agent an older release wrote
       Given the project has the file ".claude/agents/sdlc-fast.md" holding "name: sdlc-fast\nrun npx --no agentic-sdlc\n"
       And the install lock is emptied
-      And the project has the file ".mcp.json" holding "{\"mcpServers\":{\"agentic-sdlc\":{\"command\":\"npx\",\"args\":[\"--no-install\",\"agentic-sdlc\",\"mcp\"]},\"other\":{\"command\":\"x\"}}}"
       When I run the install command "init --upgrade"
       Then the installed file ".claude/agents/sdlc-fast.md" does not match "npx"
-      And the installed file ".mcp.json" contains ".agents/bin/agentic-sdlc"
-      And the installed file ".mcp.json" contains "\"other\""
+
+  Rule: An upgrade writes only under paths.factory and reports a root file it would change
+
+    Scenario: Init --upgrade leaves .gitignore, AGENTS.md and an npx .mcp.json as they are, and says what to change
+      Given I run the install command "init --harness claude --no-plugin"
+      And the project has the file ".gitignore" holding "node_modules"
+      And the project has the file ".mcp.json" holding '{"mcpServers":{"agentic-sdlc":{"command":"npx","args":["--no-install","agentic-sdlc","mcp"]}}}'
+      And the project has the file "AGENTS.md" holding "# Mine\n"
+      When I run the install command "init --upgrade"
+      Then the installed file ".gitignore" holds "node_modules"
+      And the installed file "AGENTS.md" holds "# Mine\n"
+      And the installed file ".mcp.json" contains "npx"
+      And a line of the output matches "^kept \\.mcp\\.json: .*\\.agents/bin/agentic-sdlc"
+      And a line of the output matches "^kept AGENTS\\.md: "

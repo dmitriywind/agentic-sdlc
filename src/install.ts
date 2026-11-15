@@ -17,7 +17,6 @@ const START = '<!-- agentic-sdlc:start -->';
 const END = '<!-- agentic-sdlc:end -->';
 const POINTER = `${START}
 Work lives on the board named in \`.agents/binding.yml\`. Before any work, invoke the sdlc skill (\`/agentic-sdlc:sdlc\` in Claude Code).
-The CLI the skills call as \`agentic-sdlc <group> <verb>\` is \`.agents/bin/agentic-sdlc\` (pinned in \`.agents/cli.json\`).
 Never duplicate the process here: the skills own it, the binding owns the project values.
 ${END}`;
 const INSTALL_LOCK = '.agents/install.lock.json';
@@ -200,7 +199,7 @@ const MCP_FILES = new Map<string, string | null>([
 ]);
 
 /** Register the agentic-sdlc stdio server (the launcher) in the harness's project MCP file, keeping other servers. */
-function registerMcp(pkg: string, root: string, harness: string, force: boolean, log: string[]) {
+function registerMcp(pkg: string, root: string, harness: string, force: boolean, log: string[], upgrade: boolean) {
   const snippet = readFileSync(need(pkg, `templates/mcp/${harness === 'codex' ? 'codex.toml' : harness + '.json'}`), 'utf8');
   const rel = MCP_FILES.get(harness);
   if (!rel) { log.push(`add this MCP server to your harness config:\n${snippet.trim()}`); return; }
@@ -217,6 +216,8 @@ function registerMcp(pkg: string, root: string, harness: string, force: boolean,
     const had = doc.mcpServers?.['agentic-sdlc'];
     const old = had?.command === 'npx' && Array.isArray(had.args) && had.args.includes('agentic-sdlc'); // written by an older release
     if (had && !force && !old) { log.push(`kept ${rel}`); return; }
+    // An upgrade writes only under paths.factory, and .mcp.json is a root file: say the fix.
+    if (upgrade && old) { log.push(`kept ${rel}: its agentic-sdlc entry runs npx; change it in a product change to {"command":"${LAUNCHER}","args":["mcp"]}`); return; }
     doc.mcpServers = { ...doc.mcpServers, ...want.mcpServers };
     next = JSON.stringify(doc, null, 2) + '\n';
   }
@@ -228,7 +229,7 @@ function registerMcp(pkg: string, root: string, harness: string, force: boolean,
 const CLI_PIN = '.agents/cli.json';
 const CLI_PACKAGE = 'github:dmitriywind/agentic-sdlc';
 const LAUNCHER = '.agents/bin/agentic-sdlc';
-const IGNORED = ['.agents/.cli/', '.agents/work/']; // the launcher's cache, vcs start's workdirs
+const IGNORED = ['.cli/', 'work/']; // the launcher's cache, vcs start's workdirs
 const isSha = (s: unknown) => typeof s === 'string' && /^[0-9a-f]{40}$/.test(s);
 const isTag = (s: unknown) => typeof s === 'string' && /^v\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.+-]+)?$/.test(s);
 
@@ -260,15 +261,16 @@ function pinCli(inst: Installer, version: string, ref: string | undefined, force
   inst.log.push(`${had ? 'updated' : 'wrote'} ${CLI_PIN} (ref ${want})`);
 }
 
-/** Keep the launcher's cache and the change-line workdirs out of git: append each entry once. */
+/** Keep the launcher's cache and the change-line workdirs out of git: append each entry once to .agents/.gitignore (a factory file). */
 function ignoreCliCache(root: string, log: string[]) {
-  const file = join(root, '.gitignore');
+  const file = join(root, '.agents', '.gitignore');
   let text = existsSync(file) ? readFileSync(file, 'utf8') : '';
   const add = IGNORED.filter((e) => !new RegExp(`^/?${e.slice(0, -1).replace(/\./g, '\\.')}/?\\s*$`, 'm').test(text));
   if (!add.length) return;
   text += (text && !text.endsWith('\n') ? '\n' : '') + add.map((e) => e + '\n').join('');
+  mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, text);
-  log.push(`added ${add.join(', ')} to .gitignore`);
+  log.push(`added ${add.join(', ')} to .agents/.gitignore`);
 }
 
 /** The old pin lived in package.json: say how to drop it. Never edits the file. */
@@ -281,7 +283,7 @@ function oldPinHint(root: string, log: string[]) {
 }
 
 /** Claude Code: tier subagents from binding.models, and CLAUDE.md importing AGENTS.md. Skills come from the plugin. */
-function claudeSetup(root: string, inst: Installer, log: string[], noPlugin: boolean) {
+function claudeSetup(root: string, inst: Installer, log: string[], noPlugin: boolean, upgrade: boolean) {
   let models: Record<string, string> = {};
   try { models = parse(readFileSync(join(root, BINDING_PATH), 'utf8'))?.models ?? {}; } catch { /* reported by validate */ }
   for (const tier of TIERS) {
@@ -302,6 +304,7 @@ Do not start subagents.
   const file = join(root, 'CLAUDE.md');
   const cur = existsSync(file) ? readFileSync(file, 'utf8') : '';
   if (/^@AGENTS\.md\s*$/m.test(cur)) log.push('kept CLAUDE.md (imports @AGENTS.md)');
+  else if (upgrade) log.push('kept CLAUDE.md: it does not import @AGENTS.md; add the line in a product change');
   else {
     writeFileSync(file, (cur ? cur.replace(/\n*$/, '\n\n') : '') + '@AGENTS.md\n');
     log.push(cur ? 'appended @AGENTS.md to CLAUDE.md' : 'wrote CLAUDE.md (@AGENTS.md)');
@@ -350,8 +353,9 @@ async function init(root: string, argv: string[], log: string[]) {
   // A kept launcher keeps its mode too.
   if (inst.copy('templates/bin/agentic-sdlc', LAUNCHER)) chmodSync(join(root, LAUNCHER), 0o755);
   ignoreCliCache(root, log);
+  const upgrade = existsSync(join(root, BINDING_PATH)); // a binding means paths.factory: an upgrade writes only there
   oldPinHint(root, log);
-  if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, force, log);
+  if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, force, log, upgrade);
   else log.push('MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)');
   const scorers = join(pkg, 'scorers');
   if (existsSync(scorers)) {
@@ -447,10 +451,10 @@ async function init(root: string, argv: string[], log: string[]) {
   const cur = existsSync(agents) ? readFileSync(agents, 'utf8') : '';
   const s = cur.indexOf(START), e = cur.indexOf(END);
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, '\n\n') : '') + POINTER + '\n';
-  if (next !== cur) writeFileSync(agents, next);
-  const agentsChanged = next !== cur;
-  if (agentsChanged) log.push('updated AGENTS.md');
-  if (harness === 'claude') claudeSetup(root, inst, log, noPlugin);
+  const agentsChanged = next !== cur && !upgrade;
+  if (agentsChanged) { writeFileSync(agents, next); log.push('updated AGENTS.md'); }
+  else if (next !== cur) log.push('kept AGENTS.md: its agentic-sdlc block differs from this release; update it in a product change');
+  if (harness === 'claude') claudeSetup(root, inst, log, noPlugin, upgrade);
   else for (const tier of TIERS) inst.skip(`.claude/agents/sdlc-${tier}.md`);
   inst.finish();
   const missing = missingKeysLine(missingBindingKeys(readFileSync(need(pkg, 'templates/binding.yml'), 'utf8'), readFileSync(bindingFile, 'utf8')));
