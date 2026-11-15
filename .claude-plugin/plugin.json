@@ -1,7 +1,7 @@
 {
   "name": "agentic-sdlc",
   "version": "0.1.0",
-  "description": "Software factory skills for any board, forge and trunk-based Git: the sdlc process skills, a guard hook (no trunk push, forge approve only in the review runtime) and the agentic-sdlc MCP server.",
+  "description": "Software factory skills for any board, forge and trunk-based Git: the sdlc process skills, tier and reviewer subagents, a guard hook (no trunk push, forge approve and status only in the review runtime) and the agentic-sdlc MCP server.",
   "author": { "name": "dmitriywind", "url": "https://github.com/dmitriywind" },
   "homepage": "https://dmitriywind.github.io/agentic-sdlc/guide.html",
   "repository": "https://github.com/dmitriywind/agentic-sdlc",

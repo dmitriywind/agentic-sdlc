@@ -603,3 +603,75 @@ Feature: Install and validate the binding
     When the adopter runs "agentic-sdlc doctor"
     Then the fail line holds the command and the first line of its error output
     And the value of every env var the binding names under a "_env" key is masked
+
+  # Source: src/board/index.ts, "milestone"
+  # Proof: test/board-local.test.ts "milestone sets and clears the milestone of an existing ticket"
+  # Proof: test/board-adapters.test.ts "board milestone sets or clears the milestone where create --milestone puts it, on github, github-issues, jira and linear"
+  # Proof: test/mcp.test.ts "board_milestone sets and clears a milestone; forge_run and forge_list take their arguments and forge_run is read only"
+  Scenario: A ticket's milestone is set or cleared where create puts it
+    Given a ticket on any board adapter
+    When the factory runs "board milestone <id> <name>"
+    Then the ticket has that milestone, as "create --milestone" would have set it
+    When the factory runs "board milestone <id> --clear"
+    Then the ticket has no milestone
+
+  # Source: src/forge/util.ts, "parseStrict"
+  # Proof: test/board-local.test.ts "board cli: an unknown flag, a flag without a value and an unreadable --body-file are usage errors, --k=v works, milestone sets and clears"
+  # Proof: test/forge.test.ts "forge and vcs cli: an unknown flag, a flag without a value and an unreadable --body-file are usage errors; --k=v works"
+  Scenario: A board, forge or vcs verb refuses a flag it does not know
+    When the factory runs a verb with a flag the verb does not list
+    Then it exits 2 with "unknown flag --x for <group> <verb>"
+    When a flag that takes a value has none
+    Then it exits 2 with "--x needs a value"
+    When "--body-file" names a file that cannot be read
+    Then it exits 2 and names the flag and the path
+    And "--k=v" is the same as "--k v"
+
+  # Source: src/forge/github.ts, "list"
+  # Proof: test/forge.test.ts "forge list: --limit and --since bound the read, and without --checks no check data is fetched"
+  # Proof: test/bench.test.ts "buildCases reads a bounded list of merged CRs: the newest few hundred by default, --merged-limit and --since override"
+  Scenario: A CR list is bounded and carries no check data unless asked
+    When the factory runs "forge list --state merged --limit 2 --since <date>"
+    Then it gets the newest CRs merged since the date, at most 2
+    And each CR has no checks, unless "--checks" reads them
+    And "bench build" and "bench propose" read only the newest merged CRs, or those from "--merged-limit" and "--since"
+
+  # Source: src/forge/github.ts, "run"
+  # Proof: test/forge.test.ts "forge run reads one CI run by id; a missing run fails; cli list and run take their flags"
+  Scenario: One CI run is read by id
+    When the factory runs "forge run <id>"
+    Then it gets that run
+    And a run that does not exist exits 1
+
+  # Source: agents/, "plugin agents"
+  # Proof: test/plugin.test.ts "plugin agents: one per tier plus a reviewer that reads files and runs only the CLI"
+  Scenario: The Claude Code plugin ships a subagent per tier and a reviewer
+    Given the plugin is enabled and the project ran no init
+    Then "agentic-sdlc:sdlc-fast", "agentic-sdlc:sdlc-balanced" and "agentic-sdlc:sdlc-deep" run one skill step each
+    And "agentic-sdlc:sdlc-reviewer" has no Edit or Write tool and a turn limit
+    And a project's "sdlc-<tier>" from "init --harness claude" keeps the model from the binding
+
+  # Source: hooks/guard.mjs, "sdlc-reviewer"
+  # Proof: test/guard.test.ts "the sdlc-reviewer agent runs only the agentic-sdlc CLI in Bash"
+  Scenario: The reviewer agent runs no code but the CLI
+    When the sdlc-reviewer agent runs a Bash command that is not an "agentic-sdlc" call
+    Then the guard hook exits with code 2
+    And "agentic-sdlc forge view 3" from that agent exits with code 0
+
+  # Source: bin/agentic-sdlc
+  # Proof: test/plugin.test.ts "bin/agentic-sdlc is executable and runs the plugin build when the project pins none"
+  Scenario: The plugin puts the CLI on the Bash path
+    When the agent runs "agentic-sdlc <group> <verb>" with the plugin enabled
+    Then the project's pinned build runs when it exists
+    And otherwise the plugin's own build runs
+
+  # Source: evals/
+  # Proof: test/plugin.test.ts "plugin evals: each case has a real prompt and graders with a type"
+  Scenario: The plugin ships skill-triggering evals
+    Then each case under "evals/" has a prompt and typed graders for "claude plugin eval"
+
+  # Source: .codex-plugin/plugin.json, .cursor-plugin/plugin.json
+  # Proof: test/plugin.test.ts "Codex and Cursor manifests parse, carry the package version and point at real paths"
+  Scenario: Codex and Cursor can install the package as a plugin
+    Then ".codex-plugin/plugin.json" and ".cursor-plugin/plugin.json" carry the package version
+    And both point at "skills/" and at "mcp.json", which starts "npx --no agentic-sdlc mcp"

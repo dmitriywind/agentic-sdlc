@@ -24,6 +24,11 @@ every session, the repo is also a plugin marketplace:
 ```
 The plugin's hook refuses a push to the trunk and allows `forge approve` and `forge status` only in the review runtime (two identities). A one-identity runner that serves `forge_status` over MCP sets `AGENTIC_SDLC_ALLOW_STATUS=1`; that never opens `forge approve`.
 
+The plugin also carries:
+- `agents/`: `agentic-sdlc:sdlc-fast`, `sdlc-balanced`, `sdlc-deep` (models `haiku`, `sonnet`, `opus`) and `agentic-sdlc:sdlc-reviewer` for `review-pr`. The reviewer has Read, Grep, Glob, Skill, Bash and the plugin's MCP tools, no Edit or Write and a turn limit, and the guard hook refuses any Bash command from it that is not an `agentic-sdlc` call. Plugin agents are namespaced, so the project's `sdlc-<tier>` from `init` (below) does not clash with them; the `sdlc` skill uses the project's agent when it exists. Plugin agents ignore `hooks`, `mcpServers` and `permissionMode` ([sub-agents](https://code.claude.com/docs/en/sub-agents)).
+- `bin/agentic-sdlc`: on the Bash tool's PATH while the plugin is enabled ([plugins reference](https://code.claude.com/docs/en/plugins-reference)), it runs the project's `node_modules/agentic-sdlc` or else the plugin's own build. Without the plugin, call `npx --no agentic-sdlc`.
+- `evals/`: skill-triggering cases for `claude plugin eval` (paid runs; not part of CI). The case layout comes from `claude plugin eval init --bare`; the grader fields from the CLI's own schema, as the public docs do not list them.
+
 What `init --harness claude` writes:
 - `.agents/binding.yml`, `.agents/scorers/`, the gate templates for your forge, the runner prompts.
 - No skill copies: the plugin carries them.

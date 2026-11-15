@@ -31,6 +31,11 @@ owner opens at Backlog).
 ```
 .claude-plugin/plugin.json   Claude Code plugin manifest: skills, hooks, the MCP server
 .claude-plugin/marketplace.json  this repo as a one-plugin marketplace
+.codex-plugin/plugin.json    Codex plugin manifest: skills and the MCP server (mcp.json)
+.cursor-plugin/plugin.json   Cursor plugin manifest: skills and the MCP server (mcp.json)
+agents/                      plugin subagents: sdlc-fast, sdlc-balanced, sdlc-deep, sdlc-reviewer
+bin/agentic-sdlc             plugin shim: the CLI on the Bash PATH (the project's pinned build, else dist/bin.js)
+evals/                       plugin evals for skill triggering (`claude plugin eval`)
 hooks/                       plugin hooks (hooks.json, guard.mjs) and the plugin's MCP launcher (mcp.mjs)
 skills/                      the portable skill pack (Agent Skills format: <name>/SKILL.md)
   sdlc/                      navigator: contract, routing, cycle, the hold, branches
@@ -437,7 +442,7 @@ stops a foreground command at 10 minutes: the cycle runs `commands.fast_check`, 
 CI. The shortest schedule interval is 1 hour; runs draw subscription usage.
 
 **Packaging per harness.** For Claude Code the package is a plugin (`.claude-plugin/`: skills,
-hooks, the MCP server), so skills are named `/agentic-sdlc:<skill>`. `init` always
+hooks, the MCP server, `agents/` with a subagent per tier and `sdlc-reviewer`, `bin/` with the CLI on the Bash PATH, `evals/`), so skills are named `/agentic-sdlc:<skill>`. The plugin's tier agents are the default; `.claude/agents/sdlc-<tier>.md` from `init` carries the binding's models and is used when present (the names differ: `agentic-sdlc:sdlc-<tier>` against `sdlc-<tier>`). `sdlc-reviewer` has no Edit or Write tool, and the guard hook lets it run only `agentic-sdlc` commands in Bash, so `review-pr` never runs CR code. Codex and Cursor each have a manifest (`.codex-plugin/`, `.cursor-plugin/`) for skills and MCP (`mcp.json`, `npx --no agentic-sdlc mcp`); neither carries the hook or the agents. `init` always
 copies the pack to `.agents/skills` (the gates and `validate` read it); `init --harness claude` generates one subagent per tier and adds an `@AGENTS.md` import to
 `CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. Codex and Cursor read `.agents/skills`, which `init` writes. Claude
 headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-turns`. The cycle

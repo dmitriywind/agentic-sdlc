@@ -35,6 +35,9 @@ install it.
 3. **Fill in `.agents/binding.yml`**. The file documents every key. Set at least the owners, the board
    options (`init` reads the repo from `git remote origin`), `commands.*`, `product.environments`,
    `product.delivery` and `models`. `npx --no agentic-sdlc validate` names every key still missing.
+   The Claude Code plugin also brings a subagent per tier, a `sdlc-reviewer` that can only read files and
+   run `agentic-sdlc` commands, and `agentic-sdlc` itself on the Bash path. Codex and Cursor can install
+   the package as a plugin for the skills and the MCP server.
 4. **Write the two docs** the skills judge every ticket against: `paths.importance_doc` (what
    matters) and `paths.guiding_narrative` (where the product goes). Without them, product questions
    become holds.

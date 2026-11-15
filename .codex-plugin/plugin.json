@@ -1,0 +1,15 @@
+{
+  "name": "agentic-sdlc",
+  "version": "0.1.0",
+  "description": "Software factory skills for any board, forge and trunk-based Git, and the agentic-sdlc MCP server.",
+  "keywords": ["software-factory", "agentic-sdlc", "trunk-based"],
+  "skills": "./skills",
+  "mcpServers": "./mcp.json",
+  "interface": {
+    "displayName": "agentic-sdlc",
+    "shortDescription": "Run software delivery with agents, gated by CI.",
+    "developerName": "dmitriywind",
+    "category": "Coding",
+    "websiteURL": "https://dmitriywind.github.io/agentic-sdlc/guide.html"
+  }
+}

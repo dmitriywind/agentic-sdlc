@@ -166,6 +166,17 @@ Feature: Implement a spec
     Then it tries up to 3 times and waits the Retry-After time, at most 30 seconds
     And it does not retry a 4xx, nor a 5xx on POST
 
+  # Source: src/exec.ts, "ghRetry"
+  # Proof: test/forge.test.ts "gh reads retry up to 3 tries on 429, a rate-limit 403 and 5xx, honouring a retry-after hint; writes retry only on a rate limit"
+  # Proof: test/board-adapters.test.ts "the GitHub boards retry a milestone write on a rate limit but not on a 5xx; a read retries on both"
+  Scenario: A gh call that hit a rate limit or a server error is retried when it is safe
+    Given gh reports HTTP 429, a 403 that names a rate limit, or HTTP 5xx
+    When an adapter makes a read call
+    Then it tries up to 3 times and waits the retry-after time gh prints, else 1 and 2 seconds
+    When an adapter makes a write call
+    Then it retries only a 429 or a rate limit, never a 5xx
+    And it does not retry any other 403
+
   # Source: src/exec.ts, "http"
   # Proof: test/exec.test.ts "http aborts a request that never gets a response"
   Scenario: A call that gets no answer is aborted
