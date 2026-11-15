@@ -44,7 +44,7 @@ Statuses and Shipped: [statuses.md](references/statuses.md). Fields, lanes, sub-
 | Done or Cancelled otherwise | none: gates write Shipped |
 
 **CRs.** `forge queue` gives each open CR one `action`. Act on a row whose ticket is at In review
-and not held, and on every row with no ticket (a factory or dependency CR).
+and not held (or released in step 2), and on every row with no ticket (a factory or dependency CR).
 
 | Action | Do |
 |---|---|
@@ -70,9 +70,9 @@ the run is a double fire or still going: leave it.
    last `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --kind heartbeat --last
    <n> --trusted`) and, when `product.slo` is set, `ledger measures`. Done when you know whether
    `errorBudget.exhausted` is true.
-2. **Release holds.** `board release <id>` for every `board holds` row with `replied: true`; the
-   ticket routes in step 7 at its Status. Done when no row shows `replied: true` and the ids
-   released are in the heartbeat's `did`.
+2. **Release holds.** `board release <id>` for every `board holds` row with `replied: true` and for
+   the ticket of every `forge queue` row with `release: true`; the ticket routes in step 7 at its
+   Status. Done when no such row remains and the ids released are in the heartbeat's `did`.
 3. **Idle exit.** When no unheld ticket matches a row that dispatches, no queue row asks for more
    than `wait`, and `ledger summary` shows neither `learning.due` nor `learning.judge`: write the
    idle heartbeat (step 9 with `runs: []`) and stop. Done when it and the done line are posted.

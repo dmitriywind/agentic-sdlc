@@ -115,8 +115,11 @@ export interface LandResult {
 }
 
 export type QueueAction = 'review' | 'rework' | 'land' | 'sync' | 'wait' | 'escalate';
-/** `forge queue`: one row per open CR. since: when the CR last moved (head push or newest trusted comment); absent when unknown. */
-export interface QueueRow { n: string; ticket?: string; class: string; action: QueueAction; reason: string; reworks: number; since?: string }
+/**
+ * `forge queue`: one row per open CR. since: when the CR last moved (head push or newest trusted comment); absent when unknown.
+ * held: its ticket carries the human label. release: the ticket is held and the CR waits only to land, its human approval given.
+ */
+export interface QueueRow { n: string; ticket?: string; class: string; action: QueueAction; reason: string; reworks: number; since?: string; held: boolean; release?: true }
 
 /** `board holds`: a ticket with the human label. replied: an owner-role account commented after the last ask. */
 export interface Hold { id: string; kind: string; askedAt: string; replied: boolean; reply?: { author: string; createdAt: string; url?: string } }

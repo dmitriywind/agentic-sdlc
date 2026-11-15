@@ -74,7 +74,7 @@ src/
   telemetry.ts               run and deploy records as OTLP traces and CDEvents (ledger export, the merged and shipped gates)
 references/architecture.md   this contract
 docs/                        guides and diagrams; never normative
-test/                        node:test, one file per module, fake exec only (no network)
+features/                    the behaviour as executable Gherkin features (`<area>/*.feature`), their steps (`steps/`) and the runner (`support/`), on node:test; fake exec only (no network)
 ```
 
 ## 3. Ports
@@ -140,7 +140,7 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `automerge <n>` | Merge when every required check is green (low level; steps use `land`) | `CR` |
 | `verdict <n> --pass\|--fail --body-file <f>` | Stamps the `verdict` marker for the CR head and the single `Verdict:` line, and posts the report. With `forge.review_identity` set it also posts the review status (`forge.review_check_name`) and, on pass, the approving review, with `options.review_token_env`; without one, CI's `review` gate turns the report into the status. A missing review token exits 1 naming an Access problem | `{ verdict, comment, status: 'posted'\|'ci' }` |
 | `land <n> [--wait <minutes>]` | Waits, bounded (default `cycle.land_wait_minutes`, 5 when unset), until every `forge.required_checks` entry is green on the head, then arms auto-merge, or merges where the forge cannot arm it. A wait on a human approval is `blocked` with `needsHuman` (the approval class and the owner who must approve). Never merges a draft | `{ state: 'merged'\|'armed'\|'waiting'\|'blocked', blocking: [{ check, state }], needsHuman?: { class, who } }` |
-| `queue` | Every open CR with the one next action the process must take (below) | `[{ n, ticket?, class, action: 'review'\|'rework'\|'land'\|'sync'\|'wait'\|'escalate', reason, reworks, since }]` |
+| `queue` | Every open CR with the one next action the process must take (below) | `[{ n, ticket?, class, action: 'review'\|'rework'\|'land'\|'sync'\|'wait'\|'escalate', reason, reworks, since?, held, release?: true }]` |
 | `comment <n> --body-file <f> [--kind <kind> [--ref <value>]]` | CR comment; `--kind` as in `board comment` | `{ id, url }` |
 | `comments <n> [--last <k>] [--kind <kind>] [--marker <text>] [--author <a>]… [--trusted]` | CR comments (review report, owner reply on a factory CR), newest first, system notes dropped; same filters as `board comments` (`--last` counts after them) | `Comment[]` |
 | `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted with `options.review_token_env`; with one identity (`review_identity` empty), with the implementer's token. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`, `agent-provenance`). The `proofs-on-base` and `linkage` gates post with `options.token_env` (the CI job's token); with two identities the CLI verb never does. | `{}` |
@@ -150,12 +150,12 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `run <id>` | One CI run by id; a run that does not exist fails (exit 1) | `Run` |
 | `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
 
-`queue` owns the CR decisions the skills only obey. `ticket` is the one id the CR closes (absent for a factory or dependency CR), `class` the approval gate's class, `since` when the row's state began, `reason` one line for the action. `reworks` counts the CR's trusted fail verdicts and trusted `note`s (a `note` names the cause of a red check or a request to a person's CR). A check named by `forge.review_check_name` or `human-approval` never counts as red, pending or missing here. The first match wins:
+`queue` owns the CR decisions the skills only obey. `ticket` is the one id the CR closes (absent for a factory or dependency CR), `class` the approval gate's class, `held` whether its ticket carries `board.labels.human`, `release: true` on a held ticket whose CR is `land` with its `human-approval` status success under a class that needs a human (an approval on the forge alone answers a Sign-off ask; the navigator releases the hold), `since` when the row's state began, `reason` one line for the action. `reworks` counts the CR's trusted fail verdicts and trusted `note`s (a `note` names the cause of a red check or a request to a person's CR). A check named by `forge.review_check_name` or `human-approval` never counts as red, pending or missing here. The first match wins:
 
 | Action | When |
 |---|---|
 | `escalate` | `reworks` has reached `cycle.max_rework` (3 when unset) and the CR needs another rework (the `rework` row below, without its `wait`), or a required check other than the review and human-approval statuses is pending or missing longer than `stall_minutes` after `pushedAt` (no `pushedAt`: the clock has not started) |
-| `rework` | the head has a trusted fail verdict, or a required check is red (`wait` instead while the newest trusted `note` for the head names a Signal, written `Signal <id>`, that is still open) |
+| `rework` | the head has a trusted fail verdict, or a required check is red (`wait` instead while the newest trusted `note` for the head names a Signal that is still open: the note's `--ref` is `<head sha> <Signal id>`; a `Signal <id>` in the text is read when the ref has none) |
 | `review` | no trusted verdict for the head (a draft, or a ready CR whose head changed); review itself stops with no verdict while a check is pending |
 | `sync` | a ready CR behind the trunk |
 | `land` | a pass verdict on the head, the CR ready and open |
@@ -291,17 +291,7 @@ Seven skills, one per phase: `sdlc` (the navigator), `plan`, `build`, `review`, 
 the skill (`build`, `ship`, `escalate`, `sdlc`). `dispatch`, the ledger's `skill` field, the bench,
 a scorer's `applies_to`, the `executors` keys and the `Agent-Skill` trailer all name a run this way.
 
-The ids below also read as old names (`OLD_STEP_IDS` in `src/skills.ts`): old heartbeat rows, `executors`
-keys and scorers' `applies_to` still resolve.
-
-| Step | Was |
-|---|---|
-| `plan/triage`, `plan/groom`, `plan/shape` | `triage-signal`, `backlog-grooming`, `shape` |
-| `build` | `implement-spec` |
-| `review/review`, `review/verify` | `review-pr`, `verify-ux` |
-| `ship` | `release` |
-| `learn/judge`, `learn/improve` | `judge-run`, `improve-factory` |
-| `escalate`, `sdlc` | `escalate-to-human`, `sdlc` |
+A stored run row that carries an earlier skill name is read as its step (`OLD_STEP_IDS` in `src/skills.ts`).
 
 - **Frontmatter**: `name`, `description` (a trigger sentence), and `metadata.steps: { <step>: { tier
   } }` for a multi-step skill (each step in `steps/<step>.md`) or `metadata.tier` for a one-step
@@ -602,7 +592,7 @@ stops a foreground command at 10 minutes: the cycle runs `commands.fast_check`, 
 CI. The shortest schedule interval is 1 hour; runs draw subscription usage.
 
 **Packaging per harness.** For Claude Code the package is a plugin (`.claude-plugin/`: skills,
-hooks, the MCP server, `agents/` with a subagent per tier and `sdlc-reviewer`, `bin/` with the CLI on the Bash PATH, `evals/`), so skills are named `/agentic-sdlc:<skill>`. The plugin's tier agents are the default; `.claude/agents/sdlc-<tier>.md` from `init` carries the binding's models and is used when present (the names differ: `agentic-sdlc:sdlc-<tier>` against `sdlc-<tier>`). `sdlc-reviewer` has no Edit or Write tool, and the guard hook lets it run only `agentic-sdlc` commands in Bash, so `review/review` never runs CR code. Codex and Cursor each have a manifest (`.codex-plugin/`, `.cursor-plugin/`) for skills and MCP (`mcp.json`, `npx --no agentic-sdlc mcp`); neither carries the hook or the agents. `init` always
+hooks, the MCP server, `agents/` with a subagent per tier and `sdlc-reviewer`, `bin/` with the CLI on the Bash PATH, `evals/`), so skills are named `/agentic-sdlc:<skill>`. The plugin's tier agents are the default; `.claude/agents/sdlc-<tier>.md` from `init` carries the binding's models and is used when present (the names differ: `agentic-sdlc:sdlc-<tier>` against `sdlc-<tier>`). `sdlc-reviewer` has no Edit or Write tool, and the guard hook lets it run only `agentic-sdlc` commands in Bash, so `review/review` never runs CR code. Codex and Cursor each have a manifest (`.codex-plugin/`, `.cursor-plugin/`) for skills and MCP (`mcp.json`, `.agents/bin/agentic-sdlc mcp`); neither carries the hook or the agents. `init` always
 copies the pack to `.agents/skills` (the gates and `validate` read it); `init --harness claude` generates one subagent per tier and adds an `@AGENTS.md` import to
 `CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. Codex and Cursor read `.agents/skills`, which `init` writes. Claude
 headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-turns`. The cycle
@@ -694,7 +684,7 @@ binding's `spec_marker`.
 |---|---|---|---|
 | `spec` | `plan/shape` (a later pass posts a new one; the newest trusted is the spec) | ticket | none |
 | `verdict` | `forge verdict` only (`review/review`) | CR | the head (stamped by the verb) |
-| `note` | `build` (the cause of a red check, a request to a person's CR author); the navigator (asking a person to update a CR behind the trunk) | CR | the head sha |
+| `note` | `build` (the cause of a red check, a request to a person's CR author); the navigator (asking a person to update a CR behind the trunk) | CR | the head sha; with a Signal, `<head sha> <Signal id>` |
 | `verify` | `review/verify` | CR | the head sha |
 | `manual-check` | `review/review` | ticket | the head sha |
 | `ask` | `board hold` (from `escalate`); `escalate` for a CR with no ticket (on the CR and on `heartbeat.ticket`); the navigator for a step with no ticket past `cycle.failure_limit` | ticket, CR, heartbeat ticket | the trigger, via `board hold --kind` |

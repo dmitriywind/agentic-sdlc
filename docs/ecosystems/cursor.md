@@ -16,7 +16,7 @@ Files it writes:
 
 The init log is the exact list; the `--harness` flag decides.
 
-The repo also has a Cursor plugin manifest, `.cursor-plugin/plugin.json`, with `skills` (`./skills/`) and `mcpServers` (`./mcp.json`, which runs `npx --no agentic-sdlc mcp`). It has no hooks and no agents. The schema is Cursor's own `schemas/plugin.schema.json` in github.com/cursor/plugins; the cursor.com plugin pages could not be fetched here. Only `~/.cursor/skills/` syncs to Cloud Agents per the skills page; whether repo skills load in Cloud Agents beyond that is not documented at the time of writing.
+The repo also has a Cursor plugin manifest, `.cursor-plugin/plugin.json`, with `skills` (`./skills/`) and `mcpServers` (`./mcp.json`, which runs `.agents/bin/agentic-sdlc mcp`). It has no hooks and no agents. The schema is Cursor's own `schemas/plugin.schema.json` in github.com/cursor/plugins; the cursor.com plugin pages could not be fetched here. Only `~/.cursor/skills/` syncs to Cloud Agents per the skills page; whether repo skills load in Cloud Agents beyond that is not documented at the time of writing.
 
 ## Run one cycle by hand
 ```bash

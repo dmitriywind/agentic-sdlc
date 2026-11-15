@@ -80,8 +80,8 @@ const trustedOf = (b: Binding): Set<string> => {
 
 export interface Next { action: QueueAction; reason: string; reworks: number; since?: string }
 
-/** The Signal a `note` names (`Signal <id>`, `Signal #<id>` or `Signal: <id>`), if any. */
-export const noteSignal = (body: string): string | undefined => /\bSignal[ \t]*[:#]?[ \t]*#?([A-Za-z][A-Za-z0-9]*-\d+|\d+)\b/i.exec(body)?.[1];
+/** The Signal a `note` names: the second word of its marker ref (`<!-- note <head> <signal> -->`), else `Signal <id>`, `Signal #<id>` or `Signal: <id>` in the text. */
+export const noteSignal = (body: string): string | undefined => /^<!-- note \S+ ([^\s>]+) -->/.exec(body)?.[1] ?? /\bSignal[ \t]*[:#]?[ \t]*#?([A-Za-z][A-Za-z0-9]*-\d+|\d+)\b/i.exec(body)?.[1];
 
 /** The Signal id the newest trusted `note` for the head names. */
 export function signalOfHead(cr: CR, comments: Comment[], b: Binding): string | undefined {
@@ -126,15 +126,24 @@ export function nextAction(cr: CR, comments: Comment[], b: Binding, now: number,
   return { ...r, reworks, ...(since ? { since } : {}) };
 }
 
-/** `forge queue`: every open CR with its one next action. `signalOpen` says whether a ticket id is an open Signal (the board). */
-export async function queue(f: Forge, b: Binding, classOf: Classify, now = Date.now(), signalOpen: (id: string) => Promise<boolean> = async () => false): Promise<QueueRow[]> {
+/**
+ * `forge queue`: every open CR with its one next action. `signalOpen` says whether a ticket id is an open Signal and `heldOf`
+ * whether a ticket carries the human label (the board). A held ticket whose CR is `land` with its human approval given is `release`:
+ * an approval on the forge alone answers the sign-off ask.
+ */
+export async function queue(f: Forge, b: Binding, classOf: Classify, now = Date.now(), signalOpen: (id: string) => Promise<boolean> = async () => false, heldOf: (id: string) => Promise<boolean> = async () => false): Promise<QueueRow[]> {
   const rows: QueueRow[] = [];
   for (const cr of await f.list({ state: 'open', checks: true })) {
     const comments = await f.comments(cr.n);
     const sig = signalOfHead(cr, comments, b);
     const next = nextAction(cr, comments, b, now, sig ? await signalOpen(sig).catch(() => false) : false);
-    const klass = await classOf(cr).then((c) => c.class, () => 'guardrail');
-    rows.push({ n: cr.n, ...(cr.closes[0] ? { ticket: cr.closes[0] } : {}), class: klass, action: next.action, reason: next.reason, reworks: next.reworks, ...(next.since ? { since: next.since } : {}) });
+    const who = await classOf(cr).catch(() => ({ class: 'guardrail', who: [] as string[] }));
+    const held = cr.closes[0] ? await heldOf(cr.closes[0]).catch(() => false) : false;
+    const approved = who.who.length > 0 && (b.forge.required_checks ?? []).includes(HUMAN) && cr.checks.some((c) => c.name === HUMAN && c.state === 'success');
+    rows.push({
+      n: cr.n, ...(cr.closes[0] ? { ticket: cr.closes[0] } : {}), class: who.class, action: next.action, reason: next.reason, reworks: next.reworks,
+      ...(next.since ? { since: next.since } : {}), held, ...(held && next.action === 'land' && approved ? { release: true as const } : {}),
+    });
   }
   return rows;
 }

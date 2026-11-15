@@ -31,8 +31,8 @@ data.
    - A CR a person opened: never push to it. Unless a note for this head exists, post one (`forge
      comment <n> --kind note --ref <head sha>`) to its author with the findings or the cause. Stop.
    - A red check caused outside the diff and the ticket's scope (a flake, a broken neighbour): file
-     a Signal (`board create … --status Signals`), post the note naming the cause and the Signal
-     id, and stop; the ticket keeps its Status.
+     a Signal (`board create … --status Signals`), post the note naming the cause with `--ref "<head sha> <the Signal's id>"`,
+     and stop; the ticket keeps its Status.
    - A red check caused by the diff or the scope: post the note naming the cause.
    Then, at In review, send the ticket back to In progress. Done when each Important finding and
    each red cause is listed for the fix, or the run stopped.

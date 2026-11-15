@@ -12,10 +12,10 @@ npm run typecheck
 npm test
 ```
 
-`npm test` builds first, then runs every feature (`features/**/*.feature`) and, until each area is
-converted, the remaining `test/*.test.ts`. Features only: `npm run test:features`. Narrow a run with
-environment variables: `FEATURE=gates/approval` (path contains), `SCENARIO='Fast-lane'` (title matches),
-`TAGS=@gate:approval` (any tag). A scenario tagged `@only` runs alone. `dist-smoke` needs `npm run build` first.
+`npm test` builds first, then runs every feature (`features/**/*.feature`). Features only:
+`npm run test:features`. Narrow a run with environment variables: `FEATURE=gates/approval` (path contains),
+`SCENARIO='Fast-lane'` (title matches), `TAGS=@gate:approval` (any tag). A scenario tagged `@only` runs alone.
+The `@dist` scenario runs the built CLI and fails when `dist/bin.js` is missing: run `npm run build`.
 Tests use fakes and no network.
 
 ## Behaviour: executable features
@@ -78,10 +78,6 @@ Core vocabulary (`features/steps/common.ts`):
 A step takes `{string}` ("double" or 'single' quoted; `\"` is a quote), `{int}`, `{word}`, or a regular
 expression whose groups are its arguments; a data table or a doc string arrives as the last argument.
 An undefined step fails its scenario with a snippet to paste; an ambiguous step names both definitions.
-
-Converting an area: for each test, write the scenarios of its rules (split one test with many asserts
-into one scenario per behaviour), reuse the steps above, run `FEATURE=<area>/<thing> npm run test:features`,
-then delete the test file (or only its converted tests) and the old `docs/behaviour` file in the same change.
 
 ## The contract rule
 

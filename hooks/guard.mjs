@@ -84,11 +84,12 @@ const scan = (cmd) => {
   return segs;
 };
 
-// The reviewer's one allowed shape: a command word that is exactly `agentic-sdlc`, or `npx [--no|--no-install] agentic-sdlc`.
+// The reviewer's one allowed shape: a command word that is exactly `agentic-sdlc`, `.agents/bin/agentic-sdlc` or
+// `./.agents/bin/agentic-sdlc` (the launcher), or `npx [--no|--no-install] agentic-sdlc`.
 const reviewerOk = (tt, seg) => {
   if (seg.subst || tt.some((x) => x.dyn)) return false;
   const t = tt.map((x) => x.s);
-  if (t[0] === 'agentic-sdlc') return true;
+  if (t[0] === 'agentic-sdlc' || t[0] === '.agents/bin/agentic-sdlc' || t[0] === './.agents/bin/agentic-sdlc') return true;
   if (t[0] !== 'npx') return false;
   let i = 1;
   while (t[i] === '--no' || t[i] === '--no-install') i++;

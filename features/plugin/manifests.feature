@@ -2,7 +2,7 @@
 @plugin
 Feature: Claude Code, Codex and Cursor install the package as a plugin
   Each tool reads its own manifest. All three carry the package version and point at the same skills folder and
-  at `mcp.json`, which starts `npx --no agentic-sdlc mcp`.
+  at `mcp.json`, which starts `.agents/bin/agentic-sdlc mcp`.
 
   Rule: The three manifests name the package and carry its version
 
@@ -28,7 +28,7 @@ Feature: Claude Code, Codex and Cursor install the package as a plugin
 
     Scenario Outline: The skills path is a folder and the MCP file starts the server
       Then the skills path of the manifest in <dir> is a directory
-      And the MCP path of the manifest in <dir> starts the server with "--no agentic-sdlc mcp"
+      And the MCP path of the manifest in <dir> starts the server with ".agents/bin/agentic-sdlc mcp"
 
       Examples:
         | dir            |

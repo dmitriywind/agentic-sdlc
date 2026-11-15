@@ -80,7 +80,8 @@ export const cli: PortCli = (argv, ctx) =>
         const { depsOf, approvalWho } = await import('../gates.ts');
         const d = depsOf(ctx);
         const open = async (id: string) => !ctx.binding.board.done_statuses.includes((await d.board.get(id)).status);
-        return queue(f, ctx.binding, (cr) => approvalWho(d, cr), Date.now(), open);
+        const held = async (id: string) => (await d.board.get(id)).labels.includes(ctx.binding.board.labels.human);
+        return queue(f, ctx.binding, (cr) => approvalWho(d, cr), Date.now(), open, held);
       }
       case 'comments': {
         if (a.has('kind') && a.has('marker')) throw new UsageError('forge comments: --kind and --marker together');
