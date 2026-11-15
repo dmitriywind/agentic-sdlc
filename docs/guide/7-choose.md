@@ -24,10 +24,11 @@ You can change every answer later.
 | | One identity (default for individual) | Two identities (required for organization) |
 |---|---|---|
 | Accounts | Yours. On a Claude cloud routine, the routine's GitHub login. | An implementer account and a separate review app. |
-| Who reviews | `review-pr` in the cycle, as a fresh subagent. | `review-pr` in a separate review run that holds the review token. |
-| Review status | CI posts it from the review report. | The review app posts it, and approves. |
+| Who reviews | `review/review` in the cycle, as a fresh agent context. | `review/review` in a separate review run that holds the review token. |
+| Review status | CI posts it from the report `forge verdict` publishes. | `forge verdict` posts it as the review app, and approves. |
+| Runs to schedule | One: the cycle. | Two: the cycle, then the review run (`review-prompt.md`). |
 | Full-lane approval | A collaborator approves it, or you merge it as admin. | A human approves the latest commit. |
-| What it proves | The review is a separate agent context. | No implementer can approve its own change. |
+| What it proves | The review is a separate agent context, not a separate account: the branch rules cannot prove an agent did not post its own review status. | No implementer can post the review status or approve its own change. |
 
 </details>
 

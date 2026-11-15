@@ -111,6 +111,10 @@ Feature: Runs exported as OpenTelemetry GenAI spans
       Then the span id of "r1" is the noted one
       And there are 2 spans in one trace
 
+    Scenario: --since takes a number of days
+      When I run "ledger export --format otlp --since 3650"
+      Then there are 4 spans in one trace
+
     Scenario: --since keeps the runs from that time on
       When I run "ledger export --format otlp --since 2026-11-08T09:40:00Z"
       Then there are 3 spans in one trace

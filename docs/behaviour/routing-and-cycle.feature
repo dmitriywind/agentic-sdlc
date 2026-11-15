@@ -145,7 +145,7 @@ Feature: Routing and the unattended cycle
     And the cycle fires no review runtime
 
   # Source: skills/sdlc/references/heartbeat.md, "Shape"
-  # Proof: test/ledger.test.ts "flattenRuns filters by age and skill and applies the newest rescore"
+  # Proof: skill text only; the ledger side is features/ledger/runs.feature
   Scenario: A heartbeat holds only the required fields by default
     When the cycle writes its heartbeat
     Then it holds "at", "factory", "runs" and "errors"
@@ -244,15 +244,6 @@ Feature: Routing and the unattended cycle
     When the cycle runs on a newer trunk sha
     Then it retries the step instead of escalating it
 
-  # Source: src/ledger.ts, "learningState"; skills/sdlc/SKILL.md, "Run one cycle", step 4
-  # Proof: test/ledger.test.ts "learningState: cycles since the last improve-factory heartbeat, due at every_cycles, off unless enabled"
-  Scenario: Learning is off unless enabled
-    Given "learning.every_cycles" cycles passed since the last improve-factory run
-    And "learning.enabled" is not true
-    When the cycle reads "ledger summary"
-    Then "learning.due" and "learning.judge" are false
-    And the cycle starts no judge-run and no improve-factory run
-
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 1
   # Proof: skill text only
   Scenario: A second cycle that starts while one runs writes nothing
@@ -300,13 +291,6 @@ Feature: Routing and the unattended cycle
     When the run posts that line in its closing comment
     Then the next dispatch of the same skill and subject starts
     And a dispatch whose executor fails to start posts the done line itself
-
-  # Source: src/ledger.ts, "learningState"
-  # Proof: test/ledger.test.ts "learningState: review and learn heartbeats count no cycle; a learn heartbeat with improve-factory resets the count"
-  Scenario: Only cycle heartbeats count cycles
-    Given review and learn heartbeats between cycle heartbeats
-    When "ledger summary" counts cycles since improve-factory
-    Then it counts only the cycle heartbeats
 
   # Source: src/dispatch.ts (sandbox check); templates/runner/local.md
   # Proof: test/dispatch.test.ts "local execution: unattended accepts sandbox local only with AGENTIC_SDLC_LOCAL=1; an unset sandbox stays refused"
@@ -384,10 +368,10 @@ Feature: Routing and the unattended cycle
     When the cycle writes the heartbeat
     Then the run row has outcome "capped" and the same path as a timed-out run
 
-  # Source: src/ledger.ts, "ticketUse"; skills/sdlc/SKILL.md, "Rules for every step"
-  # Proof: test/ledger.test.ts "summarise: tokens per ticket, top 20 by tokens, over-budget tickets marked and always listed; capped is a hard fact"
+  # Source: skills/sdlc/SKILL.md, "Rules for every step"
+  # Proof: skill text only; the ledger side (overBudget) is features/ledger/summary.feature
   Scenario: A ticket over its token budget gets no further dispatch
     Given cycle.max_tokens_per_ticket is set and a ticket's runs reported more tokens
     When ledger summary runs
     Then the ticket is marked overBudget
-    And the cycle calls escalate-to-human instead of dispatching it
+    And the cycle calls escalate instead of dispatching it

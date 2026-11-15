@@ -8,13 +8,16 @@ Try it first in five minutes with no accounts. Then install it on a real repo.
 The `local` board is a file, `.agents/board.json`. No board account and no forge are needed.
 
 ```bash
-mkdir try-agentic && cd try-agentic && git init -b main && npm init -y
-npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0
-npx --no agentic-sdlc init --board local --forge github --harness generic
+mkdir try-agentic && cd try-agentic && git init -b main
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init --board local --forge github --harness generic
 printf 'Show a greeting on the home page.\n' > body.md
-npx --no agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog
-npx --no agentic-sdlc dispatch shape --ticket 2
+.agents/bin/agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog
+.agents/bin/agentic-sdlc dispatch plan/shape --ticket 2
 ```
+
+The first command runs the package once from its Git tag. `init` writes the pin `.agents/cli.json`
+and the launcher `.agents/bin/agentic-sdlc`; from then on every command runs through the launcher,
+which installs the pinned CLI on first use. The folder needs no `package.json`.
 
 `dispatch` prints the instruction your agent would follow and starts nothing. Open the folder in your
 agent and ask it to run the `sdlc` skill for one cycle. `doctor` also probes Git and GitHub, so it needs a
@@ -29,29 +32,32 @@ install it.
 
 ## Install on a real repo
 
-1. **Install the CLI**, pinned to a tag:
-   `npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0`
-2. **Run `init`** with the command from [7. Choose your setup](7-choose.md). It lists every file it writes.
-3. **Fill in `.agents/binding.yml`**. The file documents every key. Set at least the owners, the board
+1. **Run `init`** with the command from [7. Choose your setup](7-choose.md), in the repo's root. It
+   runs the package once from its Git tag, writes the pin `.agents/cli.json` and the launcher
+   `.agents/bin/agentic-sdlc`, adds `.agents/.cli/` to `.gitignore`, and lists every file it writes.
+   It writes nothing into `package.json` or `.npmrc`; a product that is not a Node project needs
+   neither. npm older than 12 does not know `--allow-git`: drop the flag there.
+2. **Fill in `.agents/binding.yml`**. The file documents every key. Set at least the owners, the board
    options (`init` reads the repo from `git remote origin`), `commands.*`, `product.environments`,
-   `product.delivery` and `models`. `npx --no agentic-sdlc validate` names every key still missing.
+   `product.delivery` and `models`. `.agents/bin/agentic-sdlc validate` names every key still missing.
    The Claude Code plugin also brings a subagent per tier, a `sdlc-reviewer` that can only read files and
    run `agentic-sdlc` commands, and `agentic-sdlc` itself on the Bash path. Codex and Cursor can install
    the package as a plugin for the skills and the MCP server.
-4. **Write the two docs** the skills judge every ticket against: `paths.importance_doc` (what
+3. **Write the two docs** the skills judge every ticket against: `paths.importance_doc` (what
    matters) and `paths.guiding_narrative` (where the product goes). Without them, product questions
    become holds.
-5. **Run `npx --no agentic-sdlc doctor`** until every port is ok. Import `.github/rulesets/trunk.json`
-   in the repo settings. A private repo on GitHub Free cannot enforce a ruleset; `doctor` warns.
-6. **Create the heartbeat ticket** and put its id in `heartbeat.ticket`. Keep it off every route: on
+4. **Run `.agents/bin/agentic-sdlc doctor`** until every port is ok. It also checks that the pin
+   parses and the launcher runs. Import `.github/rulesets/trunk.json` in the repo settings. A private
+   repo on GitHub Free cannot enforce a ruleset; `doctor` warns.
+5. **Create the heartbeat ticket** and put its id in `heartbeat.ticket`. Keep it off every route: on
    `github-issues`, an issue with no `status:` label is off the board, and comments still work; on the
    local board, status Cancelled (`init` does this); on other boards, a Cancelled status.
-7. **Run one cycle by hand** with two or three real tickets in Backlog. Read every comment it writes.
+6. **Run one cycle by hand** with two or three real tickets in Backlog. Read every comment it writes.
    Repeat until three cycles in a row need no correction.
-8. **Schedule the cycle** from [`templates/runner/`](../../templates/runner/routine.md), and the
-   dead-man check (`agentic-sdlc ledger stale --max-hours <h>`). On GitHub, set the repo variables
-   `AGENTIC_SDLC_VERSION` (an exact version or a commit SHA; a SHA cannot move) and, for the runner
-   workflows, `AGENTIC_AGENT_CLI_VERSION`; the workflows fail when one is unset
+7. **Schedule the cycle** from [`templates/runner/`](../../templates/runner/routine.md), and the
+   dead-man check (`agentic-sdlc ledger stale --max-hours <h>`). Every workflow job runs the CLI
+   through the launcher, so it uses the same pin. The runner workflows also need the repo variable
+   `AGENTIC_AGENT_CLI_VERSION` (an exact version of the agent's CLI); they fail when it is unset
    ([GitHub forges](../forges.md)).
 
 <div class="callout ok">
@@ -63,15 +69,16 @@ through the checks.
 
 ## Claude Code plugin
 
-For Claude Code, the skills, the guard hook and the MCP server ship as a plugin, named
-`/agentic-sdlc:<skill>`:
+For Claude Code, the skills, the guard hook and the MCP server ship as a plugin:
 
 ```text
 /plugin marketplace add dmitriywind/agentic-sdlc
 /plugin install agentic-sdlc@agentic-sdlc
 ```
 
-A scheduled run loads the repo's pinned copy instead: `claude --plugin-dir ./node_modules/agentic-sdlc`.
-A Claude cloud routine loads `.claude/skills/`: install with `init --no-plugin`.
+A skill under the plugin is `agentic-sdlc:<skill>`. A copied install has no namespace, so `init`
+names each copy `sdlc-<skill>` (`sdlc` stays `sdlc`). A scheduled run loads the pinned copy instead:
+`claude --plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc`, where `<ref>` is the `ref` in
+`.agents/cli.json`. A Claude cloud routine loads `.claude/skills/`: install with `init --no-plugin`.
 
 Next: [9. Run it](9-run-it.md).

@@ -162,13 +162,3 @@ Feature: Gate shipped
     When "gate shipped staging --result success --sha <sha>" runs
     Then the gate finds the merge in the newest merged CRs
     And the ticket is On staging
-
-  # Source: src/telemetry.ts, "deployEvent" and src/gates.ts, "cli"
-  # Proof: test/telemetry.test.ts "deployEvent: service deployed or rolledback with the environment and a generic purl; nothing true to say otherwise"
-  # Proof: test/telemetry.test.ts "gate shipped: a deploy posts one service CDEvent, and a failing sink does not fail the gate"
-  Scenario: A deploy result is posted as a CDEvent when the binding names a sink
-    Given telemetry.cdevents_sink_env names an env var that holds a URL and forge.options.repo is set
-    When "gate shipped <env> --result success" runs
-    Then one dev.cdevents.service.deployed event is posted with the environment and the artifact pkg:generic/<repo>@<version or sha>
-    And "--result rolled-back" posts service.rolledback, and "--result failure" posts nothing
-    And a send that fails writes one line to stderr and the gate's result and exit code do not change

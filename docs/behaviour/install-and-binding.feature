@@ -69,20 +69,11 @@ Feature: Install and validate the binding
 
   # Source: src/forge/github.ts, "list"
   # Proof: test/forge.test.ts "forge list: --limit and --since bound the read, and without --checks no check data is fetched"
-  # Proof: test/bench.test.ts "buildCases reads a bounded list of merged CRs: the newest few hundred by default, --merged-limit and --since override"
   Scenario: A CR list is bounded and carries no check data unless asked
     When the factory runs "forge list --state merged --limit 2 --since <date>"
     Then it gets the newest CRs merged since the date, at most 2
     And each CR has no checks, unless "--checks" reads them
     And "bench build" and "bench propose" read only the newest merged CRs, or those from "--merged-limit" and "--since"
-
-  # Source: src/bench.ts, "buildCases"
-  # Proof: test/bench.test.ts "buildCases says when the merged-CR cap was hit"
-  Scenario: Bench says when it did not read every merged CR
-    Given the forge returned as many merged CRs as the cap allows
-    When "bench build" or "bench propose" reads them
-    Then one stderr line says older CRs were not read
-    And it names "--merged-limit" and "--since"
 
   # Source: src/forge/github.ts, "run"
   # Proof: test/forge.test.ts "forge run reads one CI run by id; a missing run fails; cli list and run take their flags"
