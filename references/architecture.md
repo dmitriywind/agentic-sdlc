@@ -82,7 +82,12 @@ same.
 Every verb prints JSON on stdout and exits 0 on success, 1 on a refused or failed action (message
 on stderr), 2 on a usage error. Ids are strings everywhere (`"123"`, `"PROJ-45"`, `"LIN-9"`).
 Adapters that call an HTTP API retry 429 and 5xx responses with backoff (3 tries, honouring
-`Retry-After`). A POST retries only 429, since a 5xx may come after the write.
+`Retry-After`). A POST retries only 429, since a 5xx may come after the write. The `gh` adapters
+(board `github` and `github-issues`, forge `github`) retry the same way on what `gh` prints: a read
+(`gh api` GET, `view`, `list`) retries HTTP 429, a 403 that names a rate limit and HTTP 5xx; a write
+retries only 429 and rate limits. They wait the `Retry-After` hint `gh` prints, else 1s then 2s.
+Every verb takes only the flags it lists: an unknown flag, a value flag with no value and a
+`--body-file` that cannot be read are usage errors (exit 2); `--k=v` is the same as `--k v`.
 
 ### 3.1 Board (`agentic-sdlc board <verb>`)
 
@@ -95,6 +100,7 @@ Adapters that call an HTTP API retry 429 and 5xx responses with backoff (3 tries
 | `set <id> <field> <value>` / `set <id> <field> --clear` | Set or clear a logical field | `Item` |
 | `label <id> add\|remove <label>` | Add or remove a label | `Item` |
 | `assign <id> <user\|--none>` | Set or clear the assignee | `Item` |
+| `milestone <id> <name>` / `milestone <id> --clear` | Set or clear the milestone of an existing ticket, where `create --milestone` puts it (`github`: the issue's milestone; `github-issues`: the issue's milestone, which must exist; `jira`: `fixVersions`; `linear`: the `milestone:<name>` label; `local`: the item's `milestone`) | `Item` |
 | `comment <id> --body-file <f>` | Add a comment | `{ id, url }` |
 | `comments <id> [--last <n>] [--marker <text>] [--author <a>]… [--trusted]` | Comments, newest first; first-line and author filters (`--last` counts after them). `--trusted` is `--author` for every entry of `owners.bots`, `owners.product`, `owners.factory` and the optional `owners.operator`, `owners.security`, `owners.compliance` | `Comment[]` |
 | `close <id> --reason completed\|not_planned` | Close (and move to Done or Cancelled) | `Item` |
@@ -120,7 +126,7 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `open --source <b> --title <t> --body-file <f> [--draft]` | Open a CR into the trunk | `CR` |
 | `view <n>` / `view --sha <sha>` | One CR; by sha, the CR whose merge commit is `<sha>` | `CR` |
 | `diff <n>` | Unified diff | text |
-| `list [--state open\|merged\|all]` | CRs (default open); merged ones carry `mergeSha` | `CR[]` |
+| `list [--state open\|merged\|all] [--limit <n>] [--since <iso date>] [--checks]` | CRs (default open), newest update first; merged ones carry `mergeSha`. `--limit` keeps the newest n; `--since` keeps CRs merged (state merged) or updated since the date. Without `--checks` each CR comes from the list payload with `checks: []`, `behind` false and no `pushedAt`: a caller that reads checks, `behind` or `pushedAt` passes `--checks`, which reads each CR as `view` does | `CR[]` |
 | `ready <n>` / `draft <n>` | Leave or return to draft | `CR` |
 | `sync <n>` | Bring the CR's source up to the trunk tip | `CR` |
 | `automerge <n>` | Merge when every required check is green | `CR` |
@@ -129,7 +135,8 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted with `options.review_token_env`; with one identity (`review_identity` empty), with the implementer's token. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`). The `proofs-on-base` and `linkage` gates post with `options.token_env` (the CI job's token); with two identities the CLI verb never does. | `{}` |
 | `approve <n>` | Approving review as `review_identity`, with `options.review_token_env`. Refused with one identity: GitHub refuses an approval from the CR's author | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
-| `runs [--ref <r>] [--failed]` | CI runs | `Run[]` |
+| `runs [--ref <r>] [--failed]` | CI runs (the newest 30) | `Run[]` |
+| `run <id>` | One CI run by id; a run that does not exist fails (exit 1) | `Run` |
 
 The port also has `commits(n)`, used by gate `provenance` and not a CLI verb: every commit of the CR, oldest first, as `{ sha, message, author, committer, authorName, committerName, parents }` (logins empty when the forge links no account). It throws when the list may be cut off (GitHub lists at most 250 commits), so the gate fails closed.
 | `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
@@ -171,7 +178,7 @@ change line `start` opens.
 | `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. Done records a fact: a held ticket moves and keeps its label; a Cancelled ticket stays. A push with no CR changes nothing. No CR-pipeline gate writes the board; besides this gate only `shipped` moves a ticket (In review to Done, when a deploy reports first). |
 | `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
 | `provenance --cr <n>` | Off unless `forge.provenance` is `warn` or `require`. Reads the CR's commits through the forge API (no CR code runs) and posts status `agent-provenance`. A commit whose author or committer is in `owners.bots` (forge names) needs well-formed `Agent-Run` and `Agent-Model` trailers (the last paragraph of the message, one value each); other commits are `human`, a merge commit (the forge's branch update) is `merge`. Prints `{ commits: [{ sha, by, run?, model?, ok }], agentCommits, humanCommits, missing }`. `warn` always succeeds; `require` fails on a missing or malformed trailer and on commits it cannot read. A squash merge drops the trailers, so the status and report on the CR are the record; `merged` is untouched. Not in `forge.required_checks` by default: with `require`, add it there and to the trunk ruleset (`validate` warns otherwise). |
-| `signal-on-red --run <id>` | A red trunk or release-line run opens a Signal with a redacted evidence bundle. Other refs are ignored. |
+| `signal-on-red --run <id>` | Reads the run with `forge run <id>`; a red trunk or release-line run opens a Signal with a redacted evidence bundle. Other refs are ignored. A run that does not exist fails the gate. |
 | `skill-regression` | A change under `paths.factory` keeps the skill pack valid: frontmatter, links, scorers. |
 
 Checks:

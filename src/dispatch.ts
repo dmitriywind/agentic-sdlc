@@ -210,7 +210,7 @@ export const cli: PortCli = async (argv, ctx) => {
     };
     const doneLine = key ? `<!-- ${DONE_MARKER} ${key} -->` : undefined;
     // forge.provenance on: the run id (the dispatch key, else ticket-skill-start time) goes to the executor and into the start record, for the Agent-Run trailer and the run row's id.
-    const run = (b.forge.provenance ?? 'off') === 'off' ? undefined : key ?? [ticket || (cr ? `cr${cr}` : 'factory'), skill, startedAt.replace(/\D/g, '')].join('-');
+    const run = (b.forge?.provenance ?? 'off') === 'off' ? undefined : key ?? [ticket || (cr ? `cr${cr}` : 'factory'), skill, startedAt.replace(/\D/g, '')].join('-');
     // The cycle claims itself with `dispatch sdlc`: a marker only, never a run, and no executor check.
     if (skill === 'sdlc') {
       if (key) await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key} -->\nagentic-sdlc: cycle claimed`);
