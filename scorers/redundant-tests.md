@@ -1,6 +1,6 @@
 ---
 name: redundant-tests
-applies_to: [implement-spec]
+applies_to: [build]
 scale: pass-fail
 ---
 

@@ -15,9 +15,9 @@ owners:
   # product and factory take one entry or a list of entries; any member counts as the owner (an approval by
   # any factory owner passes guardrail). The first entry is the primary: the one an ask or request is addressed to.
   #   factory: [alice, bob]
-  # Optional roles, same shape, default absent. escalate-to-human routes a matching ask to them, else to the product or factory owner:
+  # Optional roles, same shape, default absent. escalate routes a matching ask to them, else to the product or factory owner:
   #   operator: [ops-lead]      # deploy, incident and rollback asks; failed-deploy Signals
-  #   security: [sec-lead]      # a security-labelled Signal, a review-pr security finding
+  #   security: [sec-lead]      # a security-labelled Signal, a review/review security finding
   #   compliance: [grc-lead]    # release evidence gaps
 
 board:
@@ -35,11 +35,11 @@ board:
   #   server: my-board-connector
   #   tools: { list: <tool>, get: <tool>, update: <tool> }
   statuses: [Ideas, Signals, Backlog, Ready, In progress, In review, Done, Cancelled] # the process statuses, in order
-  # later_milestone: Later       # milestone for accepted nice-to-have work; shape never routes it
+  # later_milestone: Later       # milestone for accepted nice-to-have work; plan/shape never routes it
   fields:                       # logical field -> the tracker's field name
     size: Size
     priority: Priority
-    lane: Lane                  # shape writes it; implement-spec or review-pr may promote, nothing demotes
+    lane: Lane                  # plan/shape writes it; build or review/review may promote, nothing demotes
     shipped: Shipped            # gates write it; release starts In release
     release_version: Release Version
   labels: { human: needs-human, bug: bug, feature: feature, release: release } # plus signal:<stream> and env_labels; no others. release marks a release request the Product owner opens at Backlog
@@ -61,9 +61,9 @@ forge:
     #            review_token_env: only with review_identity: the review identity's token; forge status and approve use it.
     #            With two identities give token_env Commit statuses: no access, so an implementer cannot green its own review.
     {}
-  review_identity: ""           # empty: one identity (yours): review-pr runs in the cycle and posts its report; CI's gate
+  review_identity: ""           # empty: one identity (yours): review/review runs in the cycle and posts its report; CI's gate
                                 #   review turns it into the review status. No approving review (GitHub refuses the author's).
-                                #   Set: the separate review account or app behind review_token_env; review-pr runs in
+                                #   Set: the separate review account or app behind review_token_env; review/review runs in
                                 #   the review runtime only. organization requires it.
   human_approval: full-lane     # full-lane | always | never. Which product CRs need one approving review by a human
                                 #   (not owners.bots, not review_identity) on the head: gate approval posts status human-approval.
@@ -72,10 +72,10 @@ forge:
                                 #   Agent-Run and Agent-Model; gate provenance posts status agent-provenance on the CR head.
                                 #   warn reports and passes. require fails a CR whose agent commit lacks them: add agent-provenance
                                 #   to required_checks below and pin it in the trunk ruleset (docs/forges.md, Source track)
-  review_check_name: review     # status context review-pr posts on a pass
-  verify_check_name: Required   # CI job (no secrets) running commands.install and commands.verify; review-pr reads it
+  review_check_name: review     # status context review/review posts on a pass
+  verify_check_name: Required   # CI job (no secrets) running commands.install and commands.verify; review/review reads it
   required_checks: [ticket-linkage, Required, proofs-on-base, review, human-approval, skill-regression] # must be green before merge
-  planned_checks: []            # wanted checks not supplied yet; review-pr names each absent one
+  planned_checks: []            # wanted checks not supplied yet; review/review names each absent one
 
 vcs:
   adapter: git                  # git only
@@ -91,20 +91,20 @@ product:
   delivery: release-line         # release-line: the last environment deploys from a release line the Product owner approves | continuous: every environment deploys from the trunk, no release line (web CD, a model registry, a package published per merge)
   evidence: []                  # release evidence the ready check requires: sbom | provenance | signature (SLSA build provenance, an SPDX or CycloneDX SBOM, a signature); commands.evidence_check proves it
   # slo: { change_failure_rate_max: 0.15, window_days: 30 } # optional error budget (unset: none): when changes shipped to the last environment in the window are followed by failures (a P0 bug or Signal, a failed deploy) at a higher rate, `ledger measures` reports errorBudget.exhausted and the cycle starts no new feature ticket
-  proofs: [test, eval, visual, data-check, computer-use, manual] # kinds a criterion may name; computer-use = verify-ux drives the built product; manual always escalates for a human check
+  proofs: [test, eval, visual, data-check, computer-use, manual] # kinds a criterion may name; computer-use = review/verify drives the built product; manual always escalates for a human check
 
-executors:                      # who runs each skill; default is a harness subagent, model by the skill's tier
+executors:                      # who runs each step; lookup: executors.<skill>/<step>, then executors.<skill>, then default (a harness subagent, model by the step's tier)
   default: { kind: harness }
-  # implement-spec: { kind: assign, user: coding-bot }  # a hosted coding agent picked up by assignment
-  # review-pr: { kind: webhook, url_env: REVIEW_BOT_URL, token_env: REVIEW_BOT_TOKEN }
-  # release: { kind: command, run: "my-release-bot --ticket {ticket} --skill {skill}", secrets: [AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN], sandbox: container }
-  # triage-signal: { kind: managed, api: claude, agent_env: TRIAGE_AGENT_ID, environment_env: TRIAGE_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }  # api: claude | cursor (repo_url) | antigravity | generic (endpoint_env)
+  # build: { kind: assign, user: coding-bot }  # a hosted coding agent picked up by assignment
+  # review/review: { kind: webhook, url_env: REVIEW_BOT_URL, token_env: REVIEW_BOT_TOKEN }
+  # ship: { kind: command, run: "my-release-bot --ticket {ticket} --step {skill}", secrets: [AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN], sandbox: container }
+  # plan/triage: { kind: managed, api: claude, agent_env: TRIAGE_AGENT_ID, environment_env: TRIAGE_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }  # api: claude | cursor (repo_url) | antigravity | generic (endpoint_env)
   # Any executor may also declare its stage definition:
-  # verify-ux: { kind: harness, mcps: [browser], secrets: [TEST_USER_PASSWORD], sandbox: container, model: { tier: balanced } }
+  # review/verify: { kind: harness, mcps: [browser], secrets: [TEST_USER_PASSWORD], sandbox: container, model: { tier: balanced } }
   #   mcps: names from `mcps` below | secrets: env var names only, nothing else is passed | sandbox: cloud | container | local (--unattended refuses local unless AGENTIC_SDLC_LOCAL=1; unset inherits executors.default.sandbox) | model: { tier } or { id }, not both
   #   max_turns | max_tokens | max_minutes: per-run caps, positive integers, unset = no cap; a stage inherits executors.default's. dispatch hands them to the executor (command: {max_turns} {max_tokens} {max_minutes} and AGENTIC_SDLC_MAX_*; harness: `limits`); the executor enforces them. A run that ends on one is outcome capped.
   # default: { kind: harness, max_turns: 200 }
-  # implement-spec: { kind: command, run: "claude -p --max-turns {max_turns} ...", max_turns: 150, max_minutes: 40 }
+  # build: { kind: command, run: "claude -p --max-turns {max_turns} ...", max_turns: 150, max_minutes: 40 }
 
 mcps:                           # tool servers executors may use; name -> { url | command, token_env? }; token_env names an env var, never a value
   browser: { command: "npx @playwright/mcp" }
@@ -118,19 +118,19 @@ mcps:                           # tool servers executors may use; name -> { url 
 #   cdevents_sink_env: CDEVENTS_SINK_URL           # NAME of the env var holding the CDEvents sink URL; the merged and shipped gates POST one event each, best effort (a failed send never fails a gate)
 #   headers_env: TELEMETRY_HEADERS                 # NAME of the env var holding request headers as name=value,name2=value2 (an auth token); URLs and headers are never written in this file
 
-models:                         # skills name a tier (frontmatter metadata.tier), never a model; init --harness claude writes .claude/agents/sdlc-<tier>.md from this map
+models:                         # steps name a tier (frontmatter metadata.steps.<step>.tier, or metadata.tier), never a model; init --harness claude writes .claude/agents/sdlc-<tier>.md from this map
   fast: your-fast-model-id      # the cycle routine runs on this tier
   balanced: your-balanced-model-id
-  deep: your-deep-model-id      # shape and improve-factory
+  deep: your-deep-model-id      # plan/shape and learn/improve
 # agent_command: "my-agent --model {model} --prompt-file {prompt_file} --cwd {workdir}" # bench run only
 
 commands:
   # setup: "bash .agents/runner-setup.sh" # prepares a fresh runner before the cycle
   install: "npm ci"             # install dependencies in a fresh checkout
-  fast_check: "npm run typecheck" # implement-spec runs it before the draft CR
+  fast_check: "npm run typecheck" # build runs it before the draft CR
   verify: "npm test"            # the full verify; the CI job Required runs it on the head (no secrets)
   proofs_on_base: "npm test -- {files}" # gate proofs-on-base: runs the CR's new or changed proof files ({files}) against the merge base's product code
-  # preview: "./deploy-preview.sh {sha}" # optional: deploys a CR head for verify-ux
+  # preview: "./deploy-preview.sh {sha}" # optional: deploys a CR head for review/verify
   # light_verify: "npm run test:unit" # used when only paths.light_verify files changed
   # rollback: "./deploy.sh rollback <released-rev>" # release cites its last green rollback run
   # evidence_check: "gh attestation verify dist/app.tar.gz --repo my-org/my-repo" # exits 0 when every product.evidence kind exists for {sha}
@@ -140,24 +140,24 @@ paths:
   roadmap_doc: docs/roadmap.md          # what each milestone contains and its readiness
   importance_doc: AGENTS.md             # non-negotiables and what counts as important
   glossary: GLOSSARY.md                 # the words criteria use
-  review_checklist: docs/review-checklist.md # review-pr and implement-spec apply it
+  review_checklist: docs/review-checklist.md # review/review and build apply it
   test_standard: docs/test-standard.md  # what a test must be: tier, file, rule
-  security_policy: SECURITY.md          # triage-signal follows it for security reports
-  pr_template: .github/pull_request_template.md # the CR body implement-spec fills
-  sources_before_question: [docs/narrative.md, GLOSSARY.md] # escalate-to-human reads these first
+  security_policy: SECURITY.md          # plan/triage follows it for security reports
+  pr_template: .github/pull_request_template.md # the CR body build fills
+  sources_before_question: [docs/narrative.md, GLOSSARY.md] # escalate reads these first
   factory: [".agents/**", ".github/**", ".claude/**"] # a change only here is a factory change: no ticket
   light_verify: ["docs/**", "*.md", ".agents/**"] # a change only here runs commands.light_verify
   lane_areas: []                # paths that force the Full lane, e.g. auth, money, crypto
   no_proof: ["docs/**", "*.md"] # a product CR that changes only these needs no proof file (proofs-on-base passes)
 
 sizes: [XS, S, M, L, XL]        # smallest to largest
-ready_size_limit: M             # largest Size that may be Ready; above it shape splits
+ready_size_limit: M             # largest Size that may be Ready; above it plan/shape splits
 fast_lane_max_size: S           # Fast lane: this Size or smaller, no trigger, no lane_areas path
 priorities: [P0, High, Default, Low] # first is the highest
-p0_setters: [owner, triage-signal] # who may set the first priority
+p0_setters: [owner, plan/triage] # who may set the first priority
 max_subissue_depth: 1           # sub-issues of sub-issues are not allowed beyond this
 spec_marker: "spec.md"          # first line of the spec comment
-stall_minutes: 60               # a ready CR with a required check red or missing this long returns to review-pr; also how long an unfinished
+stall_minutes: 60               # a ready CR with a required check red or missing this long returns to review/review; also how long an unfinished
                                 # run blocks a second dispatch: keep it above the longest stage run
 parallel_agents: 3              # most subagents running at once
 
@@ -167,8 +167,8 @@ cycle:                          # Run one cycle (sdlc skill)
   time_budget_minutes: 45       # start nothing new after this; keep it below the runner job timeout (templates: 60)
   failure_limit: 2              # a step failing in this many heartbeats in a row is escalated
   dedupe_minutes: 10            # a second dispatch of the same skill and subject this soon is a double fire: skipped (0: no dispatch lock at all)
-  max_rework: 3                 # unset: 3. review-pr sends a CR back this many times at most; the next REMEDIATION REQUIRED goes to escalate-to-human
-  # max_tokens_per_ticket: 2000000 # unset: no limit. A ticket whose runs reported more tokens in total gets no further dispatch and goes to escalate-to-human; ledger summary marks it overBudget
+  max_rework: 3                 # unset: 3. review/review sends a CR back this many times at most; the next REMEDIATION REQUIRED goes to escalate
+  # max_tokens_per_ticket: 2000000 # unset: no limit. A ticket whose runs reported more tokens in total gets no further dispatch and goes to escalate; ledger summary marks it overBudget
 
 heartbeat:
   ticket: ""                    # id of the ticket that holds heartbeat comments; keep it off every route. init sets it on a local
@@ -178,8 +178,8 @@ heartbeat:
                                 # in a Cancelled status. Put its id here
 
 learning:                       # the self-improvement loop
-  enabled: false                # judge-run and improve-factory run only when true; set it with agent_command
-  every_cycles: 20             # run improve-factory every N cycles
+  enabled: false                # learn/judge and learn/improve run only when true; set it with agent_command
+  every_cycles: 20             # run learn/improve every N cycles
   min_evidence_runs: 5          # runs of evidence a failure needs before a change is proposed
   bench_size: 20                # cases per bench run; at least bench_min_cases
   bench_min_cases: 20           # bench compare needs at least this many shared cases, else regressed
@@ -187,4 +187,4 @@ learning:                       # the self-improvement loop
   # bench_budget: { max_runs: 60, max_minutes: 120 } # unset: no cap. bench run refuses a plan over max_runs (cases x trials) unless --allow-over-budget; past max_minutes it starts no new case and records the rest skipped: budget, which compare and report treat as incomplete. No token cap: bench results carry no token count
   auto_merge_classes: []        # classes that merge without the factory owner (only tuning may be listed; guardrail never).
                                 #   Keep [] until a bench baseline exists, then [tuning].
-  judge_tier: fast              # tier judge-run scores on (fast | balanced | deep)
+  judge_tier: fast              # tier learn/judge scores on (fast | balanced | deep)

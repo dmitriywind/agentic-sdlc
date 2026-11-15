@@ -1,6 +1,6 @@
 // The step library: Given/When/Then register a definition; the runner matches a step's text against all of them
 // (the keyword does not matter, as in Cucumber). {string} is "quoted" or 'quoted', {int} a whole number, {word} a
-// run of non-space characters. A RegExp works too: its capture groups are the arguments (as strings).
+// run of non-space characters. Inside "double quotes" a \" is a quote. A RegExp works too: its capture groups are the arguments (as strings).
 import type { DataTable } from './gherkin.ts';
 import type { World } from './world.ts';
 
@@ -13,7 +13,7 @@ export type StepDef = { source: string | RegExp; re: RegExp; casts: ((v: string)
 export const defs: StepDef[] = [];
 
 const PLACEHOLDERS: Record<string, [string, (v: string) => unknown]> = {
-  string: [`"([^"]*)"|'([^']*)'`, (v) => v],
+  string: ['', (v) => v],
   int: ['(-?\\d+)', (v) => Number(v)],
   word: ['(\\S+)', (v) => v],
 };
@@ -24,7 +24,7 @@ function compile(pattern: string | RegExp): { re: RegExp; casts: ((v: string) =>
   let out = '';
   for (const part of pattern.split(/(\{(?:string|int|word)\})/)) {
     const m = /^\{(string|int|word)\}$/.exec(part);
-    if (m) { casts.push(PLACEHOLDERS[m[1]][1]); out += m[1] === 'string' ? `(?:"([^"]*)"|'([^']*)')` : PLACEHOLDERS[m[1]][0]; }
+    if (m) { casts.push(PLACEHOLDERS[m[1]][1]); out += m[1] === 'string' ? `(?:"((?:[^"\\\\]|\\\\.)*)"|'([^']*)')` : PLACEHOLDERS[m[1]][0]; }
     else out += part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
   return { re: new RegExp(`^${out}$`), casts };
@@ -51,7 +51,7 @@ export function match(def: StepDef, text: string): unknown[] | undefined {
     let g = 0;
     for (const cast of def.casts) {
       const isString = cast === PLACEHOLDERS.string[1];
-      if (isString) { out.push(groups[g] ?? groups[g + 1]); g += 2; } else { out.push(cast(groups[g])); g += 1; }
+      if (isString) { out.push((groups[g] ?? groups[g + 1]).replace(/\\(["\\])/g, '$1')); g += 2; } else { out.push(cast(groups[g])); g += 1; }
     }
     return out;
   }

@@ -17,7 +17,8 @@ test('plugin agents: one per tier plus a reviewer that reads files and runs only
     const f = front(read(`agents/sdlc-${tier}.md`));
     assert.equal(f.name, `sdlc-${tier}`);
     assert.equal(f.model, 'inherit'); // the tier's model is a binding value: init writes it into the project's agent
-    assert.match(f.description, new RegExp(`metadata\\.tier is ${tier}`));
+    assert.match(f.description, new RegExp(`whose tier is ${tier}`));
+    assert.doesNotMatch(f.description, /skill step|metadata\.tier/); // a step has the tier, not a skill
   }
   const r = front(read('agents/sdlc-reviewer.md'));
   const tools = r.tools.split(/,\s*/);
@@ -25,6 +26,8 @@ test('plugin agents: one per tier plus a reviewer that reads files and runs only
   assert.ok(tools.includes('Read') && tools.includes('Bash') && tools.includes('mcp__plugin_agentic-sdlc_agentic-sdlc__*'));
   assert.match(r.disallowedTools, /Edit, Write/);
   assert.match(r.maxTurns, /^\d+$/);
+  assert.match(r.description, /review\/review step/);
+  assert.doesNotMatch(r.description, /review-pr/);
   const files: string[] = JSON.parse(read('package.json')).files;
   for (const d of ['agents', 'bin', 'evals', 'hooks', '.claude-plugin']) assert.ok(files.includes(d), d);
   for (const f of readdirSync(join(root, 'agents'))) {
@@ -38,6 +41,13 @@ test('bin/agentic-sdlc is executable and runs the plugin build when the project 
   const r = spawnSync('node', [join(root, 'bin/agentic-sdlc'), '--version'], { env: { ...process.env, CLAUDE_PROJECT_DIR: join(root, 'test') }, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout.trim(), JSON.parse(read('package.json')).version);
+});
+
+test('plugin evals name the new skills, never an old skill name', () => {
+  const dir = join(root, 'evals');
+  for (const c of readdirSync(dir)) for (const g of readdirSync(join(dir, c, 'graders')))
+    assert.doesNotMatch(read(`evals/${c}/graders/${g}`), /triage-signal|judge-run|improve-factory|verify-ux|escalate-to-human|implement-spec|review-pr/, `${c}/${g}`);
+  assert.match(read('evals/release-not-model-invoked/graders/no-release-skills.md'), /ship\|learn/);
 });
 
 test('plugin evals: each case has a real prompt and graders with a type', () => {

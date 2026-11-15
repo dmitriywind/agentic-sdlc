@@ -21,7 +21,9 @@ export class Outcome {
   stdout: string;
   stderr: string;
   constructor(code: number, stdout: string, stderr: string) { this.code = code; this.stdout = stdout; this.stderr = stderr; }
-  json(): any { return JSON.parse(this.stdout); } // eslint-disable-line @typescript-eslint/no-explicit-any
+  json(): any {
+    try { return JSON.parse(this.stdout); } catch { throw new Error(`the command printed no JSON (exit ${this.code}):\n${this.output}`); }
+  } // eslint-disable-line @typescript-eslint/no-explicit-any
   /** Both streams: what the user would see in the terminal. */
   get output() { return this.stdout + this.stderr; }
 }
@@ -32,6 +34,14 @@ const merge = (a: any, b: any): any => { // eslint-disable-line @typescript-esli
   for (const [k, v] of Object.entries(b)) out[k] = merge(out[k], v);
   return out;
 };
+
+/** Splits a command line into words, honouring 'single' and "double" quotes. */
+export function splitArgs(line: string): string[] {
+  const out: string[] = [];
+  const re = /(?:[^\s'"]+|'[^']*'|"[^"]*")+/g;
+  for (const m of line.match(re) ?? []) out.push(m.replace(/'([^']*)'|"([^"]*)"/g, (_x, a, b) => a ?? b));
+  return out;
+}
 
 export class World {
   private cleanups: (() => void)[] = [];
@@ -77,8 +87,10 @@ export class World {
   /** Runs `agentic-sdlc --root <project> ...args` and keeps the outcome in `last`. */
   cli(...args: string[]): Outcome {
     this.writeBinding();
-    return (this.last = this.spawn([BIN, '--root', this.root, ...args]));
+    return (this.last = this.spawn([BIN, '--root', this.root, ...args], undefined, this.root));
   }
+  /** The same, from one line typed as in a shell: words split on spaces, 'single' or "double" quotes group (and may be empty). */
+  cliLine(line: string): Outcome { return this.cli(...splitArgs(line)); }
   /** Runs a node script with an optional stdin. */
   spawn(argv: string[], input?: string, cwd?: string): Outcome {
     const r = spawnSync(process.execPath, ['--no-warnings', ...argv], { input, cwd, encoding: 'utf8', env: { ...process.env, ...this.env } });

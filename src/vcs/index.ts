@@ -11,7 +11,7 @@ export function createVcs(ctx: AdapterContext): Vcs {
 }
 
 /** The flags each verb accepts; anything else is a usage error. */
-const VERBS: Record<string, VerbSpec> = {
+export const VERBS: Record<string, VerbSpec> = {
   start: {}, head: {}, base: {}, push: {}, cut: {}, tag: {}, drop: {}, 'checkout-tests': {},
   changed: { value: ['since'] },
   tags: { value: ['prefix'] },

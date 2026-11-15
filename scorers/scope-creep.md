@@ -1,6 +1,6 @@
 ---
 name: scope-creep
-applies_to: [implement-spec, review-pr]
+applies_to: [build, review/review]
 scale: pass-fail
 ---
 

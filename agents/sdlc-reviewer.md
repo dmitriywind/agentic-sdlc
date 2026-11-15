@@ -1,6 +1,6 @@
 ---
 name: sdlc-reviewer
-description: Runs the review-pr skill on one change request in a fresh context. It reads files and runs only the agentic-sdlc CLI and MCP tools; it cannot edit files or run the CR's code. The sdlc skill hands every review-pr step to this agent.
+description: Runs the review/review step on one change request in a fresh context. It reads files and runs only the agentic-sdlc CLI and MCP tools; it cannot edit files or run the CR's code. The sdlc skill hands every review/review step to this agent.
 model: inherit
 tools: Read, Grep, Glob, Skill, Bash, mcp__plugin_agentic-sdlc_agentic-sdlc__*
 disallowedTools: Edit, Write, NotebookEdit, Agent

@@ -41,7 +41,7 @@ test('resolveExecutor and agentCommand pick the template per kind', () => {
   const vars = { model: 'm', ticket: '7', prompt_file: 'p.md', workdir: 'w' };
   const q = (s: string) => quote(s);
   assert.equal(agentCommand(resolveExecutor('harness', b), b, vars), `agent --model ${q('m')} --prompt ${q('p.md')} --cwd ${q('w')}`);
-  assert.equal(agentCommand(resolveExecutor('bot', b), b, vars), `bot ${q('implement-spec')} ${q('7')} ${q('p.md')} ${q('w')}`);
+  assert.equal(agentCommand(resolveExecutor('bot', b), b, vars), `bot ${q('build')} ${q('7')} ${q('p.md')} ${q('w')}`);
   assert.equal(agentCommand(resolveExecutor('{"kind":"command","run":"x {model}"}', b), b, vars), `x ${q('m')}`);
   assert.throws(() => agentCommand(resolveExecutor('hook', b), b, vars), /cannot run on the bench/);
   assert.throws(() => resolveExecutor('nope', b), /no executor/);
@@ -117,7 +117,7 @@ test('runBench: the agent never sees the oracle; verify runs in a fresh tree wit
       agentDir = cwd;
       assert.equal(existsSync(join(cwd, 'test/a.test.ts')), false, 'oracle visible to the agent');
       assert.equal(readFileSync(join(cwd, 'src/a.ts'), 'utf8'), 'old');
-      assert.match(readFileSync(promptOf(line), 'utf8'), /implement-spec[\\/]SKILL\.md[\s\S]*do it/);
+      assert.match(readFileSync(promptOf(line), 'utf8'), /build[\\/]SKILL\.md[\s\S]*do it/);
       // the agent edits product code, games the tests and the verify config, writes its own oracle
       writeFileSync(join(cwd, 'src/a.ts'), 'agent');
       writeFileSync(join(cwd, 'src/b.ts'), 'new');
@@ -152,7 +152,7 @@ test('runBench --factory runs the candidate skill AND binding', async () => {
   const { vcs } = fakeVcs({
     base: { 'src/a.ts': 'old' },
     head: { 'src/a.ts': 'x', 'test/a.test.ts': 'oracle' },
-    fac: { '.agents/binding.yml': JSON.stringify(facBinding), '.agents/skills/implement-spec/SKILL.md': 'candidate' },
+    fac: { '.agents/binding.yml': JSON.stringify(facBinding), '.agents/skills/sdlc-build/SKILL.md': 'candidate' },
   });
   const calls: string[] = [];
   const exec = (_c: string, args: string[], o?: { env?: NodeJS.ProcessEnv }) => {
@@ -348,4 +348,13 @@ test('buildCases reads a bounded list of merged CRs: the newest few hundred by d
     { state: 'merged', limit: 500, since: undefined },
     { state: 'merged', limit: 7, since: '2026-01-01' },
   ]);
+});
+
+test('benchStepFile finds the build step in the pack of a tree, else the copied-install path', async () => {
+  const { benchStepFile, BENCH_STEP } = await import('../src/bench.ts');
+  const { packRoot } = await import('./skillfix.ts');
+  assert.equal(BENCH_STEP, 'build');
+  assert.match(benchStepFile(packRoot()), /\.agents[\\/]skills[\\/]sdlc-build[\\/]SKILL\.md$/);
+  assert.match(benchStepFile(packRoot('')), /\.agents[\\/]skills[\\/]build[\\/]SKILL\.md$/); // a package-named pack
+  assert.match(benchStepFile(tmpdir()), /sdlc-build[\\/]SKILL\.md$/);
 });

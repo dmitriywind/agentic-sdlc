@@ -16,7 +16,7 @@ export function createForge(ctx: AdapterContext): Forge {
 }
 
 /** The flags each verb accepts; anything else is a usage error. */
-const VERBS: Record<string, VerbSpec> = {
+export const VERBS: Record<string, VerbSpec> = {
   open: { value: ['source', 'title', 'body-file'], bool: ['draft'] },
   view: { value: ['sha'] },
   diff: {},

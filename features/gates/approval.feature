@@ -232,3 +232,9 @@ Feature: Gate human-approval
         | a/*.md       | a/b/c.md                     | product-full |
         | a?.md        | ab.md                        | guardrail |
         | a.md         | axmd                         | product-full |
+
+    Scenario: A CR that changes product and factory paths is a guardrail CR
+      Given a CR that changes "src/app.ts"
+      And the CR also changes ".agents/binding.yml"
+      When the approval gate runs
+      Then the CR class is "guardrail"

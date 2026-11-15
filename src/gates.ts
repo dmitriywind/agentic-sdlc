@@ -1,6 +1,6 @@
 // Repo gates, run by CI. Mechanism only: every process value comes from the binding.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse } from 'yaml';
 import type { AdapterContext, Binding, Board, CR, CrCommit, Forge, PortCli, Review, Vcs } from './ports.ts';
@@ -8,10 +8,13 @@ import { ownersFor } from './ports.ts';
 import { BINDING_PATH, shippedOptions } from './binding.ts';
 import { PROOF_FILE, fill, rule, shell } from './bench.ts';
 import { UsageError, guard, parseArgs } from './forge/util.ts';
-import { createBoard } from './board/index.ts';
-import { createForge } from './forge/index.ts';
-import { createVcs } from './vcs/index.ts';
+import { createBoard, VERBS as BOARD_VERBS } from './board/index.ts';
+import { createForge, VERBS as FORGE_VERBS } from './forge/index.ts';
+import { createVcs, VERBS as VCS_VERBS } from './vcs/index.ts';
+import { GROUPS } from './cli.ts';
 import { matches, selectComments, verdictOf } from './comments.ts';
+import { forbiddenHits, frontmatter, logicalName, readSkills, scorerTargets, skillOf, stepIdOf, TIER_NAMES } from './skills.ts';
+import { BENCH_STEP } from './bench.ts';
 import { changeMergedEvent, deployEvent, emitGateEvent } from './telemetry.ts';
 
 export interface Deps {
@@ -64,21 +67,13 @@ export function diffPaths(diff: string): string[] | null {
 
 const TUNING_KEYS = ['models']; // cycle.*, stall_minutes, parallel_agents are guardrail: the bench cannot measure them
 const SKILL_MD = /^\.agents\/skills\/([^/]+)\/SKILL\.md$/;
-const TIERS = ['fast', 'balanced', 'deep'];
+const TIERS = TIER_NAMES;
 
-/** Frontmatter (parsed) and body of a markdown file; undefined when either is missing or not YAML. */
-export function frontmatter(text: string): { fm: Record<string, any>; body: string } | undefined {
-  const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(text);
-  if (!m) return undefined;
-  try {
-    const fm = parse(m[1]);
-    return fm && typeof fm === 'object' && !Array.isArray(fm) ? { fm, body: m[2].replace(/\r\n/g, '\n') } : undefined;
-  } catch { return undefined; }
-}
+export { frontmatter };
 
 /**
  * Skills with a bench suite: `.agents/bench/suites/*.json` holding at least one case. A suite's
- * `skill` names its skill; absent, implement-spec (the skill the bench replays). Read from the root:
+ * `skill` names a step id or a skill; absent, the step the bench replays. Read from the root:
  * a CR that touches a suite is guardrail anyway, so the root's suites are the base's.
  */
 export function benchedSkills(root: string): Set<string> {
@@ -88,14 +83,19 @@ export function benchedSkills(root: string): Set<string> {
   for (const f of readdirSync(dir).filter((n) => n.endsWith('.json'))) {
     try {
       const suite = JSON.parse(readFileSync(join(dir, f), 'utf8'));
-      if (Array.isArray(suite?.cases) && suite.cases.length) out.add(typeof suite.skill === 'string' ? suite.skill : 'implement-spec');
+      if (Array.isArray(suite?.cases) && suite.cases.length) out.add(skillOf(stepIdOf(typeof suite.skill === 'string' ? suite.skill : BENCH_STEP)));
     } catch { /* an unreadable suite benches nothing */ }
   }
   return out;
 }
 
-const tierOf = (fm: Record<string, any>) => fm.metadata?.tier;
-const withoutTier = (fm: Record<string, any>) => ({ ...fm, metadata: { ...fm.metadata, tier: undefined } });
+/** Every tier a skill's frontmatter sets: metadata.tier, and metadata.steps.<step>.tier. */
+const tiersOf = (fm: Record<string, any>) => ({ tier: fm.metadata?.tier, steps: Object.fromEntries(Object.entries<any>(fm.metadata?.steps ?? {}).map(([k, v]) => [k, v?.tier])) });
+const withoutTier = (fm: Record<string, any>) => ({
+  ...fm,
+  metadata: { ...fm.metadata, tier: undefined, ...(fm.metadata?.steps && typeof fm.metadata.steps === 'object' ? { steps: Object.fromEntries(Object.entries<any>(fm.metadata.steps).map(([k, v]) => [k, { ...v, tier: undefined }])) } : {}) },
+});
+const tiersValid = (fm: Record<string, any>) => { const t = tiersOf(fm); return [t.tier, ...Object.values(t.steps)].every((x) => x === undefined || TIERS.includes(x as string)) && (t.tier !== undefined || Object.keys(t.steps).length > 0); };
 
 /** product | tuning | guardrail. Anything not provably tuning under paths.factory is guardrail. */
 export async function classify(d: Deps, cr: CR, diff: string | undefined): Promise<'product' | 'tuning' | 'guardrail'> {
@@ -113,9 +113,9 @@ export async function classify(d: Deps, cr: CR, diff: string | undefined): Promi
     if (skill) {
       // Tuning only when the one change is metadata.tier and the skill has a bench suite to measure it.
       const [b, h] = [at(p, cr.baseSha), at(p, cr.headSha)].map((t) => (t === undefined ? undefined : frontmatter(t)));
-      if (!b || !h || b.body !== h.body || !TIERS.includes(tierOf(h.fm)) || tierOf(b.fm) === tierOf(h.fm)) return 'guardrail';
+      if (!b || !h || b.body !== h.body || !tiersValid(h.fm) || isDeepStrictEqual(tiersOf(b.fm), tiersOf(h.fm))) return 'guardrail';
       if (!isDeepStrictEqual(withoutTier(b.fm), withoutTier(h.fm))) return 'guardrail';
-      if (!(benched ??= benchedSkills(d.root)).has(skill)) return 'guardrail';
+      if (!(benched ??= benchedSkills(d.root)).has(logicalName(skill))) return 'guardrail';
       continue;
     }
     if (p !== BINDING_PATH) return 'guardrail';
@@ -561,43 +561,61 @@ export async function signalOnRed(d: Deps, id: string) {
   return { created: true, id: item.id };
 }
 
-/** Skill frontmatter (name, description, metadata.tier), relative links, scorer frontmatter. A top-level tier still passes, with a warning. */
+/** Every markdown file under `dir`, as paths relative to `dir`. */
+const mdFiles = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? mdFiles(join(dir, e.name)).map((f) => `${e.name}/${f}`) : e.name.endsWith('.md') ? [e.name] : []));
+
+/** The verbs of each group that has them, from the CLI's own tables. A group with no verb (init, dispatch ...) is absent. */
+export function cliVerbs(): Record<string, Set<string>> {
+  const out: Record<string, Set<string>> = { board: new Set(Object.keys(BOARD_VERBS)), forge: new Set(Object.keys(FORGE_VERBS)), vcs: new Set(Object.keys(VCS_VERBS)) };
+  for (const g of ['gate', 'ledger', 'bench']) out[g] = new Set(GROUPS[g][2].split(':')[0].split(/\s+/).filter((w) => /^[a-z][a-z-]*$/.test(w)));
+  return out;
+}
+
+/**
+ * The installed skill pack and the scorers: the loader's problems (frontmatter, steps and their files), links between
+ * skill files, forbidden content (FORBIDDEN in skills.ts), every `agentic-sdlc <group> <verb>` and `dispatch <id>`
+ * a skill file names, and scorers' `applies_to`. A top-level tier still passes, with a warning.
+ */
 export function skillRegression(root: string): { errors: string[]; warnings: string[] } {
   const dir = join(root, '.agents', 'skills');
   if (!existsSync(dir)) return { errors: [`${dir} does not exist`], warnings: [] };
-  const errors: string[] = [], warnings: string[] = [];
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (!e.isDirectory()) continue;
-    const file = join(dir, e.name, 'SKILL.md');
-    if (!existsSync(file)) { errors.push(`${e.name}: SKILL.md missing`); continue; }
+  const pack = readSkills(dir);
+  const errors = [...pack.errors], warnings = [...pack.warnings];
+  const verbs = cliVerbs();
+  const ids = new Set(pack.steps.map((x) => x.id));
+  for (const sk of pack.skills) for (const rel of mdFiles(sk.dir)) {
+    const file = join(sk.dir, rel), name = `${sk.name}/${rel}`;
     const text = readFileSync(file, 'utf8');
-    const fm = frontmatter(text)?.fm;
-    if (!fm) { errors.push(`${e.name}: no frontmatter`); continue; }
-    for (const k of ['name', 'description']) if (typeof fm[k] !== 'string' || !fm[k].trim()) errors.push(`${e.name}: frontmatter ${k} missing`);
-    let tier = fm.metadata?.tier;
-    if (tier === undefined && fm.tier !== undefined) { tier = fm.tier; warnings.push(`${e.name}: top-level tier is deprecated; move it to metadata.tier`); }
-    if (tier === undefined) errors.push(`${e.name}: frontmatter metadata.tier missing`);
-    else if (!TIERS.includes(tier)) errors.push(`${e.name}: tier ${tier} invalid`);
     for (const m of text.matchAll(/\]\(([^)\s]+)\)/g)) {
       const link = m[1].split('#')[0];
       if (!link || /^[a-z][a-z0-9+.-]*:/i.test(link)) continue;
-      if (!existsSync(resolve(dirname(file), link))) errors.push(`${e.name}: broken link ${m[1]}`);
+      if (!existsSync(resolve(dirname(file), link))) errors.push(`${rel === 'SKILL.md' ? sk.name : name}: broken link ${m[1]}`);
     }
+    for (const h of forbiddenHits(text)) errors.push(`${relative(root, file).replaceAll('\\', '/')}:${h.line}: forbidden '${h.match}' (${h.reason})`);
+    text.split(/\r?\n/).forEach((l, i) => {
+      for (const m of l.matchAll(/agentic-sdlc\s+(board|forge|vcs|gate|ledger|bench)\s+([a-z][a-z-]*)/g))
+        if (!verbs[m[1]].has(m[2])) errors.push(`${relative(root, file).replaceAll('\\', '/')}:${i + 1}: 'agentic-sdlc ${m[1]} ${m[2]}' is not a verb (${m[1]}: ${[...verbs[m[1]]].join(' ')})`);
+      for (const m of l.matchAll(/agentic-sdlc\s+dispatch\s+([a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)?)/g))
+        if (!ids.has(m[1])) errors.push(`${relative(root, file).replaceAll('\\', '/')}:${i + 1}: 'agentic-sdlc dispatch ${m[1]}' is not a step id (${[...ids].join(' ')})`);
+    });
   }
   const sdir = join(root, '.agents', 'scorers');
-  if (existsSync(sdir)) for (const f of readdirSync(sdir).filter((n) => n.endsWith('.md'))) errors.push(...scorerErrors(f, readFileSync(join(sdir, f), 'utf8')));
+  const targets = scorerTargets(pack);
+  if (existsSync(sdir)) for (const f of readdirSync(sdir).filter((n) => n.endsWith('.md'))) errors.push(...scorerErrors(f, readFileSync(join(sdir, f), 'utf8'), targets));
   return { errors, warnings };
 }
 
 /** A scorer file's frontmatter: name, applies_to (list or "*"), scale. */
-function scorerErrors(f: string, text: string): string[] {
+function scorerErrors(f: string, text: string, targets: Set<string>): string[] {
   let fm: any;
   try { fm = parse(/^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? ''); } catch { return [`scorers/${f}: frontmatter is not YAML`]; }
   if (!fm || typeof fm !== 'object') return [`scorers/${f}: no frontmatter`];
   const errors: string[] = [];
   if (typeof fm.name !== 'string' || !fm.name) errors.push(`scorers/${f}: frontmatter name missing`);
   const at = fm.applies_to;
-  if (at !== '*' && !(Array.isArray(at) && at.length && at.every((s: unknown) => typeof s === 'string' && s))) errors.push(`scorers/${f}: applies_to must be "*" or a list of skills`);
+  if (at !== '*' && !(Array.isArray(at) && at.length && at.every((s: unknown) => typeof s === 'string' && s))) errors.push(`scorers/${f}: applies_to must be "*" or a list of step ids or skills`);
+  else if (Array.isArray(at)) for (const t of at) if (!targets.has(t)) errors.push(`scorers/${f}: applies_to '${t}' names no step or skill (steps: ${[...targets].join(', ')})`);
   if (!['pass-fail', '0-4'].includes(fm.scale)) errors.push(`scorers/${f}: scale ${fm.scale} invalid`);
   return errors;
 }

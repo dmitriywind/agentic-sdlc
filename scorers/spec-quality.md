@@ -1,6 +1,6 @@
 ---
 name: spec-quality
-applies_to: [shape]
+applies_to: [plan/shape]
 scale: 0-4
 ---
 

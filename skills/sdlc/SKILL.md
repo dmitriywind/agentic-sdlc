@@ -1,210 +1,131 @@
 ---
 name: sdlc
-description: The process map of the agentic SDLC - statuses, who moves what, the needs-human hold, lanes, change lines and which skill acts next. Load first when you start work on a ticket, do not know your next skill, run a cycle, or edit a skill.
+description: The navigator of the agentic SDLC - which step acts next on a ticket or a change request, and one unattended cycle. Load first to run a cycle, to find the next step for a ticket, or before editing a skill.
 metadata:
   tier: fast
 ---
 
 # SDLC
 
-The one navigator. It says where a ticket stands and which skill acts next; how to do a step lives
-in that step's skill. Under Claude Code the plugin names skills `/agentic-sdlc:<skill>` (this one
-is `/agentic-sdlc:sdlc`); elsewhere they are plain `<skill>`. Both mean the same skill.
+Seven skills, one per phase. A skill's steps are the units that run: `dispatch <skill>/<step>`, or
+`dispatch <skill>` for a one-step skill. Every step follows the [contract](references/contract.md).
+Statuses and Shipped: [statuses.md](references/statuses.md). Fields, lanes, sub-issues:
+[board.md](references/board.md).
 
-There are three layers:
-
-- **Process: these skills.** Generic and reusable. Every process rule lives here. No project value.
-- **Binding: `.agents/binding.yml`.** Every project value: board, statuses, labels, commands, paths,
-  owners, model tiers. A project replaces only the binding, never the skills.
-- **Ports: the `agentic-sdlc` CLI.** Board, forge and VCS steps are CLI verbs, never a vendor
-  command. See [`references/ports.md`](references/ports.md). Repo gates run in CI, not in agents.
-
-**Harness**: the agent product running the cycle (`init --harness`). **Executor**: who runs one
-skill (`executors.<skill>.kind`, of which `harness` is one).
-
-## Common contract
-
-Every step skill follows [`references/contract.md`](references/contract.md): words, roles, trust,
-the move guard, the hold, the closing comment. It is the one home of those rules.
+| Skill | Phase | Steps |
+|---|---|---|
+| `plan` | Signals, Ideas, Backlog to Ready | `triage`, `groom`, `shape` |
+| `build` | Ready to In review | one |
+| `review` | In review to merged, or sent back | `review`, `verify` |
+| `ship` | the release line (`product.delivery: release-line` only) | one |
+| `learn` | the learning loop (`learning.enabled` only) | `judge`, `improve` |
+| `escalate` | any status: classify, ask, hold | one, run inside the calling step |
 
 ## Routing
 
-Pick the first row that matches. Skip a held ticket.
+**Tickets.** The first row that matches; a held ticket matches none.
 
-| Ticket state | Skill |
+| Ticket | Dispatch |
 |---|---|
-| Status Ideas | none; humans only |
-| Status Signals | [`triage-signal`](../triage-signal/SKILL.md) |
-| Status Backlog with label `board.labels.release` (a release request), not waiting on a Product owner reply to its proposal | [`release`](../release/SKILL.md), dispatched with `--ticket <request>` (`product.delivery: release-line` only) |
-| Status Backlog, no Priority; a plan or conversation that must become tickets | [`backlog-grooming`](../backlog-grooming/SKILL.md) |
-| Status Backlog with a Priority, no [open blocker](references/statuses.md#open-blocker), not in `board.later_milestone`, no children (an initiative is never routed) | [`shape`](../shape/SKILL.md) |
-| Status Ready or In progress, with an open CR a person opened (author outside `owners.bots`) | [`implement-spec`](../implement-spec/SKILL.md): it hands the ticket to review, outside `cycle.max_implementations` |
-| Status Ready | [`implement-spec`](../implement-spec/SKILL.md) |
-| Status In progress | [`implement-spec`](../implement-spec/SKILL.md) |
-| Status In review, no open CR closes it | [`implement-spec`](../implement-spec/SKILL.md): back to In progress |
-| Status In review, draft CR | [`review-pr`](../review-pr/SKILL.md) (dispatches [`verify-ux`](../verify-ux/SKILL.md) for `computer-use` criteria) |
-| Status In review, ready CR behind the trunk | [`review-pr`](../review-pr/SKILL.md) |
-| Status In review, ready CR with no `review` status on its head | [`review-pr`](../review-pr/SKILL.md) |
-| Status In review, ready CR whose required check is red, or missing for longer than `stall_minutes` (never `review` or `human-approval`, which wait for a review and a person) | [`review-pr`](../review-pr/SKILL.md) |
-| Status In review, ready CR with every `required_checks` entry green on its head, still open | [`review-pr`](../review-pr/SKILL.md): it merges (step 11) |
-| Status In review, otherwise | none; approvals and auto-merge act |
-| Draft factory CR (only `paths.factory` changed, change line per `vcs.factory_change_pattern`) | [`review-pr`](../review-pr/SKILL.md), dispatched with `--cr` |
-| Open dependency CR (change line `dependabot/` or `renovate/`, no ticket) | [`review-pr`](../review-pr/SKILL.md), dispatched with `--cr` |
-| Status Done, a P0 ticket with Shipped On <env before last> and no open release request | [`release`](../release/SKILL.md): it opens the request itself (`product.delivery: release-line` only) |
-| Status Done, otherwise | none; gates write Shipped |
-| `ledger summary` shows `learning.due` | [`improve-factory`](../improve-factory/SKILL.md) |
-| Any working status, authority unclear | [`escalate-to-human`](../escalate-to-human/SKILL.md) |
+| Ideas | none: humans only |
+| Signals | `plan/triage` |
+| Backlog, label `board.labels.release` | `ship` |
+| Backlog with children, every child closed | `plan/groom` (it closes the initiative) |
+| Backlog with children | none: an initiative is never shaped or built |
+| Backlog, no Priority | `plan/groom` |
+| Backlog with a Priority, no open blocker, milestone not `board.later_milestone` | `plan/shape` |
+| Backlog otherwise | none |
+| Ready or In progress, closed by an open CR a person opened | `build` (it hands the ticket to review) |
+| Ready | `build` |
+| In progress | `build` |
+| In review, no open CR closes it | `build` |
+| In review, an open CR closes it | that CR's queue row |
+| Done, P0, Shipped On <env before last>, no open release request names it | `ship` |
+| Done or Cancelled otherwise | none: gates write Shipped |
+
+**CRs.** `forge queue` gives each open CR one `action`. Act on a row whose ticket is at In review
+and not held, and on every row with no ticket (a factory or dependency CR).
+
+| Action | Do |
+|---|---|
+| `review` | `dispatch review/review --cr <n> [--ticket <ticket>]` |
+| `rework` | with a ticket, `dispatch build --ticket <ticket>`; with none, nothing: the verdict is the answer |
+| `land` | `forge land <n>`, then as the contract's Land says |
+| `sync` | `forge sync <n>`; for a CR a person opened, instead one `note` on the CR asking its author to update it, once per head |
+| `escalate` | `escalate` on the ticket (with none, on the CR), with the row's `reason` and `reworks` as evidence |
+| `wait` | nothing |
+
+**Learning.** When `ledger summary` shows `learning.judge`: `learn/judge` per unscored run. When it
+shows `learning.due`: `learn/improve`.
 
 ## Run one cycle
 
-One unattended run by a scheduler. Its numbers are the binding's `cycle` keys. On a fresh runner,
-run `commands.setup` first.
+One unattended run by a scheduler. On a fresh runner run `commands.setup` first. Each dispatch
+prints how its run goes: run the task it hands you in a fresh context with its own scratch folder,
+at most `parallel_agents` at once, or leave a run it started elsewhere. A review never runs in the
+context that built the CR. `{ skipped: true }` means the run is a double fire or still going: leave
+it.
 
-The orchestrator only routes, waits and writes the heartbeat. Each work item (one signal's
-triage, one shape, one implementation, one judge) goes to its own subagent with its own scratch
-folder, at most `parallel_agents` at once. Each starts with `agentic-sdlc dispatch <skill>
---ticket <id>` (`--cr <n>` for a factory CR; no subject for `improve-factory`); the binding's
-`executors` says who runs it (see Executors). A second dispatch of the same skill and subject
-while the first has not finished, prints `{ skipped: true }`: it is a double fire, or the first still
-runs; leave it ([Executors](references/executors.md) says how long).
+1. **Lock and read.** `dispatch sdlc --ticket <heartbeat.ticket>`; on `{ skipped: true }` stop and
+   write nothing. Then, once each: `board list`, `board holds`, `forge queue`, `ledger summary`, the
+   last `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --kind heartbeat --last
+   <n> --trusted`) and, when `product.slo` is set, `ledger measures`. Done when you know whether
+   `errorBudget.exhausted` is true.
+2. **Release holds.** `board release <id>` for every `board holds` row with `replied: true`; the
+   ticket routes in step 7 at its Status. Done when no row shows `replied: true` and the ids
+   released are in the heartbeat's `did`.
+3. **Idle exit.** When no unheld ticket matches a row that dispatches, no queue row asks for more
+   than `wait`, and `ledger summary` shows neither `learning.due` nor `learning.judge`: write the
+   idle heartbeat (step 9 with `runs: []`) and stop. Done when it and the done line are posted.
+4. **Judge.** For each run in the heartbeats since the last judge that has no `score`, except
+   `learn/judge` runs: `dispatch learn/judge --ticket <id> [--cr <n>] --run <run id> --run-model
+   <the row's model>` (the heartbeat ticket for a run with neither). `{ skip: true }` goes in
+   `errors`. Done when every unscored run is dispatched or named.
+5. **Learn.** When `learning.due`: `dispatch learn/improve`. It runs beside the next steps and writes
+   its own `learn` heartbeat. Done when dispatched.
+6. **Triage.** Every ticket at Signals, in the order `plan/triage` names. Done when each is
+   dispatched.
+7. **Route.** Dispatch by the Routing tables, in this order: release requests and Done P0 tickets;
+   hand-offs of CRs a person opened (no cap); In review tickets and CRs with no ticket, by their
+   queue row except `review`; In progress; Ready from the top, at most `cycle.max_implementations`
+   claims (no `feature` ticket while `errorBudget.exhausted`); Backlog, groom first, then shape
+   while Ready plus the shapes under way hold fewer than `cycle.min_ready`. When a run finishes,
+   `board get` its ticket; when it matches a further row, dispatch that in this cycle under the same
+   caps. Done when no finished ticket matches a further row, or the time budget is spent.
+8. **Review.** `forge queue` again, since this cycle may have opened CRs; act on every `review` row
+   not dispatched in this cycle. Done when each is dispatched.
+9. **Report.** One `board comment <heartbeat.ticket> --kind heartbeat --body-file <f>`, the body a
+   JSON object: `kind: cycle`, `at` (UTC end time), `factory` (`vcs head` sha of the trunk read),
+   `runs`, `errors` (`step`, `id`, `msg` per failed step), `did` (one line per result, with its id),
+   `learning` copied forward when `learning.enabled`, and `budget: exhausted` when step 1 found it.
+   One row in `runs` per run this cycle dispatched, except a run that writes its own heartbeat
+   (`learn/improve`, and a review that `dispatch` started elsewhere) (`id`, `skill` as
+   `<skill>/<step>`, `skillHash`, `ticket`, `cr`, `tier`, `model`, `executor`, `ref`, `tokens`,
+   `minutes`, `outcome`, `error`, `trace`); a value the run did not report is left out. `outcome`
+   is `done`, `sent_back`, `failed`, `escalated`, `timeout` or `capped`. Then the cycle's done line.
+   Done when both are posted.
 
-On Claude Code a `harness` step goes to the agent for its tier: `sdlc-<tier>` when the project has
-`.claude/agents/sdlc-<tier>.md` (its model comes from the binding's `models`), else the plugin's
-`agentic-sdlc:sdlc-<tier>`. Every `review-pr` step goes to `agentic-sdlc:sdlc-reviewer`, which can read
-files and run only `agentic-sdlc` commands, so it cannot run the CR's code.
+Rules for a cycle:
 
-A CR **needs a review** when it is open, a `review-pr` row of the Routing table matches it, and,
-for a draft CR, the newest `<!-- review-pr` report on it (`forge comments <n> --last 1 --marker
-"<!-- review-pr" --trusted`) is not for its head sha, or is for it but is neither a `Verdict:
-REMEDIATION REQUIRED` report nor a red-gate note whose `Signal: <id>` ticket is still open. A PASS
-leaves the CR ready, and a fixed outside cause clears a red gate, so such a draft waits on nobody.
-
-In order:
-
-1. **Read state.** First `dispatch sdlc --ticket <heartbeat.ticket>`: when it prints `{ skipped: true }`
-   another cycle is running; stop and write nothing. List the board once (`board list`). Read open CRs (`forge list --checks`), the last
-   `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --last <n> --marker
-   "<!-- heartbeat -->" --trusted`) and `ledger summary`. When `product.slo` is set (unset: no error budget), also
-   `ledger measures`: while it prints `errorBudget.exhausted: true`, the cycle claims no new `feature`
-   ticket (Ready to In progress in step 6) and works only bugs, Signals and the tickets and reviews
-   already in flight, and the heartbeat records `budget: exhausted`. Done when the budget state is
-   known, and no `feature` ticket moved from Ready to In progress in a cycle whose heartbeat says
-   `budget: exhausted`.
-1a. **Release holds.** For each held ticket in the listing (label `board.labels.human`): read its last
-   ask (`board comments <id> --last 1 --marker "### Needs human" --trusted`) and the replies after it
-   (`board comments <id> --author <a>`, with one `--author` for each entry of every owner role:
-   `owners.product`, `factory`, `operator`, `security`, `compliance`; never `owners.bots`). When one reply is newer than
-   the ask, `board label <id> remove <board.labels.human>`; the ticket routes in step 6 at the same
-   Status. A held ticket with no such reply stays held. Done when no held ticket has an owner reply
-   after its last ask, and the ids released are in the heartbeat's `did`.
-2. **Idle exit.** When no unheld ticket matches a Routing row the cycle dispatches (a Ready `feature`
-   ticket does not match while the error budget is exhausted; any skill but
-   `review-pr` when `forge.review_identity` is set), no CR needs a review, and `ledger summary` shows neither `learning.due` nor
-   `learning.judge` with an unscored run: write the idle heartbeat (`at`, `factory`, `runs: []`,
-   `errors: []`, and `learning` copied forward when `learning.enabled` is true), fire no review, and stop. Done when it is posted.
-3. **Judge.** When `ledger summary` shows `learning.judge` (true only when `learning.enabled`): for
-   each run in the newest heartbeats since the last judge step that has no `score` yet, except `judge-run` runs, `dispatch judge-run --ticket <id>` (`--cr <n>`; the heartbeat ticket for a
-   run with neither) `--run <run id> --run-model <the row's model>`. It prints
-   `{ skip: true }` when no independent model exists: name it in this heartbeat's `errors`.
-4. **Learn.** When step 1's `ledger summary` shows `learning.due` (due counts cycles, only when
-   `learning.enabled`), `dispatch improve-factory`. It runs beside the next steps and writes its own
-   `learn` heartbeat, so its row survives a cycle that times out; give it its own executor
-   (`executors.improve-factory`) when the bench would outlast the cycle's job timeout.
-5. **Triage Signals.** Every ticket at Signals, in the order `triage-signal` names.
-6. **Route.** Walk the unheld tickets and dispatch each by the Routing table, in this order:
-   - every release request, and every Done P0 the `release` rows match;
-   - every Ready or In progress ticket whose open CR a person opened (a hand-off, no cap);
-   - every ticket at In progress (rework, or a resumed implementation);
-   - Ready from the top, at most `cycle.max_implementations` new claims;
-   - Backlog: grooming for items with no Priority; shape while Ready plus the shapes under way hold
-     fewer than `cycle.min_ready` tickets;
-   - one identity (`forge.review_identity` empty): every CR that needs a review, to `review-pr`. Its
-     subagent starts with a fresh context and runs no CR code.
-
-   When a run finishes, read its ticket again (`board get <id>`). When the ticket now matches another
-   row the cycle dispatches (groomed to shape, shaped to Ready, implemented to In review with one
-   identity), dispatch that next step in this cycle,
-   under the same caps. Start no new step after `cycle.time_budget_minutes`. Done when no finished
-   ticket matches a further row, or the time budget is spent.
-7. **Report.** Write one heartbeat as [`references/heartbeat.md`](references/heartbeat.md) says. Its
-   runs include the judge runs of step 3 and, with one identity, the `review-pr` runs of step 6; the
-   `improve-factory` run is in its own `learn` heartbeat, and the review runtime writes a `review`
-   heartbeat for its runs, so every run is in the ledger once.
-8. **Review hand-off.** Only with a `forge.review_identity`: `forge list --checks` again, since this cycle may
-   have opened CRs. Fire the review runtime once, as the runner prompt says, only when a CR needs a
-   review. Done when it was fired, or no CR needs a review, or the binding has one identity.
-
-Rules for every step:
-
-- Route only by the Routing table. No cap other than `cycle.max_implementations`, `cycle.min_ready`,
-  `cycle.max_tokens_per_ticket` and an exhausted error budget (step 1) holds a routed ticket back.
-- A ticket the `ledger summary` `tickets` list marks `overBudget: true` (more tokens than
-  `cycle.max_tokens_per_ticket`; unset: no limit) gets no further dispatch: call `escalate-to-human`
-  (Money) with its tokens and runs.
-- A run that ends on its cap (`executors.<stage>.max_turns`, `max_tokens` or `max_minutes`; a cap the binding leaves unset does not exist) records
-  outcome `capped` with the cap in `error`; its ticket follows the same path as after a `timeout`
-  (a failed step: the rule below).
-- After `cycle.time_budget_minutes`, start nothing new, judge and learn included: wait for the running
-  subagents, then report. The next cycle judges the runs that have no score.
-  Keep `cycle.time_budget_minutes` below the runner's job timeout, so the heartbeat is always written.
-- A failed step goes into the heartbeat's `errors`, and the cycle goes on with the next step.
-- A step that failed in each of the last `cycle.failure_limit` heartbeats whose `factory` is this
-  cycle's trunk sha (`vcs head`) is not retried: a factory change gives the step a fresh start. Call
-  `escalate-to-human` on the step's ticket. A step with no ticket (read state, judge, learn) asks
-  `owners.factory` with one comment on the heartbeat ticket, as escalate-to-human step 4 does for a
-  run with no ticket: no label, no hold. The heartbeat is always written.
-
-## Executors
-
-The executor kinds, their fields and what `dispatch` prints are defined once, in
-[`references/executors.md`](references/executors.md). Every executor
-obeys the same skills and gates; a reviewer is never the implementer of the same CR.
-
-## The needs-human hold
-
-- A label (`board.labels.human`), not a status, set by `escalate-to-human` or on a
-  last-environment-failure Signal. It applies at Backlog, Ready, In progress and In review, and to
-  a Signal.
-- A held ticket keeps its Status. No automation moves it, except gate `merged` when its CR merges:
-  Done records the merge and the label stays.
-- Removing the label is the only release; the next run resumes at the same Status. A trusted owner
-  reply after the ticket's last `### Needs human` comment is a release too: step 1a of the cycle
-  removes the label and step 6 routes the ticket, so an owner who only comments is never stuck.
-
-## Statuses, board, lanes, gates
-
-- Statuses and Shipped: [`references/statuses.md`](references/statuses.md).
-- Board fields, Size, Priority, labels, milestones, Lanes and sub-issues:
-  [`references/board.md`](references/board.md).
-- Gates, required checks, approval and the In review hand-offs:
-  [`references/gates.md`](references/gates.md).
-
-## Branches and releases
-
-- Trunk-based on Git: one trunk (`vcs.trunk`), short-lived change lines matching
-  `vcs.change_pattern` in, release lines `vcs.release_prefix` out. No long-lived develop line. With
-  release-line delivery, a P0 fix starts release as soon as it is Done with Shipped On <env before
-  last>; the Product owner still approves the cut.
-- `implement-spec` writes the CR's one `Closes <id>` line; every later reader checks the CR's
-  `closes` against its change line.
-- A merge to the trunk moves the ticket to Done and deploys the first environment. With
-  `product.delivery: release-line` the last environment deploys from a release line after the Product
-  owner approves it; with `continuous` every environment deploys from the trunk. Agents never
-  approve it.
-- The tag is `vcs.tag_prefix` plus the version, created by the release pipeline at success in the
-  last environment.
-- Every CR gets an agent review from a fresh context. A Full-lane product CR also needs a human
-  approval per `forge.human_approval`; a `guardrail` factory CR needs the Factory owner's.
+- Route only by the Routing tables. Only `cycle.max_implementations`, `cycle.min_ready`, an
+  exhausted error budget and `cycle.max_tokens_per_ticket` hold a routed ticket back. A ticket
+  `ledger summary` marks `overBudget: true` gets no further dispatch: run `escalate` (Money) with
+  its tokens and runs.
+- After `cycle.time_budget_minutes` start nothing new, judge and learn included; wait for the
+  running steps, then report.
+- A failed step goes in `errors` and the cycle goes on. A run that ended on a cap of its executor is
+  `capped`, with the cap in `error`, and counts as failed.
+- A step that failed in each of the last `cycle.failure_limit` heartbeats with this `factory` sha is
+  not retried: run `escalate` (Repeat) on its ticket. A step with no ticket gets one `board comment
+  <heartbeat.ticket> --kind ask` to `owners.factory` instead: no hold. A factory change gives it a
+  fresh start.
 
 ## Editing skills
 
-- Short plain sentences. A rule has one home; elsewhere a pointer, never a copy.
-- The agent card routes and never rules: a promise and a pointer, no mechanism.
-- A skill holds process only; project values belong in the binding, domain rules in the docs the
-  card routes to.
-- A skill's description names what it is and the distinct cases that should trigger it.
-- A step skill points to [`references/contract.md`](references/contract.md), never to this file.
-- Every step ends on a checkable done condition. State the behaviour wanted, not the one banned.
-- Delete a sentence the agent would follow anyway. Prune stale lines when you touch a file.
-- New rules come only from [`improve-factory`](../improve-factory/SKILL.md), which owns the
-  evidence bar and the merge classes. Any change to skill text is class `guardrail`.
+- Plain short sentences. A rule has one home; elsewhere a pointer, never a copy. Words come from the
+  contract.
+- A skill holds process only: project values are binding keys, mechanism is the CLI's, domain rules
+  live in the docs the agent card routes to.
+- A step file points to the contract, lists numbered steps each ending on a checkable **Done when**,
+  then Rules. State the behaviour wanted, not the one banned.
+- New rules come only from `learn/improve`. Any change to skill text needs the Factory owner.
