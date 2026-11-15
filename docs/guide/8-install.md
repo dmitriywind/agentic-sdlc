@@ -34,7 +34,7 @@ install it.
 
 1. **Run `init`** with the command from [7. Choose your setup](7-choose.md), in the repo's root. It
    runs the package once from its Git tag, writes the pin `.agents/cli.json` and the launcher
-   `.agents/bin/agentic-sdlc`, adds `.agents/.cli/` and `.agents/work/` to `.gitignore`, and lists every file it writes.
+   `.agents/bin/agentic-sdlc`, adds `.cli/` and `work/` to `.agents/.gitignore`, and lists every file it writes.
    It writes nothing into `package.json` or `.npmrc`; a product that is not a Node project needs
    neither. npm older than 12 does not know `--allow-git`: drop the flag there.
 2. **Fill in `.agents/binding.yml`**. The file documents every key. Set at least the owners, the board

@@ -12097,7 +12097,7 @@ function missingBindingKeys(template, binding) {
   }
   return out;
 }
-function registerMcp(pkg, root, harness, force, log) {
+function registerMcp(pkg, root, harness, force, log, upgrade) {
   const snippet = readFileSync9(need2(pkg, `templates/mcp/${harness === "codex" ? "codex.toml" : harness + ".json"}`), "utf8");
   const rel = MCP_FILES.get(harness);
   if (!rel) {
@@ -12121,6 +12121,10 @@ ${snippet.trim()}`);
     const old = had?.command === "npx" && Array.isArray(had.args) && had.args.includes("agentic-sdlc");
     if (had && !force && !old) {
       log.push(`kept ${rel}`);
+      return;
+    }
+    if (upgrade && old) {
+      log.push(`kept ${rel}: its agentic-sdlc entry runs npx; change it in a product change to {"command":"${LAUNCHER}","args":["mcp"]}`);
       return;
     }
     doc.mcpServers = { ...doc.mcpServers, ...want.mcpServers };
@@ -12158,13 +12162,14 @@ function pinCli(inst, version3, ref, force) {
   inst.log.push(`${had ? "updated" : "wrote"} ${CLI_PIN} (ref ${want})`);
 }
 function ignoreCliCache(root, log) {
-  const file = join10(root, ".gitignore");
+  const file = join10(root, ".agents", ".gitignore");
   let text = existsSync8(file) ? readFileSync9(file, "utf8") : "";
   const add = IGNORED.filter((e) => !new RegExp(`^/?${e.slice(0, -1).replace(/\./g, "\\.")}/?\\s*$`, "m").test(text));
   if (!add.length) return;
   text += (text && !text.endsWith("\n") ? "\n" : "") + add.map((e) => e + "\n").join("");
+  mkdirSync4(dirname4(file), { recursive: true });
   writeFileSync5(file, text);
-  log.push(`added ${add.join(", ")} to .gitignore`);
+  log.push(`added ${add.join(", ")} to .agents/.gitignore`);
 }
 function oldPinHint(root, log) {
   try {
@@ -12174,7 +12179,7 @@ function oldPinHint(root, log) {
   } catch {
   }
 }
-function claudeSetup(root, inst, log, noPlugin) {
+function claudeSetup(root, inst, log, noPlugin, upgrade) {
   let models = {};
   try {
     models = (0, import_yaml5.parse)(readFileSync9(join10(root, BINDING_PATH), "utf8"))?.models ?? {};
@@ -12198,6 +12203,7 @@ Do not start subagents.
   const file = join10(root, "CLAUDE.md");
   const cur = existsSync8(file) ? readFileSync9(file, "utf8") : "";
   if (/^@AGENTS\.md\s*$/m.test(cur)) log.push("kept CLAUDE.md (imports @AGENTS.md)");
+  else if (upgrade) log.push("kept CLAUDE.md: it does not import @AGENTS.md; add the line in a product change");
   else {
     writeFileSync5(file, (cur ? cur.replace(/\n*$/, "\n\n") : "") + "@AGENTS.md\n");
     log.push(cur ? "appended @AGENTS.md to CLAUDE.md" : "wrote CLAUDE.md (@AGENTS.md)");
@@ -12240,8 +12246,9 @@ async function init(root, argv, log) {
   pinCli(inst, version3, f.ref, force);
   if (inst.copy("templates/bin/agentic-sdlc", LAUNCHER)) chmodSync2(join10(root, LAUNCHER), 493);
   ignoreCliCache(root, log);
+  const upgrade = existsSync8(join10(root, BINDING_PATH));
   oldPinHint(root, log);
-  if (harness !== "claude" || noPlugin) registerMcp(pkg, root, harness, force, log);
+  if (harness !== "claude" || noPlugin) registerMcp(pkg, root, harness, force, log, upgrade);
   else log.push("MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)");
   const scorers = join10(pkg, "scorers");
   if (existsSync8(scorers)) {
@@ -12327,10 +12334,12 @@ async function init(root, argv, log) {
   const cur = existsSync8(agents) ? readFileSync9(agents, "utf8") : "";
   const s = cur.indexOf(START), e = cur.indexOf(END);
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, "\n\n") : "") + POINTER + "\n";
-  if (next !== cur) writeFileSync5(agents, next);
-  const agentsChanged = next !== cur;
-  if (agentsChanged) log.push("updated AGENTS.md");
-  if (harness === "claude") claudeSetup(root, inst, log, noPlugin);
+  const agentsChanged = next !== cur && !upgrade;
+  if (agentsChanged) {
+    writeFileSync5(agents, next);
+    log.push("updated AGENTS.md");
+  } else if (next !== cur) log.push("kept AGENTS.md: its agentic-sdlc block differs from this release; update it in a product change");
+  if (harness === "claude") claudeSetup(root, inst, log, noPlugin, upgrade);
   else for (const tier of TIERS4) inst.skip(`.claude/agents/sdlc-${tier}.md`);
   inst.finish();
   const missing = missingKeysLine(missingBindingKeys(readFileSync9(need2(pkg, "templates/binding.yml"), "utf8"), readFileSync9(bindingFile, "utf8")));
@@ -12485,7 +12494,6 @@ var init_install = __esm({
     END = "<!-- agentic-sdlc:end -->";
     POINTER = `${START}
 Work lives on the board named in \`.agents/binding.yml\`. Before any work, invoke the sdlc skill (\`/agentic-sdlc:sdlc\` in Claude Code).
-The CLI the skills call as \`agentic-sdlc <group> <verb>\` is \`.agents/bin/agentic-sdlc\` (pinned in \`.agents/cli.json\`).
 Never duplicate the process here: the skills own it, the binding owns the project values.
 ${END}`;
     INSTALL_LOCK = ".agents/install.lock.json";
@@ -12660,7 +12668,7 @@ ${END}`;
     CLI_PIN = ".agents/cli.json";
     CLI_PACKAGE = "github:dmitriywind/agentic-sdlc";
     LAUNCHER = ".agents/bin/agentic-sdlc";
-    IGNORED = [".agents/.cli/", ".agents/work/"];
+    IGNORED = [".cli/", "work/"];
     isSha = (s) => typeof s === "string" && /^[0-9a-f]{40}$/.test(s);
     isTag = (s) => typeof s === "string" && /^v\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.+-]+)?$/.test(s);
     envNames = (x, out = []) => {
