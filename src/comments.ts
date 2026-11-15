@@ -27,7 +27,7 @@ const REGISTRY: Record<Kind, Def> = {
   verdict: html('review-pr', 'optional'), // ref: the CR head sha
   note: html('note', 'optional'),
   verify: html('verify-ux', 'optional'),
-  'manual-check': html('manual-check', 'optional'), // ref: `<criterion> <sha>`
+  'manual-check': html('manual-check', 'optional'), // ref: the head sha
   ask: { ref: 'optional', style: 'heading', open: () => '### Needs human' }, // ref: the trigger
   heartbeat: html('heartbeat', 'none'),
   scores: html('scores', 'none'),
@@ -43,6 +43,16 @@ export const isKind = (k: string): k is Kind => (KINDS as readonly string[]).inc
 export function parseKind(k: string): Kind {
   if (!isKind(k)) throw new UsageError(`unknown comment kind '${k}' (kinds: ${KINDS.join(', ')})`);
   return k;
+}
+
+/** Kinds only one verb writes; `comment --kind` refuses them, so no step can post a verdict, a dispatch or a score by hand. */
+const VERB_ONLY: Partial<Record<Kind, string>> = { verdict: 'forge verdict', dispatch: 'dispatch', scores: 'ledger record' };
+
+/** A kind from `comment --kind`: as `parseKind`, and not a kind only a verb writes. */
+export function parseWritableKind(k: string): Kind {
+  const kind = parseKind(k);
+  if (VERB_ONLY[kind]) throw new UsageError(`comment kind '${kind}' is written only by '${VERB_ONLY[kind]}'`);
+  return kind;
 }
 
 const oneLine = (ref: string | undefined) => {

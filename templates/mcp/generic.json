@@ -1,1 +1,1 @@
-{"mcpServers": {"agentic-sdlc": {"command": "npx", "args": ["--no-install", "agentic-sdlc", "mcp"]}}}
+{"mcpServers": {"agentic-sdlc": {"command": ".agents/bin/agentic-sdlc", "args": ["mcp"]}}}

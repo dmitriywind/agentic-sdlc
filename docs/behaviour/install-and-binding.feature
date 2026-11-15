@@ -575,23 +575,6 @@ Feature: Install and validate the binding
     When a binding has a non-list done_statuses, a missing bug, feature or human label, an unknown version_scheme or judge_tier, an auto-merge class other than tuning, an MCP server with both url and command, or a managed executor without its api's fields
     Then validate names each problem and exits with code 1
 
-  # Source: src/cli.ts, "main"
-  # Proof: test/cli.test.ts "help: every group answers --help with its usage and exit 0; a group with no verb is a usage error"
-  Scenario: The CLI explains itself
-    When the adopter runs "agentic-sdlc" with no arguments
-    Then it lists every group and exits with code 2
-    When the adopter runs "agentic-sdlc <group> --help"
-    Then it prints that group's usage and exits with code 0
-
-  # Source: src/cli.ts, "main"
-  # Proof: test/cli.test.ts "cli: --version and help print and exit 0; --root needs a directory; --help is read only at the verb position; groups are own properties"
-  Scenario: The CLI reads its own options strictly
-    When the adopter runs "agentic-sdlc --version" or "agentic-sdlc help"
-    Then it prints the version or the group list and exits with code 0
-    When "--root" has no directory, or is followed by a group name
-    Then it is a usage error with exit code 2
-    And "--help" counts as help only as the first argument after the group or its verb
-
   # Source: src/board/index.ts, "createBoard"
   # Proof: test/board-adapters.test.ts "a board verb with a missing required option fails naming the binding key and validate, not a raw gh call"
   Scenario: A board verb fails clearly when the adapter's required option is missing

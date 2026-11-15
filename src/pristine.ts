@@ -6,9 +6,9 @@ import { join } from 'node:path';
 
 export const sha = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
 
-/** Package paths init installs from: the skill pack, scorers, gate templates, and three runner files. */
+/** Package paths init installs from: the skill pack, scorers, gate templates, the launcher, and three runner files. */
 export const isInstallable = (path: string) =>
-  /^(skills|scorers)\/./.test(path) || /^templates\/gates\/./.test(path) || /^templates\/runner\/(setup\.sh|cycle-prompt\.md|review-prompt\.md)$/.test(path);
+  /^(skills|scorers)\/./.test(path) || /^templates\/(gates|bin)\/./.test(path) || /^templates\/runner\/(setup\.sh|cycle-prompt\.md|review-prompt\.md)$/.test(path);
 
 /** The binding values written into the stock workflows (the `# set:` lines init derives from the binding). */
 export type Bound = { trunk: string; releasePrefix: string; delivery: string; install: string; verify: string };

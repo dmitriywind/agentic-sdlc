@@ -114,6 +114,9 @@ export class World {
     };
   }
 
+  /** Registers something to undo when the scenario ends (a stubbed global, a server). */
+  onCleanup(fn: () => void) { this.cleanups.push(fn); }
+
   // ---- clock: the injectable sleep ----
   /** Slept milliseconds, in order. The retry helpers of src/exec.ts call this instead of waiting. */
   sleeps: number[] = [];

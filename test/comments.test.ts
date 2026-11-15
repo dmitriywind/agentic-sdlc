@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { KINDS, isMarked, matches, parseKind, stamp, stampBody, verdictOf } from '../src/comments.ts';
+import { KINDS, isMarked, matches, parseKind, parseWritableKind, stamp, stampBody, verdictOf } from '../src/comments.ts';
 import { UsageError } from '../src/forge/util.ts';
-import { buildReport, land, nextAction, queue, verdict } from '../src/forge/flow.ts';
+import { buildReport, land, nextAction, queue, signalOfHead, verdict } from '../src/forge/flow.ts';
 import { cli as forgeCli } from '../src/forge/index.ts';
 import { cli as boardCli, hold, holds } from '../src/board/index.ts';
 import { createBoard } from '../src/board/index.ts';
@@ -70,38 +70,60 @@ const com = (author: string, body: string, ago = 1): Comment => ({ id: String(Ma
 const pass = (sha = 'h1', ago = 1) => com('bot', `<!-- review-pr ${sha} -->\nVerdict: PASS`, ago);
 const fail = (sha = 'h1', ago = 1) => com('bot', `<!-- review-pr ${sha} -->\nVerdict: REMEDIATION REQUIRED`, ago);
 
+const stallReason = (check: string, state: string) => `required check ${check} is ${state} past stall_minutes`;
 const cases: [string, CR, Comment[], any, string, string?][] = [
   ['draft, no verdict, no checks', cr({ draft: true }), [], b(), 'review'],
   ['draft, no verdict, checks green', cr({ draft: true, checks: [{ name: 'ci', state: 'success' }] }), [], b(), 'review'],
-  ['draft, no verdict, ci still pending', cr({ draft: true, checks: [{ name: 'ci', state: 'pending' }] }), [], b(), 'wait'],
+  ['draft, no verdict, ci still pending (review stops until it is green)', cr({ draft: true, checks: [{ name: 'ci', state: 'pending' }] }), [], b(), 'review'],
   ['draft, only the review check pending', cr({ draft: true, checks: [{ name: 'review', state: 'pending' }] }), [], b(), 'review'],
   ['draft, verdict for an old head only', cr({ draft: true }), [pass('old')], b(), 'review'],
   ['draft, untrusted verdict ignored', cr({ draft: true }), [com('mallory', '<!-- review-pr h1 -->\nVerdict: PASS')], b(), 'review'],
+  ['ready, a changed head has no verdict', cr(), [pass('old')], b(), 'review'],
+  ['ready, no verdict, nothing red', cr({ pushedAt: iso(5) }), [], b(), 'review'],
+  ['a verdict with two conflicting lines is no verdict', cr(), [com('bot', '<!-- review-pr h1 -->\nVerdict: PASS\nVerdict: REMEDIATION REQUIRED')], b(), 'review'],
   ['remediation verdict for the head', cr(), [fail()], b(), 'rework'],
   ['red required check, ready', cr({ checks: [{ name: 'ci', state: 'failure' }] }), [], b(), 'rework'],
-  ['red required check, draft with a verdict', cr({ draft: true, checks: [{ name: 'ci', state: 'failure' }] }), [pass()], b(), 'land'],
+  ['red required check, draft with a verdict', cr({ draft: true, checks: [{ name: 'ci', state: 'failure' }] }), [pass()], b(), 'rework'],
+  ['red required check, draft, no verdict', cr({ draft: true, checks: [{ name: 'ci', state: 'failure' }] }), [], b(), 'rework'],
   ['red review context is not a rework', cr({ checks: [{ name: 'review', state: 'failure' }] }), [pass()], b(), 'land'],
-  ['behind the trunk', cr({ behind: true }), [pass()], b(), 'sync'],
+  ['red check, the newest note names an open Signal: wait', cr({ checks: [{ name: 'ci', state: 'failure' }] }), [com('bot', '<!-- note h1 -->\nflake, Signal 31')], b(), 'wait'],
+  ['behind the trunk, passed', cr({ behind: true }), [pass()], b(), 'sync'],
+  ['behind the trunk, no verdict: review first', cr({ behind: true }), [], b(), 'review'],
+  ['behind the trunk, still a draft with a verdict', cr({ behind: true, draft: true }), [pass()], b(), 'wait'],
   ['pass verdict for the head', cr(), [pass()], b(), 'land'],
+  ['pass verdict, the CR still a draft', cr({ draft: true }), [pass()], b(), 'wait'],
   ['pass for the head, newest report wins', cr(), [fail('h1', 9), pass('h1', 2)], b(), 'land'],
   ['pass then remediation for the head', cr(), [pass('h1', 9), fail('h1', 2)], b(), 'rework'],
   ['merged CR is not landed again', cr({ state: 'merged' }), [pass()], b(), 'wait'],
-  ['ready, no verdict, nothing red', cr({ pushedAt: iso(5) }), [], b(), 'wait'],
   ['rework cap (default 3): two reports and a note', cr(), [fail('h0', 30), fail('h1', 20), com('bot', '<!-- note -->\nred gate', 10)], b(), 'escalate', 'rework cap'],
   ['below the cap', cr(), [fail('h0', 30), fail('h1', 20)], b(), 'rework'],
   ['cycle.max_rework lowers the cap', cr(), [fail()], b({ cycle: { max_rework: 1 } }), 'escalate', 'rework cap'],
+  ['at the cap, a pass for the head still lands', cr(), [fail('a', 30), fail('b', 20), fail('c', 10), pass()], b({ cycle: { max_rework: 3 } }), 'land'],
+  ['at the cap, an open Signal waits instead', cr({ checks: [{ name: 'ci', state: 'failure' }] }), [com('bot', '<!-- note h1 -->\nSignal #7', 1), fail('a', 30), fail('b', 20)], b(), 'wait'],
   ['a note by a stranger does not count', cr({ checks: [{ name: 'ci', state: 'failure' }] }), [com('mallory', '<!-- note -->'), com('mallory', '<!-- note -->'), com('mallory', '<!-- note -->')], b(), 'rework'],
-  ['stalled wait', cr({ pushedAt: iso(120) }), [], b(), 'escalate', 'stalled'],
-  ['a recent trusted comment keeps a wait alive', cr({ pushedAt: iso(120) }), [com('fo', 'looking', 5)], b(), 'wait'],
-  ['a stalled land is not escalated', cr({ pushedAt: iso(120) }), [pass('h1', 120)], b(), 'land'],
+  ['a required check missing past stall_minutes after the push', cr({ pushedAt: iso(120) }), [], b(), 'escalate', stallReason('ci', 'missing')],
+  ['a required check pending past stall_minutes after the push', cr({ pushedAt: iso(120), checks: [{ name: 'ci', state: 'pending' }] }), [com('fo', 'looking', 5)], b(), 'escalate', stallReason('ci', 'pending')],
+  ['a stalled CR with a pass is escalated too', cr({ pushedAt: iso(120) }), [pass('h1', 120)], b(), 'escalate'],
+  ['a pending review or human-approval status never stalls', cr({ pushedAt: iso(120), checks: [{ name: 'ci', state: 'success' }, { name: 'human-approval', state: 'pending' }, { name: 'review', state: 'pending' }] }), [pass()], b(), 'land'],
+  ['no push time: the stall clock has not started', cr({ pushedAt: undefined }), [], b(), 'review'],
 ];
 for (const [name, c, comments, binding, action, reason] of cases) {
   test(`nextAction: ${name} -> ${action}`, () => {
-    const r = nextAction(c, comments, binding, T0);
+    const r = nextAction(c, comments, binding, T0, signalOfHead(c, comments, binding) !== undefined); // a named Signal counts as open here
     assert.equal(r.action, action, r.reason);
     if (reason) assert.equal(r.reason, reason);
   });
 }
+
+test('signalOfHead: the newest trusted note for the head names the Signal; others are ignored', () => {
+  const c = cr();
+  assert.equal(signalOfHead(c, [com('bot', '<!-- note h1 -->\nflaky; Signal #31 filed', 1)], b()), '31');
+  assert.equal(signalOfHead(c, [com('bot', '<!-- note h1 -->\nSignal: PROJ-4', 1)], b()), 'PROJ-4');
+  assert.equal(signalOfHead(c, [com('bot', '<!-- note h1 -->\nSignal 5', 9), com('bot', '<!-- note h1 -->\nfixed in the diff', 1)], b()), undefined, 'the newest note decides');
+  assert.equal(signalOfHead(c, [com('bot', '<!-- note h0 -->\nSignal 5', 1)], b()), undefined, 'a note for another head');
+  assert.equal(signalOfHead(c, [com('mallory', '<!-- note h1 -->\nSignal 5', 1)], b()), undefined, 'a stranger');
+  assert.equal(signalOfHead(c, [com('bot', '<!-- note h1 -->\nthe signal is red', 1)], b()), undefined);
+});
 
 test('nextAction: reworks counts trusted remediation reports and notes; since is the later of the push and the last trusted comment', () => {
   const r = nextAction(cr({ pushedAt: iso(50) }), [fail('a', 40), com('bot', '<!-- note -->', 30), com('mallory', '<!-- note -->', 1)], b(), T0);
@@ -121,10 +143,16 @@ const forgeOf = (crs: CR[], comments: Record<string, Comment[]> = {}) => {
   return { f, log };
 };
 
-test('forge queue: one row per open CR with ticket, class, action, reason, reworks, since', async () => {
-  const { f } = forgeOf([cr({ n: '5', draft: true }), cr({ n: '6', closes: [], behind: true })]);
-  const rows = await queue(f, b(), async () => ({ class: 'product-full', who: [] }), T0);
-  assert.deepEqual(rows.map((r) => [r.n, r.ticket, r.class, r.action, r.reworks, r.since]), [['5', '12', 'product-full', 'review', 0, iso(5)], ['6', undefined, 'product-full', 'sync', 0, iso(5)]]);
+test('forge queue: one row per open CR with ticket, class, action, reason, reworks, since; a note naming an open Signal waits', async () => {
+  const red = [{ name: 'ci', state: 'failure' }] as CR['checks'];
+  const { f } = forgeOf([cr({ n: '5', draft: true }), cr({ n: '6', closes: [], behind: true }), cr({ n: '7', checks: red }), cr({ n: '8', headSha: 'h8', checks: red })], {
+    '6': [pass()], '7': [com('bot', '<!-- note h1 -->\nSignal 31')], '8': [com('bot', '<!-- note h8 -->\nSignal 32')],
+  });
+  const rows = await queue(f, b(), async () => ({ class: 'product-full', who: [] }), T0, async (id) => id === '31');
+  assert.deepEqual(rows.map((r) => [r.n, r.ticket, r.class, r.action, r.reworks, r.since]), [
+    ['5', '12', 'product-full', 'review', 0, iso(5)], ['6', undefined, 'product-full', 'sync', 0, iso(1)],
+    ['7', '12', 'product-full', 'wait', 1, iso(1)], ['8', '12', 'product-full', 'rework', 1, iso(1)],
+  ]);
   const guarded = await queue(f, b(), async () => { throw new Error('x'); }, T0);
   assert.equal(guarded[0].class, 'guardrail');
 });
@@ -229,6 +257,42 @@ test('forge cli: --kind stamps, --ref needs --kind, an unknown kind or both --ki
   assert.ok(errs.some((e) => /unknown comment kind/.test(e)));
 });
 
+test('forge verdict by cli: callable with no review identity; with one it needs the review token and posts nothing without it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fv-'));
+  const file = join(dir, 'b.md');
+  writeFileSync(file, 'report\n');
+  const pr = { number: 5, html_url: 'u', title: 't', head: { sha: 'abc1234', ref: 's' }, base: { sha: 'm', ref: 'main' }, state: 'open', body: '', user: { login: 'bot' } };
+  const run = async (identity: string, env: Record<string, string>) => {
+    const f = fakeCtx(dir, { review_token_env: 'REV' }, (c) => (/\/comments/.test(c) && /POST/.test(c) ? { id: 1, html_url: 'cu' } : /pulls\/5$/.test(c) ? pr : ''), env);
+    f.ctx.binding = { ...b(), forge: { adapter: 'github', options: { repo: 'o/r', review_token_env: 'REV' }, review_identity: identity, required_checks: [] }, spec_marker: 'spec.md' } as any;
+    const err: string[] = [], out: string[] = [];
+    const e = process.stderr.write, o = process.stdout.write;
+    process.stderr.write = ((s: string) => (err.push(s), true)) as any;
+    process.stdout.write = ((s: string) => (out.push(s), true)) as any;
+    try { return { code: await forgeCli(['verdict', '5', '--pass', '--body-file', file], f.ctx), err: err.join(''), out: out.join(''), calls: f.calls }; }
+    finally { process.stderr.write = e; process.stdout.write = o; }
+  };
+  const none = await run('', {});
+  assert.equal(none.code, 0, none.err);
+  assert.equal(JSON.parse(none.out).status, 'ci');
+  const denied = await run('rev-bot', {});
+  assert.equal(denied.code, 1);
+  assert.match(denied.err, /^Access:/);
+  assert.ok(!denied.calls.some((c) => /POST/.test(c)), 'nothing was posted');
+});
+
+test('comment --kind refuses the kinds only a verb writes', async () => {
+  const { f } = boardWith();
+  const file = join(f.ctx.root, 'b.md');
+  writeFileSync(file, 'x');
+  const err = console.error; console.error = () => {};
+  try {
+    for (const kind of ['verdict', 'dispatch', 'scores']) assert.equal(await boardCli(['comment', '1', '--body-file', file, '--kind', kind, '--ref', 'x'], f.ctx), 2, kind);
+  } finally { console.error = err; }
+  assert.throws(() => parseWritableKind('verdict'), /only by 'forge verdict'/);
+  assert.equal(parseWritableKind('note'), 'note');
+});
+
 const owners = { bots: ['bot'], product: 'po', factory: ['fo', 'fo2'] };
 function boardWith() {
   const dir = mkdtempSync(join(tmpdir(), 'bh-'));
@@ -250,7 +314,7 @@ test('board hold, holds, release: the label, the ask marker, and a reply by an o
   await board.create({ title: 't', body: '', status: 'Backlog' });
   await board.create({ title: 'u', body: '', status: 'Backlog' });
   const h = await hold(board, f.ctx.binding, '1', 'scope', '### Needs human: old\nThe question.');
-  assert.equal(h.kind, 'scope');
+  assert.deepEqual([h.id, h.labels], ['1', ['needs-human']], 'the Item');
   assert.deepEqual((await board.get('1')).labels, ['needs-human']);
   const asked = (await board.comments('1'))[0];
   assert.equal(asked.body, '### Needs human: scope\n\nThe question.\n');

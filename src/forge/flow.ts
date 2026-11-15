@@ -80,38 +80,59 @@ const trustedOf = (b: Binding): Set<string> => {
 
 export interface Next { action: QueueAction; reason: string; reworks: number; since?: string }
 
-/** The one next action of a CR. Pure: the CR with its checks, its comments (any order), the binding and the time in ms. */
-export function nextAction(cr: CR, comments: Comment[], b: Binding, now: number): Next {
+/** The Signal a `note` names (`Signal <id>`, `Signal #<id>` or `Signal: <id>`), if any. */
+export const noteSignal = (body: string): string | undefined => /\bSignal[ \t]*[:#]?[ \t]*#?([A-Za-z][A-Za-z0-9]*-\d+|\d+)\b/i.exec(body)?.[1];
+
+/** The Signal id the newest trusted `note` for the head names. */
+export function signalOfHead(cr: CR, comments: Comment[], b: Binding): string | undefined {
+  const trusted = trustedOf(b);
+  const note = comments.filter((c) => trusted.has(c.author?.toLowerCase()) && isMarked(c.body, 'note', cr.headSha))
+    .sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
+  return note ? noteSignal(note.body) : undefined;
+}
+
+/**
+ * The one next action of a CR (references/architecture.md 3.2; the first match wins: escalate, rework, review, sync, land, wait).
+ * Pure: the CR with its checks, its comments (any order), the binding, the time in ms, and whether the Signal its newest note names is still open.
+ */
+export function nextAction(cr: CR, comments: Comment[], b: Binding, now: number, signalOpen = false): Next {
   const trusted = trustedOf(b);
   const mine = comments.filter((c) => trusted.has(c.author?.toLowerCase())).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt));
   const reports = mine.filter((c) => isMarked(c.body, 'verdict'));
   const forHead = reports.find((c) => isMarked(c.body, 'verdict', cr.headSha));
   const v = forHead ? verdictOf(forHead.body) : undefined;
   const head = v === 'PASS' || v === 'REMEDIATION REQUIRED' ? v : undefined;
+  // A rework is a trusted fail verdict or a `note` (the cause of a red check).
   const reworks = reports.filter((c) => verdictOf(c.body) === 'REMEDIATION REQUIRED').length + mine.filter((c) => isMarked(c.body, 'note')).length;
   const times = [cr.pushedAt, mine[0]?.createdAt].filter((t): t is string => !!t && !Number.isNaN(Date.parse(t)));
   const since = times.length ? new Date(Math.max(...times.map((t) => Date.parse(t)))).toISOString() : undefined;
   const gate = (name: string) => name === reviewContext(b) || name === HUMAN;
-  const finished = !cr.checks.some((c) => !gate(c.name) && c.state === 'pending');
-  const redCheck = (b.forge.required_checks ?? []).find((name) => !gate(name) && cr.checks.some((c) => c.name === name && c.state === 'failure'));
-  let r: { action: QueueAction; reason: string };
-  if (cr.draft && !head && finished) r = { action: 'review', reason: 'no review of this head' };
-  else if (head === 'REMEDIATION REQUIRED') r = { action: 'rework', reason: 'the review asks for remediation' };
-  else if (!cr.draft && redCheck) r = { action: 'rework', reason: `required check ${redCheck} is red` };
-  else if (cr.behind) r = { action: 'sync', reason: 'behind the trunk' };
-  else if (head === 'PASS' && cr.state === 'open') r = { action: 'land', reason: 'the review passed this head' };
-  else r = { action: 'wait', reason: cr.draft && !head ? 'checks are still running' : 'waiting on checks or approval' };
+  const required = (b.forge.required_checks ?? []).filter((name) => !gate(name));
+  const state = (name: string) => cr.checks.find((c) => c.name === name)?.state;
+  const redCheck = required.find((name) => state(name) === 'failure');
+  const stuck = required.find((name) => { const s = state(name); return s === undefined || s === 'pending'; });
+  const stalled = !!stuck && !!cr.pushedAt && b.stall_minutes > 0 && now - Date.parse(cr.pushedAt) > b.stall_minutes * 60_000;
+  const needsRework = head === 'REMEDIATION REQUIRED' || !!redCheck;
   const cap = b.cycle?.max_rework ?? 3;
-  if (r.action === 'rework' && reworks >= cap) r = { action: 'escalate', reason: 'rework cap' };
-  else if (r.action === 'wait' && since && b.stall_minutes > 0 && now - Date.parse(since) > b.stall_minutes * 60_000) r = { action: 'escalate', reason: 'stalled' };
+  let r: { action: QueueAction; reason: string };
+  if (needsRework && !signalOpen && reworks >= cap) r = { action: 'escalate', reason: 'rework cap' };
+  else if (stalled) r = { action: 'escalate', reason: `required check ${stuck} is ${state(stuck!) ?? 'missing'} past stall_minutes` };
+  else if (needsRework) r = signalOpen ? { action: 'wait', reason: 'a Signal named by the note is open' }
+    : { action: 'rework', reason: head === 'REMEDIATION REQUIRED' ? 'the review asks for remediation' : `required check ${redCheck} is red` };
+  else if (cr.state === 'open' && !head) r = { action: 'review', reason: 'no verdict for this head' };
+  else if (cr.state === 'open' && !cr.draft && cr.behind) r = { action: 'sync', reason: 'behind the trunk' };
+  else if (cr.state === 'open' && !cr.draft && head === 'PASS') r = { action: 'land', reason: 'the review passed this head' };
+  else r = { action: 'wait', reason: 'waiting on checks or approval' };
   return { ...r, reworks, ...(since ? { since } : {}) };
 }
 
-/** `forge queue`: every open CR with its one next action. */
-export async function queue(f: Forge, b: Binding, classOf: Classify, now = Date.now()): Promise<QueueRow[]> {
+/** `forge queue`: every open CR with its one next action. `signalOpen` says whether a ticket id is an open Signal (the board). */
+export async function queue(f: Forge, b: Binding, classOf: Classify, now = Date.now(), signalOpen: (id: string) => Promise<boolean> = async () => false): Promise<QueueRow[]> {
   const rows: QueueRow[] = [];
   for (const cr of await f.list({ state: 'open', checks: true })) {
-    const next = nextAction(cr, await f.comments(cr.n), b, now);
+    const comments = await f.comments(cr.n);
+    const sig = signalOfHead(cr, comments, b);
+    const next = nextAction(cr, comments, b, now, sig ? await signalOpen(sig).catch(() => false) : false);
     const klass = await classOf(cr).then((c) => c.class, () => 'guardrail');
     rows.push({ n: cr.n, ...(cr.closes[0] ? { ticket: cr.closes[0] } : {}), class: klass, action: next.action, reason: next.reason, reworks: next.reworks, ...(next.since ? { since: next.since } : {}) });
   }

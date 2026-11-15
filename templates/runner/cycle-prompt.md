@@ -15,4 +15,4 @@ Preamble (scheduler setup, not part of the prompt):
 
 ---
 Load the `sdlc` skill: invoke `/agentic-sdlc:sdlc` when that skill is available, otherwise read `.claude/skills/sdlc/SKILL.md`, otherwise `.agents/skills/sdlc/SKILL.md`. Then run exactly one cycle, and stop.
-Call the CLI as `npx --no agentic-sdlc ...` and pass `--unattended` to every `dispatch` call.
+Call the CLI as `agentic-sdlc ...` (it is `.agents/bin/agentic-sdlc`) and pass `--unattended` to every `dispatch` call.

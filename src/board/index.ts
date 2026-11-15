@@ -1,7 +1,7 @@
 import type { AdapterContext, Binding, Board, Comment, Hold, Item, LogicalField, PortCli } from '../ports.ts';
 import { ownersFor } from '../ports.ts';
 import { validateBinding } from '../binding.ts';
-import { isMarked, matches, parseKind, selectComments, stamp, stampBody } from '../comments.ts';
+import { isMarked, matches, parseKind, parseWritableKind, selectComments, stamp, stampBody } from '../comments.ts';
 import { UsageError, bodyFile, parseStrict, type VerbSpec } from '../forge/util.ts';
 import { createGithubBoard } from './github.ts';
 import { createGithubIssuesBoard } from './github-issues.ts';
@@ -64,13 +64,13 @@ const asked = (c: Comment) => isMarked(c.body, 'ask');
 const byTime = (x: Comment, y: Comment) => Date.parse(y.createdAt) - Date.parse(x.createdAt);
 
 /** `board hold`: the human label, then the ask with the trigger as its marker ref. The trigger is one non-empty line. */
-export async function hold(board: Board, b: Binding, id: string, kind: string, body: string): Promise<{ id: string; kind: string; comment: { id: string; url?: string } }> {
+export async function hold(board: Board, b: Binding, id: string, kind: string, body: string): Promise<Item> {
   const trigger = kind.trim();
   if (!trigger || /[\r\n]/.test(trigger)) throw new Usage('board hold: --kind is one non-empty line');
   const text = body.replace(/^### Needs human[^\n]*\n+/, '');
-  await board.label(id, 'add', b.board.labels.human);
-  const comment = await board.comment(id, `${stamp('ask', trigger)}\n\n${text.trim()}\n`);
-  return { id, kind: trigger, comment };
+  const item = await board.label(id, 'add', b.board.labels.human);
+  await board.comment(id, `${stamp('ask', trigger)}\n\n${text.trim()}\n`);
+  return item;
 }
 
 /** `board holds`: every ticket with the human label, its last ask, and the owner-role reply after it if any (a bot never counts). */
@@ -157,7 +157,7 @@ export const cli: PortCli = async (argv, base) => {
       case 'comment': {
         need(1);
         if (a.has('ref') && !a.has('kind')) throw new Usage('board comment: --ref needs --kind');
-        out = await board.comment(id, a.has('kind') ? stampBody(body(), parseKind(a.get('kind')!), a.get('ref'), { specMarker: base.binding.spec_marker }) : body());
+        out = await board.comment(id, a.has('kind') ? stampBody(body(), parseWritableKind(a.get('kind')!), a.get('ref'), { specMarker: base.binding.spec_marker }) : body());
         break;
       }
       case 'hold': need(1); out = await hold(board, base.binding, id, req('kind'), body()); break;

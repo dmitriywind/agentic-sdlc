@@ -17,6 +17,7 @@ const START = '<!-- agentic-sdlc:start -->';
 const END = '<!-- agentic-sdlc:end -->';
 const POINTER = `${START}
 Work lives on the board named in \`.agents/binding.yml\`. Before any work, invoke the sdlc skill (\`/agentic-sdlc:sdlc\` in Claude Code).
+The CLI the skills call as \`agentic-sdlc <group> <verb>\` is \`.agents/bin/agentic-sdlc\` (pinned in \`.agents/cli.json\`).
 Never duplicate the process here: the skills own it, the binding owns the project values.
 ${END}`;
 const INSTALL_LOCK = '.agents/install.lock.json';
@@ -36,7 +37,7 @@ export function packageRoot(env: NodeJS.ProcessEnv = process.env): string {
   return d;
 }
 
-const INIT_FLAGS = ['board', 'forge', 'vcs', 'harness', 'profile', 'force', 'upgrade', 'no-plugin'];
+const INIT_FLAGS = ['board', 'forge', 'vcs', 'harness', 'profile', 'ref', 'force', 'upgrade', 'no-plugin'];
 const flagsOf = (argv: string[]) => {
   const f: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -196,11 +197,9 @@ const MCP_FILES = new Map<string, string | null>([
   ['claude', '.mcp.json'], ['cursor', '.cursor/mcp.json'], ['codex', '.codex/config.toml'], ['generic', null],
 ]);
 
-/** Register the agentic-sdlc stdio server in the harness's project MCP file, keeping other servers. */
-function registerMcp(pkg: string, root: string, harness: string, args: string[], force: boolean, log: string[]) {
-  let snippet = readFileSync(need(pkg, `templates/mcp/${harness === 'codex' ? 'codex.toml' : harness + '.json'}`), 'utf8');
-  if (harness === 'codex') snippet = snippet.replace(/^args = .*$/m, `args = ${JSON.stringify(args)}`);
-  else { const j = JSON.parse(snippet); j.mcpServers['agentic-sdlc'].args = args; snippet = JSON.stringify(j, null, 2) + '\n'; }
+/** Register the agentic-sdlc stdio server (the launcher) in the harness's project MCP file, keeping other servers. */
+function registerMcp(pkg: string, root: string, harness: string, force: boolean, log: string[]) {
+  const snippet = readFileSync(need(pkg, `templates/mcp/${harness === 'codex' ? 'codex.toml' : harness + '.json'}`), 'utf8');
   const rel = MCP_FILES.get(harness);
   if (!rel) { log.push(`add this MCP server to your harness config:\n${snippet.trim()}`); return; }
   const file = join(root, rel);
@@ -222,39 +221,57 @@ function registerMcp(pkg: string, root: string, harness: string, args: string[],
   log.push(`wrote ${rel}`);
 }
 
-/** The CLI ships from Git only: the npm name agentic-sdlc belongs to another package. */
-const gitSpec = (version: string) => `github:dmitriywind/agentic-sdlc#v${version}`;
-/** npm 12 refuses git dependencies unless allow-git permits them; root allows this direct one, not transitive ones. */
-const ALLOW_GIT = '--allow-git=root';
+const CLI_PIN = '.agents/cli.json';
+const CLI_PACKAGE = 'github:dmitriywind/agentic-sdlc';
+const LAUNCHER = '.agents/bin/agentic-sdlc';
+const IGNORED = '.agents/.cli/';
+const isSha = (s: unknown) => typeof s === 'string' && /^[0-9a-f]{40}$/.test(s);
+const isTag = (s: unknown) => typeof s === 'string' && /^v\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.+-]+)?$/.test(s);
 
-/** Write allow-git=root to the project's .npmrc, so npm install and npm ci fetch the pinned CLI. */
-function allowGit(root: string, log: string[]) {
-  const file = join(root, '.npmrc');
-  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
-  if (/^\s*allow-git\s*=/m.test(text)) return;
-  writeFileSync(file, text + (text && !text.endsWith('\n') ? '\n' : '') + 'allow-git=root\n');
-  log.push('set allow-git=root in .npmrc (npm 12 refuses git dependencies by default)');
+/**
+ * Write the CLI pin, a factory file (git only: the npm name agentic-sdlc belongs to another package). The ref is the running
+ * package's version tag, or --ref. An upgrade moves it, unless the file was hand-edited to a sha that init did not write.
+ */
+function pinCli(inst: Installer, version: string, ref: string | undefined, force: boolean) {
+  const file = join(inst.root, CLI_PIN);
+  inst.offered.add(CLI_PIN);
+  let pkgName = CLI_PACKAGE, want = ref ?? `v${version}`;
+  if (existsSync(file)) {
+    const raw = readFileSync(file);
+    const cur = parseJson(raw.toString('utf8'), CLI_PIN);
+    if (typeof cur.package === 'string' && cur.package) pkgName = cur.package;
+    if (!ref && !force && isSha(cur.ref) && sha(raw) !== inst.lock[CLI_PIN]) {
+      inst.counts.kept++;
+      inst.log.push(`kept ${CLI_PIN} (its ref is a commit sha you set; --ref <sha|vX.Y.Z> or --force moves it)`);
+      return;
+    }
+  }
+  const data = JSON.stringify({ package: pkgName, ref: want }, null, 2) + '\n';
+  const had = existsSync(file);
+  if (had && sha(readFileSync(file)) === sha(data)) { inst.lock[CLI_PIN] = sha(data); return; }
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, data);
+  inst.lock[CLI_PIN] = sha(data);
+  if (had) inst.counts.updated++; else inst.counts.wrote++;
+  inst.log.push(`${had ? 'updated' : 'wrote'} ${CLI_PIN} (ref ${want})`);
 }
 
-/** Pin this CLI as the project's devDependency, so CI, hooks and MCP run one known version. True when pinned. */
-function pinCli(root: string, version: string, force: boolean, log: string[]): boolean {
-  const file = join(root, 'package.json');
-  if (!existsSync(file)) {
-    log.push(`pin the CLI so CI and MCP run one version: npm i -D ${ALLOW_GIT} ${gitSpec(version)}`);
-    return false;
-  }
-  const text = readFileSync(file, 'utf8');
-  const doc = parseJson(text, 'package.json');
-  allowGit(root, log);
-  const have: string | undefined = doc.devDependencies?.['agentic-sdlc'];
-  // A pin this init wrote for another version follows the package; any other spec (a fork, a sha, a path) is the project's choice.
-  const ours = have !== undefined && /^github:dmitriywind\/agentic-sdlc#v\d/.test(have);
-  if (have === gitSpec(version) || (have && !ours && !force)) { log.push('kept devDependencies.agentic-sdlc in package.json'); return true; }
-  doc.devDependencies = { ...doc.devDependencies, 'agentic-sdlc': gitSpec(version) };
-  const indent = /^[ \t]+/m.exec(text)?.[0] ?? '  ';
-  writeFileSync(file, JSON.stringify(doc, null, indent) + '\n');
-  log.push(`set devDependencies.agentic-sdlc=${gitSpec(version)} in package.json: run npm install`);
-  return true;
+/** Keep the launcher's cache out of git: append the entry once. */
+function ignoreCliCache(root: string, log: string[]) {
+  const file = join(root, '.gitignore');
+  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  if (/^\/?\.agents\/\.cli\/?\s*$/m.test(text)) return;
+  writeFileSync(file, text + (text && !text.endsWith('\n') ? '\n' : '') + IGNORED + '\n');
+  log.push(`added ${IGNORED} to .gitignore`);
+}
+
+/** The old pin lived in package.json: say how to drop it. Never edits the file. */
+function oldPinHint(root: string, log: string[]) {
+  try {
+    const doc = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    if (doc?.devDependencies?.['agentic-sdlc'] !== undefined)
+      log.push(`package.json pins agentic-sdlc as a devDependency: remove it with npm rm agentic-sdlc (the pin is ${CLI_PIN})`);
+  } catch { /* no package.json, or not ours to judge */ }
 }
 
 /** Claude Code: tier subagents from binding.models, and CLAUDE.md importing AGENTS.md. Skills come from the plugin. */
@@ -272,7 +289,7 @@ model: ${model}
 
 You run one step of the agentic-sdlc process at the ${tier} tier. Your task names the step file to follow
 (\`.agents/skills/sdlc-<skill>/steps/<step>.md\`, or the skill's \`SKILL.md\` for a one-step skill). Read it, follow it to
-its last Done when, and report the result and the evidence. Call the CLI as \`npx --no agentic-sdlc ...\`.
+its last Done when, and report the result and the evidence. Call the CLI as \`agentic-sdlc <group> <verb>\` (it is \`${LAUNCHER}\`).
 Do not start subagents.
 `);
   }
@@ -285,7 +302,7 @@ Do not start subagents.
   }
   if (noPlugin) return;
   log.push('install the Claude Code plugin (skills, guard hook, MCP server): /plugin marketplace add dmitriywind/agentic-sdlc, then /plugin install agentic-sdlc@agentic-sdlc');
-  log.push('headless runs load it from the pinned package: claude -p ... --plugin-dir node_modules/agentic-sdlc');
+  log.push('headless runs load it from the pinned package: claude -p ... --plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc (the ref in .agents/cli.json)');
 }
 
 /** owner/name of a GitHub origin remote, or undefined. */
@@ -311,7 +328,7 @@ async function init(root: string, argv: string[], log: string[]) {
   const pkgJson = join(pkg, 'package.json');
   const version: string = existsSync(pkgJson) ? readJson(pkgJson).version : 'next';
 
-  if (existsSync(join(root, 'package.json'))) readJson(join(root, 'package.json')); // fail before anything is written
+  if (f.ref !== undefined && !isSha(f.ref) && !isTag(f.ref)) throw new Error(`--ref must be a 40-hex commit sha or a version tag like v${version}, got '${f.ref}'`);
   const skills = need(pkg, 'skills');
   const inst = new Installer(root, pkg, force, log);
   inst.skills('skills', '.agents/skills', true);
@@ -320,9 +337,12 @@ async function init(root: string, argv: string[], log: string[]) {
   const noPlugin = harness === 'claude' && f['no-plugin'] === 'true';
   if (noPlugin) inst.skills('skills', '.claude/skills', true);
   else for (const n of filesUnder(skills)) inst.skip(join('.claude/skills', inst.installedName(n)));
-  const pinned = pinCli(root, version, force, log);
-  const pinMoved = log.some((l) => l.startsWith('set devDependencies.agentic-sdlc='));
-  if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, pinned ? ['--no-install', 'agentic-sdlc', 'mcp'] : ['-y', ALLOW_GIT, gitSpec(version), 'mcp'], force, log);
+  pinCli(inst, version, f.ref, force);
+  // A kept launcher keeps its mode too.
+  if (inst.copy('templates/bin/agentic-sdlc', LAUNCHER)) chmodSync(join(root, LAUNCHER), 0o755);
+  ignoreCliCache(root, log);
+  oldPinHint(root, log);
+  if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, force, log);
   else log.push('MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)');
   const scorers = join(pkg, 'scorers');
   if (existsSync(scorers)) {
@@ -428,9 +448,9 @@ async function init(root: string, argv: string[], log: string[]) {
   if (missing) log.push(missing);
   const c = inst.counts;
   log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept (differ from every released version), ${c.stale} stale${c.removed ? `, ${c.removed} removed` : ''}`);
-  const changed = c.wrote + c.updated + c.removed > 0 || pinMoved || agentsChanged;
+  const changed = c.wrote + c.updated + c.removed > 0 || agentsChanged;
   if (hadBinding && !changed) log.push(c.kept ? `install: nothing to update; ${c.kept} kept (differ from every released version)` : 'install: up to date');
-  else if (hadBinding) log.push('upgrade: run npm install to fetch the pinned CLI, review the kept files, then run agentic-sdlc validate and agentic-sdlc doctor');
+  else if (hadBinding) log.push('upgrade: review the kept files, then run .agents/bin/agentic-sdlc validate and .agents/bin/agentic-sdlc doctor (the first call installs the pinned CLI)');
 }
 
 /** Binding problems plus skill problems (the loader's); skill warnings go into `warnings`. */
@@ -563,6 +583,27 @@ export function unpinnedActions(root: string): string | undefined {
   return bad.length ? `warn workflow actions: not pinned to a commit SHA (${[...new Set(bad)].join(', ')}); a tag can move, so let Dependabot's github-actions ecosystem pin them` : undefined;
 }
 
+/** The CLI pin: .agents/cli.json parses, its ref is a commit sha (immutable) or a version tag (can move), and the launcher is executable. */
+export function cliPin(root: string): string[] {
+  const out: string[] = [];
+  const file = join(root, CLI_PIN);
+  if (!existsSync(file)) out.push(`fail cli pin: ${CLI_PIN} is missing; run agentic-sdlc init`);
+  else {
+    let pin: any;
+    try { pin = JSON.parse(readFileSync(file, 'utf8')); } catch (e) { out.push(`fail cli pin: ${CLI_PIN} is not valid JSON (${(e as Error).message})`); }
+    if (pin) {
+      if (typeof pin.package !== 'string' || !pin.package) out.push(`fail cli pin: ${CLI_PIN} has no package`);
+      if (isSha(pin.ref)) out.push(`ok   cli pin: ${pin.package} at commit ${String(pin.ref).slice(0, 12)}`);
+      else if (isTag(pin.ref)) out.push(`warn: cli pin: ref ${pin.ref} is a tag, and a tag can move; pin a commit sha (agentic-sdlc init --ref <sha>)`);
+      else out.push(`fail cli pin: ref '${pin.ref ?? ''}' in ${CLI_PIN} is neither a 40-hex commit sha nor a version tag like v1.2.3`);
+    }
+  }
+  const launcher = join(root, LAUNCHER);
+  if (!existsSync(launcher)) out.push(`fail cli pin: ${LAUNCHER} is missing; run agentic-sdlc init`);
+  else if (process.platform !== 'win32' && !(statSync(launcher).mode & 0o111)) out.push(`fail cli pin: ${LAUNCHER} is not executable; chmod +x ${LAUNCHER}`);
+  return out;
+}
+
 /** Called with the group name as the first element: init | validate | doctor. */
 export const cli: PortCli = async (argv, ctx) => {
   const [verb, ...rest] = argv;
@@ -606,6 +647,7 @@ export const cli: PortCli = async (argv, ctx) => {
       if (dw) { out(dw); if (dw.startsWith('fail')) bad++; }
       const ua = unpinnedActions(ctx.root);
       if (ua) out(ua);
+      for (const l of cliPin(ctx.root)) { out(l); if (l.startsWith('fail')) bad++; }
       for (const [name, run] of probes) {
         try { await run(); out(`ok   ${name}`); }
         catch (e) {

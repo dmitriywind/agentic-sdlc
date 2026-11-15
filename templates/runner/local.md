@@ -16,10 +16,10 @@ secrets the binding names in the scheduler's environment.
 ## The command
 Run it from the root of a separate clone, one run at a time:
 ```bash
-git pull --ff-only && sh .agents/runner-setup.sh && claude -p "$(sed '1,/^---$/d' .agents/cycle-prompt.md)" \
+git pull --ff-only && sh .agents/runner-setup.sh && PATH="$PWD/.agents/bin:$PATH" claude -p "$(sed '1,/^---$/d' .agents/cycle-prompt.md)" \
   --permission-mode acceptEdits --max-turns 200 --output-format json \
-  --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git add *)" "Bash(git commit *)" "Bash(git push *)" "Bash(npm run *)" "Bash(npm test *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc" \
-  --disallowedTools "Bash(npx --no agentic-sdlc forge approve *)"
+  --allowedTools "Bash(agentic-sdlc *)" "Bash(git add *)" "Bash(git commit *)" "Bash(git push *)" "Bash(npm run *)" "Bash(npm test *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc" \
+  --disallowedTools "Bash(agentic-sdlc forge approve *)"
 ```
 This `--max-turns` caps the orchestrator session. A stage's own cap is `executors.<stage>.max_turns`: a `command` executor passes it with `--max-turns {max_turns}` (or `$AGENTIC_SDLC_MAX_TURNS`), so keep any fixed `--max-turns` equal to the binding value. Set the npm entries to the binding's `commands.fast_check` and `commands.verify`. The login is your
 subscription (`claude` logged in, or `CLAUDE_CODE_OAUTH_TOKEN`); the runner setup fails when
