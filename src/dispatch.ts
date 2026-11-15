@@ -8,7 +8,7 @@ import { fill } from './bench.ts';
 import type { Binding, Board, Executor, Limits, McpServer, PortCli } from './ports.ts';
 import { limitsOf, ownersFor } from './ports.ts';
 import { matches, stamp } from './comments.ts';
-import { findStep, readSkills, skillOf, stepIdOf } from './skills.ts';
+import { findStep, readSkills, skillOf } from './skills.ts';
 
 const envOf = (env: NodeJS.ProcessEnv, name: string) => {
   const v = env[name];
@@ -95,12 +95,11 @@ export const REVIEW_FIRE_ENV = 'AGENTIC_REVIEW_FIRE_CMD';
 
 /**
  * The executor entry for a step: `executors.<skill>/<step>`, then `executors.<skill>`, then `executors.default`.
- * A key that is an old skill name counts as the step that replaced it.
  */
 export function executorFor(b: Binding, id: string): Executor {
   const by = new Map<string, Executor>();
   const keys = Object.keys(b.executors).filter((k) => k !== 'default');
-  for (const k of [...keys.filter((k) => stepIdOf(k) !== k), ...keys.filter((k) => stepIdOf(k) === k)]) by.set(stepIdOf(k), b.executors[k]);
+  for (const k of keys) by.set(k, b.executors[k]);
   return by.get(id) ?? by.get(skillOf(id)) ?? b.executors.default;
 }
 
@@ -187,7 +186,7 @@ export const cli: PortCli = async (argv, ctx) => {
     // `review`) dispatch starts nothing locally: it runs the fire command the cycle's environment holds, once, or leaves
     // the start to the runner's job dependency, and prints kind `fire`. Inside the review runtime, and with no identity,
     // it is an ordinary step. An executor the binding names for the step wins. The start record says which (`via`).
-    const outside = skill === REVIEW_STEP && !!b.forge?.review_identity && ctx.env.AGENTIC_SDLC_ROLE !== 'review' && !Object.keys(b.executors).some((k) => k !== 'default' && stepIdOf(k) === skill);
+    const outside = skill === REVIEW_STEP && !!b.forge?.review_identity && ctx.env.AGENTIC_SDLC_ROLE !== 'review' && !Object.keys(b.executors).some((k) => k !== 'default' && k === skill);
     const fire = outside ? ctx.env[REVIEW_FIRE_ENV] || undefined : undefined;
     const ex: Executor = fire ? { kind: 'command', run: fire } : executorFor(b, skill);
     const via = skill === REVIEW_STEP ? (outside ? (fire ? 'review-runtime' : 'job-dependency') : 'executor') : undefined;

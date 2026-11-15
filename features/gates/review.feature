@@ -15,7 +15,7 @@ Feature: Gate review (one identity)
     Scenario: A trusted PASS for the head is a success, posted as the CI job on the head
       Given "factory-bot" commented on the CR "1":
         """
-        <!-- review-pr h2 -->
+        <!-- verdict h2 -->
         Verdict: PASS
         """
       When the review gate runs for the CR "1"

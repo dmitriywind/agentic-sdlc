@@ -24,10 +24,9 @@ const html = (name: string, ref: Def['ref']): Def => ({ ref, style: 'html', open
 
 const REGISTRY: Record<Kind, Def> = {
   spec: { ref: 'none', style: 'text', open: (c) => c.specMarker ?? 'spec.md' },
-  // The wire names `review-pr` and `verify-ux` are the markers existing boards and CRs already hold; they stay.
-  verdict: html('review-pr', 'optional'), // ref: the CR head sha
+  verdict: html('verdict', 'optional'), // ref: the CR head sha
   note: html('note', 'optional'),
-  verify: html('verify-ux', 'optional'),
+  verify: html('verify', 'optional'),
   'manual-check': html('manual-check', 'optional'), // ref: the head sha
   ask: { ref: 'optional', style: 'heading', open: () => '### Needs human' }, // ref: the trigger
   heartbeat: html('heartbeat', 'none'),

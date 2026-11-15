@@ -11,7 +11,7 @@ import { createVcs } from './vcs/index.ts';
 import { createLocalBoard } from './board/local.ts';
 import type { AdapterContext, PortCli } from './ports.ts';
 import { DEFAULTS, COPY_PREFIX, bindWorkflow, knownHashes, oneIdentityRuleset, releasedHash, renameSkill, sha, skillNames, type Bound } from './pristine.ts';
-import { OLD_STEP_IDS, readSkills, scorerTargets, stepIdOf } from './skills.ts';
+import { readSkills, scorerTargets } from './skills.ts';
 
 const START = '<!-- agentic-sdlc:start -->';
 const END = '<!-- agentic-sdlc:end -->';
@@ -476,12 +476,11 @@ export function validate(root: string, warnings: string[] = []): string[] {
   const pack = readSkills(dir);
   problems.push(...pack.errors.map((m) => `skill ${m}`));
   warnings.push(...pack.warnings.map((m) => `skill ${m}`));
-  // An executors key names a step or a skill (or default). An old skill name still resolves; any other name only serves bench --executor.
+  // An executors key names a step or a skill (or default); any other name only serves bench --executor.
   const targets = scorerTargets(pack);
   for (const k of Object.keys(binding?.executors ?? {})) {
     if (k === 'default' || targets.has(k)) continue;
-    if (Object.hasOwn(OLD_STEP_IDS, k)) warnings.push(`executors.${k}: '${k}' is an old skill name; it runs as ${stepIdOf(k)}, so name it that`);
-    else warnings.push(`executors.${k} names no step or skill, so no dispatch uses it (bench --executor ${k} still does)`);
+    warnings.push(`executors.${k} names no step or skill, so no dispatch uses it (bench --executor ${k} still does)`);
   }
   return problems;
 }

@@ -280,7 +280,7 @@ const commentsOf = (list: string): Comment[] => list.split(';').map((s) => s.tri
   const m = /^(\S+): (pass|fail|conflict|note|comment)(?: for (\S+))?(?: signal (\S+))?, (\d+)m ago(?: saying (.+))?$/.exec(e);
   if (!m) throw new Error(`cannot read the comment: ${e}`);
   const [, author, kind, head = 'h1', signal, ago, said] = m;
-  const mark = `<!-- review-pr ${head} -->`;
+  const mark = `<!-- verdict ${head} -->`;
   const body = kind === 'pass' ? `${mark}\nVerdict: PASS` : kind === 'fail' ? `${mark}\nVerdict: REMEDIATION REQUIRED`
     : kind === 'conflict' ? `${mark}\nVerdict: PASS\nVerdict: REMEDIATION REQUIRED`
       : kind === 'note' ? `<!-- note${m[3] || signal ? ` ${head}` : ''}${signal ? ` ${signal}` : ''} -->${said ? `\n${said}` : ''}` : said ?? '';

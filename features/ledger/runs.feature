@@ -94,26 +94,6 @@ Feature: The runs of the ledger
         1
         """
 
-  Rule: A run stored under an old skill name reads as its step id
-
-    Background:
-      Given a heartbeat by "factory-bot" at "2026-11-08T00:00:00Z" with these runs:
-        | id | skill          |
-        | a  | implement-spec |
-        | b  | review-pr      |
-        | c  | verify-ux      |
-        | d  | review/review  |
-        | e  | bench          |
-
-    Scenario Outline: A skill filter takes an old name as its step, and a skill name as all its steps
-      When I run "ledger runs --skill <skill>"
-      Then the "id" of the result entries are "<ids>"
-
-      Examples:
-        | skill     | ids     |
-        | review-pr | b, d    |
-        | review    | b, c, d |
-
   Rule: A human may grade a run unscorable, except a run that a hard fact capped
 
     Scenario: A human unscorable grade replaces the judge's score

@@ -294,8 +294,6 @@ Seven skills, one per phase: `sdlc` (the navigator), `plan`, `build`, `review`, 
 the skill (`build`, `ship`, `escalate`, `sdlc`). `dispatch`, the ledger's `skill` field, the bench,
 a scorer's `applies_to`, the `executors` keys and the `Agent-Skill` trailer all name a run this way.
 
-A stored run row that carries an earlier skill name is read as its step (`OLD_STEP_IDS` in `src/skills.ts`).
-
 - **Frontmatter**: `name`, `description` (a trigger sentence), and `metadata.steps: { <step>: { tier
   } }` for a multi-step skill (each step in `steps/<step>.md`) or `metadata.tier` for a one-step
   skill (the step is the SKILL.md body). `tier` is `fast`, `balanced` or `deep`; `models` maps it to

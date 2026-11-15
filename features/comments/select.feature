@@ -27,8 +27,8 @@ Feature: Comments are selected newest first by one filter
     Scenario: The comments of a kind for a head
       Given the CR 5 has these comments:
         | author | body                      |
-        | bot    | <!-- review-pr h1 -->     |
-        | bot    | <!-- review-pr h2 -->     |
+        | bot    | <!-- verdict h1 -->     |
+        | bot    | <!-- verdict h2 -->     |
         | bot    | <!-- note h1 -->          |
       When the forge CLI runs "comments 5 --kind verdict --ref h1"
-      Then the printed comments open with "<!-- review-pr h1 -->"
+      Then the printed comments open with "<!-- verdict h1 -->"

@@ -153,7 +153,7 @@ Given('these tickets, with times in hours before 2026-11-14:', (w, t: DataTable)
 });
 Given('the merged CRs:', (w, t: DataTable) => { for (const r of t.hashes()) m(w).crs.push({ n: r.cr, closes: r.closes.split(',').map((x) => x.trim()) }); });
 Given('{string} reported REMEDIATION REQUIRED on CR {string}', (w, author: string, cr: string) => {
-  (m(w).comments[cr] ??= []).push({ author, body: '<!-- review-pr\nVerdict: REMEDIATION REQUIRED' });
+  (m(w).comments[cr] ??= []).push({ author, body: '<!-- verdict\nVerdict: REMEDIATION REQUIRED' });
 });
 Given('the change failure rate may be at most {string} over {int} days', (w, max: string, days: number) => w.binding({ product: { slo: { change_failure_rate_max: Number(max), window_days: days } } }));
 Given('the environments {string}', (w, list: string) => w.binding({ product: { environments: list.split(',').map((s) => s.trim()) } }));

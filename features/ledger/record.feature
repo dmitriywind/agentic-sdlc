@@ -10,10 +10,9 @@ Feature: Planning and recording the scores of a run
 
   Rule: The plan lists the scorers that apply to the step of the run
 
-    Scenario Outline: done-conditions always applies, a scorer applies by step id, skill name, old name or *
+    Scenario Outline: done-conditions always applies, a scorer applies by step id, skill name, or *
       Given a scorer "by-step" on the scale "pass-fail" that applies to "review/verify"
       And a scorer "by-skill" on the scale "pass-fail" that applies to "review"
-      And a scorer "old-name" on the scale "pass-fail" that applies to "review-pr"
       And a scorer "other" on the scale "pass-fail" that applies to "build"
       And a heartbeat by "local" at "2026-11-08T00:00:00Z" with these runs:
         | id | skill         |
@@ -25,7 +24,7 @@ Feature: Planning and recording the scores of a run
       Examples:
         | run | scorers                                  |
         | v   | done-conditions, by-skill, by-step       |
-        | r   | done-conditions, by-skill, old-name      |
+        | r   | done-conditions, by-skill                |
 
     Scenario: The evidence names the step file of the installed pack and the skill hash
       Given an installed skill pack with the review steps

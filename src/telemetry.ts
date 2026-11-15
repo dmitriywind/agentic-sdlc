@@ -1,6 +1,5 @@
 // Standard telemetry for runs and deploys: OpenTelemetry GenAI spans (OTLP/HTTP JSON) and CDEvents.
 // Mechanism only, opt-in: nothing is sent unless the binding's `telemetry` names the env vars that hold the URLs.
-import { stepIdOf } from './skills.ts';
 import { createHash } from 'node:crypto';
 import { scrubUrl } from './exec.ts';
 import type { AdapterContext, Binding } from './ports.ts';
@@ -166,8 +165,8 @@ export function cdEventsFromRuns(rows: LedgerRun[], meta: Map<string, CycleMeta>
       taskName: r.skill, outcome: cdOutcome(r.outcome), ...(r.outcome !== 'done' && r.error ? { errors: r.error } : {}), ...(cycle ? { pipelineRun: { id: cycle } } : {}),
     }));
     if (!r.cr) continue;
-    if (stepIdOf(r.skill) === 'build' && !created.has(r.cr)) { created.add(r.cr); out.push(cd(b, CDEVENTS.type.changeCreated, r.cr, r.at, r.id, { ...(repo ? { repository: repo } : {}) })); }
-    if (stepIdOf(r.skill) === 'review/review' && r.outcome === 'done') out.push(cd(b, CDEVENTS.type.changeReviewed, r.cr, r.at, r.id, { ...(repo ? { repository: repo } : {}) }));
+    if (r.skill === 'build' && !created.has(r.cr)) { created.add(r.cr); out.push(cd(b, CDEVENTS.type.changeCreated, r.cr, r.at, r.id, { ...(repo ? { repository: repo } : {}) })); }
+    if (r.skill === 'review/review' && r.outcome === 'done') out.push(cd(b, CDEVENTS.type.changeReviewed, r.cr, r.at, r.id, { ...(repo ? { repository: repo } : {}) }));
   }
   return out;
 }

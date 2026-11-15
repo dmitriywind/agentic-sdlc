@@ -7905,11 +7905,10 @@ var init_comments = __esm({
     html = (name, ref) => ({ ref, style: "html", open: () => `<!-- ${name}` });
     REGISTRY = {
       spec: { ref: "none", style: "text", open: (c) => c.specMarker ?? "spec.md" },
-      // The wire names `review-pr` and `verify-ux` are the markers existing boards and CRs already hold; they stay.
-      verdict: html("review-pr", "optional"),
+      verdict: html("verdict", "optional"),
       // ref: the CR head sha
       note: html("note", "optional"),
-      verify: html("verify-ux", "optional"),
+      verify: html("verify", "optional"),
       "manual-check": html("manual-check", "optional"),
       // ref: the head sha
       ask: { ref: "optional", style: "heading", open: () => "### Needs human" },
@@ -9427,25 +9426,12 @@ function forbiddenHits(text) {
   });
   return hits;
 }
-var import_yaml2, TIER_NAMES, OLD_STEP_IDS, stepIdOf, skillOf, logicalName, STEP_NAME, findStep, scorerTargets, FORBIDDEN;
+var import_yaml2, TIER_NAMES, skillOf, logicalName, STEP_NAME, findStep, scorerTargets, FORBIDDEN;
 var init_skills = __esm({
   "src/skills.ts"() {
     "use strict";
     import_yaml2 = __toESM(require_dist(), 1);
     TIER_NAMES = ["fast", "balanced", "deep"];
-    OLD_STEP_IDS = {
-      "implement-spec": "build",
-      "review-pr": "review/review",
-      shape: "plan/shape",
-      "triage-signal": "plan/triage",
-      "backlog-grooming": "plan/groom",
-      "verify-ux": "review/verify",
-      release: "ship",
-      "judge-run": "learn/judge",
-      "improve-factory": "learn/improve",
-      "escalate-to-human": "escalate"
-    };
-    stepIdOf = (name) => Object.hasOwn(OLD_STEP_IDS, name) ? OLD_STEP_IDS[name] : name;
     skillOf = (id) => id.split("/")[0];
     logicalName = (folder) => folder.replace(/^sdlc-(?=.)/, "");
     STEP_NAME = /^[a-z][a-z0-9-]*$/;
@@ -9560,11 +9546,11 @@ function cdEventsFromRuns(rows, meta, b) {
       ...cycle ? { pipelineRun: { id: cycle } } : {}
     }));
     if (!r.cr) continue;
-    if (stepIdOf(r.skill) === "build" && !created.has(r.cr)) {
+    if (r.skill === "build" && !created.has(r.cr)) {
       created.add(r.cr);
       out.push(cd(b, CDEVENTS.type.changeCreated, r.cr, r.at, r.id, { ...repo ? { repository: repo } : {} }));
     }
-    if (stepIdOf(r.skill) === "review/review" && r.outcome === "done") out.push(cd(b, CDEVENTS.type.changeReviewed, r.cr, r.at, r.id, { ...repo ? { repository: repo } : {} }));
+    if (r.skill === "review/review" && r.outcome === "done") out.push(cd(b, CDEVENTS.type.changeReviewed, r.cr, r.at, r.id, { ...repo ? { repository: repo } : {} }));
   }
   return out;
 }
@@ -9644,7 +9630,6 @@ var GENAI, NS, SCOPE_NAME, SPAN_KIND_INTERNAL, STATUS_ERROR, CDEVENTS, sha256, t
 var init_telemetry = __esm({
   "src/telemetry.ts"() {
     "use strict";
-    init_skills();
     init_exec();
     GENAI = {
       schemaUrl: "https://opentelemetry.io/schemas/gen-ai-dev/1.42.0-dev",
@@ -9786,14 +9771,14 @@ function parseScores(body) {
   return Object.entries(s.scores).map(([scorer, score]) => ({ id: s.run, scorer, score, by: "judge", ...scorer === SCORE_SCORER && s.cap ? { cap: s.cap } : {} }));
 }
 function flattenRuns(comments, q = {}) {
-  const want = q.skill === void 0 ? void 0 : stepIdOf(q.skill);
+  const want = q.skill;
   const cutoff = q.sinceDays === void 0 ? -Infinity : (q.now ?? Date.now()) - q.sinceDays * 864e5;
   const beats = comments.map((c) => ({ c, hb: parseHeartbeat(c.body) })).filter((x) => x.hb);
   const rescore = pickRescores(comments.flatMap((c) => {
     const hb = parseHeartbeat(c.body);
     return hb ? hb.rescores ?? [] : isScores(c) ? parseScores(c.body) : parseGrades(c.body);
   }));
-  return beats.flatMap(({ c, hb }) => (hb.runs ?? []).map((r) => ({ ...r, at: r.at ?? hb.at ?? c.createdAt }))).map((r) => applyRescores({ ...r, skill: stepIdOf(String(r.skill)) }, rescore.get(r.id))).filter((r) => Date.parse(r.at) >= cutoff && (!want || r.skill === want || skillOf(r.skill) === want));
+  return beats.flatMap(({ c, hb }) => (hb.runs ?? []).map((r) => ({ ...r, at: r.at ?? hb.at ?? c.createdAt }))).map((r) => applyRescores(r, rescore.get(r.id))).filter((r) => Date.parse(r.at) >= cutoff && (!want || r.skill === want || skillOf(r.skill) === want));
 }
 function median(xs) {
   if (!xs.length) return null;
@@ -9848,7 +9833,7 @@ function ticketUse(rows, maxTokens, top = 20) {
   for (const r of rows) if (r.ticket) g.set(r.ticket, [...g.get(r.ticket) ?? [], r]);
   const all = [...g].map(([ticket, rs]) => {
     const tokens = rs.reduce((t, r) => t + (r.tokens ?? 0), 0);
-    const reworks = Math.max(0, rs.filter((r) => stepIdOf(r.skill) === "build").length - 1);
+    const reworks = Math.max(0, rs.filter((r) => r.skill === "build").length - 1);
     return { ticket, runs: rs.length, tokens, minutes: Math.round(rs.reduce((t, r) => t + (r.minutes ?? 0), 0) * 100) / 100, ...reworks ? { reworks } : {}, ...maxTokens && tokens > maxTokens ? { overBudget: true } : {} };
   }).sort((a, b) => b.tokens - a.tokens || b.minutes - a.minutes);
   return {
@@ -9871,13 +9856,13 @@ async function readRuns(board, ticket, authors, q = {}, graders = []) {
 }
 function learningState(comments, everyCycles, enabled = false) {
   const beats = comments.map((c) => parseHeartbeat(c.body)).filter((hb) => hb && (hb.kind ?? "cycle") === "cycle");
-  const learnAt = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean).findIndex((hb) => (hb.runs ?? []).some((r) => stepIdOf(String(r.skill)) === "learn/improve"));
+  const learnAt = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean).findIndex((hb) => (hb.runs ?? []).some((r) => String(r.skill) === "learn/improve"));
   const all = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean);
   const cyclesSince = learnAt < 0 ? beats.length : all.slice(0, learnAt).filter((hb) => (hb.kind ?? "cycle") === "cycle").length;
   return { due: enabled && Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles), judge: enabled, cyclesSince };
 }
 function scorersFor(root, id) {
-  const ids = [stepIdOf(id), skillOf(stepIdOf(id))];
+  const ids = [id, skillOf(id)];
   const dir = join4(root, ".agents", "scorers");
   const out = [];
   for (const f of existsSync3(dir) ? readdirSync2(dir).filter((n) => n.endsWith(".md")) : []) {
@@ -9888,7 +9873,7 @@ function scorersFor(root, id) {
       continue;
     }
     if (!fm?.name || !["pass-fail", "0-4"].includes(fm.scale)) continue;
-    if (fm.applies_to === "*" || Array.isArray(fm.applies_to) && fm.applies_to.some((a) => ids.includes(stepIdOf(String(a))))) out.push({ name: fm.name, scale: fm.scale, applies_to: fm.applies_to });
+    if (fm.applies_to === "*" || Array.isArray(fm.applies_to) && fm.applies_to.some((a) => ids.includes(String(a)))) out.push({ name: fm.name, scale: fm.scale, applies_to: fm.applies_to });
   }
   if (!out.some((s) => s.name === SCORE_SCORER)) out.unshift({ name: SCORE_SCORER, scale: "0-4", applies_to: "*" });
   return out;
@@ -9902,8 +9887,8 @@ function hardFacts(run, cr, required = []) {
   return { score: Math.min(...facts.map(([s]) => s)), facts: facts.map(([, f]) => f) };
 }
 function stepFile(root, id) {
-  const step = findStep(readSkills(join4(root, ".agents", "skills")), stepIdOf(id));
-  return step ? relative2(root, step.file).replaceAll("\\", "/") : `.agents/skills/${stepIdOf(id)}`;
+  const step = findStep(readSkills(join4(root, ".agents", "skills")), id);
+  return step ? relative2(root, step.file).replaceAll("\\", "/") : `.agents/skills/${id}`;
 }
 async function plan(run, o) {
   let cr;
@@ -10887,7 +10872,7 @@ function childEnv(env, secrets) {
 function executorFor(b, id) {
   const by = /* @__PURE__ */ new Map();
   const keys = Object.keys(b.executors).filter((k) => k !== "default");
-  for (const k of [...keys.filter((k2) => stepIdOf(k2) !== k2), ...keys.filter((k2) => stepIdOf(k2) === k2)]) by.set(stepIdOf(k), b.executors[k]);
+  for (const k of keys) by.set(k, b.executors[k]);
   return by.get(id) ?? by.get(skillOf(id)) ?? b.executors.default;
 }
 function managedRequest(ex, env, t, model, stageBody) {
@@ -11009,7 +10994,7 @@ ${usage}`);
         const ticket = f.ticket ?? "", cr = f.cr ?? "", workdir = f.workdir ?? ctx.root;
         const b = ctx.binding;
         const file = relative4(ctx.root, step.file).replaceAll("\\", "/");
-        const outside = skill === REVIEW_STEP && !!b.forge?.review_identity && ctx.env.AGENTIC_SDLC_ROLE !== "review" && !Object.keys(b.executors).some((k) => k !== "default" && stepIdOf(k) === skill);
+        const outside = skill === REVIEW_STEP && !!b.forge?.review_identity && ctx.env.AGENTIC_SDLC_ROLE !== "review" && !Object.keys(b.executors).some((k) => k !== "default" && k === skill);
         const fire = outside ? ctx.env[REVIEW_FIRE_ENV] || void 0 : void 0;
         const ex = fire ? { kind: "command", run: fire } : executorFor(b, skill);
         const via = skill === REVIEW_STEP ? outside ? fire ? "review-runtime" : "job-dependency" : "executor" : void 0;
@@ -11231,7 +11216,7 @@ function benchedSkills(root) {
   for (const f of readdirSync4(dir).filter((n) => n.endsWith(".json"))) {
     try {
       const suite = JSON.parse(readFileSync7(join8(dir, f), "utf8"));
-      if (Array.isArray(suite?.cases) && suite.cases.length) out.add(skillOf(stepIdOf(typeof suite.skill === "string" ? suite.skill : BENCH_STEP)));
+      if (Array.isArray(suite?.cases) && suite.cases.length) out.add(skillOf(typeof suite.skill === "string" ? suite.skill : BENCH_STEP));
     } catch {
     }
   }
@@ -12367,8 +12352,7 @@ function validate(root, warnings = []) {
   const targets = scorerTargets(pack);
   for (const k of Object.keys(binding?.executors ?? {})) {
     if (k === "default" || targets.has(k)) continue;
-    if (Object.hasOwn(OLD_STEP_IDS, k)) warnings.push(`executors.${k}: '${k}' is an old skill name; it runs as ${stepIdOf(k)}, so name it that`);
-    else warnings.push(`executors.${k} names no step or skill, so no dispatch uses it (bench --executor ${k} still does)`);
+    warnings.push(`executors.${k} names no step or skill, so no dispatch uses it (bench --executor ${k} still does)`);
   }
   return problems;
 }

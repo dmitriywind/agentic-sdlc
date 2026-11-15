@@ -64,8 +64,8 @@ Feature: Gate skill-regression
       And the output says "scorers/bad.md: scale 1-10 invalid"
 
     Scenario: An applies_to that names no step or skill is listed with the known ones
-      Given a scorer "old" on the scale "pass-fail" that applies to "review-pr, plan/nope"
+      Given a scorer "old" on the scale "pass-fail" that applies to "nope, plan/nope"
       When I run "gate skill-regression"
       Then the exit code is 1
-      And the output says "scorers/old.md: applies_to 'review-pr' names no step or skill"
+      And the output says "scorers/old.md: applies_to 'nope' names no step or skill"
       And the output says "scorers/old.md: applies_to 'plan/nope' names no step or skill"

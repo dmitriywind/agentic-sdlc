@@ -11,13 +11,13 @@ Feature: forge verdict posts the review report for the head
     Scenario: A body that already carries the marker and the verdict is normalised
       When the report for the head "h1" is built as pass from:
         """
-        <!-- review-pr h1 -->
+        <!-- verdict h1 -->
         all good
         Verdict: PASS
         """
       Then the report is:
         """
-        <!-- review-pr h1 -->
+        <!-- verdict h1 -->
         all good
 
         Verdict: PASS
@@ -40,6 +40,6 @@ Feature: forge verdict posts the review report for the head
       When the forge CLI runs "verdict 5 --pass --body-file report.md"
       Then the exit code is 0
       And the result "status" is "posted"
-      And the comment posted on the CR "5" opens with "<!-- review-pr abc1234 -->"
+      And the comment posted on the CR "5" opens with "<!-- verdict abc1234 -->"
       And a call includes "statuses/abc1234 -f state=success -f context=review"
       And a call includes "-X POST repos/o/r/pulls/5/reviews"
