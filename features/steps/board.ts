@@ -314,3 +314,21 @@ Then('the one patch sets the assignees to {string}', (w, logins: string) => {
   assert.ok(!rest(w).some((c) => c.args[4]?.endsWith('/assignees')));
 });
 Then('the repo holds {int} issues', (w, n: number) => assert.equal(w.state.issues.length, n));
+
+// ---- holds: comments written by a given author at a given time, read straight from the local board ----
+const boardDb = (w: World) => JSON.parse(readFileSync(w.path('.agents', 'board.json'), 'utf8'));
+const setWriter = (w: World, id: string, i: number, author: string, at: string) => {
+  const db = boardDb(w);
+  db.comments[id][i].author = author;
+  db.comments[id][i].createdAt = at;
+  writeFileSync(w.path('.agents', 'board.json'), JSON.stringify(db));
+};
+Given('the ticket {string} gets the comment {string} written by {string} at {string}', (w, id: string, body: string, author: string, at: string) => {
+  w.write('.comment.md', body);
+  run(w, `board comment ${id} --body-file .comment.md`);
+  setWriter(w, id, boardDb(w).comments[id].length - 1, author, at);
+});
+Given('the comment {int} of the ticket {string} was written by {string} at {string}', (w, i: number, id: string, author: string, at: string) => setWriter(w, id, i, author, at));
+Then('the comment {int} of the ticket {string} reads:', (w, i: number, id: string, doc: string) => assert.equal(boardDb(w).comments[id][i].body.trimEnd(), doc.trimEnd()));
+Then('the ticket {string} carries the labels {string}', (w, id: string, labels: string) =>
+  assert.equal(boardDb(w).items.find((t: Item) => t.id === id).labels.join(', '), labels));
