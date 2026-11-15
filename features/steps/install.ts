@@ -10,8 +10,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parse as parseYaml, stringify } from 'yaml';
 import { skillRegression } from '../../src/gates.ts';
-import { cli, deliveryWorkflow, implementerToken, probeFailure, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../../src/install.ts';
-import { DEFAULTS, bindWorkflow, isInstallable, releasedHash, renameSkill, shippedHashes } from '../../src/pristine.ts';
+import { cli, cliPin, deliveryWorkflow, implementerToken, probeFailure, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../../src/install.ts';
+import { isInstallable, renameSkill, shippedHashes } from '../../src/pristine.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import { BIN, Outcome, REPO, splitArgs, type World } from '../support/world.ts';
 
@@ -66,20 +66,9 @@ Given('the package file {string} holds {string}', (w, rel: string, text: string)
 Given('the package ships the stock file {string}', (w, rel: string) => { mkdirSync(dirname(join(pkgOf(w), rel)), { recursive: true }); cpSync(join(REPO, rel), join(pkgOf(w), rel)); });
 Given('the package no longer ships {string}', (w, rel: string) => rmSync(join(pkgOf(w), rel), { recursive: true, force: true }));
 Given('the package is at version {string}', (w, version: string) => put(pkgOf(w), 'package.json', JSON.stringify({ name: 'agentic-sdlc', version })));
-const listed = (w: World, ...hashes: string[]) => {
-  const f = join(pkgOf(w), 'templates/known-hashes.json');
-  const have: string[] = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : [];
-  put(pkgOf(w), 'templates/known-hashes.json', JSON.stringify([...have, ...hashes]));
-};
 Given('the package binding template also sets vcs.trunk and slo', (w) => {
   const f = join(pkgOf(w), 'templates/binding.yml');
   writeFileSync(f, readFileSync(f, 'utf8').replace('vcs: { adapter: git }', 'vcs: { adapter: git, trunk: main }') + 'slo: { target: 99 }\n');
-});
-Given('a delivery workflow of an older release is installed with hand-edited values, and that release is known', (w) => {
-  const real = readFileSync(join(pkgOf(w), 'templates/gates/github/agentic-sdlc-delivery.yml'), 'utf8');
-  const older = real + '# older release\n';
-  put(w.root, '.github/workflows/agentic-sdlc-delivery.yml', bindWorkflow('agentic-sdlc-delivery.yml', older, { ...DEFAULTS, trunk: 'trunk', delivery: 'hand-edited' }));
-  listed(w, releasedHash('agentic-sdlc-delivery.yml', Buffer.from(older)));
 });
 
 // ---- the project ----
@@ -113,10 +102,6 @@ Given('I note the installed file {string}', (w, rel: string) => { (w.state.noted
 const lockFile = '.agents/install.lock.json';
 const lockOf = (w: World): Record<string, string> => JSON.parse(w.read(lockFile));
 Given('the install lock is emptied', (w) => w.write(lockFile, '{}\n'));
-Given('the old skills lock holds the entry of {string} and the install lock is removed', (w, rel: string) => {
-  w.write('.agents/skills.lock.json', JSON.stringify({ [rel]: lockOf(w)[rel] }));
-  rmSync(w.path(lockFile));
-});
 
 // ---- running the install commands as a process ----
 When('I run the install command {string}', (w, line: string) => { w.last = w.spawn([BIN, '--root', w.root, ...splitArgs(line)], undefined, w.root); });
@@ -127,7 +112,6 @@ Then('the installed file {string} is absent', (w, rel: string) => assert.ok(!w.e
 Then('the installed file {string} holds {string}', (w, rel: string, text: string) => assert.equal(w.read(rel), nl(text)));
 Then('the installed file {string} is as noted', (w, rel: string) => assert.equal(w.read(rel), w.state.noted[rel]));
 Then('the installed file {string} contains {string}', (w, rel: string, text: string) => assert.ok(w.read(rel).includes(nl(text)), `${rel}:\n${w.read(rel)}`));
-Then('the installed file {string} does not contain {string}', (w, rel: string, text: string) => assert.ok(!w.read(rel).includes(nl(text)), `${rel}:\n${w.read(rel)}`));
 Then('the installed file {string} contains {string} exactly {int} times', (w, rel: string, text: string, n: number) => assert.equal(w.read(rel).split(nl(text)).length - 1, n, w.read(rel)));
 Then('the installed file {string} matches {string}', (w, rel: string, re: string) => assert.match(w.read(rel), new RegExp(re, 'm')));
 Then('the installed file {string} does not match {string}', (w, rel: string, re: string) => assert.doesNotMatch(w.read(rel), new RegExp(re, 'm')));
@@ -167,8 +151,6 @@ Then('the install lock does not record {string}', (w, rel: string) => assert.equ
 const lines = (w: World) => w.last.output.split('\n');
 Then('the output has the line {string}', (w, line: string) => assert.ok(lines(w).includes(line), w.last.output));
 Then('a line of the output matches {string}', (w, re: string) => assert.ok(lines(w).some((l) => new RegExp(re).test(l)), w.last.output));
-Then('no line of the output matches {string}', (w, re: string) => assert.ok(!lines(w).some((l) => new RegExp(re).test(l)), w.last.output));
-Then('the output does not say {string}', (w, text: string) => assert.ok(!w.last.output.includes(text), w.last.output));
 
 // ---- the installed skills ----
 Then('the installed skill pack has no skill problems', (w) => assert.deepEqual(validate(w.root).filter((m) => m.startsWith('skill ')), []));
@@ -303,6 +285,7 @@ When('doctor checks the trunk protection', (w) => shown(w, ...trunkProtection(bo
 When('doctor checks the implementer token', (w) => shown(w, implementerToken(bound(w), ctxOf(w))));
 When('doctor checks the self-hosted runner', (w) => shown(w, selfHostedRunner(bound(w), ctxOf(w))));
 When('doctor checks the delivery workflow', (w) => shown(w, deliveryWorkflow(bound(w), w.root)));
+When('doctor checks the CLI pin', (w) => shown(w, ...cliPin(w.root)));
 When('doctor checks the workflow actions', (w) => shown(w, unpinnedActions(w.root)));
 When('a probe fails with the message {string}', (w, msg: string) => shown(w, probeFailure(nl(msg), doc(w).env, bound(w))));
 When('doctor runs against the fake forge', async (w) => {

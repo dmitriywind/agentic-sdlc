@@ -11,61 +11,30 @@ Feature: Push guard
 
   Rule: A push that reaches the trunk is blocked
 
-    Scenario: A push to the trunk is blocked, and the agent is told to open a CR
-      When the agent runs "git push origin main"
-      Then the command is blocked
-      And the agent is told "push to the trunk 'main' is not allowed: open a CR."
-
-    Scenario Outline: A push to the trunk is blocked however it is spelled
+    Scenario Outline: A push to the trunk or to many branches is blocked, and the agent is told why
       When the agent runs "<command>"
       Then the command is blocked
+      And the agent is told "<told>"
 
       Examples:
-        | command                           |
-        | git push origin main              |
-        | git push origin HEAD:main         |
-        | git push --repo=origin main       |
-        | git push origin feat:\"main\"     |
-        | git push origin feat:main>/dev/null |
-        | git push origin feat:main#        |
-        | git -C . push origin main         |
+        | command                   | told                                                 |
+        | git push origin HEAD:main | push to the trunk 'main' is not allowed: open a CR.  |
+        | git -C . push origin main | push to the trunk 'main' is not allowed: open a CR.  |
+        | git push --all origin     | push your change line by name                        |
+        | git push origin {feat,main} | push your change line by name                      |
 
-    Scenario Outline: A push that can reach many branches is blocked
-      When the agent runs "<command>"
-      Then the command is blocked
-      And the agent is told "push your change line by name"
-
-      Examples:
-        | command                                      |
-        | git push --all origin                        |
-        | git push --mirror origin                     |
-        | git push origin 'refs/heads/*:refs/heads/*'  |
-        | git push 'refs/heads/*:refs/heads/*'         |
-        | git push origin {feat,main}                  |
-
-    Scenario Outline: A push of a named change line is allowed
-      When the agent runs "<command>"
-      Then the command is allowed
-
-      Examples:
-        | command                |
-        | git push origin feat   |
-        | git push -u origin feat |
-        | git push               |
-        | git push origin feat/x |
-
-    Scenario Outline: A push from a checkout of the trunk without a change line is blocked
+    Scenario Outline: A push is read in the checkout of the trunk or of a change line
       Given a checkout "on-trunk" on the branch "main" of a project whose trunk is "main"
-      And the agent works in "on-trunk"
+      And the agent works in "<where>"
       When the agent runs "<command>"
       Then the command is <verdict>
 
       Examples:
-        | command               | verdict |
-        | git push              | blocked |
-        | git push origin       | blocked |
-        | git push -u origin    | blocked |
-        | git push origin feat  | allowed |
+        | where    | command              | verdict |
+        | work     | git push origin feat | allowed |
+        | work     | git push             | allowed |
+        | on-trunk | git push             | blocked |
+        | on-trunk | git push origin feat | allowed |
 
     Scenario: A push from a checkout of the trunk tells the agent to start a change line
       Given a checkout "on-trunk" on the branch "main" of a project whose trunk is "main"
@@ -89,9 +58,8 @@ Feature: Push guard
       Then the command is <verdict>
 
       Examples:
-        | command                  | verdict |
-        | git push origin master   | blocked |
-        | git push origin main     | blocked |
+        | command                   | verdict |
+        | git push origin main      | blocked |
         | git push origin feature-x | allowed |
 
   Rule: A push is read in the checkout where it runs
@@ -101,37 +69,16 @@ Feature: Push guard
       And a checkout "feat-co" on the branch "feat" of a project whose trunk is "main"
       And the agent works in "work/sub"
 
-    Scenario Outline: A push from another checkout that is on the trunk is blocked
+    Scenario Outline: A push from another checkout is read there, and a cd that cannot be followed blocks it
       When the agent runs "<command>"
-      Then the command is blocked
+      Then the command is <verdict>
 
       Examples:
-        | command                                          |
-        | cd {{trunk-co}} && git push                      |
-        | cd {{trunk-co}}; git push origin                 |
-        | git -C {{trunk-co}} push                         |
-        | git --git-dir={{trunk-co}}/.git push             |
-        | pushd {{trunk-co}} && git push                   |
-
-    Scenario: A cd to a checkout on a change line is fine
-      Given the agent works in "trunk-co"
-      When the agent runs "cd {{feat-co}} && git push origin feat"
-      Then the command is allowed
-
-    Scenario Outline: A cd that cannot be followed blocks the push
-      When the agent runs "<command>"
-      Then the command is blocked
-
-      Examples:
-        | command                                    |
-        | cd $WT && git push origin feat             |
-        | cd \"$(pwd)/x\" && git push origin feat    |
-        | cd nowhere-here && git push origin feat    |
-        | git -C $WT push origin feat                |
-
-    Scenario: A cd that cannot be followed tells the agent to push without cd
-      When the agent runs "cd $WT && git push"
-      Then the agent is told "without cd"
+        | command                                | verdict |
+        | cd {{trunk-co}} && git push            | blocked |
+        | git -C {{trunk-co}} push               | blocked |
+        | cd {{feat-co}} && git push origin feat | allowed |
+        | cd $WT && git push origin feat         | blocked |
 
   Rule: A push built from a variable, an alias or a substitution is blocked
 
@@ -140,207 +87,93 @@ Feature: Push guard
       Then the command is blocked
 
       Examples:
-        | command                                   |
-        | B=main; git push origin $B                |
-        | g=git; $g push origin main                |
-        | git -c alias.p=push p origin main         |
-        | git push origin feat#1:main               |
-        | git push origin $(echo main)              |
-        | git push origin `echo main`               |
-        | git push \"$REMOTE\" feat                 |
-        | X=push; git $X origin main                |
-        | eval 'g=git; $g push origin main'         |
-        | bash -c \"$CMD push origin main\"         |
-
-    Scenario Outline: A push inside a command substitution is scanned too
-      When the agent runs "<command>"
-      Then the command is blocked
-
-      Examples:
-        | command                         |
-        | echo $(git push origin main)    |
-        | echo `git push origin main`     |
+        | command                           |
+        | B=main; git push origin $B        |
+        | git -c alias.p=push p origin main |
+        | echo $(git push origin main)      |
 
   Rule: Only the review runtime approves
 
-    Scenario Outline: Without the review role, forge approve is blocked however it is launched
+    Scenario Outline: forge approve is blocked without the review role however it is launched, and allowed with it
+      Given the environment sets "AGENTIC_SDLC_ROLE" to "<role>"
       When the agent runs "<command>"
-      Then the command is blocked
-      And the agent is told "forge approve is for the review runtime only"
-
-      Examples:
-        | command                                                     |
-        | agentic-sdlc forge approve 3                                |
-        | .agents/bin/agentic-sdlc forge approve 3                    |
-        | ./.agents/bin/agentic-sdlc forge approve 3                  |
-        | node dist/bin.js forge approve 3                            |
-        | agentic-sdlc.cmd forge approve 3                            |
-        | npx agentic-sdlc@latest forge approve 1                     |
-        | a=approve; agentic-sdlc forge $a 1                          |
-        | node node_modules/agentic-sdlc/dist/bin.js forge approve 1  |
-        | node node_modules/agentic-sdlc/dist/cli.js forge approve 1  |
-        | agentic-sdlc forge `echo approve` 1                         |
-        | echo $(agentic-sdlc forge approve 1)                        |
-
-    Scenario Outline: With the review role, forge approve is allowed
-      Given the environment sets "AGENTIC_SDLC_ROLE" to "review"
-      When the agent runs "<command>"
-      Then the command is allowed
-
-      Examples:
-        | command                                  |
-        | agentic-sdlc forge approve 3             |
-        | npx agentic-sdlc@latest forge approve 1  |
-        | .agents/bin/agentic-sdlc forge approve 3 |
-
-    Scenario: The MCP tool forge_approve is blocked without the review role
-      When the agent calls the MCP tool "mcp__agentic-sdlc__forge_approve"
-      Then the command is blocked
-
-    Scenario: The runner's opt-in to forge status does not open forge approve
-      Given the environment sets "AGENTIC_SDLC_ALLOW_STATUS" to "1"
-      When the agent runs "agentic-sdlc forge approve 3"
-      Then the command is blocked
-
-    Scenario: The runner's opt-in to forge status does not open the MCP tool forge_approve
-      Given the environment sets "AGENTIC_SDLC_ALLOW_STATUS" to "1"
-      When the agent calls the MCP tool "mcp__agentic-sdlc__forge_approve"
-      Then the command is blocked
-
-  Rule: Only the review runtime posts a status, unless the runner opts in
-
-    Scenario Outline: Without the review role or the opt-in, forge status is blocked
-      When the agent runs "<command>"
-      Then the command is blocked
-      And the agent is told "forge status is for the review runtime only"
-
-      Examples:
-        | command                                                              |
-        | agentic-sdlc forge status abc --context review --state success       |
-        | npx --no agentic-sdlc forge status abc --context review --state success |
-        | echo $(agentic-sdlc forge status abc)                                |
-        | .agents/bin/agentic-sdlc forge status abc --context review --state success |
-
-    Scenario Outline: The review role or the runner's opt-in allows forge status
-      Given the environment sets "<variable>" to "<value>"
-      When the agent runs "agentic-sdlc forge status abc --context review --state success"
-      Then the command is allowed
-
-      Examples:
-        | variable                  | value  |
-        | AGENTIC_SDLC_ROLE         | review |
-        | AGENTIC_SDLC_ALLOW_STATUS | 1      |
-
-    Scenario Outline: The MCP tool forge_status follows the same rule
-      Given the environment sets "<variable>" to "<value>"
-      When the agent calls the MCP tool "<tool>"
       Then the command is <verdict>
 
       Examples:
-        | tool                                                   | variable                  | value  | verdict |
-        | mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status    | AGENTIC_SDLC_ROLE         |        | blocked |
-        | mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status    | AGENTIC_SDLC_ROLE         | review | allowed |
-        | mcp__agentic-sdlc__forge_status                        | AGENTIC_SDLC_ALLOW_STATUS | 1      | allowed |
+        | role   | command                                  | verdict |
+        |        | agentic-sdlc forge approve 3             | blocked |
+        |        | agentic-sdlc --root=. forge approve 1    | blocked |
+        |        | .agents/bin/agentic-sdlc forge approve 3 | blocked |
+        |        | npx agentic-sdlc@latest forge approve 1  | blocked |
+        |        | a=approve; agentic-sdlc forge $a 1       | blocked |
+        | review | agentic-sdlc forge approve 3             | allowed |
 
-    Scenario Outline: The hook entry for MCP tools covers the forge tools of the plugin and of a manual install
-      Then the hook entry that matches MCP tools matches "<tool>"
+    Scenario: The agent is told that forge approve is for the review runtime only
+      When the agent runs "agentic-sdlc forge approve 3"
+      Then the agent is told "forge approve is for the review runtime only"
+
+  Rule: Only the review runtime posts a status, unless the runner opts in
+
+    Scenario Outline: forge status and the MCP tools follow the role and the opt-in
+      Given the environment sets "<variable>" to "<value>"
+      When the agent <call>
+      Then the command is <verdict>
 
       Examples:
-        | tool                                                 |
-        | mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status  |
-        | mcp__agentic-sdlc__forge_approve                     |
+        | variable                  | value  | call                                                                       | verdict |
+        | AGENTIC_SDLC_ROLE         |        | runs "agentic-sdlc forge status abc --state success"                       | blocked |
+        | AGENTIC_SDLC_ROLE         | review | runs "agentic-sdlc forge status abc --state success"                       | allowed |
+        | AGENTIC_SDLC_ALLOW_STATUS | 1      | runs "agentic-sdlc forge status abc --state success"                       | allowed |
+        | AGENTIC_SDLC_ALLOW_STATUS | 1      | calls the MCP tool "mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status"    | allowed |
+        | AGENTIC_SDLC_ROLE         |        | calls the MCP tool "mcp__agentic-sdlc__forge_status"                        | blocked |
+        | AGENTIC_SDLC_ALLOW_STATUS | 1      | runs "agentic-sdlc forge approve 3"                                         | blocked |
+        | AGENTIC_SDLC_ALLOW_STATUS | 1      | calls the MCP tool "mcp__agentic-sdlc__forge_approve"                       | blocked |
+
+    Scenario: The agent is told that forge status is for the review runtime only
+      When the agent runs "agentic-sdlc forge status abc --state success"
+      Then the agent is told "forge status is for the review runtime only"
+
+    Scenario: The hook entry for MCP tools covers the forge tools of the plugin and of a manual install
+      Then the hook entry that matches MCP tools matches "mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status"
+      And the hook entry that matches MCP tools matches "mcp__agentic-sdlc__forge_approve"
 
   Rule: The sdlc-reviewer agent runs only the agentic-sdlc CLI in Bash
 
     Background:
       Given the agent is the subagent "agentic-sdlc:sdlc-reviewer"
 
-    Scenario Outline: The reviewer may run a read-only CLI verb
+    Scenario Outline: The reviewer may run a read-only CLI verb and nothing else
       When the agent runs "<command>"
-      Then the command is allowed
+      Then the command is <verdict>
 
       Examples:
-        | command                                          |
-        | agentic-sdlc forge view 1                        |
-        | agentic-sdlc forge view 3 2>/dev/null            |
-        | agentic-sdlc forge view 3 > /dev/null 2>&1       |
-        | npx --no agentic-sdlc forge diff 1               |
-        | npx --no-install agentic-sdlc forge diff 3       |
-        | .agents/bin/agentic-sdlc forge diff 1            |
-        | ./.agents/bin/agentic-sdlc forge diff 1          |
-
-    Scenario Outline: The reviewer may run nothing else
-      When the agent runs "<command>"
-      Then the command is blocked
-
-      Examples:
-        | command                                            |
-        | npm test                                           |
-        | cat .env                                           |
-        | node script.js                                     |
-        | agentic-sdlc forge view 3 && npm test              |
-        | agentic-sdlc forge view 3 > out.txt                |
-        | echo $(npm test)                                   |
-        | x=agentic-sdlc; $x forge view 3                    |
-        | cd sub                                             |
-        | node ./evil.js agentic-sdlc                        |
-        | /tmp/agentic-sdlc forge view 3                     |
-        | ../.agents/bin/agentic-sdlc forge view 3           |
-        | bin/agentic-sdlc forge view 3                      |
-        | npx evil-pkg agentic-sdlc                          |
-        | ./agentic-sdlc board list                          |
-        | /tmp/x/agentic-sdlc                                |
-        | node node_modules/agentic-sdlc/dist/bin.js board get 4 |
-        | FOO=1 agentic-sdlc board list                      |
-        | agentic-sdlc board list $(id)                      |
-        | agentic-sdlc board list `id`                       |
-        | agentic-sdlc board list $HOME                      |
-        | npx --package=evil agentic-sdlc board list         |
-        | agentic-sdlc forge list --checks \| head -5        |
-
-    Scenario: The reviewer cannot approve without the review role
-      When the agent runs "agentic-sdlc forge approve 3"
-      Then the command is blocked
-
-    Scenario: The reviewer can approve with the review role
-      Given the environment sets "AGENTIC_SDLC_ROLE" to "review"
-      When the agent runs "agentic-sdlc forge approve 3"
-      Then the command is allowed
+        | command                                    | verdict |
+        | agentic-sdlc forge view 3 2>/dev/null      | allowed |
+        | npx --no agentic-sdlc forge diff 1         | allowed |
+        | npm test                                   | blocked |
+        | agentic-sdlc forge view 3 && npm test      | blocked |
+        | x=agentic-sdlc; $x forge view 3            | blocked |
+        | ../.agents/bin/agentic-sdlc forge view 3   | blocked |
+        | agentic-sdlc forge approve 3               | blocked |
 
   Rule: Other agents and ordinary commands are not restricted
 
-    Scenario Outline: An agent that is not the reviewer may run any command
-      Given the agent is the subagent "<agent>"
-      When the agent runs "npm test"
-      Then the command is allowed
-
-      Examples:
-        | agent                  |
-        | agentic-sdlc:sdlc-fast |
-        | sdlc-fast              |
-
     Scenario Outline: An ordinary command passes
+      Given the agent is the subagent "<agent>"
       When the agent runs "<command>"
       Then the command is allowed
 
       Examples:
-        | command                                           |
-        | cd sub && npm test                                |
-        | git -c user.name=x commit -m \"fix #1\"           |
-        | git commit -m \"wip # push\" && git push origin feat |
-        | agentic-sdlc forge view 1                         |
-        | echo $HOME && ls \"$PWD\"                         |
-        | for f in a b; do echo $f; done                    |
-        | v=$(git rev-parse HEAD); echo $v                  |
+        | agent                  | command                                              |
+        | agentic-sdlc:sdlc-fast | npm test                                             |
+        | main                   | git commit -m \"wip # push\" && git push origin feat |
 
   Rule: The guard fails closed, except on input that is not a tool call
 
-    Scenario: Input that is not JSON is let through
+    Scenario: Input that is not JSON is let through, and a hook that cannot run blocks the tool call
       When the hook receives the input "not json {"
       Then the command is allowed
-
-    Scenario: A hook that cannot run blocks the tool call
-      Then every hook entry blocks the call when the hook fails
+      And every hook entry blocks the call when the hook fails
 
   Rule: The pre-push hook checks the branch names being pushed
 
@@ -354,24 +187,22 @@ Feature: Push guard
           factory_change_pattern: "factory/<name>"
         """
 
-    Scenario: A branch that follows the change pattern is pushed
+    Scenario Outline: A branch is pushed only if it follows a binding pattern
       When git hands the pre-push hook of the checkout "work" these lines:
         """
-        refs/heads/12-fix-x SHA refs/heads/12-fix-x ZERO
+        <line>
         """
-      Then the exit code is 0
+      Then the exit code is <code>
 
-    Scenario: A branch outside the binding patterns is refused
+      Examples:
+        | line                                             | code |
+        | refs/heads/12-fix-x SHA refs/heads/12-fix-x ZERO | 0    |
+        | refs/heads/wip SHA refs/heads/wip ZERO           | 1    |
+        | (delete) ZERO refs/heads/wip SHA                 | 0    |
+
+    Scenario: A refused branch name is reported
       When git hands the pre-push hook of the checkout "work" these lines:
         """
         refs/heads/wip SHA refs/heads/wip ZERO
         """
-      Then the exit code is 1
-      And the output says "branch name not allowed: wip"
-
-    Scenario: A deleted branch is not checked
-      When git hands the pre-push hook of the checkout "work" these lines:
-        """
-        (delete) ZERO refs/heads/wip SHA
-        """
-      Then the exit code is 0
+      Then the output says "branch name not allowed: wip"

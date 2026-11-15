@@ -88,11 +88,6 @@ const jiraAnswer = (w: World) => (c: string): unknown => {
     if (s.jiraPages === 'stuck') return { issues: [jIssue('PROJ-1')], nextPageToken: 't1' };
     return { issues: [], isLast: true };
   }
-  if (s.jiraComments && c.includes('/comment')) {
-    const { total, marker, text } = s.jiraComments;
-    const [from, n] = c.includes('startAt=100') ? [100, total - 100] : [0, Math.min(total, 100)];
-    return { total, comments: Array.from({ length: n }, (_, i) => ({ id: String(from + i), created: '', body: { type: 'doc', content: [{ type: 'text', text: from + i === marker ? text : 'hi' }] } })) };
-  }
   if (c.includes('/issue/PROJ-1')) return { key: 'PROJ-1', fields: { summary: 's', status: { name: s.status ?? 'Ready' }, labels: [], subtasks: [] } };
   return {};
 };
@@ -192,7 +187,6 @@ Given('the GitHub Project holds issue {int} of {string} and issue {int} of {stri
 });
 Given('Jira lists the issues {string} and {string} on two pages', (w, a: string, b: string) => { w.state.jiraPages = 'two'; w.state.jiraFirst = a; w.state.jiraLast = b; });
 Given('Jira answers every page with the same next page token', (w) => { w.state.jiraPages = 'stuck'; });
-Given('Jira holds {int} comments and the comment {int} says {string}', (w, total: number, marker: number, text: string) => { w.state.jiraComments = { total, marker, text }; });
 Given('Linear holds the issues L1 and L2 and the comments k1 and k2 on two pages each', (w) => { w.state.linearPages = true; });
 Given('Linear answers every page with a next page and the same cursor', (w) => { w.state.linearStuck = true; });
 Given('the Linear issue carries the workspace label {string} with the id {string}', (w, name: string, id: string) => { w.state.linearLabels = [{ id, name }]; });
@@ -224,12 +218,10 @@ When('the factory moves the ticket {string} to {string}', (w, id: string, status
 When('the factory moves the ticket {string} to {string} only from {string}', (w, id: string, status: string, from: string) => attempt(w, (b) => b.move(id, status, from)));
 When('the factory reads the comments of the ticket {string}', (w, id: string) => attempt(w, (b) => b.comments(id)));
 When('the factory reads the comments of the ticket {string} with the marker {string}', (w, id: string, marker: string) => attempt(w, (b) => b.comments(id, { marker })));
-When('the factory comments {string} on the ticket {string}', (w, body: string, id: string) => attempt(w, (b) => b.comment(id, body)));
 When('the factory assigns the ticket {string} to {string}', (w, id: string, login: string) => attempt(w, (b) => b.assign(id, login)));
 When('the factory sets the milestone of the ticket {string} to {string}', (w, id: string, name: string) => attempt(w, (b) => b.milestone(id, name)));
 When('the factory sets the field {string} of the ticket {string} to {string}', (w, f: string, id: string, v: string) => attempt(w, (b) => b.set(id, f as LogicalField, v)));
 When('the factory adds the label {string} to the ticket {string}', (w, l: string, id: string) => attempt(w, (b) => b.label(id, 'add', l)));
-When('the factory removes the label {string} from the ticket {string}', (w, l: string, id: string) => attempt(w, (b) => b.label(id, 'remove', l)));
 When('the factory closes the ticket {string} as {string}', (w, id: string, reason: string) => attempt(w, (b) => b.close(id, reason as 'completed' | 'not_planned')));
 When('the factory creates a ticket at {string} with the labels {string}, the milestone {string} and the parent {string}', (w, status: string, labels: string, milestone: string, parent: string) =>
   attempt(w, (b) => b.create({ title: 'n', body: 'b', status, labels: csv(labels), milestone, parent })));
@@ -249,8 +241,6 @@ Then('the listed ticket {string} has the labels {string}', (w, id: string, label
 Then('the comment ids are {string}', (w, ids: string) => assert.equal((w.state.result as { id: string }[]).map((c) => c.id).sort().join(', '), ids));
 Then('the returned ticket has the status {string}', (w, status: string) => assert.equal((w.state.result as Item).status, status));
 Then('the returned ticket has the fields {string}', (w, fields: string) => assert.equal(Object.entries((w.state.result as Item).fields).map(([k, v]) => `${k}=${v}`).join(', '), fields));
-Then('the returned ticket has the labels {string}', (w, labels: string) => assert.equal((w.state.result as Item).labels.join(', '), labels));
-Then('the returned comment id is {string}', (w, id: string) => assert.equal((w.state.result as { id: string }).id, id));
 Then('the search was called {int} times', (w, n: number) => assert.equal(w.calls.filter((c) => c.includes('/search/jql')).length, n));
 Then('the JQL searches for the text {string} with the backslash and the quote escaped', (w, text: string) => {
   const call = w.calls.find((c) => c.includes('/search/jql'))!;

@@ -11,8 +11,6 @@ Feature: The GitHub Projects board
       When the factory lists the tickets
       Then the listed ticket titles are "of O/R"
 
-  Rule: Every gh call carries the credential the binding names
-
   Rule: An assignee is replaced, never added
 
     Scenario: A new assignee replaces the old one

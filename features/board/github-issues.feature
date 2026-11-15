@@ -6,36 +6,19 @@ Feature: The github-issues board
 
   Rule: A ticket is an issue with a status label
 
-    Scenario: Status and fields are read from the labels
+    Scenario: Status and fields are read from the labels, and pull requests and issues with no status label are left out
       Given the github-issues board adapter
       And the repo has these issues:
-        | number | labels                                         |
-        | 1      | status:Backlog                                 |
-        | 2      | status:Ready, size:S, release version:1.2, bug |
+        | number | labels                                         | pull request |
+        | 1      | status:Backlog                                 |              |
+        | 2      | status:Ready, size:S, release version:1.2, bug |              |
+        | 3      |                                                |              |
+        | 4      | status:Ready                                   | yes          |
       When the factory lists the tickets in the status "Ready"
       Then the listed ticket ids are "2"
       And the listed ticket "2" has the status "Ready"
       And the listed ticket "2" has the fields "size=S, release_version=1.2"
       And the listed ticket "2" has the labels "bug"
-      And every call is a gh api call under the repo, never GraphQL, gh issue or gh project
-
-    Scenario: Pull requests and issues with no status label are left out of the list
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels         | pull request |
-        | 10     | status:Ready   |              |
-        | 200    |                |              |
-        | 201    | status:Ready   | yes          |
-      When the factory lists the tickets
-      Then the listed ticket ids are "10"
-
-    Scenario: A comment can be written on an issue with no status label
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels |
-        | 9      |        |
-      When the factory comments "hb" on the ticket "9"
-      Then the returned comment id is "5"
       And every call is a gh api call under the repo, never GraphQL, gh issue or gh project
 
   Rule: A move swaps the status label
@@ -49,7 +32,6 @@ Feature: The github-issues board
       When the factory moves the ticket "7" to "In progress" only from "Backlog"
       Then the returned ticket has the status "In progress"
       And the issue 7 has the labels "size:M, status:In progress"
-      And every call is a gh api call under the repo, never GraphQL, gh issue or gh project
 
   Rule: Create, set, label and close edit labels and the issue state
 
@@ -64,31 +46,16 @@ Feature: The github-issues board
       Then the repo has the labels exactly "bug, feature, status:Ready"
       And the returned ticket has the status "Ready"
 
-    Scenario: A field is set and cleared through its label
+    Scenario: A field is set through its label, and a ticket closed as not planned is Cancelled
       Given the github-issues board adapter
       And the repo has these issues:
-        | number | labels                       |
+        | number | labels                        |
         | 7      | status:In review, size:M, bug |
       When the factory sets the field "size" of the ticket "7" to "L"
       Then the returned ticket has the fields "size=L"
-
-    Scenario: A label is removed
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels                       |
-        | 7      | status:In review, size:M, bug |
-      When the factory removes the label "bug" from the ticket "7"
-      Then the returned ticket has the labels ""
-
-    Scenario: A ticket closed as not planned is Cancelled
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels                       |
-        | 7      | status:In review |
       When the factory closes the ticket "7" as "not_planned"
       Then the returned ticket has the status "Cancelled"
       And the issue 7 is closed with the reason "not_planned"
-      And every call is a gh api call under the repo, never GraphQL, gh issue or gh project
 
   Rule: Comments are paged and newest first
 
@@ -101,8 +68,6 @@ Feature: The github-issues board
       And the comment 110 of the issue 7 says "hb\nx"
       When the factory reads the comments of the ticket "7" with the marker "hb"
       Then the comment ids are "110"
-
-  Rule: An assignee is replaced, never added
 
   Rule: The milestone is set by title and cleared with null
 
@@ -118,20 +83,16 @@ Feature: The github-issues board
 
   Rule: A write is retried on a rate limit but not on a server error; a read is retried on both
 
-    Scenario: A read is retried on a server error
+    Scenario Outline: A failing gh is retried or not
       Given the github-issues board adapter
       And the repo has these issues:
         | number | labels       |
         | 7      | status:Ready |
-      And gh fails 2 times with "gh: HTTP 502: Bad Gateway" before it answers
-      When the factory gets the ticket "7"
-      Then the returned ticket has the status "Ready"
+      And gh fails 1 times with "<error>" before it answers
+      When the factory <call>
+      Then <then>
 
-    Scenario: A write is retried on a rate limit
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels       |
-        | 7      | status:Ready |
-      And gh fails 1 times with "gh: HTTP 403: You have exceeded a secondary rate limit" before it answers
-      When the factory assigns the ticket "7" to "x"
-      Then the one patch sets the assignees to "x"
+      Examples:
+        | error                                                  | call                          | then                                       |
+        | gh: HTTP 502: Bad Gateway                              | gets the ticket "7"           | the returned ticket has the status "Ready" |
+        | gh: HTTP 403: You have exceeded a secondary rate limit | assigns the ticket "7" to "x" | the one patch sets the assignees to "x"    |

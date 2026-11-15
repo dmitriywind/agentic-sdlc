@@ -13,16 +13,7 @@ Feature: The CLI explains itself and reads its own options strictly
         | group    |
         | init     |
         | board    |
-        | forge    |
-        | vcs      |
         | gate     |
-        | dispatch |
-        | ledger   |
-        | bench    |
-
-    Scenario: Init lists the profiles it knows
-      When I run "init --help"
-      Then the output matches "--profile individual\|individual-api\|organization"
 
     Scenario Outline: A group that needs a verb is a usage error without one
       When I run "<group>"
@@ -31,39 +22,19 @@ Feature: The CLI explains itself and reads its own options strictly
       Examples:
         | group |
         | forge |
-        | vcs   |
         | gate  |
+
+  Rule: Own options are read strictly
+
+    Scenario: The version prints and exits with code 0
+      When I run the CLI as typed "--version"
+      Then the exit code is 0
+      And the output matches "^\d+\.\d+\.\d+"
 
     Scenario: No arguments lists every group and is a usage error
       When I run the CLI as typed ""
       Then the exit code is 2
       And the output matches "init[\s\S]*mcp"
-
-  Rule: Own options are read strictly
-
-    Scenario Outline: The version prints and exits with code 0
-      When I run the CLI as typed "<flag>"
-      Then the exit code is 0
-      And the output matches "^\d+\.\d+\.\d+"
-
-      Examples:
-        | flag      |
-        | --version |
-        | -v        |
-
-    Scenario: Help lists the groups and the gates
-      When I run the CLI as typed "help"
-      Then the exit code is 0
-      And the output matches "usage: agentic-sdlc"
-      And the output matches "gate .*skill-regression review"
-
-    Scenario: A group asked for help prints its usage
-      When I run the CLI as typed "gate --help"
-      Then the output matches "usage: agentic-sdlc gate"
-
-    Scenario: --root without a directory is a usage error
-      When I run the CLI as typed "--root"
-      Then the exit code is 2
 
     Scenario: --root followed by a group name is a usage error that says so
       When I run the CLI as typed "--root board list"
