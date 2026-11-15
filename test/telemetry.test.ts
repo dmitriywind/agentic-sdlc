@@ -18,9 +18,9 @@ const env = { OTLP: 'https://otel.example/', SINK: 'https://sink.example/events'
 const hb = {
   at: '2026-11-08T10:00:00Z', factory: 'f00dfeed',
   runs: [
-    { id: 'r1', at: '2026-11-08T09:30:00Z', skill: 'implement-spec', skillHash: 'abc123', ticket: '7', cr: '12', tier: 'balanced', model: 'm1', executor: 'command', ref: 'bot-1', tokens: 1200, minutes: 6, outcome: 'done', score: 4, scores: { 'done-conditions': 4, 'scope-creep': 'pass' } },
-    { id: 'r2', at: '2026-11-08T09:45:00Z', skill: 'review-pr', skillHash: 'def456', ticket: '7', cr: '12', tier: 'fast', model: '', outcome: 'done' },
-    { id: 'r3', at: '2026-11-08T09:50:00Z', skill: 'implement-spec', skillHash: 'abc123', ticket: '8', cr: '13', tier: 'balanced', model: 'm1', minutes: 2, outcome: 'failed', error: 'fast_check red' },
+    { id: 'r1', at: '2026-11-08T09:30:00Z', skill: 'build', skillHash: 'abc123', ticket: '7', cr: '12', tier: 'balanced', model: 'm1', executor: 'command', ref: 'bot-1', tokens: 1200, minutes: 6, outcome: 'done', score: 4, scores: { 'done-conditions': 4, 'scope-creep': 'pass' } },
+    { id: 'r2', at: '2026-11-08T09:45:00Z', skill: 'review/review', skillHash: 'def456', ticket: '7', cr: '12', tier: 'fast', model: '', outcome: 'done' },
+    { id: 'r3', at: '2026-11-08T09:50:00Z', skill: 'build', skillHash: 'abc123', ticket: '8', cr: '13', tier: 'balanced', model: 'm1', minutes: 2, outcome: 'failed', error: 'fast_check red' },
   ],
 };
 const comments: Comment[] = [{ id: 'c1', author: 'bot', createdAt: '2026-11-08T10:00:00Z', body: `<!-- heartbeat -->\n\`\`\`json\n${JSON.stringify(hb)}\n\`\`\`` }];
@@ -47,14 +47,14 @@ test('otlpTraces: one trace per heartbeat, a workflow root and one invoke_agent 
   assert.match(root.traceId, /^[0-9a-f]{32}$/);
   assert.match(s1.spanId, /^[0-9a-f]{16}$/);
   assert.equal(s1.parentSpanId, root.spanId);
-  assert.equal(s1.name, 'invoke_agent implement-spec');
+  assert.equal(s1.name, 'invoke_agent build');
   assert.equal(s1.kind, 1);
   // 09:30 is the end of the run; 6 minutes before it is the start. Times are decimal strings of nanoseconds.
   assert.equal(s1.endTimeUnixNano, String(Date.parse('2026-11-08T09:30:00Z')) + '000000');
   assert.equal(s1.startTimeUnixNano, String(Date.parse('2026-11-08T09:24:00Z')) + '000000');
   assert.deepEqual(s1.attributes, [
     { key: 'gen_ai.operation.name', value: { stringValue: 'invoke_agent' } },
-    { key: 'gen_ai.agent.name', value: { stringValue: 'implement-spec' } },
+    { key: 'gen_ai.agent.name', value: { stringValue: 'build' } },
     { key: 'gen_ai.agent.version', value: { stringValue: 'abc123' } },
     { key: 'gen_ai.request.model', value: { stringValue: 'm1' } },
     { key: 'agentic_sdlc.run.id', value: { stringValue: 'r1' } },
@@ -111,10 +111,10 @@ test('cdEventsFromRuns: taskrun finished per run, change created once per CR, ch
   ]);
   assert.deepEqual(evs[0], {
     context: { specversion: '0.5.1', id: evs[0].context.id, source: 'https://github.com/acme/app', type: CDEVENTS.type.taskrunFinished, timestamp: '2026-11-08T09:30:00.000Z' },
-    subject: { id: 'r1', content: { taskName: 'implement-spec', outcome: 'success', pipelineRun: { id: 'c1' } } },
+    subject: { id: 'r1', content: { taskName: 'build', outcome: 'success', pipelineRun: { id: 'c1' } } },
   });
   assert.deepEqual(evs[1].subject.content, { repository: { id: 'acme/app', source: 'https://github.com/acme/app' } });
-  assert.deepEqual(evs[4].subject.content, { taskName: 'implement-spec', outcome: 'failure', errors: 'fast_check red', pipelineRun: { id: 'c1' } });
+  assert.deepEqual(evs[4].subject.content, { taskName: 'build', outcome: 'failure', errors: 'fast_check red', pipelineRun: { id: 'c1' } });
   assert.match(evs[0].context.id, /^[0-9a-f]{32}$/);
   assert.deepEqual(cdEventsFromRuns(rows, meta, binding).map((e) => e.context.id), evs.map((e) => e.context.id));
 });

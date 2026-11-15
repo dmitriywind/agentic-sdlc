@@ -1,6 +1,6 @@
 ---
 name: sdlc-balanced
-description: Runs one agentic-sdlc skill step whose metadata.tier is balanced (an ordinary step). The sdlc skill hands a step to this agent when the step's skill is at the balanced tier and the project has no .claude/agents/sdlc-balanced.md.
+description: Runs one agentic-sdlc step whose tier is balanced (an ordinary step). The sdlc skill hands a step to this agent when the step is at the balanced tier and the project has no .claude/agents/sdlc-balanced.md.
 model: inherit
 disallowedTools: Agent
 ---

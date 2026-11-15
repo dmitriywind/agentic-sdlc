@@ -1,6 +1,6 @@
 // The core vocabulary every area reuses. Keep it small, in domain words, and used.
 import assert from 'node:assert/strict';
-import { Given, Then } from '../support/steps.ts';
+import { Given, When, Then } from '../support/steps.ts';
 import type { World } from '../support/world.ts';
 
 /** Sets a dotted key of the binding the scenario builds (CLI and gates read the same patch). */
@@ -23,3 +23,9 @@ Given('the binding has no {string}', (w, key: string) => setKey(w, key, undefine
 Then('the exit code is {int}', (w, code: number) => assert.equal(w.last.code, code, `exit code (stderr: ${w.last.stderr.trim()})`));
 Then('the output says {string}', (w, text: string) => assert.ok(w.last.output.includes(text), `output lacks "${text}":\n${w.last.output}`));
 Then('the output matches {string}', (w, re: string) => assert.match(w.last.output, new RegExp(re)));
+
+// ---- When: the CLI ----
+When('I run {string}', (w, line: string) => { w.cliLine(line); });
+
+// ---- the files of the project ----
+Given('a file {string} with {string}', (w, name: string, text: string) => w.write(name, text));

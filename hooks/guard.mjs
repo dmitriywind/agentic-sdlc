@@ -20,9 +20,9 @@ try { input = JSON.parse(readFileSync(0, 'utf8') || '{}'); } catch { process.exi
 const dir = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const review = process.env.AGENTIC_SDLC_ROLE === 'review';
 const status = review || process.env.AGENTIC_SDLC_ALLOW_STATUS === '1';
-// The sdlc-reviewer agent (plugin-scoped agent_type) runs only the agentic-sdlc CLI from PATH in Bash: review-pr never runs the CR's code.
+// The sdlc-reviewer agent (plugin-scoped agent_type) runs only the agentic-sdlc CLI from PATH in Bash: review/review never runs the CR's code.
 const reviewer = /(^|:)sdlc-reviewer$/.test(input.agent_type ?? '');
-const REVIEWER = 'the sdlc-reviewer agent runs only agentic-sdlc commands in Bash: review-pr never runs the change request\'s code.';
+const REVIEWER = 'the sdlc-reviewer agent runs only agentic-sdlc commands in Bash: review/review never runs the change request\'s code.';
 const APPROVE = 'forge approve is for the review runtime only (AGENTIC_SDLC_ROLE=review).';
 const STATUS = 'forge status is for the review runtime only (AGENTIC_SDLC_ROLE=review, or AGENTIC_SDLC_ALLOW_STATUS=1 set by the runner for a one-identity cycle).';
 

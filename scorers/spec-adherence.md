@@ -1,6 +1,6 @@
 ---
 name: spec-adherence
-applies_to: [implement-spec, shape]
+applies_to: [build, plan/shape]
 scale: pass-fail
 ---
 

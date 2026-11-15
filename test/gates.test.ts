@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
@@ -130,30 +130,58 @@ test('signal-on-red: redacted summary, deduplicated, string ids', async () => {
   await assert.rejects(signalOnRed(f.d, '1'), /no run 1/);
 });
 
-test('skill-regression: valid pack passes, bad frontmatter and broken links listed', () => {
-  const root = mkdtempSync(join(tmpdir(), 'sk-'));
-  const mkSkill = (n: string, text: string) => { mkdirSync(join(root, '.agents', 'skills', n), { recursive: true }); writeFileSync(join(root, '.agents', 'skills', n, 'SKILL.md'), text); };
-  mkSkill('good', '---\nname: good\ndescription: d\nmetadata:\n  tier: fast\n---\nsee [x](https://x.y) and [r](SKILL.md#a)\n');
+test('skill-regression: a valid pack passes; bad frontmatter, steps, links, forbidden words and verbs are listed with file:line', async () => {
+  const { packRoot } = await import('./skillfix.ts');
+  const root = packRoot();
+  const sk = (...p: string[]) => join(root, '.agents', 'skills', ...p);
   assert.deepEqual(skillRegression(root), { errors: [], warnings: [] });
-  mkSkill('old', '---\nname: old\ndescription: d\ntier: deep\n---\nx\n');
-  assert.deepEqual(skillRegression(root), { errors: [], warnings: ['old: top-level tier is deprecated; move it to metadata.tier'] });
-  mkSkill('none', '---\nname: none\ndescription: d\n---\nx\n');
-  mkSkill('bad', '---\nname: bad\nmetadata:\n  tier: huge\n---\n[l](missing.md)\n');
+  writeFileSync(sk('sdlc-build', 'SKILL.md'), '---\nname: sdlc-build\ndescription: d\ntier: deep\n---\nx\n');
+  assert.deepEqual(skillRegression(root), { errors: [], warnings: ['sdlc-build: top-level tier is deprecated; move it to metadata.tier'] });
+  mkdirSync(sk('none'), { recursive: true }); writeFileSync(sk('none', 'SKILL.md'), '---\nname: none\ndescription: d\n---\nx\n');
+  mkdirSync(sk('bad'), { recursive: true }); writeFileSync(sk('bad', 'SKILL.md'), '---\nname: bad\nmetadata:\n  tier: huge\n---\n[l](missing.md)\n');
+  mkdirSync(sk('sdlc-ghost', 'steps'), { recursive: true });
+  writeFileSync(sk('sdlc-ghost', 'SKILL.md'), '---\nname: sdlc-ghost\ndescription: d\nmetadata:\n  steps:\n    one: { tier: fast }\n    two: { tier: nope }\n---\n');
+  writeFileSync(sk('sdlc-ghost', 'steps', 'extra.md'), 'x\n');
   const errs = skillRegression(root).errors.join('\n');
-  assert.match(errs, /none: frontmatter metadata.tier missing/);
+  assert.match(errs, /none: frontmatter metadata.tier or metadata.steps missing/);
   assert.match(errs, /bad: frontmatter description missing/);
   assert.match(errs, /tier huge invalid/);
-  assert.match(errs, /broken link missing.md/);
+  assert.match(errs, /bad: broken link missing.md/);
+  assert.match(errs, /sdlc-ghost: step one has no file steps\/one.md/);
+  assert.match(errs, /sdlc-ghost: tier nope invalid/);
+  assert.match(errs, /sdlc-ghost: steps\/extra.md is not in metadata.steps/);
+  rmSync(sk('none'), { recursive: true }); rmSync(sk('bad'), { recursive: true }); rmSync(sk('sdlc-ghost'), { recursive: true });
+  writeFileSync(sk('sdlc-build', 'SKILL.md'), '---\nname: sdlc-build\ndescription: d\nmetadata:\n  tier: deep\n---\nok\nUse the review token on GitHub.\nRun `agentic-sdlc board nope` then `agentic-sdlc forge verdict`.\nRun agentic-sdlc gate proofs-on-base and agentic-sdlc dispatch review/review, then agentic-sdlc dispatch plan.\n');
+  const e2 = skillRegression(root).errors;
+  assert.ok(e2.some((m) => /sdlc-build\/SKILL\.md:8: forbidden 'review token'/.test(m)), e2.join('\n'));
+  assert.ok(e2.some((m) => /SKILL\.md:8: forbidden 'GitHub'/.test(m)));
+  assert.ok(e2.some((m) => /SKILL\.md:9: 'agentic-sdlc board nope' is not a verb/.test(m)));
+  assert.ok(e2.some((m) => /SKILL\.md:10: 'agentic-sdlc dispatch plan' is not a step id/.test(m)));
+  assert.ok(!e2.some((m) => /proofs-on-base/.test(m) && /forbidden/.test(m)), 'a gate verb is a CLI verb, not a hard-coded check name');
 });
 
-test('skill-regression: a good scorer passes; bad scorer frontmatter is listed', () => {
-  const root = mkdtempSync(join(tmpdir(), 'sc-'));
-  mkdirSync(join(root, '.agents', 'skills'), { recursive: true });
+test('forbidden content: each pattern has a reason and the hits carry their line', async () => {
+  const { FORBIDDEN, forbiddenHits } = await import('../src/skills.ts');
+  assert.ok(FORBIDDEN.every((f) => f.reason.length > 10));
+  for (const bad of ['two identities', 'the review_identity key', 'review runtime', 'Claude', 'a plugin', 'a subagent', 'MCP', 'GitHub', 'run gh pr', 'a pull request', 'npm test', 'npx x', 'node x', 'cloud session', 'HTTP 404', 'status 429', 'jira', '`Required`', 'DORA', 'GDPR'])
+    assert.equal(forbiddenHits(`ok\n${bad}\n`)[0]?.line, 2, bad);
+  for (const good of ['change request', 'agentic-sdlc gate proofs-on-base', 'a node of the tree is fine? no, use item', 'the board status', 'retry in 500 ms'].filter((g) => !/node/.test(g)))
+    assert.deepEqual(forbiddenHits(good), [], good);
+});
+
+test('skill-regression: a good scorer passes; scorers name real step ids, skills or *', async () => {
+  const { packRoot } = await import('./skillfix.ts');
+  const root = packRoot();
   mkdirSync(join(root, '.agents', 'scorers'), { recursive: true });
-  writeFileSync(join(root, '.agents', 'scorers', 'good.md'), '---\nname: good\napplies_to: [implement-spec]\nscale: pass-fail\n---\nq\n');
+  writeFileSync(join(root, '.agents', 'scorers', 'good.md'), '---\nname: good\napplies_to: [build, review/verify, plan]\nscale: pass-fail\n---\nq\n');
+  writeFileSync(join(root, '.agents', 'scorers', 'star.md'), '---\nname: star\napplies_to: "*"\nscale: 0-4\n---\nq\n');
   assert.deepEqual(skillRegression(root).errors, []);
   writeFileSync(join(root, '.agents', 'scorers', 'bad.md'), '---\nname: bad\napplies_to: implement-spec\ntier: huge\nscale: 1-10\n---\nq\n');
-  assert.deepEqual(skillRegression(root).errors, ['scorers/bad.md: applies_to must be "*" or a list of skills', 'scorers/bad.md: scale 1-10 invalid']);
+  writeFileSync(join(root, '.agents', 'scorers', 'old.md'), '---\nname: old\napplies_to: [review-pr, plan/nope]\nscale: pass-fail\n---\nq\n');
+  assert.deepEqual(skillRegression(root).errors.map((m) => m.replace(/ \(steps:.*/, '')), [
+    'scorers/bad.md: applies_to must be "*" or a list of step ids or skills', 'scorers/bad.md: scale 1-10 invalid',
+    "scorers/old.md: applies_to 'review-pr' names no step or skill", "scorers/old.md: applies_to 'plan/nope' names no step or skill",
+  ]);
 });
 
 test('diffPaths: old and new path; quoted or ambiguous headers fail closed', () => {
@@ -163,6 +191,7 @@ test('diffPaths: old and new path; quoted or ambiguous headers fail closed', () 
   assert.equal(diffPaths('diff --git a/x b/y b/z\n'), null);
 });
 
+const stepsMd = (t1: string, t2: string) => `---\nname: a\ndescription: d\nmetadata:\n  steps:\n    one: { tier: ${t1} }\n    two: { tier: ${t2} }\n---\nrules\n`;
 const skillMd = (tier: string, body = 'rules\n', extra = '') => `---\nname: a\ndescription: d\nmetadata:\n  tier: ${tier}\n${extra}---\n${body}`;
 
 /** Classes the CRs whose diffs and files at base/head shas are given; a suite for skill `a` lives in d.root. */
@@ -185,14 +214,18 @@ function classFakes(benched: boolean) {
     'both:skill': skillMd('deep', 'other rules\n'),
     'desc:skill': skillMd('deep', 'rules\n', 'license: x\n'),
     'badtier:skill': skillMd('huge'),
+    'sbase:skill': stepsMd('fast', 'balanced'),
+    'stier:skill': stepsMd('fast', 'deep'),
+    'sbad:skill': stepsMd('fast', 'huge'),
   };
   const crs: Record<string, Partial<CR>> = {}, diffs: Record<string, string> = {};
   for (const [n, d] of Object.entries({ tune: bdiff, guard: bdiff, nohead: bdiff, tier: mdiff, text: mdiff, both: mdiff, desc: mdiff, badtier: mdiff })) {
     crs[n] = { headSha: n, baseSha: 'base', source: `factory/${n}` };
     diffs[n] = d;
   }
-  Object.assign(crs, { ren: {}, q: {}, del: {}, gate: {}, mix: {} });
+  Object.assign(crs, { ren: {}, q: {}, del: {}, gate: {}, mix: {}, stier: { headSha: 'stier', baseSha: 'sbase' }, sbad: { headSha: 'sbad', baseSha: 'sbase' } });
   Object.assign(diffs, {
+    stier: mdiff, sbad: mdiff,
     mix: 'diff --git a/src/app.ts b/src/app.ts\ndiff --git a/.agents/binding.yml b/.agents/binding.yml\n',
     ren: 'diff --git a/src/app.ts b/.agents/app.ts\n',
     q: 'diff --git "a/.agents/\\303\\251" "b/.agents/\\303\\251"\n',
@@ -214,6 +247,8 @@ test('classify: rename out of factory, quoted path, models-only binding, metadat
   assert.equal(await cls('mix'), 'guardrail');
   assert.equal(await cls('tune'), 'tuning');
   assert.equal(await cls('tier'), 'tuning');
+  assert.equal(await cls('stier'), 'tuning'); // one step's tier in metadata.steps
+  assert.equal(await cls('sbad'), 'guardrail');
   for (const n of ['del', 'gate', 'nohead', 'guard', 'text', 'both', 'desc', 'badtier']) assert.equal(await cls(n), 'guardrail', n);
   assert.deepEqual(await linkage(d, 'guard'), { ok: true, factory: true, class: 'guardrail', errors: [] });
   // No bench suite for the skill: a tier change cannot be measured, so it is guardrail.

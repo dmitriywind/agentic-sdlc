@@ -9,12 +9,12 @@ import type { Board, Comment } from '../src/ports.ts';
 const beat = (hb: object, createdAt = '2026-11-08T00:00:00Z'): Comment => ({
   id: 'c', author: 'bot', createdAt, body: `<!-- heartbeat -->\n\`\`\`json\n${JSON.stringify(hb)}\n\`\`\``,
 });
-const run = (o: object) => ({ id: 'r1', skill: 'implement-spec', skillHash: 'abc', tier: 'balanced', model: 'm1', outcome: 'done', ...o });
+const run = (o: object) => ({ id: 'r1', skill: 'build', skillHash: 'abc', tier: 'balanced', model: 'm1', outcome: 'done', ...o });
 
 test('flattenRuns filters by age and skill and applies the newest rescore', () => {
   const now = Date.parse('2026-11-09T00:00:00Z');
   const comments = [
-    beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: 'b', skill: 'review-pr' })], rescores: [{ id: 'a', score: 1 }] }),
+    beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: 'b', skill: 'review/review' })], rescores: [{ id: 'a', score: 1 }] }),
     beat({ at: '2026-11-07T00:00:00Z', runs: [run({ id: 'a', score: 4 })], rescores: [{ id: 'a', score: 3 }] }),
     beat({ at: '2026-10-01T00:00:00Z', runs: [run({ id: 'old' })] }),
   ];
@@ -23,7 +23,7 @@ test('flattenRuns filters by age and skill and applies the newest rescore', () =
   assert.equal(all.find((r) => r.id === 'a')!.score, 1);
   assert.equal(all[0].at, '2026-11-08T00:00:00Z');
   assert.deepEqual(flattenRuns(comments, { sinceDays: 7, now }).map((r) => r.id), ['b', 'a']);
-  assert.deepEqual(flattenRuns(comments, { skill: 'review-pr' }).map((r) => r.id), ['b']);
+  assert.deepEqual(flattenRuns(comments, { skill: 'review/review' }).map((r) => r.id), ['b']);
 });
 
 test('summarise groups by skill and model; clusters need two hits', () => {
@@ -31,25 +31,25 @@ test('summarise groups by skill and model; clusters need two hits', () => {
     run({ id: '1', score: 4, minutes: 10 }),
     run({ id: '2', score: 2, minutes: 5, outcome: 'failed', error: 'Fast_check red in src/x.ts at 3f9c2d1e for \"PROJ-45\"', ticket: '7' }),
     run({ id: '3', score: 1, model: 'm2', outcome: 'failed', error: 'fast_check red in  lib\\y.ts:7 at 0a1b2c3d4e for \"LIN-9\"', ticket: '8' }),
-    run({ id: '4', skill: 'shape', executor: 'command', ref: 'bot-1', outcome: 'failed', error: 'once only' }),
+    run({ id: '4', skill: 'plan/shape', executor: 'command', ref: 'bot-1', outcome: 'failed', error: 'once only' }),
   ] as any[];
   const s = summarise(rows);
-  assert.deepEqual(s.bySkill['implement-spec'], { runs: 3, medianScore: 2, failureRate: 2 / 3, minutes: 15 });
+  assert.deepEqual(s.bySkill['build'], { runs: 3, medianScore: 2, failureRate: 2 / 3, minutes: 15 });
   assert.equal(s.byModel.m2.runs, 1);
   assert.equal(s.byExecutor.harness.runs, 3);
   assert.equal(s.byExecutor.command.runs, 1);
-  assert.deepEqual(clusters(rows), [{ skill: 'implement-spec', error: 'fast_check red in <path> at <sha> for <s>', count: 2, tickets: ['7', '8'] }]);
+  assert.deepEqual(clusters(rows), [{ skill: 'build', error: 'fast_check red in <path> at <sha> for <s>', count: 2, tickets: ['7', '8'] }]);
   // the scorer view
   const srows = [
     run({ id: '1', ticket: '7', cr: '70', scores: { 'done-conditions': 4, 'redundant-tests': 'fail' } }),
     run({ id: '2', ticket: '8', cr: '80', scores: { 'done-conditions': 1, 'redundant-tests': 'fail' } }),
     run({ id: '3', ticket: '8', cr: '81', scores: { 'redundant-tests': 'pass' } }),
-    run({ id: '4', skill: 'judge-run' }),
+    run({ id: '4', skill: 'learn/judge' }),
   ] as any[];
   const ss = summarise(srows);
   assert.deepEqual(ss.byScorer['redundant-tests'], { runs: 3, failRate: 2 / 3, median: null });
   assert.deepEqual(ss.byScorer['done-conditions'], { runs: 2, failRate: 0.5, median: 2.5 });
-  assert.deepEqual(ss.failureClusters, [{ skill: 'implement-spec', scorer: 'redundant-tests', count: 2, tickets: ['7', '8'] }]);
+  assert.deepEqual(ss.failureClusters, [{ skill: 'build', scorer: 'redundant-tests', count: 2, tickets: ['7', '8'] }]);
 });
 
 test('cli: hash prints JSON, bad verb is a usage error', async () => {
@@ -116,9 +116,9 @@ test('readRuns: scores comments by bots and grade comments by owners apply; othe
 
 test('learningState: cycles since the last improve-factory heartbeat, due at every_cycles, off unless enabled', () => {
   const comments = [
-    beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: '5', skill: 'judge-run' })] }),
+    beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: '5', skill: 'learn/judge' })] }),
     beat({ at: '2026-11-07T00:00:00Z', runs: [run({ id: '4' })] }),
-    beat({ at: '2026-11-06T00:00:00Z', runs: [run({ id: '3', skill: 'improve-factory' })] }),
+    beat({ at: '2026-11-06T00:00:00Z', runs: [run({ id: '3', skill: 'learn/improve' })] }),
     beat({ at: '2026-10-01T00:00:00Z', runs: [run({ id: '1', skill: 'bench' })] }),
   ];
   assert.deepEqual(learningState(comments, 2, true), { due: true, judge: true, cyclesSince: 2 });
@@ -130,14 +130,14 @@ test('learningState: cycles since the last improve-factory heartbeat, due at eve
 test('plan scorers and caps; record validates names and scales and applies the cap', () => {
   const root = mkdtempSync(join(tmpdir(), 'sc-'));
   mkdirSync(join(root, '.agents', 'scorers'), { recursive: true });
-  writeFileSync(join(root, '.agents', 'scorers', 'r.md'), '---\nname: redundant-tests\napplies_to: [implement-spec]\nscale: pass-fail\n---\nq\n');
-  writeFileSync(join(root, '.agents', 'scorers', 'x.md'), '---\nname: release-only\napplies_to: [release]\nscale: 0-4\n---\nq\n');
-  assert.deepEqual(scorersFor(root, 'implement-spec').map((s) => s.name), ['done-conditions', 'redundant-tests']);
+  writeFileSync(join(root, '.agents', 'scorers', 'r.md'), '---\nname: redundant-tests\napplies_to: [build]\nscale: pass-fail\n---\nq\n');
+  writeFileSync(join(root, '.agents', 'scorers', 'x.md'), '---\nname: release-only\napplies_to: [ship]\nscale: 0-4\n---\nq\n');
+  assert.deepEqual(scorersFor(root, 'build').map((s) => s.name), ['done-conditions', 'redundant-tests']);
   const r = run({ id: 'a', outcome: 'failed', cr: '7' }) as any;
   const cr = { checks: [{ name: 'Required', state: 'failure' }, { name: 'lint', state: 'failure' }] } as any;
   assert.deepEqual(hardFacts(r, cr, ['Required']), { score: 1, facts: ['outcome failed', 'red check on the head: Required'] });
   assert.equal(hardFacts(run({}) as any), null);
-  const p = { run: r, scorers: scorersFor(root, 'implement-spec'), evidence: {}, cap: hardFacts(r, cr, ['Required']) };
+  const p = { run: r, scorers: scorersFor(root, 'build'), evidence: {}, cap: hardFacts(r, cr, ['Required']) };
   const body = scoresComment(p, { scores: { 'done-conditions': 4, 'redundant-tests': 'pass' } }, 'T');
   assert.ok(body.startsWith('<!-- scores -->\n'));
   assert.deepEqual(JSON.parse(body.split('\n')[2]), { run: 'a', at: 'T', scores: { 'done-conditions': 1, 'redundant-tests': 'pass' }, cap: 'outcome failed; red check on the head: Required' });
@@ -178,9 +178,9 @@ test('cli: plan, record and stale on a local board', async () => {
 
 test('learningState: review and learn heartbeats count no cycle; a learn heartbeat with improve-factory resets the count', () => {
   const comments = [
-    beat({ at: '2026-11-08T03:00:00Z', kind: 'review', runs: [run({ id: 'r', skill: 'review-pr' })] }),
+    beat({ at: '2026-11-08T03:00:00Z', kind: 'review', runs: [run({ id: 'r', skill: 'review/review' })] }),
     beat({ at: '2026-11-08T02:00:00Z', runs: [] }),
-    beat({ at: '2026-11-08T01:00:00Z', kind: 'learn', runs: [run({ id: 'l', skill: 'improve-factory' })] }),
+    beat({ at: '2026-11-08T01:00:00Z', kind: 'learn', runs: [run({ id: 'l', skill: 'learn/improve' })] }),
     beat({ at: '2026-11-08T00:00:00Z', runs: [] }),
     beat({ at: '2026-11-07T00:00:00Z', runs: [] }),
   ];
@@ -191,7 +191,7 @@ test('summarise: tokens per ticket, top 20 by tokens, over-budget tickets marked
   const rows = [
     run({ id: '1', ticket: '7', tokens: 900, minutes: 4 }),
     run({ id: '2', ticket: '7', tokens: 700, minutes: 3, outcome: 'capped', error: 'max turns' }),
-    run({ id: '3', ticket: '8', skill: 'review-pr', tokens: 100 }),
+    run({ id: '3', ticket: '8', skill: 'review/review', tokens: 100 }),
     run({ id: '4', ticket: '9' }),
     run({ id: '5' }),
   ] as any[];
@@ -297,4 +297,38 @@ test('cli: a flag without a value and an unknown export format are one-line usag
     assert.equal(await cli(['runs', '--bogus', 'x'], ctx), 2);
     assert.deepEqual(errs, ['--since needs a value', '--format must be otlp or cdevents', '--format must be otlp or cdevents', 'unknown flag --bogus']);
   } finally { console.error = err; }
+});
+
+test('old skill names in stored rows read as their step ids; summary groups by step and rolls up by skill; scorers match id, skill or *', async () => {
+  const { stepIdOf } = await import('../src/skills.ts');
+  const comments = [beat({ at: '2026-11-08T00:00:00Z', runs: [
+    run({ id: 'a', skill: 'implement-spec' }), run({ id: 'b', skill: 'review-pr' }), run({ id: 'c', skill: 'verify-ux' }), run({ id: 'd', skill: 'review/review' }), run({ id: 'e', skill: 'bench' }),
+  ] })];
+  const rows = flattenRuns(comments);
+  assert.deepEqual(rows.map((r) => r.skill), ['build', 'review/review', 'review/verify', 'review/review', 'bench']);
+  assert.deepEqual(flattenRuns(comments, { skill: 'review-pr' }).map((r) => r.id), ['b', 'd']); // an old name filters as its step
+  assert.deepEqual(flattenRuns(comments, { skill: 'review' }).map((r) => r.id), ['b', 'c', 'd']); // a skill name takes all its steps
+  const s = summarise(rows);
+  assert.equal(s.byStep['review/review'].runs, 2);
+  assert.equal(s.byStep['review/verify'].runs, 1);
+  assert.equal(s.bySkill.review.runs, 3);
+  assert.equal(s.bySkill.build.runs, 1);
+  assert.equal(stepIdOf('escalate-to-human'), 'escalate');
+  const root = mkdtempSync(join(tmpdir(), 'sc2-'));
+  mkdirSync(join(root, '.agents', 'scorers'), { recursive: true });
+  const sc = (n: string, at: string) => writeFileSync(join(root, '.agents', 'scorers', `${n}.md`), `---\nname: ${n}\napplies_to: ${at}\nscale: pass-fail\n---\nq\n`);
+  sc('by-step', '[review/verify]'); sc('by-skill', '[review]'); sc('old-name', '[review-pr]'); sc('other', '[build]');
+  assert.deepEqual(scorersFor(root, 'review/verify').map((x) => x.name).sort(), ['by-skill', 'by-step', 'done-conditions']);
+  assert.deepEqual(scorersFor(root, 'review/review').map((x) => x.name).sort(), ['by-skill', 'done-conditions', 'old-name']);
+  // learningState finds a learn/improve run stored under its old name
+  const st = learningState([beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: 'i', skill: 'improve-factory' })] }), beat({ at: '2026-11-07T00:00:00Z', runs: [] })], 5, true);
+  assert.equal(st.cyclesSince, 0);
+});
+
+test('plan names the step file of the installed pack', async () => {
+  const { packRoot } = await import('./skillfix.ts');
+  const { plan } = await import('../src/ledger.ts');
+  const root = packRoot();
+  const p = await plan(run({ id: 'z', skill: 'review/verify' }) as any, { root, binding: { forge: {} } as any });
+  assert.match(p.evidence.skill, /^\.agents\/skills\/sdlc-review\/steps\/verify\.md at skillHash abc$/);
 });

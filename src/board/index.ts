@@ -94,7 +94,7 @@ export async function holds(board: Board, b: Binding): Promise<Hold[]> {
 }
 
 /** The flags each verb accepts; anything else is a usage error. */
-const VERBS: Record<string, VerbSpec> = {
+export const VERBS: Record<string, VerbSpec> = {
   list: { value: ['status', 'label', 'search'] },
   get: {},
   create: { value: ['title', 'body-file', 'status', 'label', 'parent', 'milestone'] },

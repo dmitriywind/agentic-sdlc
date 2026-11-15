@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { cli, probeFailure, cloudBoard, deliveryWorkflow, implementerToken, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../src/install.ts';
 import { parse } from 'yaml';
 import { fakeCtx } from './helpers.ts';
+import { writePack } from './skillfix.ts';
 import { DEFAULTS, bindWorkflow, isInstallable, releasedHash, sha, shippedHashes } from '../src/pristine.ts';
 
 const w = (p: string, s: string) => { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, s); };
@@ -14,7 +15,7 @@ const w = (p: string, s: string) => { mkdirSync(dirname(p), { recursive: true })
 function fixture() {
   const pkg = mkdtempSync(join(tmpdir(), 'pkg-'));
   w(join(pkg, 'package.json'), '{"name":"agentic-sdlc","version":"9.9.9"}');
-  w(join(pkg, 'skills/sdlc/SKILL.md'), '---\nname: sdlc\ndescription: d\nmetadata:\n  tier: fast\n---\n');
+  writePack(join(pkg, 'skills'));
   w(join(pkg, 'templates/binding.yml'), '# doc\nversion: 2\nboard: { adapter: github }\nforge: { adapter: github }\nvcs: { adapter: git }\nmodels: { fast: claude-haiku-4-5, balanced: your-balanced-model-id }\n');
   w(join(pkg, 'templates/gates/github/gate.yml'), 'on: push\n');
   w(join(pkg, 'templates/gates/hooks/pre-push'), '#!/bin/sh\n');
@@ -60,11 +61,11 @@ test('init keeps an edited skill file unless --force, and updates an unedited on
   const root = fixture();
   const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
   const { ctx } = fakeCtx(root, {}, () => ({}));
-  w(join(pkg, 'skills/shape/SKILL.md'), 'v1');
+  w(join(pkg, 'skills/plan/steps/shape.md'), 'v1');
   await quiet(() => cli(['init'], ctx));
-  const sdlc = join(root, '.agents/skills/sdlc/SKILL.md'), shape = join(root, '.agents/skills/shape/SKILL.md');
+  const sdlc = join(root, '.agents/skills/sdlc/SKILL.md'), shape = join(root, '.agents/skills/sdlc-plan/steps/shape.md');
   writeFileSync(sdlc, 'mine');
-  w(join(pkg, 'skills/shape/SKILL.md'), 'v2');
+  w(join(pkg, 'skills/plan/steps/shape.md'), 'v2');
   const lines: string[] = [];
   const l = console.log; console.log = (m: string) => { lines.push(m); };
   try { await cli(['init'], ctx); } finally { console.log = l; }
@@ -89,9 +90,18 @@ test('validate warns on a top-level skill tier, fails when no tier exists or fro
   w(join(root, '.agents/skills/none/SKILL.md'), '---\nname: none\ndescription: d\n---\n');
   const warnings: string[] = [];
   const problems = validate(root, warnings);
-  assert.ok(warnings.some((m) => m.includes("skill old: top-level 'tier'")), warnings.join('|'));
-  assert.ok(problems.some((m) => /skill none: .*metadata\.tier/.test(m)), problems.join('|'));
+  assert.ok(warnings.some((m) => m.includes('skill old: top-level tier is deprecated')), warnings.join('|'));
+  assert.ok(problems.some((m) => /skill none: .*metadata\.tier or metadata\.steps/.test(m)), problems.join('|'));
   assert.ok(!problems.some((m) => /skill (old|sdlc):/.test(m)), problems.join('|'));
+  const b = parse(readFileSync(join(root, '.agents/binding.yml'), 'utf8'));
+  b.executors['implement-spec'] = { kind: 'harness' }; b.executors['plan/shape'] = { kind: 'harness' }; b.executors.mybot = { kind: 'harness' };
+  w(join(root, '.agents/binding.yml'), JSON.stringify(b));
+  const w2: string[] = []; validate(root, w2);
+  assert.ok(w2.some((m) => /executors\.implement-spec: .* runs as build/.test(m)), w2.join('|'));
+  assert.ok(w2.some((m) => /executors\.mybot names no step or skill/.test(m)));
+  assert.ok(!w2.some((m) => /executors\.plan\/shape/.test(m)));
+  w(join(root, '.agents/skills/sdlc-plan/steps/extra.md'), 'x');
+  assert.ok(validate(root).some((m) => /sdlc-plan: steps\/extra\.md is not in metadata\.steps/.test(m)));
   w(join(root, '.agents/skills/bad/SKILL.md'), 'no frontmatter');
   assert.equal(await quiet(() => cli(['validate'], fakeCtx(root, {}, () => ({})).ctx)), 1);
 });
@@ -535,16 +545,88 @@ test('init honours the skills lock of an install from before the single lock', a
   assert.ok(existsSync(join(root, '.agents/install.lock.json')));
 });
 
-test('init reports a file the package no longer ships and deletes nothing', async () => {
+test('init removes an unedited file the package no longer ships and reports an edited one as stale, keeping it', async () => {
   const root = fixture();
   const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
   const { ctx } = fakeCtx(root, {}, () => ({}));
   w(join(pkg, 'templates/gates/github/old.yml'), 'x: 1\n');
+  w(join(pkg, 'templates/gates/github/old2.yml'), 'y: 1\n');
+  w(join(pkg, 'skills/gone/SKILL.md'), '---\nname: gone\ndescription: d\nmetadata:\n  tier: fast\n---\n');
+  w(join(pkg, 'skills/gone/steps/a.md'), 'a\n');
   await quiet(() => cli(['init'], ctx));
-  rmSync(join(pkg, 'templates/gates/github/old.yml'));
+  assert.ok(existsSync(join(root, '.agents/skills/sdlc-gone/steps/a.md')));
+  writeFileSync(join(root, '.github/workflows/old2.yml'), 'edited: 1\n');
+  for (const f of ['templates/gates/github/old.yml', 'templates/gates/github/old2.yml']) rmSync(join(pkg, f));
+  rmSync(join(pkg, 'skills/gone'), { recursive: true });
   const lines = await capture(() => cli(['init'], ctx));
-  assert.ok(lines.includes('stale .github/workflows/old.yml: no longer part of the package'), lines.join('|'));
-  assert.ok(existsSync(join(root, '.github/workflows/old.yml')));
+  assert.ok(lines.includes('removed .github/workflows/old.yml: no longer part of the package'), lines.join('|'));
+  assert.ok(!existsSync(join(root, '.github/workflows/old.yml')));
+  assert.ok(lines.includes('stale .github/workflows/old2.yml: no longer part of the package'), lines.join('|'));
+  assert.ok(existsSync(join(root, '.github/workflows/old2.yml')));
+  assert.ok(!existsSync(join(root, '.agents/skills/sdlc-gone')), 'an old skill folder does not linger and trigger');
+  assert.ok(existsSync(join(root, '.agents/skills')));
+  assert.ok(lines.some((m) => /^install: .*, 1 stale, 3 removed$/.test(m)), lines.join('|'));
+});
+
+test('init removes an old skill folder that no lock tracks when every file of it is a released version', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  const old = '---\nname: implement-spec\ndescription: old\nmetadata:\n  tier: balanced\n---\nrules\n';
+  w(join(root, '.agents/skills/implement-spec/SKILL.md'), old);
+  w(join(root, '.agents/skills/mine/SKILL.md'), 'my own skill\n');
+  w(join(pkg, 'templates/known-hashes.json'), JSON.stringify([sha(old)]));
+  await quiet(() => cli(['init'], ctx));
+  assert.ok(!existsSync(join(root, '.agents/skills/implement-spec')));
+  assert.ok(existsSync(join(root, '.agents/skills/mine/SKILL.md')), 'a skill of the project is never touched');
+});
+
+test('init writes copied installs as sdlc-<name>: folder, frontmatter name and links between skills; sdlc stays; the plugin install writes no copy', async () => {
+  const root = fixture();
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  const skills = join(root, '.agents/skills');
+  assert.deepEqual(readdirSync(skills).sort(), ['sdlc', 'sdlc-build', 'sdlc-escalate', 'sdlc-learn', 'sdlc-plan', 'sdlc-review', 'sdlc-ship']);
+  assert.match(readFileSync(join(skills, 'sdlc-plan/SKILL.md'), 'utf8'), /^---\nname: sdlc-plan\n/);
+  assert.match(readFileSync(join(skills, 'sdlc-plan/SKILL.md'), 'utf8'), /\(\.\.\/sdlc\/references\/contract\.md\)/);
+  assert.match(readFileSync(join(skills, 'sdlc-plan/steps/shape.md'), 'utf8'), /\(\.\.\/\.\.\/sdlc-escalate\/SKILL\.md\)/);
+  assert.match(readFileSync(join(skills, 'sdlc/SKILL.md'), 'utf8'), /^---\nname: sdlc\n/);
+  assert.deepEqual(validate(root).filter((m) => m.startsWith('skill ')), []); // the loader reads the installed pack
+  const { skillRegression } = await import('../src/gates.ts');
+  assert.deepEqual(skillRegression(root).errors, []);
+  // a second run finds every renamed file unedited: nothing is updated or kept
+  const lines = await capture(() => cli(['init'], ctx));
+  assert.ok(lines.includes('install: up to date') || lines.some((m) => /0 new, 0 updated, 0 kept/.test(m)), lines.join('|'));
+  const cc = fixture();
+  await quiet(() => cli(['init', '--harness', 'claude', '--no-plugin'], fakeCtx(cc, {}, () => ({})).ctx));
+  assert.ok(existsSync(join(cc, '.claude/skills/sdlc-build/SKILL.md')));
+  assert.ok(!existsSync(join(cc, '.claude/skills/build')));
+});
+
+test('a renamed skill file is unedited when its package source hash is a released one (no lock needed)', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  const src = join(pkg, 'skills/plan/SKILL.md');
+  const v1 = readFileSync(src, 'utf8');
+  await quiet(() => cli(['init'], ctx));
+  rmSync(join(root, '.agents/install.lock.json'));
+  w(join(pkg, 'templates/known-hashes.json'), JSON.stringify([sha(v1)]));
+  w(src, v1 + 'more\n');
+  await quiet(() => cli(['init'], ctx));
+  assert.match(readFileSync(join(root, '.agents/skills/sdlc-plan/SKILL.md'), 'utf8'), /more\n$/);
+  assert.match(readFileSync(join(root, '.agents/skills/sdlc-plan/SKILL.md'), 'utf8'), /^---\nname: sdlc-plan\n/);
+});
+
+test('renameSkill: names and relative links go to the copied form and back, byte for byte', async () => {
+  const { renameSkill } = await import('../src/pristine.ts');
+  const names = new Set(['sdlc', 'plan', 'build']);
+  const src = '---\nname: plan\ndescription: d\nmetadata:\n  name: keep\n---\n[a](../sdlc/references/c.md#x) [b](../build/SKILL.md) [c](steps/s.md) [d](https://x/y) [e](#f) [f](./steps/s.md)\n';
+  const to = renameSkill('plan/SKILL.md', src, 'to', names);
+  assert.equal(to, '---\nname: sdlc-plan\ndescription: d\nmetadata:\n  name: keep\n---\n[a](../sdlc/references/c.md#x) [b](../sdlc-build/SKILL.md) [c](steps/s.md) [d](https://x/y) [e](#f) [f](./steps/s.md)\n');
+  assert.equal(renameSkill('sdlc-plan/SKILL.md', to, 'from', new Set()), src);
+  assert.equal(renameSkill('plan/steps/s.md', '[x](../../build/SKILL.md) [y](../SKILL.md)', 'to', names), '[x](../../sdlc-build/SKILL.md) [y](../SKILL.md)');
+  assert.equal(renameSkill('sdlc/SKILL.md', '[x](../plan/SKILL.md)', 'to', names), '[x](../sdlc-plan/SKILL.md)');
 });
 
 test('init and validate list template binding keys that the binding does not set', async () => {

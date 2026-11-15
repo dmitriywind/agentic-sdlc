@@ -1,6 +1,6 @@
 ---
 name: triage-accuracy
-applies_to: [triage-signal]
+applies_to: [plan/triage]
 scale: pass-fail
 ---
 

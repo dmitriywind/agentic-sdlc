@@ -55,7 +55,7 @@ export function resolveStage(b: Binding, ex: Executor, skillTier?: string, judge
     mcps[n] = { ...(m.url ? { url: m.url } : {}), ...(m.command ? { command: m.command } : {}), ...(m.token_env ? { token_env: m.token_env } : {}) };
   }
   const tier = ex.model?.tier ?? skillTier;
-  const model = judgeModel ?? ex.model?.id ?? (tier ? (b.models as Record<string, string>)[tier] : undefined);
+  const model = judgeModel ?? ex.model?.id ?? (tier ? (b.models as Record<string, string> | undefined)?.[tier] : undefined);
   return { mcps, secrets: ex.secrets ?? [], sandbox: ex.sandbox ?? b.executors.default?.sandbox, model };
 }
 

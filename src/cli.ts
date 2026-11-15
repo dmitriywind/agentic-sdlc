@@ -4,7 +4,7 @@ import { exec, http } from './exec.ts';
 import type { AdapterContext, PortCli } from './ports.ts';
 
 // [module, needs binding, verbs]. install.ts serves init|validate|doctor and takes the group as its verb.
-const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, string]> = {
+export const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, string]> = {
   init: [() => import('./install.ts'), false, 'copy skills, write the binding and CI gates'],
   validate: [() => import('./install.ts'), false, 'check the binding and skills'],
   doctor: [() => import('./install.ts'), false, 'validate, then probe board, forge and vcs'],
