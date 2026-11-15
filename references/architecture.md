@@ -558,7 +558,7 @@ allows `forge approve` and `forge status`, and its MCP launcher serves `forge_ap
 `AGENTIC_SDLC_PACKAGE` (the package root `init` copies from; tests set it). `dispatch` sets
 `AGENTIC_SDLC_MAX_TURNS`, `AGENTIC_SDLC_MAX_TOKENS` and `AGENTIC_SDLC_MAX_MINUTES` in a `command` executor's child (section 7).
 
-**Install and upgrade.** `init` records the sha256 of every file it copies from the package (skills,
+**Install and upgrade.** `init --upgrade` without `--harness` reuses the install's harness: `.claude/skills` means `claude --no-plugin`, tier agents `.claude/agents/sdlc-*.md` mean `claude`. A generated tier agent with no lock entry is regenerated when it names `npx --no agentic-sdlc`, and an `npx` agentic-sdlc entry in `.mcp.json` moves to the launcher (other servers untouched). `init` records the sha256 of every file it copies from the package (skills,
 scorers, workflows, rulesets as patched, the pre-push hook, runner files, generated tier agents) in
 `.agents/install.lock.json`; it reads the older `.agents/skills.lock.json` once. A re-run (`init --upgrade`
 is the same run) updates a file still at its recorded hash, keeps an edited one and names the package file

@@ -80,3 +80,22 @@ Feature: Init upgrades an install
       And the installed file ".github/workflows/old2.yml" exists
       And the installed file ".agents/skills/sdlc-gone" is absent
       And a line of the output matches "^install: .*, 1 stale, 3 removed$"
+
+  Rule: An upgrade reuses the harness of the install and regenerates what an older release generated
+
+    Background:
+      Given I run the install command "init --harness claude --no-plugin"
+
+    Scenario: Init --upgrade without flags keeps the claude harness and its copied skills
+      Given the package file "skills/plan/steps/triage.md" holds "new triage\n"
+      When I run the install command "init --upgrade"
+      Then the installed file ".claude/skills/sdlc-plan/steps/triage.md" holds "new triage\n"
+
+    Scenario: Init --upgrade regenerates a tier agent an older release wrote and moves the old MCP entry to the launcher
+      Given the project has the file ".claude/agents/sdlc-fast.md" holding "name: sdlc-fast\nrun npx --no agentic-sdlc\n"
+      And the install lock is emptied
+      And the project has the file ".mcp.json" holding "{\"mcpServers\":{\"agentic-sdlc\":{\"command\":\"npx\",\"args\":[\"--no-install\",\"agentic-sdlc\",\"mcp\"]},\"other\":{\"command\":\"x\"}}}"
+      When I run the install command "init --upgrade"
+      Then the installed file ".claude/agents/sdlc-fast.md" does not match "npx"
+      And the installed file ".mcp.json" contains ".agents/bin/agentic-sdlc"
+      And the installed file ".mcp.json" contains "\"other\""
