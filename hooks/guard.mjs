@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 // PreToolUse guard of the agentic-sdlc plugin. Exit 2 (stderr shown to the agent) blocks the call:
 // - `git push` to the trunk (vcs.trunk in .agents/binding.yml, default main): delivery goes through a CR;
-// - `agentic-sdlc forge approve` (Bash or the MCP tool) unless AGENTIC_SDLC_ROLE=review: only the review runtime approves.
+// - `agentic-sdlc forge approve` (Bash or the MCP tool) unless AGENTIC_SDLC_ROLE=review: only the review runtime approves;
+// - `agentic-sdlc forge status` (Bash or the MCP tool) unless AGENTIC_SDLC_ROLE=review or AGENTIC_SDLC_ALLOW_STATUS=1
+//   (the runner sets it for a one-identity cycle that starts `mcp --allow status`): an implementer never posts a status.
+// - any Bash command that is not an agentic-sdlc CLI call, from the `sdlc-reviewer` agent.
 // No dependencies: a plugin installed from git has no node_modules.
 // ponytail: a token scan, not a shell parser, and it fails closed on what it cannot resolve (a variable, a cd to a computed path).
 // The trunk ruleset and the absence of the review token are the real boundary; this hook is a second line of defence.
@@ -16,10 +19,19 @@ let input = {};
 try { input = JSON.parse(readFileSync(0, 'utf8') || '{}'); } catch { process.exit(0); }
 const dir = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const review = process.env.AGENTIC_SDLC_ROLE === 'review';
+const status = review || process.env.AGENTIC_SDLC_ALLOW_STATUS === '1';
+// The sdlc-reviewer agent (plugin-scoped agent_type) runs only the agentic-sdlc CLI in Bash: review-pr never runs the CR's code.
+const reviewer = /(^|:)sdlc-reviewer$/.test(input.agent_type ?? '');
+const REVIEWER = 'the sdlc-reviewer agent runs only agentic-sdlc commands in Bash: review-pr never runs the change request\'s code.';
 const APPROVE = 'forge approve is for the review runtime only (AGENTIC_SDLC_ROLE=review).';
+const STATUS = 'forge status is for the review runtime only (AGENTIC_SDLC_ROLE=review, or AGENTIC_SDLC_ALLOW_STATUS=1 set by the runner for a one-identity cycle).';
 
 if (/forge_approve$/.test(input.tool_name ?? '')) {
   if (!review) block(APPROVE);
+  process.exit(0);
+}
+if (/forge_status$/.test(input.tool_name ?? '')) {
+  if (!status) block(STATUS);
   process.exit(0);
 }
 const command = String(input.tool_input?.command ?? '');
@@ -82,6 +94,7 @@ for (const seg of scan(command)) {
   const envMoved = t.slice(0, ci).some((x) => /^GIT_(DIR|WORK_TREE)=/.test(x));
   if (t[ci] === 'builtin') ci++;
   const cmd = t[ci] ?? '';
+  if (reviewer && t.length && !(!tt[ci]?.dyn && !seg.subst && (CLI.test(cmd) || (/(^|[/\\])(npx|node)$/.test(cmd) && t.slice(ci + 1, ci + 4).some((x) => CLI.test(x)))))) block(REVIEWER);
   if (tt[ci]?.dyn && pushy) block('a command word built from a variable in a command that pushes is not allowed: write the git push out literally.');
   if (WRAP.test(cmd) && pushy && (seg.subst || tt.some((x) => x.dyn))) block('a shell expansion inside eval or sh -c in a command that pushes is not allowed: write the git push out literally.');
   if (cmd === 'cd' || cmd === 'pushd' || cmd === 'popd') {
@@ -94,7 +107,11 @@ for (const seg of scan(command)) {
   const cli = t.findIndex((x) => CLI.test(x));
   if (cli >= 0) {
     const rest = tt.slice(cli + 1).filter((x, i, a) => !(x.s === '--root' || a[i - 1]?.s === '--root'));
-    if (rest[0]?.s === 'forge' && (rest[1]?.s === 'approve' || seg.subst || /[$`]/.test(rest[1]?.s ?? '')) && !review) block(APPROVE);
+    if (rest[0]?.s === 'forge') {
+      const verb = rest[1]?.s ?? '', unknown = seg.subst || /[$`]/.test(verb);
+      if ((verb === 'approve' || unknown) && !review) block(APPROVE);
+      if ((verb === 'status' || unknown) && !status) block(STATUS);
+    }
   }
   const g = t.findIndex((x) => GIT.test(x));
   if (g < 0) continue;

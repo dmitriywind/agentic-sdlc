@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { clusters, flattenRuns, hashSkill, hardFacts, learningState, readRuns, scoresComment, scorersFor, summarise, cli } from '../src/ledger.ts';
+import { clusters, flattenRuns, hashSkill, hardFacts, learningState, measures, readRuns, scoresComment, scorersFor, summarise, cli } from '../src/ledger.ts';
 import type { Board, Comment } from '../src/ports.ts';
 
 const beat = (hb: object, createdAt = '2026-11-08T00:00:00Z'): Comment => ({
@@ -185,4 +185,83 @@ test('learningState: review and learn heartbeats count no cycle; a learn heartbe
     beat({ at: '2026-11-07T00:00:00Z', runs: [] }),
   ];
   assert.deepEqual(learningState(comments, 2, true), { due: false, judge: true, cyclesSince: 1 });
+});
+
+test('summarise: tokens per ticket, top 20 by tokens, over-budget tickets marked and always listed; capped is a hard fact', () => {
+  const rows = [
+    run({ id: '1', ticket: '7', tokens: 900, minutes: 4 }),
+    run({ id: '2', ticket: '7', tokens: 700, minutes: 3, outcome: 'capped', error: 'max turns' }),
+    run({ id: '3', ticket: '8', skill: 'review-pr', tokens: 100 }),
+    run({ id: '4', ticket: '9' }),
+    run({ id: '5' }),
+  ] as any[];
+  const s = summarise(rows, { maxTokensPerTicket: 1000 });
+  assert.deepEqual(s.tickets, [
+    { ticket: '7', runs: 2, tokens: 1600, minutes: 7, reworks: 1, overBudget: true },
+    { ticket: '8', runs: 1, tokens: 100, minutes: 0 },
+    { ticket: '9', runs: 1, tokens: 0, minutes: 0 },
+  ]);
+  assert.deepEqual(s.ticketTotals, { tickets: 3, runs: 4, tokens: 1700, minutes: 7 });
+  assert.equal(summarise(rows).tickets[0].overBudget, undefined);
+  const many = Array.from({ length: 25 }, (_, i) => run({ id: `m${i}`, ticket: `t${i}`, tokens: 10 + i })) as any[];
+  assert.equal(summarise(many).tickets.length, 20);
+  assert.equal(summarise(many, { maxTokensPerTicket: 12 }).tickets.length, 22); // the 20 largest, and every ticket over 12 tokens is among them already
+  assert.deepEqual(hardFacts(run({ outcome: 'capped' }) as any), { score: 1, facts: ['outcome capped'] });
+  assert.equal(clusters([run({ id: 'a', outcome: 'capped', error: 'max turns 50', ticket: '1' }), run({ id: 'b', outcome: 'capped', error: 'max turns 80', ticket: '2' })] as any[])[0].count, 2);
+});
+
+test('unscorable: needs a reason, is counted per scorer, and is left out of rates, medians, clusters and the cap', () => {
+  const p = { run: run({ id: 'a' }) as any, scorers: [{ name: 'done-conditions', scale: '0-4', applies_to: '*' }, { name: 'redundant-tests', scale: 'pass-fail', applies_to: '*' }] as any, cap: { score: 1, facts: ['red'] } };
+  assert.throws(() => scoresComment(p, { scores: { 'done-conditions': 3, 'redundant-tests': 'unscorable' } }), /unscorable needs a reason/);
+  const body = scoresComment(p, { scores: { 'done-conditions': 'unscorable', 'redundant-tests': 'unscorable' }, reasons: { 'done-conditions': 'no diff', 'redundant-tests': 'no diff' } }, 'T');
+  assert.deepEqual(JSON.parse(body.split('\n')[2]).scores, { 'done-conditions': 'unscorable', 'redundant-tests': 'unscorable' }); // no cap on a non-grade
+  const rows = [
+    run({ id: '1', ticket: '7', scores: { 'redundant-tests': 'fail', 'done-conditions': 4 } }),
+    run({ id: '2', ticket: '8', scores: { 'redundant-tests': 'unscorable', 'done-conditions': 'unscorable' } }),
+    run({ id: '3', ticket: '9', scores: { 'redundant-tests': 'unscorable' } }),
+  ] as any[];
+  const s = summarise(rows);
+  assert.deepEqual(s.byScorer['redundant-tests'], { runs: 1, failRate: 1, median: null, unscorable: 2 });
+  assert.deepEqual(s.byScorer['done-conditions'], { runs: 1, failRate: 0, median: 4, unscorable: 1 });
+  assert.deepEqual(s.failureClusters, []);
+  // a human grade may be unscorable and then replaces the judge's score
+  const hb = beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: 'g', score: 3 })] });
+  const grade: Comment = { id: 'g1', author: 'o', createdAt: '2026-11-08T01:00:00Z', body: 'agentic-sdlc:grade g done-conditions unscorable' };
+  const [g] = flattenRuns([grade, hb]);
+  assert.equal(g.scores!['done-conditions'], 'unscorable');
+  assert.equal(g.score, undefined);
+});
+
+test('measures: DORA from the board and forge, null with a why, and the error budget', async () => {
+  const now = Date.parse('2026-11-14T00:00:00Z');
+  const h = (n: number) => new Date(now - n * 36e5).toISOString();
+  const item = (id: string, o: object) => ({ id, title: id, url: '', status: 'Done', labels: [], fields: {}, children: [], assignees: [], createdAt: h(100), updatedAt: h(10), statusChangedAt: h(10), ...o });
+  const items = [
+    item('1', { fields: { shipped: 'On production', release_version: '1.0' }, createdAt: h(58), statusChangedAt: h(10) }), // lead 48h
+    item('2', { fields: { shipped: 'On production', release_version: '1.0' }, createdAt: h(110), statusChangedAt: h(10) }), // lead 100h
+    item('3', { labels: ['bug'], fields: { priority: 'P0', shipped: 'On production' }, createdAt: h(30), statusChangedAt: h(20), updatedAt: h(20) }), // failure, restored in 10h
+    item('4', { status: 'Signals', labels: ['signal:deploy'], createdAt: h(5), updatedAt: h(5), statusChangedAt: h(5) }),
+    item('5', { status: 'Ready', createdAt: h(500) }),
+  ] as any[];
+  const board = { list: async () => items } as unknown as Board;
+  const crs = [{ n: '10', closes: ['1'] }, { n: '11', closes: ['2'] }] as any[];
+  const forge = {
+    list: async () => crs,
+    comments: async (n: string) => (n === '10' ? [{ author: 'Bot', body: '<!-- review-pr\nVerdict: REMEDIATION REQUIRED' }, { author: 'rando', body: '' }] : [{ author: 'rando', body: '<!-- review-pr\nVerdict: REMEDIATION REQUIRED' }]),
+  } as any;
+  const binding = { product: { environments: ['staging', 'production'], slo: { change_failure_rate_max: 0.5, window_days: 30 } }, board: { labels: { bug: 'bug' } }, owners: { bots: ['bot'] } } as any;
+  const m = await measures({ board, forge, binding, days: 7, now });
+  assert.equal(m.deployFrequency.changes, 3);
+  assert.equal(m.deployFrequency.versions, 1);
+  assert.equal(m.deployFrequency.value, 3);
+  assert.equal(m.leadTimeHours.value, 48); // tickets 1,2,3 reached Done: 48, 100, 10 -> median 48
+  assert.deepEqual(m.changeFailureRate, { value: 0.67, failures: 2, changes: 3 });
+  assert.equal(m.timeToRestoreHours.value, 10);
+  assert.deepEqual(m.reworkRate, { value: 0.5, crs: 2, reworked: 1 }); // only a trusted author's report counts
+  assert.deepEqual(m.errorBudget, { max: 0.5, windowDays: 30, actual: 0.67, exhausted: true });
+  const empty = await measures({ board: { list: async () => [] } as any, binding: { ...binding, product: { environments: ['a'] } }, now });
+  assert.equal(empty.changeFailureRate.value, null);
+  assert.match((empty.changeFailureRate as { why?: string }).why!, /no change shipped/);
+  assert.equal(empty.reworkRate.value, null);
+  assert.equal(empty.errorBudget, undefined);
 });

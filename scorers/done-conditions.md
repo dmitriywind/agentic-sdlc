@@ -19,3 +19,5 @@ Nits only or after one rework; 2 every condition met in form but one has no proo
 worked the wrong ticket or CR. The hard-fact caps in
 [`judge-run`](../skills/judge-run/SKILL.md) apply to this scorer: the value is the lower of the
 grade and the lowest cap.
+
+Unscorable when the skill file at `skillHash`, the ticket or its spec, or the CR or its checks cannot be opened.

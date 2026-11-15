@@ -17,8 +17,7 @@ calls another skill. Follow the [common contract](../sdlc/references/contract.md
    `paths.sources_before_question`. Done when each source is named with what it says; a source that
    answers a Ruling question settles that trigger. For every other trigger a source may supply
    options but never settles it; classify in step 2.
-   On this ticket, a trusted owner reply (`board comments <id> --trusted`, by `owners.product` or
-   `owners.factory`) posted after its last `### Needs human` comment settles every trigger that
+   On this ticket, a trusted owner reply (`board comments <id> --trusted`, by any entry of an owner role) posted after its last `### Needs human` comment settles every trigger that
    comment named, unless new facts appeared since (a changed Size, Lane or acceptance criteria, or a trigger class the hold comment did not
    name; a new diff or a later run alone is never new); name that
    reply as the settling source. On a factory CR without a ticket, read the owner reply with
@@ -47,13 +46,22 @@ calls another skill. Follow the [common contract](../sdlc/references/contract.md
    comment (for review-pr, the report). On `escalate`: the comment below. Done when the result is on the ticket.
 4. **Hold.** On `escalate`: if you are on a change line with unpushed commits, publish them (`vcs push`); then post the comment below once
    (`board comment`), `board label <id> add <board.labels.human>`, `board assign <id> --none`, and
-   stop. The Status stays. The ask goes to `owners.product`, or `owners.factory` for a factory
-   change or an Access gap. Done when the label is on and the comment is posted. If the label was
+   stop. The Status stays. The ask goes to the first entry of `owners.product`, or of `owners.factory`
+   for a factory change or an Access gap, unless a role below is set and matches (a role holds one
+   entry or a list; the first is the primary; a reply by any entry settles it). Done when the label is on and the comment is posted. If the label was
    already on, comment only when new facts appeared. A run with no ticket (dispatched with only
    `--cr`, e.g. a factory CR): post the comment on the CR (`forge comment <n> --body-file <f>`) and
    the same comment on `heartbeat.ticket` (`board comment`), set no label and no assignee, and
    stop. The CR stays draft; review-pr reviews it again only when its head changes or a trusted
    owner reply appears on the CR. Done when both comments are posted.
+
+### Who gets it
+
+Use the role when `owners.<role>` is set; otherwise the fallback above.
+
+- `owners.operator`: a deploy, incident or rollback ask; a Signal of a failed deploy.
+- `owners.security`: a Signal labelled security; a finding review-pr marks as security.
+- `owners.compliance`: a release whose evidence has a gap.
 
 ### Needs human
 

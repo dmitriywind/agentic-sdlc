@@ -54,6 +54,8 @@ spec, and stop.
 ## Rules
 
 - Never mark the CR ready; review does that.
+- Every commit you make ends with the provenance trailers and the CR body carries the `Provenance:`
+  line, as the [contract](../sdlc/references/contract.md) says, when your task text gives a run id.
 - Write each deviation back into the spec comment. Promotion to Full follows
   [Lanes](../sdlc/references/board.md#lanes).
 - A deviation that changes design or scope is an escalation, not a decision.

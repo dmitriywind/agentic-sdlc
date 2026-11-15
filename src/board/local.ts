@@ -60,6 +60,7 @@ export function createLocalBoard(ctx: AdapterContext): Board {
       return edit(id, (it) => { it.labels = it.labels.filter((l) => l !== label); if (op === 'add') it.labels.push(label); });
     },
     assign(id, user) { return edit(id, (it) => { it.assignees = user ? [user] : []; }); },
+    milestone(id, name) { return edit(id, (it) => { if (name === null) delete it.milestone; else it.milestone = name; }); },
     async comment(id, body) {
       const db = load();
       find(db, id);

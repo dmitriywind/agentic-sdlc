@@ -27,6 +27,16 @@ Feature: Escalate to a human
     And it has 2 to 4 Options with the recommended one first
     And it has at most two Asks
     And the ask goes to owners.product, or to owners.factory for a factory change or an Access gap
+    And when an owner role holds a list, the ask goes to its first entry
+
+  # Source: skills/escalate-to-human/SKILL.md, "Who gets it"
+  # Proof: skill text only
+  Scenario: An optional owner role receives the ask that matches it
+    Given owners.operator, owners.security or owners.compliance is set
+    When a deploy, incident or rollback ask, a security finding, or a release evidence gap escalates
+    Then the ask goes to the first entry of the matching role
+    And with no such role set the ask goes to owners.product or owners.factory as before
+    And a trusted reply by any entry of any owner role settles it
 
   # Source: skills/escalate-to-human/SKILL.md, "Classify" and "Record"
   # Proof: skill text only

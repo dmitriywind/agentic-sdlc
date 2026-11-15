@@ -11,7 +11,7 @@ The cycle never holds the review token, so an implementer cannot approve its own
 A `github` (Projects v2) board needs a runtime that can reach GitHub Projects: GitHub Actions works, on a GitHub-hosted or a
 self-hosted runner (`AGENTIC_RUNS_ON`; no billed minutes). A Claude cloud routine cannot reach it; it runs a
 `github-issues`, `jira` or `linear` board (`claude-routine.md`).
-Setup step everywhere: `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_API_KEY` under the individual and individual-api profiles). Gates run in the forge's CI whatever the runtime.
+Setup step everywhere (a Claude cloud environment uses its own setup script, see `claude-routine.md`): `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_API_KEY` under the individual and individual-api profiles). Gates run in the forge's CI whatever the runtime.
 
 | Runtime | Template | Profile |
 |---|---|---|

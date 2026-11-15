@@ -23,7 +23,9 @@ It is the only skill that proposes a new rule.
 3. **Evidence.** `agentic-sdlc ledger summary --since 28` and the stats and failure clusters it prints. Done
    when you hold the failure clusters (by scorer and by normalised error, each
    with its run count and its tickets), the per-skill, per-model, per-executor and per-scorer
-   stats, and the time and quality trends.
+   stats, and the time and quality trends. A scorer's `unscorable` count is not evidence: those
+   runs are in no cluster and no run count. A scorer unscorable on most of its runs is itself a
+   finding: its evidence refs are missing.
 4. **Pick one target.** The cluster with the most runs, where runs ≥ `learning.min_evidence_runs`
    and the same mistake appears on at least two tickets. Name it with its count:
    "`<scorer>` failed N times across M tickets in `<skill>`" for a scorer cluster, "`<error>` N
@@ -44,7 +46,12 @@ It is the only skill that proposes a new rule.
    `vcs.factory_change_pattern`) and its class is stated.
 7. **Prove on the bench.** `bench run --suite <s> --model <id> --dry-run` prints the command per
    case. Stop with `learning: too few cases` when the suite has fewer than
-   `learning.bench_min_cases` cases.
+   `learning.bench_min_cases` cases. Count the runs the proof needs (cases x `learning.bench_trials`
+   for the baseline and again for the candidate): when one bench run is over
+   `learning.bench_budget.max_runs`, stop with `learning: over bench budget` and the numbers; never
+   pass `--allow-over-budget`. A bench run that spent `max_minutes` records the rest as
+   `skipped: budget`, and `bench compare` reports that as incomplete (`regressed`): write
+   `learning: not proven` and stop.
    - Baseline: `learning.benchBaseline` when its factory is the trunk and its model and executor
      match; otherwise `agentic-sdlc bench run --suite <s> --model <id>` on the trunk. With no
      suite, `bench build --suite <s> [--paths <glob>]… [--per-size <n>]` first.

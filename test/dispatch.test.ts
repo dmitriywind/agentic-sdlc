@@ -262,3 +262,34 @@ test('dispatch: overlapping cycles on one key start one run; flags are checked; 
     assert.equal(mode(r.out.log), 0o600);
   }
 });
+
+test('limits: a stage inherits executors.default caps and each executor kind is handed them', async () => {
+  const ex = { default: { kind: 'harness', max_turns: 80, max_minutes: 20 }, release: { kind: 'command', run: 'bot --max-turns {max_turns} --tokens {max_tokens}', max_tokens: 5000, max_turns: 30 } };
+  const c = await run(ex, ['release', '--ticket', '5']);
+  assert.equal(c.cmd.replace(/^sh -c /, ''), `bot --max-turns ${quote('30')} --tokens ${quote('5000')}`);
+  assert.deepEqual([c.childEnv.AGENTIC_SDLC_MAX_TURNS, c.childEnv.AGENTIC_SDLC_MAX_TOKENS, c.childEnv.AGENTIC_SDLC_MAX_MINUTES], ['30', '5000', '20']);
+  assert.deepEqual(c.out.limits, { max_turns: 30, max_tokens: 5000, max_minutes: 20 });
+  const unset = await run({ default: { kind: 'command', run: 'bot {max_turns}' } }, ['x', '--ticket', '5']);
+  assert.equal(unset.cmd.replace(/^sh -c /, ''), `bot ${quote('')}`);
+  assert.equal(unset.childEnv.AGENTIC_SDLC_MAX_TURNS, undefined);
+  assert.equal(unset.out.limits, undefined);
+  const h = await run(ex, ['implement-spec', '--ticket', '5']);
+  assert.deepEqual(h.out.limits, { max_turns: 80, max_minutes: 20 });
+  assert.match(h.out.instruction, /at most 80 turns, 20 minutes/);
+  const w = await run({ default: { kind: 'webhook', url_env: 'U', max_turns: 9 } }, ['x', '--ticket', '1'], { U: 'https://h/x' });
+  assert.match(w.calls[0], /"limits":\{"max_turns":9\}/);
+  const m = await run({ default: { kind: 'managed', api: 'cursor', repo_url: 'https://r', token_env: 'T', max_tokens: 700 } }, ['x', '--ticket', '1'], { T: 't' });
+  assert.match(m.calls[0], /at most 700 tokens/);
+});
+
+test('validateBinding: executor caps and cycle.max_tokens_per_ticket are positive integers; bench_budget knows runs and minutes only', async () => {
+  const { validateBinding } = await import('../src/binding.ts');
+  const msgs = (extra: object) => validateBinding({ ...binding, ...extra } as any).join('\n');
+  assert.match(msgs({ executors: { default: { kind: 'harness', max_turns: 0 } } }), /executors\.default\.max_turns must be a positive integer/);
+  assert.match(msgs({ executors: { default: { kind: 'harness', max_minutes: 1.5 } } }), /max_minutes must be a positive integer/);
+  assert.match(msgs({ cycle: { ...binding.cycle, max_tokens_per_ticket: -1 } }), /cycle\.max_tokens_per_ticket must be a positive integer/);
+  assert.match(msgs({ learning: { ...binding.learning, bench_budget: { max_tokens: 5 } } }), /bench_budget\.max_tokens is not a bench cap/);
+  assert.match(msgs({ learning: { ...binding.learning, bench_budget: { max_runs: 'x' } } }), /bench_budget\.max_runs must be a positive integer/);
+  const ok = msgs({ executors: { default: { kind: 'harness', max_turns: 5 } }, cycle: { ...binding.cycle, max_tokens_per_ticket: 9 }, learning: { ...binding.learning, bench_budget: { max_runs: 4, max_minutes: 9 } } });
+  assert.doesNotMatch(ok, /max_turns|max_tokens_per_ticket|bench_budget/);
+});

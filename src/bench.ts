@@ -8,7 +8,7 @@ import { diffPaths, matchesAny } from './gates.ts';
 import { median } from './ledger.ts';
 import type { Exec } from './exec.ts';
 import type { AdapterContext, Binding, Board, Executor, Forge, PortCli, Vcs } from './ports.ts';
-import { ownersFor } from './ports.ts';
+import { limitsOf, ownersFor } from './ports.ts';
 
 export interface BenchCase {
   id: string; ticket: string; title: string; spec: string; baseSha: string; headSha: string; oracleTests: string[];
@@ -17,7 +17,7 @@ export interface BenchCase {
   mergedAt?: string; // the ticket's last update, as the merge time
 }
 /** scorerInput: the prompt and the agent's changed files, for judge-run to score later. */
-export interface CaseResult { id: string; trial?: number; pass: boolean; minutes: number; error?: string; scorerInput?: string }
+export interface CaseResult { id: string; trial?: number; pass: boolean; minutes: number; error?: string; scorerInput?: string; skipped?: 'budget' /* not run: learning.bench_budget was spent; never a failure, never a pass */ }
 export interface BenchResult { model: string; executor: string; executorKind?: string; factory?: string; suite?: string; at: string; cases: CaseResult[]; passRate: number; minutes: number }
 export interface Suite { name: string; cases: BenchCase[] }
 
@@ -48,7 +48,7 @@ export function agentCommand(e: Executor, binding: Binding, vars: { model: strin
     if (!binding.agent_command) throw new Error('binding.agent_command is not set');
     return fill(binding.agent_command, vars);
   }
-  if (e.kind === 'command') return fill(e.run, { ...vars, skill: 'implement-spec', cr: '' });
+  if (e.kind === 'command') { const l = limitsOf(binding, e); return fill(e.run, { ...vars, skill: 'implement-spec', cr: '', max_turns: String(l.max_turns ?? ''), max_tokens: String(l.max_tokens ?? ''), max_minutes: String(l.max_minutes ?? '') }); }
   throw new Error(`executor kind ${e.kind} cannot run on the bench; use harness or command`);
 }
 
@@ -89,7 +89,7 @@ export const shell = (exec: Exec, cmd: string, cwd: string): string =>
     : exec('sh', ['-c', cmd], { cwd });
 
 /** Accounts whose spec comments are trusted: the factory's bots and the two owners. */
-export const specAuthors = (b: Binding): string[] => { const o = ownersFor(b.owners, 'board'); return [...o.bots, o.product, o.factory].filter((a): a is string => !!a); };
+export const specAuthors = (b: Binding): string[] => { const o = ownersFor(b.owners, 'board'); return [...o.bots, ...o.product, ...o.factory]; };
 
 /** The most frequent top-two-level directory among product (non-proof) paths. */
 export function area(paths: string[], isProof: RegExp = PROOF_FILE): string {
@@ -122,10 +122,12 @@ export function diverse(cases: BenchCase[], n: number): BenchCase[] {
 }
 
 /** Done tickets whose merged CR added proofs. With `paths`, only CRs touching a matching file; with `perSize`, stratified by Size. */
-export async function buildCases(board: Board, forge: Forge, binding: Binding, limit: number, o: { paths?: string[]; perSize?: number } = {}): Promise<BenchCase[]> {
+export async function buildCases(board: Board, forge: Forge, binding: Binding, limit: number, o: { paths?: string[]; perSize?: number; mergedLimit?: number; since?: string } = {}): Promise<BenchCase[]> {
   const isTest = rule(binding, 'proof_pattern', PROOF_FILE);
   const trusted = specAuthors(binding).map((a) => a.toLowerCase());
-  const merged = (await forge.list({ state: 'merged' })).filter((c) => c.state === 'merged');
+  // Not every merged CR ever: the newest ones, enough to match the Done tickets the suite takes (--merged-limit, --since).
+  const mergedLimit = o.mergedLimit ?? (Number.isFinite(limit) ? Math.max(100, limit * 10) : 500);
+  const merged = (await forge.list({ state: 'merged', limit: mergedLimit, since: o.since })).filter((c) => c.state === 'merged');
   const tickets = (await board.list({ status: binding.board.done_statuses })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const cases: BenchCase[] = [];
   for (const t of tickets) {
@@ -185,7 +187,7 @@ function carry(from: string, to: string, p: string) {
  */
 export async function runBench(
   cases: BenchCase[],
-  o: { model: string; executor?: Executor; executorName?: string; factory?: string; suite?: string; root: string; binding: Binding; dryRun?: boolean; scorerDir?: string; trials?: number },
+  o: { model: string; executor?: Executor; executorName?: string; factory?: string; suite?: string; root: string; binding: Binding; dryRun?: boolean; scorerDir?: string; trials?: number; allowOverBudget?: boolean },
   deps: BenchDeps,
 ): Promise<BenchResult | { dryRun: { id: string; command: string }[] }> {
   const executor = o.executor ?? { kind: 'harness' };
@@ -194,6 +196,12 @@ export async function runBench(
   const command = (b: Binding, c: BenchCase, scratch: string, workdir: string) =>
     agentCommand(executor, b, { model: o.model, ticket: c.ticket, prompt_file: promptFile(scratch, c), workdir });
   if (o.dryRun) return { dryRun: cases.map((c) => ({ id: c.id, command: command(o.binding, c, '<scratch>', '<workdir>') })) };
+  // learning.bench_budget of the current binding (a candidate factory never sets its own budget).
+  const budget = o.binding.learning?.bench_budget ?? {};
+  const trials = o.trials ?? 1;
+  const planned = cases.length * trials;
+  if (budget.max_runs && planned > budget.max_runs && !o.allowOverBudget)
+    throw new Error(`bench plans ${planned} runs (${cases.length} cases x ${trials} trials), over learning.bench_budget.max_runs ${budget.max_runs}; lower --cases or --trials, raise the budget, or pass --allow-over-budget`);
   const vcs = deps.vcs;
   const snap = (rev: string) => vcs.snapshot(rev);
   // --factory: the candidate's skills AND binding, so binding-value tuning is exercised too.
@@ -206,8 +214,11 @@ export async function runBench(
     const isProof = rule(binding, 'proof_pattern', PROOF_FILE);
     const isConfig = rule(binding, 'verify_config_pattern', VERIFY_CONFIG);
     const scratch = mkdtempSync(join(tmpdir(), 'agentic-bench-prompts-'));
-    const trials = o.trials ?? 1;
+    const began = now();
+    // Past max_minutes, no new case starts: the rest are recorded as skipped, not as failures.
+    const spent = () => !!budget.max_minutes && (now() - began) / 60000 >= budget.max_minutes;
     for (const c of cases) for (let trial = 1; trial <= trials; trial++) {
+      if (spent()) { results.push({ id: c.id, ...(trials > 1 ? { trial } : {}), pass: false, minutes: 0, skipped: 'budget' }); continue; }
       const trees: Tree[] = [];
       try {
         const agent = await snap(c.baseSha);
@@ -246,6 +257,7 @@ export async function runBench(
   } finally {
     if (factory) await dropAll([factory]);
   }
+  const ran = results.filter((r) => !r.skipped);
   return {
     model: o.model,
     executor: o.executorName ?? (o.executor ? 'inline' : 'harness'),
@@ -254,7 +266,7 @@ export async function runBench(
     ...(o.suite ? { suite: o.suite } : {}),
     at: new Date(now()).toISOString(),
     cases: results,
-    passRate: results.length ? results.filter((r) => r.pass).length / results.length : 0,
+    passRate: ran.length ? ran.filter((r) => r.pass).length / ran.length : 0,
     minutes: Math.round(results.reduce((t, r) => t + r.minutes, 0) * 100) / 100,
   };
 }
@@ -276,16 +288,17 @@ function writeScorerInput(dir: string, root: string, c: BenchCase, trial: number
   return relative(root, file).replaceAll('\\', '/');
 }
 
-export interface ReportRow { model: string; executor: string; executorKind?: string; factory?: string; passRate: number; medianMinutes: number | null; n: number; pareto: boolean }
+export interface ReportRow { model: string; executor: string; executorKind?: string; factory?: string; passRate: number; medianMinutes: number | null; n: number; pareto: boolean; incomplete?: true; skipped?: number }
 
 /** Per model, executor and factory over every result given: pass rate and median case minutes; `pareto` marks the non-dominated set (max passRate, min minutes). */
 export function report(results: BenchResult[]): ReportRow[] {
-  const g = new Map<string, { r: BenchResult; cases: CaseResult[] }>();
+  const g = new Map<string, { r: BenchResult; cases: CaseResult[]; skipped: number }>();
   for (const r of results) {
     const k = JSON.stringify([r.model, r.executor, r.factory ?? null]);
-    g.set(k, { r, cases: [...(g.get(k)?.cases ?? []), ...r.cases] });
+    const prev = g.get(k);
+    g.set(k, { r, cases: [...(prev?.cases ?? []), ...r.cases.filter((c) => !c.skipped)], skipped: (prev?.skipped ?? 0) + r.cases.filter((c) => c.skipped).length });
   }
-  const rows = [...g.values()].map(({ r, cases }) => ({
+  const rows: ReportRow[] = [...g.values()].map(({ r, cases, skipped }) => ({
     model: r.model,
     executor: r.executor,
     ...(r.executorKind ? { executorKind: r.executorKind } : {}),
@@ -294,9 +307,11 @@ export function report(results: BenchResult[]): ReportRow[] {
     medianMinutes: median(cases.map((c) => c.minutes)),
     n: cases.length,
     pareto: false,
+    // Budget-skipped cases: the row is incomplete, like too few cases, and never on the Pareto front.
+    ...(skipped ? { incomplete: true as const, skipped } : {}),
   }));
   const cost = (x: ReportRow) => x.medianMinutes ?? Infinity;
-  for (const a of rows) a.pareto = !rows.some((b) => b !== a && b.passRate >= a.passRate && cost(b) <= cost(a) && (b.passRate > a.passRate || cost(b) < cost(a)));
+  for (const a of rows) a.pareto = !a.incomplete && !rows.some((b) => b !== a && !b.incomplete && b.passRate >= a.passRate && cost(b) <= cost(a) && (b.passRate > a.passRate || cost(b) < cost(a)));
   return rows.sort((a, b) => b.passRate - a.passRate || cost(a) - cost(b));
 }
 
@@ -312,7 +327,11 @@ export function wilsonLower(pass: number, n: number, z = 1.96): number {
  * Wilson lower bound of its pass rate is below a's, when fewer than `minCases` cases are shared,
  * when a shared case has fewer than `trials` trials on either side, or when b ran fewer cases.
  */
-export function compare(a: BenchResult, b: BenchResult, o: { minCases?: number; trials?: number } = {}) {
+export function compare(a0: BenchResult, b0: BenchResult, o: { minCases?: number; trials?: number } = {}) {
+  // Budget-skipped rows were never run: they count for nothing, and the result is incomplete.
+  const ran = (r: BenchResult): BenchResult => ({ ...r, cases: r.cases.filter((c) => !c.skipped) });
+  const skippedOf = (r: BenchResult) => r.cases.length - ran(r).cases.length;
+  const [a, b] = [ran(a0), ran(b0)];
   const minCases = o.minCases ?? 20, trials = o.trials ?? 3;
   const ids = new Set(b.cases.map((c) => c.id));
   const common = [...new Set(a.cases.map((c) => c.id))].filter((id) => ids.has(id));
@@ -326,6 +345,7 @@ export function compare(a: BenchResult, b: BenchResult, o: { minCases?: number; 
   const [sa, sb] = [side(a), side(b)];
   const d = (x: number, y: number) => Math.round((y - x) * 1000) / 1000;
   const short = [
+    ...[['a', a0], ['b', b0]].flatMap(([n, r]) => (skippedOf(r as BenchResult) ? [`${n} skipped ${skippedOf(r as BenchResult)} runs on its budget`] : [])),
     ...(common.length < minCases ? [`${common.length} shared cases, need ${minCases}`] : []),
     ...(Math.min(sa.trials, sb.trials) < trials ? [`${Math.min(sa.trials, sb.trials)} trials on a shared case, need ${trials}`] : []),
     ...(new Set(b.cases.map((c) => c.id)).size < new Set(a.cases.map((c) => c.id)).size ? ['b ran fewer cases than a'] : []),
@@ -342,9 +362,9 @@ export function compare(a: BenchResult, b: BenchResult, o: { minCases?: number; 
 }
 
 const USAGE = [
-  'usage: bench build [--suite <name>] [--paths <glob>]… [--per-size <n>] [--limit n]',
-  '       bench propose --suite <name> [--n k]',
-  '       bench run [--suite <s>] --model <id> | --executor <name|json> [--model <id>] [--factory <rev>] [--cases <ids>] [--trials <n>] [--dry-run]',
+  'usage: bench build [--suite <name>] [--paths <glob>]… [--per-size <n>] [--limit n] [--merged-limit n] [--since <date>]',
+  '       bench propose --suite <name> [--n k] [--merged-limit n] [--since <date>]',
+  '       bench run [--suite <s>] --model <id> | --executor <name|json> [--model <id>] [--factory <rev>] [--cases <ids>] [--trials <n>] [--allow-over-budget] [--dry-run]',
   '       bench report --suite <s> [results.json…]',
   '       bench compare <a.json> <b.json>',
 ].join('\n');
@@ -359,7 +379,7 @@ export const cli: PortCli = async (argv, ctx) => {
       args: rest,
       options: {
         limit: { type: 'string' }, model: { type: 'string' }, executor: { type: 'string' }, factory: { type: 'string' }, cases: { type: 'string' }, 'dry-run': { type: 'boolean' },
-        suite: { type: 'string' }, paths: { type: 'string', multiple: true }, 'per-size': { type: 'string' }, n: { type: 'string' }, trials: { type: 'string' },
+        'merged-limit': { type: 'string' }, since: { type: 'string' }, suite: { type: 'string' }, paths: { type: 'string', multiple: true }, 'per-size': { type: 'string' }, n: { type: 'string' }, trials: { type: 'string' }, 'allow-over-budget': { type: 'boolean' },
       },
       allowPositionals: true,
     });
@@ -378,11 +398,14 @@ export const cli: PortCli = async (argv, ctx) => {
       return r.regressed ? 1 : 0;
     }
     const suite = a.values.suite;
+    const mergedLimit = a.values['merged-limit'] ? Number(a.values['merged-limit']) : undefined;
+    if ((mergedLimit !== undefined && !(mergedLimit > 0)) || (a.values.since !== undefined && Number.isNaN(Date.parse(a.values.since)))) return (console.error(USAGE), 2);
     const suiteCases = (s: string) => (readJson(join(root, suiteFile(s))) as Suite).cases;
     const allCases = async (limit: number, o: { paths?: string[]; perSize?: number }) => {
+
       const { createBoard } = await import('./board/index.ts');
       const { createForge } = await import('./forge/index.ts');
-      return buildCases(await createBoard(with_(binding.board.options)), await createForge(with_(binding.forge.options)), binding, limit, o);
+      return buildCases(await createBoard(with_(binding.board.options)), await createForge(with_(binding.forge.options)), binding, limit, { ...o, mergedLimit, since: a.values.since });
     };
     if (verb === 'report') {
       if (!suite) return (console.error(USAGE), 2);
@@ -430,14 +453,15 @@ export const cli: PortCli = async (argv, ctx) => {
       const { createVcs } = await import('./vcs/index.ts');
       const r = await runBench(
         cases,
-        { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values['dry-run'], scorerDir: join(root, RESULTS_DIR, stem), trials },
+        { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values['dry-run'], scorerDir: join(root, RESULTS_DIR, stem), trials, allowOverBudget: a.values['allow-over-budget'] },
         { exec: ctx.exec, vcs: await createVcs(with_(binding.vcs.options)) },
       );
       if ('cases' in r) {
         const file = `${RESULTS_DIR}/${stem}.json`;
         mkdirSync(join(root, RESULTS_DIR), { recursive: true });
         writeFileSync(join(root, file), JSON.stringify(r, null, 2) + '\n');
-        console.log(JSON.stringify({ file, passRate: r.passRate, minutes: r.minutes }));
+        const skipped = r.cases.filter((c) => c.skipped).length;
+        console.log(JSON.stringify({ file, passRate: r.passRate, minutes: r.minutes, ...(skipped ? { skipped, incomplete: true } : {}) }));
       } else console.log(JSON.stringify(r, null, 2));
       return 0;
     }

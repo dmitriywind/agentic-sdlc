@@ -84,8 +84,12 @@ CR pipelines never let the CR choose the rules. GitHub runs the gates of `agenti
 never run); the `Required` and `proofs-on-base` jobs run on plain `pull_request` with no secrets.
 `gate shipped` needs full history (fetch depth 0) and a git identity to tag. Actions and
 installs are pinned: the project's `agentic-sdlc` devDependency (a `github:` spec; `init` sets
-`allow-git=root` in `.npmrc` for npm 12) through `npm ci`, and each action
-carries a `# pin to a commit SHA` note.
+`allow-git=root` in `.npmrc` for npm 12) through `npm ci`, and each action by a 40-hex commit SHA with
+its version in a trailing comment (`actions/checkout@<sha> # v7.0.1`). The installed workflows under
+`.github/workflows` are the adopter's to keep fresh: Dependabot's `github-actions` ecosystem
+(`.github/dependabot.yml`) bumps the SHA and the comment together. `doctor` warns when an installed
+`agentic-sdlc-*.yml` has a `uses:` that is not a SHA. The pinned actions run on Node 24, so a self-hosted runner needs
+Actions runner v2.327.1 or later.
 
 Board writes from delivery runs are safe when they overlap: each gate reads a ticket again before it
 writes and never lowers Shipped. The delivery workflow uses no concurrency group, because a group keeps only one pending run and

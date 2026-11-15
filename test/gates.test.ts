@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
 import { shippedOptions } from '../src/binding.ts';
-import { approval, approvers, merged, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, review, shipped, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
+import { approval, approvers, merged, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, provenance, review, shipped, trailers, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
 import { PROOF_FILE } from '../src/bench.ts';
 
 const binding = {
@@ -38,6 +38,7 @@ function fakes(items: Item[], crs: Record<string, Partial<CR>> = {}, diffs: Reco
     viewBySha: async (sha: string) => cr(Object.keys(crs).find((k) => crs[k].mergeSha === sha)!),
     diff: async (n: string) => diffs[n] ?? '',
     runs: async () => runs,
+    run: async (id: string) => { const r = runs.find((x) => x.id === id); if (!r) throw new Error(`no run ${id}`); return r; },
     list: async () => Object.keys(crs).map(cr).filter((c) => c.state === 'merged'),
     status: async (sha: string, s: any) => { statuses.push({ sha, ...s }); },
   };
@@ -126,7 +127,7 @@ test('signal-on-red: redacted summary, deduplicated, string ids', async () => {
   assert.ok(!body.includes('SECRET') && !body.includes('u:p@'));
   assert.deepEqual(f.created[0].labels, ['signal:ci']);
   assert.equal((await signalOnRed(f.d, '987')).created, false);
-  assert.equal((await signalOnRed(f.d, '1')).created, false);
+  await assert.rejects(signalOnRed(f.d, '1'), /no run 1/);
 });
 
 test('skill-regression: valid pack passes, bad frontmatter and broken links listed', () => {
@@ -265,6 +266,10 @@ test('approval: classes and the human-approval status per forge.human_approval',
   assert.equal(await st('full'), 'product-full:pending');
   f.d.binding = { ...f.d.binding, owners: { factory: { board: 'fo', forge: 'fo-gh' }, bots: ['factory-bot'] } } as any;
   assert.equal(await st('guardok'), 'guardrail:pending');
+  // A list of factory owners: an approval by any member passes guardrail.
+  f.d.binding = { ...f.d.binding, owners: { factory: ['someone', { board: 'b', forge: 'fo' }], bots: ['factory-bot'] } } as any;
+  assert.equal(await st('guardok'), 'guardrail:success');
+  assert.equal(await st('guard'), 'guardrail:pending');
   f.d.binding = { ...f.d.binding, owners: { factory: 'fo', bots: ['factory-bot'] } } as any;
   // A path in paths.lane_areas forces Full, whatever the ticket's Lane says.
   f.d.binding = { ...f.d.binding, paths: { ...f.d.binding.paths, lane_areas: ['src/**'] } } as any;
@@ -416,9 +421,10 @@ test('shipped: a last-env failure resets only tickets whose CRs are in the faile
   assert.equal(f.items[1].fields.release_version, '2026.11.2');
 });
 
-test('signal-on-red: a run outside the recent runs is reported, not thrown', async () => {
+test('signal-on-red: a run id that does not exist fails the gate', async () => {
   const f = fakes([], {}, {}, []);
-  assert.equal((await signalOnRed(f.d, 'nope')).created, false);
+  await assert.rejects(signalOnRed(f.d, 'nope'), /no run nope/);
+  assert.equal(f.created.length, 0);
 });
 
 test('proofRunner: only a real non-zero exit is a failing proof; anything else is not a test result', () => {
@@ -647,4 +653,83 @@ test('signal-on-red: a run that did not fail opens no Signal; an unset release_p
   assert.equal((await signalOnRed(f.d, '3')).created, false);
   assert.equal(f.created.length, 0);
   assert.deepEqual(branchNames(cd, ['undefinedwip', 'main']), ['undefinedwip']);
+});
+
+const commit = (sha: string, author: string, message: string, parents = 1) => ({ sha, message, author, committer: author, authorName: author, committerName: author, parents });
+const TRAILERS = '\n\nAgent-Run: 12-implement-spec-r1\nAgent-Model: claude-sonnet-5-5\nCo-Authored-By: Claude <noreply@anthropic.com>';
+
+function provFakes(mode: string | undefined, commits: any[] | Error) {
+  const f = fakes([], { c: { headSha: 'h1' } });
+  f.d.binding = { ...binding, owners: { bots: ['bot[bot]', { board: 'b', forge: 'Agent' }] }, forge: { ...(mode ? { provenance: mode } : {}) } } as any;
+  (f.d.forge as any).commits = async () => { if (commits instanceof Error) throw commits; return commits; };
+  return f;
+}
+
+test('provenance: agent commits with well-formed trailers pass; human and merge commits are listed and ignored', async () => {
+  const f = provFakes('require', [
+    commit('a'.repeat(40), 'bot[bot]', `fix: x${TRAILERS}`),
+    commit('b'.repeat(40), 'alice', 'fix: y'),
+    commit('c'.repeat(40), 'AGENT', `fix: z${TRAILERS}`),
+    commit('d'.repeat(40), 'bot[bot]', "Merge branch 'main' into 12/x", 2),
+  ]);
+  const r = await provenance(f.d, 'c') as any;
+  assert.equal(r.ok, true);
+  assert.equal(r.agentCommits, 2);
+  assert.equal(r.humanCommits, 1);
+  assert.deepEqual(r.commits.map((c: any) => c.by), ['agent', 'human', 'agent', 'merge']);
+  assert.equal(r.commits[0].run, '12-implement-spec-r1');
+  assert.equal(r.commits[0].model, 'claude-sonnet-5-5');
+  assert.deepEqual(r.missing, []);
+  assert.deepEqual(f.statuses.map((s) => [s.sha, s.context, s.state]), [['h1', 'agent-provenance', 'success']]);
+});
+
+test('provenance: a missing, malformed or body-only trailer fails under require and passes under warn', async () => {
+  const bad = [
+    commit('a'.repeat(40), 'bot[bot]', 'fix: no trailers'),
+    commit('b'.repeat(40), 'bot[bot]', 'fix: body\n\nAgent-Run: r1\nAgent-Model: m1\n\nmore text after'),
+    commit('c'.repeat(40), 'bot[bot]', 'fix: bad\n\nAgent-Run: has spaces!\nAgent-Model: m1'),
+    commit('d'.repeat(40), 'bot[bot]', 'fix: two\n\nAgent-Run: r1\nAgent-Run: r2\nAgent-Model: m1'),
+  ];
+  const req = await provFakes('require', bad);
+  const r = await provenance(req.d, 'c') as any;
+  assert.equal(r.ok, false);
+  assert.equal(r.state, 'failure');
+  assert.equal(r.missing.length, 6);
+  assert.match(r.errors.join('\n'), /aaaaaaaaaaaa: Agent-Run trailer is missing/);
+  assert.match(r.errors.join('\n'), /cccccccccccc: Agent-Run trailer is malformed/);
+  assert.equal(req.statuses[0].state, 'failure');
+  const warn = provFakes('warn', bad);
+  const w = await provenance(warn.d, 'c') as any;
+  assert.equal(w.state, 'success');
+  assert.equal(w.ok, false);
+  assert.equal(w.missing.length, 6);
+  assert.equal(w.errors, undefined);
+  assert.equal(warn.statuses[0].state, 'success');
+});
+
+test('provenance: off, or no key, does nothing and posts nothing', async () => {
+  for (const mode of ['off', undefined]) {
+    const f = provFakes(mode, new Error('must not be read'));
+    const r = await provenance(f.d, 'c') as any;
+    assert.match(r.skipped, /off/);
+    assert.deepEqual(f.statuses, []);
+  }
+});
+
+test('provenance: commits the forge cannot list fail closed under require', async () => {
+  const req = provFakes('require', new Error('forge: CR c has 250 or more commits'));
+  const r = await provenance(req.d, 'c') as any;
+  assert.equal(r.ok, false);
+  assert.equal(r.state, 'failure');
+  assert.match(r.errors[0], /commits unreadable: forge: CR c has 250/);
+  assert.equal(req.statuses[0].state, 'failure');
+  const warn = await provenance(provFakes('warn', new Error('boom')).d, 'c') as any;
+  assert.equal(warn.state, 'success');
+  assert.match(warn.missing[0], /unreadable/);
+});
+
+test('provenance: trailers are the key: value lines of the last paragraph only', () => {
+  assert.deepEqual(trailers('subject only'), {});
+  assert.deepEqual(trailers('s\n\nAgent-Run: r1 \nnot a trailer\nCo-Authored-By: A <a@b>'), { 'agent-run': ['r1'], 'co-authored-by': ['A <a@b>'] });
+  assert.deepEqual(trailers('s\n\nAgent-Run: in body\n\nfooter text'), {});
 });

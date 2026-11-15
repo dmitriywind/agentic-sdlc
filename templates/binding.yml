@@ -12,6 +12,13 @@ owners:
   bots: [your-factory-bot]      # accounts the factory runs as; only their heartbeats and specs are trusted (github login, jira accountId, linear user id, local: local)
   # When the board and the forge name a person differently (Jira or Linear with GitHub), give both:
   #   product: { board: 5b10ac8d82e05b22cc7d4ef5, forge: ann }   bots: [{ board: 712020:abc, forge: factory-bot[bot] }]
+  # product and factory take one entry or a list of entries; any member counts as the owner (an approval by
+  # any factory owner passes guardrail). The first entry is the primary: the one an ask or request is addressed to.
+  #   factory: [alice, bob]
+  # Optional roles, same shape, default absent. escalate-to-human routes a matching ask to them, else to the product or factory owner:
+  #   operator: [ops-lead]      # deploy, incident and rollback asks; failed-deploy Signals
+  #   security: [sec-lead]      # a security-labelled Signal, a review-pr security finding
+  #   compliance: [grc-lead]    # release evidence gaps
 
 board:
   adapter: github               # github | github-issues | jira | linear | local
@@ -61,6 +68,10 @@ forge:
   human_approval: full-lane     # full-lane | always | never. Which product CRs need one approving review by a human
                                 #   (not owners.bots, not review_identity) on the head: gate approval posts status human-approval.
                                 #   With one identity a collaborator approves, or you merge the CR as admin
+  provenance: off               # off | warn | require. Agent commits (author or committer in owners.bots) carry the trailers
+                                #   Agent-Run and Agent-Model; gate provenance posts status agent-provenance on the CR head.
+                                #   warn reports and passes. require fails a CR whose agent commit lacks them: add agent-provenance
+                                #   to required_checks below and pin it in the trunk ruleset (docs/forges.md, Source track)
   review_check_name: review     # status context review-pr posts on a pass
   verify_check_name: Required   # CI job (no secrets) running commands.install and commands.verify; review-pr reads it
   required_checks: [ticket-linkage, Required, proofs-on-base, review, human-approval, skill-regression] # must be green before merge
@@ -79,6 +90,7 @@ product:
   environments: [staging, production] # ordered; the last is where users get value; Shipped options derive from it (library: [prerelease, registry]; mobile: [internal, beta, store])
   delivery: release-line         # release-line: the last environment deploys from a release line the Product owner approves | continuous: every environment deploys from the trunk, no release line (web CD, a model registry, a package published per merge)
   evidence: []                  # release evidence the ready check requires: sbom | provenance | signature (SLSA build provenance, an SPDX or CycloneDX SBOM, a signature); commands.evidence_check proves it
+  # slo: { change_failure_rate_max: 0.15, window_days: 30 } # optional error budget (unset: none): when changes shipped to the last environment in the window are followed by failures (a P0 bug or Signal, a failed deploy) at a higher rate, `ledger measures` reports errorBudget.exhausted and the cycle starts no new feature ticket
   proofs: [test, eval, visual, data-check, computer-use, manual] # kinds a criterion may name; computer-use = verify-ux drives the built product; manual always escalates for a human check
 
 executors:                      # who runs each skill; default is a harness subagent, model by the skill's tier
@@ -90,6 +102,9 @@ executors:                      # who runs each skill; default is a harness suba
   # Any executor may also declare its stage definition:
   # verify-ux: { kind: harness, mcps: [browser], secrets: [TEST_USER_PASSWORD], sandbox: container, model: { tier: balanced } }
   #   mcps: names from `mcps` below | secrets: env var names only, nothing else is passed | sandbox: cloud | container | local (--unattended refuses local unless AGENTIC_SDLC_LOCAL=1; unset inherits executors.default.sandbox) | model: { tier } or { id }, not both
+  #   max_turns | max_tokens | max_minutes: per-run caps, positive integers, unset = no cap; a stage inherits executors.default's. dispatch hands them to the executor (command: {max_turns} {max_tokens} {max_minutes} and AGENTIC_SDLC_MAX_*; harness: `limits`); the executor enforces them. A run that ends on one is outcome capped.
+  # default: { kind: harness, max_turns: 200 }
+  # implement-spec: { kind: command, run: "claude -p --max-turns {max_turns} ...", max_turns: 150, max_minutes: 40 }
 
 mcps:                           # tool servers executors may use; name -> { url | command, token_env? }; token_env names an env var, never a value
   browser: { command: "npx @playwright/mcp" }
@@ -148,6 +163,7 @@ cycle:                          # Run one cycle (sdlc skill)
   failure_limit: 2              # a step failing in this many heartbeats in a row is escalated
   dedupe_minutes: 10            # a second dispatch of the same skill and subject this soon is a double fire: skipped (0: no dispatch lock at all)
   max_rework: 3                 # review-pr sends a CR back this many times at most; the next REMEDIATION REQUIRED goes to escalate-to-human
+  # max_tokens_per_ticket: 2000000 # unset: no limit. A ticket whose runs reported more tokens in total gets no further dispatch and goes to escalate-to-human; ledger summary marks it overBudget
 
 heartbeat:
   ticket: ""                    # id of the ticket that holds heartbeat comments, kept off the board. init sets it on a local
@@ -161,6 +177,7 @@ learning:                       # the self-improvement loop
   bench_size: 20                # cases per bench run; at least bench_min_cases
   bench_min_cases: 20           # bench compare needs at least this many shared cases, else regressed
   bench_trials: 3               # trials per case; compare uses the Wilson lower bound of the pass rate
+  # bench_budget: { max_runs: 60, max_minutes: 120 } # unset: no cap. bench run refuses a plan over max_runs (cases x trials) unless --allow-over-budget; past max_minutes it starts no new case and records the rest skipped: budget, which compare and report treat as incomplete. No token cap: bench results carry no token count
   auto_merge_classes: []        # classes that merge without the factory owner (only tuning may be listed; guardrail never).
                                 #   Keep [] until a bench baseline exists, then [tuning].
   judge_tier: fast              # tier judge-run scores on (fast | balanced | deep)

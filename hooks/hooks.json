@@ -6,7 +6,7 @@
         "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs\"", "onFailure": "block" }]
       },
       {
-        "matcher": "mcp__.*agentic-sdlc.*__forge_approve",
+        "matcher": "mcp__.*agentic-sdlc.*__forge_(approve|status)",
         "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs\"", "onFailure": "block" }]
       }
     ]

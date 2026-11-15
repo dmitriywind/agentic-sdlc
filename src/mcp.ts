@@ -29,6 +29,7 @@ const TOOLS: Record<string, Spec> = {
   board_set: S('board', 'set', ['id', 'field'], { value: 'pos', clear: 'boolean' }, 'Set a logical field (size, priority, lane, shipped, release_version), or clear it.'),
   board_label: S('board', 'label', ['id', 'op', 'label'], {}, 'Add or remove a label (op: add|remove).'),
   board_assign: S('board', 'assign', ['id'], { user: 'pos', none: 'boolean' }, 'Assign a user, or none.'),
+  board_milestone: S('board', 'milestone', ['id'], { name: 'pos', clear: 'boolean' }, 'Set the milestone of an item, or clear it.'),
   board_comment: S('board', 'comment', ['id'], {}, 'Comment on an item.', [], true),
   board_comments: S('board', 'comments', ['id'], { last: 'integer', marker: 'string', author: 'strings', trusted: 'boolean' }, 'Read comments, newest first; trusted keeps the binding bots and owners.'),
   board_close: S('board', 'close', ['id'], { reason: 'string' }, 'Close an item (reason: completed|not_planned).', ['reason']),
@@ -36,7 +37,7 @@ const TOOLS: Record<string, Spec> = {
   forge_open: S('forge', 'open', [], { source: 'string', title: 'string', draft: 'boolean' }, 'Open a change request.', ['source', 'title'], true),
   forge_view: S('forge', 'view', [], { n: 'string', sha: 'string' }, 'View a change request by number n, or by sha.'),
   forge_diff: S('forge', 'diff', ['n'], {}, 'Diff of a change request.'),
-  forge_list: S('forge', 'list', [], { state: 'string' }, 'List change requests (state: open|merged|all).'),
+  forge_list: S('forge', 'list', [], { state: 'string', limit: 'integer', since: 'string', checks: 'boolean' }, 'List change requests (state: open|merged|all; limit: the newest n; since: an ISO date; checks: include check results, otherwise checks is empty).'),
   forge_ready: S('forge', 'ready', ['n'], {}, 'Mark ready for review.'),
   forge_draft: S('forge', 'draft', ['n'], {}, 'Mark as draft.'),
   forge_sync: S('forge', 'sync', ['n'], {}, 'Bring the change request up to date with its target.'),
@@ -48,6 +49,7 @@ const TOOLS: Record<string, Spec> = {
   forge_cut: S('forge', 'cut', ['revision', 'version'], {}, 'Ask the release workflow to cut a release line.'),
   forge_status: S('forge', 'status', ['n'], { context: 'string', state: 'string', description: 'string', url: 'string' }, 'Post a commit status (n is the sha; state: pending|success|failure).', ['context', 'state', 'description']),
   forge_runs: S('forge', 'runs', [], { ref: 'string', failed: 'boolean' }, 'List CI runs.'),
+  forge_run: S('forge', 'run', ['id'], {}, 'One CI run by id.'),
   vcs_start: S('vcs', 'start', ['name'], {}, 'Start a working tree.'),
   vcs_head: S('vcs', 'head', [], {}, 'Current ref and sha.'),
   vcs_changed: S('vcs', 'changed', [], { since: 'string' }, 'Changed paths.'),
@@ -82,10 +84,10 @@ export function allowList(arg: string | undefined): Set<string> {
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
 // Tool annotations come from these sets, keyed by tool name; no per-tool boilerplate.
-const READ = new Set(['board_list', 'board_get', 'board_comments', 'forge_view', 'forge_diff', 'forge_list', 'forge_approvals', 'forge_comments', 'forge_runs',
+const READ = new Set(['board_list', 'board_get', 'board_comments', 'forge_view', 'forge_diff', 'forge_list', 'forge_approvals', 'forge_comments', 'forge_runs', 'forge_run',
   'vcs_head', 'vcs_changed', 'vcs_base', 'vcs_tags', 'ledger_runs', 'ledger_summary', 'ledger_plan', 'ledger_hash', 'ledger_stale']);
 const DESTRUCTIVE = new Set(['board_close', 'vcs_drop']);
-const IDEMPOTENT = new Set(['board_move', 'board_set', 'board_label', 'board_assign', 'board_close', 'forge_ready', 'forge_draft', 'forge_sync', 'forge_automerge',
+const IDEMPOTENT = new Set(['board_move', 'board_set', 'board_label', 'board_assign', 'board_milestone', 'board_close', 'forge_ready', 'forge_draft', 'forge_sync', 'forge_automerge',
   'forge_approve', 'forge_status', 'vcs_push', 'vcs_drop', 'ledger_record']);
 const LOCAL = new Set(['vcs_start', 'vcs_head', 'vcs_changed', 'vcs_base', 'vcs_tags', 'vcs_drop', 'ledger_hash']); // never reach an external system
 const annotations = (name: string) => {

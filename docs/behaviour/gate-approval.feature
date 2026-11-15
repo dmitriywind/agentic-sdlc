@@ -101,6 +101,15 @@ Feature: Gate human-approval
     Then the human-approval status is success
     And an approval by the board name "acc-7" does not count
 
+  # Source: src/gates.ts, "approval"; src/ports.ts, "ownersFor"
+  # Proof: test/gates.test.ts "approval: classes and the human-approval status per forge.human_approval"
+  Scenario: An approval by any one of several factory owners passes guardrail
+    Given owners.factory lists two accounts
+    And a guardrail CR
+    When the second account approves the head
+    Then the human-approval status is success
+    And an approval by an account outside the list leaves it pending
+
   # Source: src/gates.ts, "globToRegExp"
   # Proof: test/gates.test.ts "globToRegExp: **, *, ?"
   Scenario: A path glob matches one folder with * and any depth with **

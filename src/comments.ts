@@ -8,7 +8,7 @@ export function selectComments(
   const w = o.owners;
   let out = o.marker ? list.filter((c) => c.body.split('\n')[0].includes(o.marker!)) : list;
   if (o.authors?.length || o.trusted) {
-    const by = [...(o.authors ?? []), ...(o.trusted ? [...(w?.bots ?? []), w?.product, w?.factory] : [])]
+    const by = [...(o.authors ?? []), ...(o.trusted ? [...(w?.bots ?? []), ...(w?.product ?? []), ...(w?.factory ?? []), ...(w?.operator ?? []), ...(w?.security ?? []), ...(w?.compliance ?? [])] : [])]
       .filter((x): x is string => !!x).map((s) => s.toLowerCase());
     out = out.filter((c) => by.includes(c.author?.toLowerCase()));
   }

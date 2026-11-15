@@ -34,6 +34,58 @@ Feature: Install and validate the binding
     And the unedited skill file is updated
     And "--force" overwrites the edited file
 
+  # Source: src/install.ts, "Installer"
+  # Proof: test/install.test.ts "init --upgrade updates an unedited workflow, keeps an edited one, and --force overwrites it but never the binding"
+  Scenario: Init --upgrade follows the package for unedited files and never rewrites the binding
+    Given init recorded the hash of every file it installed in .agents/install.lock.json
+    And the package holds a new workflow
+    When the adopter runs "agentic-sdlc init --upgrade"
+    Then a workflow still at its recorded hash is updated
+    And a workflow the adopter edited is kept and the line names the package file with the new version
+    And "--force" overwrites the edited workflow
+    And no flag rewrites .agents/binding.yml: to regenerate it the adopter deletes the file
+    And the last lines say how many files are new, updated, kept and stale, and what to run next
+
+  # Source: src/install.ts, "init" (binding)
+  # Proof: test/install.test.ts "init --force on a local board creates no second heartbeat ticket"
+  Scenario: Init --force creates no second heartbeat ticket
+    Given the binding exists on a local board
+    When the adopter runs "agentic-sdlc init --board local --force"
+    Then the board still holds one heartbeat ticket
+
+  # Source: src/install.ts, "Installer"
+  # Proof: test/install.test.ts "init on an install from before the lock adopts an identical file and keeps a differing one"
+  Scenario: A file with no lock entry counts as edited unless it equals the package's
+    Given an install whose lock has no entry for two files
+    And one file equals the package's file and the other differs
+    When the adopter runs "agentic-sdlc init"
+    Then the identical file is recorded in the lock
+    And the differing file is kept and not recorded
+
+  # Source: src/install.ts, "Installer"
+  # Proof: test/install.test.ts "init honours the skills lock of an install from before the single lock"
+  Scenario: Init reads the old skills lock once
+    Given the project has .agents/skills.lock.json and no .agents/install.lock.json
+    When the adopter runs "agentic-sdlc init"
+    Then a skill file still at its old recorded hash is updated
+    And .agents/install.lock.json holds the lock from then on
+
+  # Source: src/install.ts, "Installer"
+  # Proof: test/install.test.ts "init reports a file the package no longer ships and deletes nothing"
+  Scenario: Init reports a file the package no longer ships
+    Given the lock names a file the package no longer ships
+    When the adopter runs "agentic-sdlc init"
+    Then init prints "stale <path>: no longer part of the package"
+    And the file stays
+
+  # Source: src/install.ts, "missingBindingKeys"
+  # Proof: test/install.test.ts "init and validate list template binding keys that the binding does not set"
+  Scenario: Init and validate list the template's binding keys that the binding lacks
+    Given the template sets a top-level or second-level key the binding does not
+    When the adopter runs "agentic-sdlc init" or "agentic-sdlc validate"
+    Then an info line lists those keys
+    And the binding is not changed
+
   # Source: src/install.ts, "init" (vcs and forge checks)
   # Proof: test/install.test.ts "init writes skills, binding, gates, pointer; second run is idempotent and keeps edits"
   Scenario: Init refuses a VCS or a forge it does not support
@@ -155,6 +207,22 @@ Feature: Install and validate the binding
     Then doctor prints a "fail delivery workflow" line
     And the command exits with code 1
 
+  # Source: src/install.ts, "unpinnedActions"
+  # Proof: test/install.test.ts "doctor: an installed workflow action not pinned to a commit SHA is a warning"
+  Scenario: Doctor warns about an action that is not pinned to a commit SHA
+    Given an installed .github/workflows/agentic-sdlc-*.yml has a uses: that is not a 40-hex commit SHA
+    When the adopter runs "agentic-sdlc doctor"
+    Then doctor prints a "warn workflow actions" line naming the file and the action
+    And the exit code is not changed
+
+  # Source: src/binding.ts, "validateBinding" (product.slo)
+  # Proof: test/binding.test.ts "product.slo: a rate from 0 to 1 and a positive whole window, or unset"
+  Scenario: The error budget needs a rate and a window
+    Given product.slo is set
+    When change_failure_rate_max is outside 0 to 1 or window_days is not a positive whole number
+    Then validation fails naming the key
+    And an unset product.slo means no error budget
+
   # Source: src/binding.ts, "validateBinding" (product.delivery)
   # Proof: test/binding.test.ts "product.delivery: continuous needs no release prefix; release-line needs two environments"
   Scenario: The delivery mode decides which release keys are required
@@ -220,6 +288,23 @@ Feature: Install and validate the binding
     When the binding is validated
     Then a warning names each of them
     And an empty vcs.release_prefix fails validation
+
+  # Source: src/binding.ts, "validateBinding" (owners); src/ports.ts, "ownersFor"
+  # Proof: test/binding.test.ts "owners: roles take lists, ownersFor normalises them, --trusted includes every role"
+  Scenario: An owner role can be a list, and optional roles exist
+    Given owners.product is a list of a name and { board, forge }
+    And owners.operator, owners.security and owners.compliance are set
+    When the binding is validated
+    Then it is valid and every role reads as a list
+    And "--trusted" keeps the comments of every entry of every role
+    And an empty list, or an entry that is empty or has only one of board and forge, is a problem
+
+  # Source: src/binding.ts, "validateBinding" and "bindingWarnings" (owners)
+  # Proof: test/binding.test.ts "owners: an unknown owners key warns and the review identity must not be an owner"
+  Scenario: An unknown owners key warns and the review identity is never an owner
+    Given owners has a key that is not a role
+    Then validation warns about it
+    And forge.review_identity equal to any owner entry is a problem
 
   # Source: src/binding.ts, "validateBinding" (owners); src/ports.ts, "ownersFor"
   # Proof: test/binding.test.ts "validateBinding: an owner is a name or { board, forge }"

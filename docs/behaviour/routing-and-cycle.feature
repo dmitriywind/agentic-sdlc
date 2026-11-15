@@ -82,6 +82,16 @@ Feature: Routing and the unattended cycle
     And then it writes one heartbeat that holds every run of this cycle, the judge and learn runs too
     And then, with a forge.review_identity, it fires the review runtime only when a CR needs a review
 
+  # Source: skills/sdlc/SKILL.md, "Run one cycle", step 1; skills/sdlc/references/heartbeat.md, "Shape"
+  # Proof: skill text only
+  Scenario: An exhausted error budget stops new feature work
+    Given product.slo is set
+    And "ledger measures" prints errorBudget.exhausted true
+    When the cycle routes the board
+    Then it moves no feature ticket from Ready to In progress
+    And it works only bugs, Signals and the tickets and reviews in flight
+    And the heartbeat records "budget: exhausted"
+
   # Source: skills/sdlc/SKILL.md, "Run one cycle", step 2
   # Proof: skill text only
   Scenario: An idle cycle exits with a minimal heartbeat

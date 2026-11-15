@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cli, probeFailure, cloudBoard, deliveryWorkflow, implementerToken, selfHostedRunner, trunkProtection, validate } from '../src/install.ts';
+import { cli, probeFailure, cloudBoard, deliveryWorkflow, implementerToken, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../src/install.ts';
 import { parse } from 'yaml';
 import { fakeCtx } from './helpers.ts';
 
@@ -428,4 +428,108 @@ test('doctor: a failed probe shows the command\'s first stderr line and hides th
   const line = probeFailure('Command failed: gh api repos/acme/shop/pulls\nHTTP 403: bad credentials hunter2hunter2\nmore', { GH_PAT_X: 'hunter2hunter2' }, { forge: { options: { token_env: 'GH_PAT_X' } } });
   assert.equal(line, 'Command failed: gh api repos/acme/shop/pulls (HTTP 403: bad credentials ***)');
   assert.equal(probeFailure('plain reason\nsecond line', {}, {}), 'plain reason');
+});
+
+test('doctor: an installed workflow action not pinned to a commit SHA is a warning', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ua-'));
+  assert.equal(unpinnedActions(root), undefined);
+  const sha = 'a'.repeat(40);
+  w(join(root, '.github/workflows/agentic-sdlc-verify.yml'), `jobs:\n  j:\n    steps:\n      - uses: actions/checkout@${sha} # v7.0.1\n`);
+  w(join(root, '.github/workflows/ci.yml'), `jobs:\n  j:\n    steps:\n      - uses: actions/checkout@v4\n`);
+  assert.equal(unpinnedActions(root), undefined);
+  w(join(root, '.github/workflows/agentic-sdlc-cr.yml'), `jobs:\n  j:\n    steps:\n      - uses: actions/setup-node@v4\n`);
+  assert.match(unpinnedActions(root)!, /^warn workflow actions:.*agentic-sdlc-cr\.yml: actions\/setup-node@v4/);
+});
+
+const capture = async (f: () => Promise<unknown>) => {
+  const lines: string[] = [];
+  const l = console.log, e = console.error;
+  console.log = (m: string) => { lines.push(String(m)); }; console.error = () => {};
+  try { await f(); } finally { console.log = l; console.error = e; }
+  return lines;
+};
+
+test('init --upgrade updates an unedited workflow, keeps an edited one, and --force overwrites it but never the binding', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  const gate = join(root, '.github/workflows/gate.yml'), binding = join(root, '.agents/binding.yml');
+  w(join(pkg, 'templates/gates/github/gate.yml'), 'on: pull_request\n');
+  const lines = await capture(() => cli(['init', '--upgrade'], ctx));
+  assert.equal(readFileSync(gate, 'utf8'), 'on: pull_request\n', 'unedited: follows the package');
+  assert.ok(lines.some((m) => m === 'updated .github/workflows/gate.yml'), lines.join('|'));
+  assert.ok(lines.some((m) => m.startsWith('upgrade: run npm install')), lines.join('|'));
+  writeFileSync(gate, 'mine\n');
+  w(join(pkg, 'templates/gates/github/gate.yml'), 'on: schedule\n');
+  writeFileSync(binding, readFileSync(binding, 'utf8') + '# mine\n');
+  const kept = await capture(() => cli(['init', '--upgrade'], ctx));
+  assert.equal(readFileSync(gate, 'utf8'), 'mine\n');
+  assert.ok(kept.includes(`kept .github/workflows/gate.yml (local edits; see ${join(pkg, 'templates/gates/github/gate.yml')} for the new version)`), kept.join('|'));
+  await quiet(() => cli(['init', '--force'], ctx));
+  assert.equal(readFileSync(gate, 'utf8'), 'on: schedule\n');
+  assert.match(readFileSync(binding, 'utf8'), /# mine/, '--force never rewrites the binding');
+});
+
+test('init --force on a local board creates no second heartbeat ticket', async () => {
+  const root = fixture();
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init', '--board', 'local'], ctx));
+  await quiet(() => cli(['init', '--board', 'local', '--force'], ctx));
+  assert.equal(JSON.parse(readFileSync(join(root, '.agents/board.json'), 'utf8')).items.length, 1);
+});
+
+test('init on an install from before the lock adopts an identical file and keeps a differing one', async () => {
+  const root = fixture();
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  const lock = join(root, '.agents/install.lock.json');
+  writeFileSync(lock, '{}\n');
+  writeFileSync(join(root, '.agents/cycle-prompt.md'), 'mine');
+  const lines = await capture(() => cli(['init'], ctx));
+  assert.equal(readFileSync(join(root, '.agents/cycle-prompt.md'), 'utf8'), 'mine');
+  assert.ok(lines.some((m) => m.startsWith('kept .agents/cycle-prompt.md (local edits')), lines.join('|'));
+  const l = JSON.parse(readFileSync(lock, 'utf8'));
+  assert.ok(l['.github/workflows/gate.yml'], 'the identical file is adopted into the lock');
+  assert.equal(l['.agents/cycle-prompt.md'], undefined, 'the differing file is not');
+});
+
+test('init honours the skills lock of an install from before the single lock', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  const skill = join(root, '.agents/skills/sdlc/SKILL.md');
+  const old = JSON.parse(readFileSync(join(root, '.agents/install.lock.json'), 'utf8'));
+  writeFileSync(join(root, '.agents/skills.lock.json'), JSON.stringify({ '.agents/skills/sdlc/SKILL.md': old['.agents/skills/sdlc/SKILL.md'] }));
+  rmSync(join(root, '.agents/install.lock.json'));
+  w(join(pkg, 'skills/sdlc/SKILL.md'), '---\nname: sdlc\ndescription: d2\nmetadata:\n  tier: fast\n---\n');
+  await quiet(() => cli(['init'], ctx));
+  assert.match(readFileSync(skill, 'utf8'), /description: d2/, 'unedited at the old lock hash: updated');
+  assert.ok(existsSync(join(root, '.agents/install.lock.json')));
+});
+
+test('init reports a file the package no longer ships and deletes nothing', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  w(join(pkg, 'templates/gates/github/old.yml'), 'x: 1\n');
+  await quiet(() => cli(['init'], ctx));
+  rmSync(join(pkg, 'templates/gates/github/old.yml'));
+  const lines = await capture(() => cli(['init'], ctx));
+  assert.ok(lines.includes('stale .github/workflows/old.yml: no longer part of the package'), lines.join('|'));
+  assert.ok(existsSync(join(root, '.github/workflows/old.yml')));
+});
+
+test('init and validate list template binding keys that the binding does not set', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  const tpl = readFileSync(join(pkg, 'templates/binding.yml'), 'utf8');
+  w(join(pkg, 'templates/binding.yml'), tpl.replace('vcs: { adapter: git }', 'vcs: { adapter: git, trunk: main }') + 'slo: { target: 99 }\n');
+  const want = 'info: binding keys in the template that this binding does not set: vcs.trunk, slo';
+  assert.ok((await capture(() => cli(['init'], ctx))).includes(want));
+  assert.ok((await capture(() => cli(['validate'], ctx))).includes(want));
+  assert.doesNotMatch(readFileSync(join(root, '.agents/binding.yml'), 'utf8'), /slo|trunk: main/, 'the binding is not touched');
 });

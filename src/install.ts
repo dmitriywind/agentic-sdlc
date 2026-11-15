@@ -18,7 +18,8 @@ const POINTER = `${START}
 Work lives on the board named in \`.agents/binding.yml\`. Before any work, invoke the sdlc skill (\`/agentic-sdlc:sdlc\` in Claude Code).
 Never duplicate the process here: the skills own it, the binding owns the project values.
 ${END}`;
-const SKILLS_LOCK = '.agents/skills.lock.json';
+const INSTALL_LOCK = '.agents/install.lock.json';
+const LEGACY_LOCK = '.agents/skills.lock.json'; // read once, so an install from before the one lock upgrades cleanly
 const TIERS = ['fast', 'balanced', 'deep'];
 const FORGES = ['github'];
 
@@ -34,14 +35,14 @@ export function packageRoot(env: NodeJS.ProcessEnv = process.env): string {
   return d;
 }
 
-const INIT_FLAGS = ['board', 'forge', 'vcs', 'harness', 'profile', 'force', 'no-plugin'];
+const INIT_FLAGS = ['board', 'forge', 'vcs', 'harness', 'profile', 'force', 'upgrade', 'no-plugin'];
 const flagsOf = (argv: string[]) => {
   const f: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
     if (!argv[i].startsWith('--')) throw new Error(`unexpected argument '${argv[i]}'`);
     const k = argv[i].slice(2);
     if (!INIT_FLAGS.includes(k)) throw new Error(`unknown flag --${k} (init takes ${INIT_FLAGS.map((n) => '--' + n).join(', ')})`);
-    if (k === 'force' || k === 'no-plugin') f[k] = 'true';
+    if (k === 'force' || k === 'upgrade' || k === 'no-plugin') f[k] = 'true';
     else if (i + 1 < argv.length) f[k] = argv[++i];
     else throw new Error(`--${k} needs a value`);
   }
@@ -58,51 +59,91 @@ const parseJson = (text: string, p: string) => {
   try { return JSON.parse(text); } catch (e) { throw new Error(`${p} is not valid JSON (${(e as Error).message}); fix it and run init again`); }
 };
 const readJson = (p: string) => parseJson(readFileSync(p, 'utf8'), basename(p));
-const sha = (p: string) => createHash('sha256').update(readFileSync(p)).digest('hex');
-
-function copyFile(from: string, to: string, force: boolean, log: string[]) {
-  if (existsSync(to) && !force) { log.push(`kept ${to}`); return; }
-  mkdirSync(dirname(to), { recursive: true });
-  cpSync(from, to);
-  log.push(`wrote ${to}`);
-}
-
-function writeKept(to: string, text: string, force: boolean, log: string[], rel: string) {
-  if (existsSync(to) && !force) { log.push(`kept ${rel}`); return; }
-  mkdirSync(dirname(to), { recursive: true });
-  writeFileSync(to, text);
-  log.push(`wrote ${rel}`);
-}
 
 const filesUnder = (dir: string): string[] =>
   readdirSync(dir).flatMap((n) => statSync(join(dir, n)).isDirectory() ? filesUnder(join(dir, n)).map((f) => join(n, f)) : [n]);
 
+const sha = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
+const posix = (p: string) => p.replaceAll('\\', '/');
+
 /**
- * Copy the skill pack into `dest`, keeping local edits. The lock records the hash of each file as
- * installed: a file still at that hash (or new) is updated; one edited since is kept unless --force.
+ * Every file init installs from the package, tracked in one lock: the hash of each file as written.
+ * A file still at its recorded hash follows the package; one edited since is kept unless --force.
+ * A file that exists with no lock entry (an install from before the lock) counts as edited unless it equals the package's.
  */
-function syncSkills(src: string, root: string, dest: string, force: boolean, log: string[]) {
-  const lockFile = join(root, SKILLS_LOCK);
-  const lock: Record<string, string> = existsSync(lockFile) ? readJson(lockFile) : {};
-  let wrote = 0;
-  for (const f of filesUnder(src)) {
-    const from = join(src, f), to = join(root, dest, f);
-    const key = relative(root, to).replaceAll('\\', '/');
-    const want = sha(from);
+class Installer {
+  lock: Record<string, string> = {};
+  offered = new Set<string>();
+  counts = { wrote: 0, updated: 0, kept: 0, stale: 0 };
+  root: string; pkg: string; force: boolean; log: string[];
+  constructor(root: string, pkg: string, force: boolean, log: string[]) {
+    this.root = root; this.pkg = pkg; this.force = force; this.log = log;
+    for (const f of [LEGACY_LOCK, INSTALL_LOCK]) {
+      const file = join(root, f);
+      if (existsSync(file)) Object.assign(this.lock, readJson(file));
+    }
+  }
+  /** Install `data` at `rel`. `src` is the package file it comes from (named when a local edit is kept). `quiet` hides wrote/updated lines. */
+  put(rel: string, data: string | Buffer, src?: string, quiet = false) {
+    rel = posix(rel);
+    this.offered.add(rel);
+    const to = join(this.root, rel), want = sha(data);
+    let how = 'wrote';
     if (existsSync(to)) {
-      const have = sha(to);
-      if (have === want) { lock[key] = want; continue; }
-      if (!force && have !== lock[key]) { log.push(`kept ${key} (local edits; --force overwrites)`); continue; }
+      const have = sha(readFileSync(to));
+      if (have === want) { this.lock[rel] = want; return; }
+      if (have === this.lock[rel]) how = 'updated';
+      else if (this.force) how = 'overwrote';
+      else {
+        this.counts.kept++;
+        this.log.push(`kept ${rel} (local edits; ${src ? `see ${join(this.pkg, src)} for the new version` : '--force regenerates it'})`);
+        return;
+      }
     }
     mkdirSync(dirname(to), { recursive: true });
-    cpSync(from, to);
-    lock[key] = want;
-    wrote++;
+    writeFileSync(to, data);
+    this.lock[rel] = want;
+    if (how === 'wrote') this.counts.wrote++; else this.counts.updated++;
+    if (!quiet) this.log.push(`${how} ${rel}`);
   }
-  mkdirSync(dirname(lockFile), { recursive: true });
-  writeFileSync(lockFile, JSON.stringify(lock, null, 2) + '\n');
-  log.push(`wrote ${dest} (${wrote} file${wrote === 1 ? '' : 's'} updated)`);
+  /** Install the package file `src` (relative to the package) at `rel`. */
+  copy(src: string, rel: string, quiet = false) { this.put(rel, readFileSync(join(this.pkg, src)), src, quiet); }
+  /** Name a file this run does not install (by choice of binding or harness) so it is not reported as stale. */
+  skip(rel: string) { this.offered.add(posix(rel)); }
+  /** Copy the skill pack into `dest`. */
+  skills(src: string, dest: string) {
+    const before = this.counts.wrote + this.counts.updated;
+    for (const f of filesUnder(join(this.pkg, src))) this.copy(join(src, f), join(dest, f), true);
+    const n = this.counts.wrote + this.counts.updated - before;
+    this.log.push(`wrote ${dest} (${n} file${n === 1 ? '' : 's'} updated)`);
+  }
+  /** Report files the package no longer ships, then save the lock. Nothing is deleted. */
+  finish() {
+    for (const rel of Object.keys(this.lock).sort()) {
+      if (this.offered.has(rel)) continue;
+      if (!existsSync(join(this.root, rel))) { delete this.lock[rel]; continue; }
+      this.counts.stale++;
+      this.log.push(`stale ${rel}: no longer part of the package`);
+    }
+    const file = join(this.root, INSTALL_LOCK);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(Object.fromEntries(Object.entries(this.lock).sort(([a], [b]) => (a < b ? -1 : 1))), null, 2) + '\n');
+  }
 }
+
+/** Binding keys (top level and second level) that the template sets and this binding does not. */
+export function missingBindingKeys(template: string, binding: string): string[] {
+  const t = parse(template), b = parse(binding);
+  const isMap = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+  if (!isMap(t) || !isMap(b)) return [];
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(t)) {
+    if (!(k in b)) out.push(k);
+    else if (isMap(v) && isMap(b[k])) for (const k2 of Object.keys(v)) if (!(k2 in (b[k] as object))) out.push(`${k}.${k2}`);
+  }
+  return out;
+}
+const missingKeysLine = (keys: string[]) => keys.length ? `info: binding keys in the template that this binding does not set: ${keys.join(', ')}` : undefined;
 
 const MCP_FILES = new Map<string, string | null>([
   ['claude', '.mcp.json'], ['cursor', '.cursor/mcp.json'], ['codex', '.codex/config.toml'], ['generic', null],
@@ -170,13 +211,13 @@ function pinCli(root: string, version: string, force: boolean, log: string[]): b
 }
 
 /** Claude Code: tier subagents from binding.models, and CLAUDE.md importing AGENTS.md. Skills come from the plugin. */
-function claudeSetup(root: string, force: boolean, log: string[], noPlugin: boolean) {
+function claudeSetup(root: string, inst: Installer, log: string[], noPlugin: boolean) {
   let models: Record<string, string> = {};
   try { models = parse(readFileSync(join(root, BINDING_PATH), 'utf8'))?.models ?? {}; } catch { /* reported by validate */ }
   for (const tier of TIERS) {
     const rel = `.claude/agents/sdlc-${tier}.md`;
     const model = !models[tier] || /^your-/.test(models[tier]) ? 'inherit' : models[tier]; // template placeholder: the session's model
-    writeKept(join(root, rel), `---
+    inst.put(rel, `---
 name: sdlc-${tier}
 description: Runs one agentic-sdlc skill step whose metadata.tier is ${tier}. The sdlc skill hands a step to this agent when the step's skill is at the ${tier} tier.
 model: ${model}
@@ -186,7 +227,7 @@ You run one step of the agentic-sdlc process at the ${tier} tier. Invoke the ski
 (\`/agentic-sdlc:<skill>\`; without the plugin, read \`.agents/skills/<skill>/SKILL.md\`), follow it to
 its last Done when, and report the result and the evidence. Call the CLI as \`npx --no agentic-sdlc ...\`.
 Do not start subagents.
-`, force, log, rel);
+`);
   }
   const file = join(root, 'CLAUDE.md');
   const cur = existsSync(file) ? readFileSync(file, 'utf8') : '';
@@ -225,22 +266,26 @@ async function init(root: string, argv: string[], log: string[]) {
 
   if (existsSync(join(root, 'package.json'))) readJson(join(root, 'package.json')); // fail before anything is written
   const skills = need(pkg, 'skills');
-  syncSkills(skills, root, '.agents/skills', force, log);
+  const inst = new Installer(root, pkg, force, log);
+  inst.skills('skills', '.agents/skills');
   // Claude Code gets skills and the MCP server from the plugin, unless --no-plugin
   // (a Claude cloud session loads no repo plugin, only .claude/skills).
   const noPlugin = harness === 'claude' && f['no-plugin'] === 'true';
-  if (noPlugin) syncSkills(skills, root, '.claude/skills', force, log);
+  if (noPlugin) inst.skills('skills', '.claude/skills');
+  else for (const n of filesUnder(skills)) inst.skip(join('.claude/skills', n));
   const pinned = pinCli(root, version, force, log);
   if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, pinned ? ['--no-install', 'agentic-sdlc', 'mcp'] : ['-y', ALLOW_GIT, gitSpec(version), 'mcp'], force, log);
   else log.push('MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)');
   const scorers = join(pkg, 'scorers');
   if (existsSync(scorers)) {
-    // Scorers are factory definition the project may tune: keep existing files unless --force.
-    for (const n of readdirSync(scorers)) copyFile(join(scorers, n), join(root, '.agents', 'scorers', n), force, log);
+    // Scorers are factory definition the project may tune: a locally edited file is kept unless --force.
+    for (const n of filesUnder(scorers)) inst.copy(join('scorers', n), join('.agents', 'scorers', n));
   }
 
   const bindingFile = join(root, BINDING_PATH);
-  if (existsSync(bindingFile) && !force) log.push(`kept ${BINDING_PATH}`);
+  // The binding is the project's: no flag overwrites it. To regenerate it, delete the file.
+  const hadBinding = existsSync(bindingFile);
+  if (hadBinding) log.push(`kept ${BINDING_PATH}`);
   else {
     const doc = parseDocument(readFileSync(need(pkg, 'templates/binding.yml'), 'utf8'));
     doc.setIn(['board', 'adapter'], board);
@@ -279,42 +324,46 @@ async function init(root: string, argv: string[], log: string[]) {
   const continuous = bound?.product?.delivery === 'continuous';
   const oneIdentity = !bound?.forge?.review_identity;
   {
-    for (const n of readdirSync(dir).filter((n) => n.endsWith('.yml') && !(continuous && n === 'agentic-sdlc-release.yml'))) copyFile(join(dir, n), join(root, '.github', 'workflows', n), force, log);
-    if (existsSync(join(dir, 'pull_request_template.md'))) copyFile(join(dir, 'pull_request_template.md'), join(root, '.github', 'pull_request_template.md'), force, log);
+    const tdir = `templates/gates/${forge}`;
+    for (const n of readdirSync(dir).filter((n) => n.endsWith('.yml'))) {
+      if (continuous && n === 'agentic-sdlc-release.yml') inst.skip(join('.github', 'workflows', n));
+      else inst.copy(`${tdir}/${n}`, join('.github', 'workflows', n));
+    }
+    if (existsSync(join(dir, 'pull_request_template.md'))) inst.copy(`${tdir}/pull_request_template.md`, '.github/pull_request_template.md');
     if (existsSync(join(dir, 'ruleset.trunk.json'))) {
-      const dest = join(root, '.github', 'rulesets', 'trunk.json');
-      const fresh = force || !existsSync(dest);
-      copyFile(join(dir, 'ruleset.trunk.json'), dest, force, log);
-      if (fresh && oneIdentity) {
+      let text = readFileSync(join(dir, 'ruleset.trunk.json'), 'utf8');
+      if (oneIdentity) {
         // One identity: GitHub refuses an approving review from the CR's author, so the ruleset asks for none.
-        const rs = readJson(dest);
+        const rs = parseJson(text, 'ruleset.trunk.json');
         for (const r of rs.rules) if (r.type === 'pull_request') Object.assign(r.parameters, { required_approving_review_count: 0, require_last_push_approval: false });
         // CI posts review (gate review) and human-approval with the Actions token: pin them to Actions too.
         for (const r of rs.rules) if (r.type === 'required_status_checks')
           for (const c of r.parameters.required_status_checks) if (['review', 'human-approval'].includes(c.context)) c.integration_id = 15368;
-        writeFileSync(dest, JSON.stringify(rs, null, 2) + '\n');
+        text = JSON.stringify(rs, null, 2) + '\n';
       }
+      inst.put('.github/rulesets/trunk.json', text, `${tdir}/ruleset.trunk.json`); // hashed as written, patch included
       log.push('import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk');
       log.push(oneIdentity
         ? 'one identity: the ruleset needs no approving review and pins every required check to GitHub Actions (integration_id 15368); a Full-lane CR waits on human-approval until a collaborator approves it or you merge it as admin'
         : 'its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App\'s id if it is an App (a PAT cannot be pinned)');
     }
+    if (continuous && existsSync(join(dir, 'ruleset.release.json'))) inst.skip('.github/rulesets/release.json');
     if (!continuous && existsSync(join(dir, 'ruleset.release.json'))) {
-      copyFile(join(dir, 'ruleset.release.json'), join(root, '.github', 'rulesets', 'release.json'), force, log);
+      inst.copy(`${tdir}/ruleset.release.json`, '.github/rulesets/release.json');
       log.push('import .github/rulesets/release.json (Rules > Rulesets) and add the release bot (app or role) as a bypass actor; set its include to your vcs.release_prefix');
     }
   }
   if (existsSync(join(gates, 'hooks', 'pre-push'))) {
-    copyFile(join(gates, 'hooks', 'pre-push'), join(root, '.agents', 'hooks', 'pre-push'), force, log);
+    inst.copy('templates/gates/hooks/pre-push', '.agents/hooks/pre-push');
     chmodSync(join(root, '.agents', 'hooks', 'pre-push'), 0o755);
     log.push('enable the hook with: git config core.hooksPath .agents/hooks');
   }
   const setup = join(pkg, 'templates', 'runner', 'setup.sh');
-  if (existsSync(setup)) copyFile(setup, join(root, '.agents', 'runner-setup.sh'), force, log);
+  if (existsSync(setup)) inst.copy('templates/runner/setup.sh', '.agents/runner-setup.sh');
 
   for (const n of ['cycle-prompt.md', 'review-prompt.md']) {
     const prompt = join(pkg, 'templates', 'runner', n);
-    if (existsSync(prompt)) copyFile(prompt, join(root, '.agents', n), force, log);
+    if (existsSync(prompt)) inst.copy(`templates/runner/${n}`, join('.agents', n));
   }
 
   const agents = join(root, 'AGENTS.md');
@@ -323,7 +372,14 @@ async function init(root: string, argv: string[], log: string[]) {
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, '\n\n') : '') + POINTER + '\n';
   if (next !== cur) writeFileSync(agents, next);
   log.push('updated AGENTS.md');
-  if (harness === 'claude') claudeSetup(root, force, log, noPlugin);
+  if (harness === 'claude') claudeSetup(root, inst, log, noPlugin);
+  else for (const tier of TIERS) inst.skip(`.claude/agents/sdlc-${tier}.md`);
+  inst.finish();
+  const missing = missingKeysLine(missingBindingKeys(readFileSync(need(pkg, 'templates/binding.yml'), 'utf8'), readFileSync(bindingFile, 'utf8')));
+  if (missing) log.push(missing);
+  const c = inst.counts;
+  log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept with local edits, ${c.stale} stale`);
+  if (hadBinding) log.push('upgrade: run npm install to fetch the pinned CLI, review the kept files, then run agentic-sdlc validate and agentic-sdlc doctor');
 }
 
 /** Binding problems plus skill frontmatter problems; skill warnings go into `warnings`. */
@@ -445,6 +501,16 @@ export function deliveryWorkflow(b: any, root: string): string | undefined {
   return `ok   delivery workflow: names trunk ${b.vcs.trunk}`;
 }
 
+/** An installed agentic-sdlc workflow whose `uses:` is not a 40-hex commit SHA (a tag can move). Local read only. */
+export function unpinnedActions(root: string): string | undefined {
+  const dir = join(root, '.github', 'workflows');
+  if (!existsSync(dir)) return undefined;
+  const bad = readdirSync(dir).filter((n) => /^agentic-sdlc-.*\.ya?ml$/.test(n)).flatMap((n) =>
+    [...readFileSync(join(dir, n), 'utf8').matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)/gm)]
+      .map((m) => m[1]!).filter((u) => !u.startsWith('./') && !/@[0-9a-f]{40}$/.test(u)).map((u) => `${n}: ${u}`));
+  return bad.length ? `warn workflow actions: not pinned to a commit SHA (${[...new Set(bad)].join(', ')}); a tag can move, so let Dependabot's github-actions ecosystem pin them` : undefined;
+}
+
 /** Called with the group name as the first element: init | validate | doctor. */
 export const cli: PortCli = async (argv, ctx) => {
   const [verb, ...rest] = argv;
@@ -462,6 +528,10 @@ export const cli: PortCli = async (argv, ctx) => {
       problems.forEach((p) => console.error(`problem: ${p}`));
       try { warnings.push(...bindingWarnings(loadBinding(ctx.root))); } catch { /* reported as a problem */ }
       warnings.forEach((m) => console.error(`warn: ${m}`));
+      try {
+        const info = missingKeysLine(missingBindingKeys(readFileSync(join(packageRoot(), 'templates/binding.yml'), 'utf8'), readFileSync(join(ctx.root, BINDING_PATH), 'utf8')));
+        if (info) out(info);
+      } catch { /* no package templates to compare with */ }
       if (problems.length) return 1;
       out('validate: ok');
       if (verb === 'validate') return 0;
@@ -482,6 +552,8 @@ export const cli: PortCli = async (argv, ctx) => {
       if (rn) { out(rn); if (rn.startsWith('fail')) bad++; }
       const dw = deliveryWorkflow(binding, ctx.root);
       if (dw) { out(dw); if (dw.startsWith('fail')) bad++; }
+      const ua = unpinnedActions(ctx.root);
+      if (ua) out(ua);
       for (const [name, run] of probes) {
         try { await run(); out(`ok   ${name}`); }
         catch (e) {
@@ -490,7 +562,7 @@ export const cli: PortCli = async (argv, ctx) => {
       }
       return bad ? 1 : 0;
     }
-    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|individual-api|organization] [--no-plugin] [--force] | validate | doctor');
+    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|individual-api|organization] [--no-plugin] [--upgrade] [--force] | validate | doctor');
     return 2;
   } catch (e) {
     console.error(redact((e as Error).message, ctx.env));

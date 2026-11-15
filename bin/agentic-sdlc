@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+// Plugin shim: Claude Code puts the plugin's bin/ on the Bash tool's PATH, so a skill can say `agentic-sdlc <group> <verb>`.
+// Runs the project's pinned build (node_modules/agentic-sdlc), else the plugin's own committed dist/bin.js.
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+const pkg = join(import.meta.dirname, '..');
+const project = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+const bin = [join(project, 'node_modules', 'agentic-sdlc', 'dist', 'bin.js'), join(pkg, 'dist', 'bin.js')].find((p) => existsSync(p));
+if (!bin) { console.error(`agentic-sdlc: no dist/bin.js in ${pkg}; reinstall the plugin`); process.exit(1); }
+const r = spawnSync(process.execPath, [bin, ...process.argv.slice(2)], { stdio: 'inherit' });
+process.exit(r.status ?? 1);

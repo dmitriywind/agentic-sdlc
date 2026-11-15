@@ -277,3 +277,43 @@ test('runBench --trials: one row per trial, each in fresh trees', async () => {
   assert.equal(made.length, 9); // agent, verify and oracle trees per trial
 });
 
+
+test('runBench budget: over max_runs refuses before any case starts unless allowed; max_minutes skips the rest, never as failures', async () => {
+  const withBudget = (bench_budget: object) => ({ ...benchBinding, learning: { ...benchBinding.learning, bench_budget } });
+  const three = [kase, { ...kase, id: '2', ticket: '2' }, { ...kase, id: '3', ticket: '3' }];
+  const files = { base: { 'src/a.ts': 'old' }, head: { 'src/a.ts': 'new', 'test/a.test.ts': 'oracle' } };
+  const root = mkdtempSync(join(tmpdir(), 'root-'));
+  let started = 0;
+  const countExec = () => { started++; return ''; };
+  // planned runs = cases x trials
+  await assert.rejects(runBench(three, { model: 'm', root, binding: withBudget({ max_runs: 5 }), trials: 2 }, { exec: countExec, vcs: fakeVcs(files).vcs }), /plans 6 runs \(3 cases x 2 trials\).*max_runs 5/);
+  assert.equal(started, 0);
+  const dry = await runBench(three, { model: 'm', root, binding: withBudget({ max_runs: 1 }), dryRun: true, trials: 2 }, { exec: countExec, vcs: fakeVcs(files).vcs });
+  assert.ok('dryRun' in dry);
+  const allowed = await runBench(three, { model: 'm', root, binding: withBudget({ max_runs: 5 }), trials: 2, allowOverBudget: true }, { exec: countExec, vcs: fakeVcs(files).vcs });
+  assert.ok('cases' in allowed && allowed.cases.length === 6 && !allowed.cases.some((c) => c.skipped));
+  // minutes: the clock moves 10 minutes per read; the cap lets the first case start only
+  let t = 0;
+  const now = () => (t += 5 * 60000);
+  const r = await runBench(three, { model: 'm', root, binding: withBudget({ max_minutes: 12 }) }, { exec: () => '', vcs: fakeVcs(files).vcs, now });
+  assert.ok('cases' in r);
+  assert.deepEqual(r.cases.map((c) => [c.id, c.pass, c.skipped]), [['1', true, undefined], ['2', false, 'budget'], ['3', false, 'budget']]);
+  assert.equal(r.passRate, 1); // skipped runs are not failures
+});
+
+test('compare and report: a result with budget-skipped cases is incomplete, never a pass', () => {
+  const ok = result('m', [['1', true, 1], ['2', true, 1]]);
+  const cut: BenchResult = { ...result('m', [['1', true, 1]]), cases: [{ id: '1', pass: true, minutes: 1 }, { id: '2', pass: false, minutes: 0, skipped: 'budget' }] };
+  const r = compare(ok, cut, { minCases: 1, trials: 1 });
+  assert.equal(r.regressed, true);
+  assert.ok(r.insufficient!.some((m) => /b skipped 1 runs on its budget/.test(m)));
+  assert.equal(r.cases, 1);
+  const rows = report([{ ...cut, model: 'cut' }, { ...ok, model: 'full' }]);
+  assert.deepEqual(rows.map((x) => [x.model, x.n, x.incomplete, x.skipped, x.pareto]), [['cut', 1, true, 1, false], ['full', 2, undefined, undefined, true]]);
+});
+
+test('agentCommand fills the stage caps into a command executor, empty when unset', () => {
+  const b = { ...binding, executors: { default: { kind: 'harness', max_turns: 40 } } } as any;
+  const v = { model: 'm', ticket: '1', prompt_file: 'p', workdir: 'w' };
+  assert.equal(agentCommand({ kind: 'command', run: 'bot {max_turns} {max_minutes}' }, b, v), `bot ${quote('40')} ${quote('')}`);
+});

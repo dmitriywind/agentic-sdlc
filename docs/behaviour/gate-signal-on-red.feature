@@ -30,12 +30,12 @@ Feature: Gate signal-on-red
     And the output says the ref is not the trunk or a release line
 
   # Source: src/gates.ts, "signalOnRed" (unknown run)
-  # Proof: test/gates.test.ts "signal-on-red: a run outside the recent runs is reported, not thrown"
-  Scenario: A run outside the recent runs is reported
-    Given the run id is not in the recent runs
+  # Proof: test/gates.test.ts "signal-on-red: a run id that does not exist fails the gate"
+  Scenario: A run id that does not exist fails the gate
+    Given the forge has no run with the id
     When the gate runs
     Then it creates no Signal
-    And it does not throw
+    And the gate exits with a failure
 
   # Source: src/gates.ts, "signalOnRed" (state)
   # Proof: test/gates.test.ts "signal-on-red: a run that did not fail opens no Signal; an unset release_prefix matches no ref or branch"
