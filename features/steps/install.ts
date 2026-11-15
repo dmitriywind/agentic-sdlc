@@ -139,6 +139,7 @@ Then('the install lock does not record {string}', (w, rel: string) => assert.equ
 // ---- the output lines ----
 const lines = (w: World) => w.last.output.split('\n');
 Then('the output has the line {string}', (w, line: string) => assert.ok(lines(w).includes(line), w.last.output));
+Then('no line of the output matches {string}', (w, re: string) => assert.ok(!lines(w).some((l) => new RegExp(re).test(l)), w.last.output));
 Then('a line of the output matches {string}', (w, re: string) => assert.ok(lines(w).some((l) => new RegExp(re).test(l)), w.last.output));
 
 // ---- the installed skills ----

@@ -9,7 +9,7 @@ import { createBoard } from './board/index.ts';
 import { createForge } from './forge/index.ts';
 import { createVcs } from './vcs/index.ts';
 import { createLocalBoard } from './board/local.ts';
-import type { AdapterContext, PortCli } from './ports.ts';
+import type { AdapterContext, Binding, PortCli } from './ports.ts';
 import { DEFAULTS, COPY_PREFIX, bindWorkflow, knownHashes, oneIdentityRuleset, releasedHash, renameSkill, sha, skillNames, type Bound } from './pristine.ts';
 import { readSkills, scorerTargets } from './skills.ts';
 
@@ -617,6 +617,14 @@ export function cliPin(root: string): string[] {
   return out;
 }
 
+/** Each paths.* file key (not a glob key) whose file is missing from the project root: the skills read nothing there. */
+export function pathWarnings(root: string, b: Binding): string[] {
+  const paths = ((b as any)?.paths ?? {}) as Record<string, unknown>;
+  return Object.entries(paths)
+    .filter(([k, v]) => !['factory', 'light_verify', 'lane_areas', 'no_proof'].includes(k) && typeof v === 'string' && v && !existsSync(join(root, v)))
+    .map(([k, v]) => `paths.${k} names ${v}, which does not exist in the project; the skills will read nothing there`);
+}
+
 /** Called with the group name as the first element: init | validate | doctor. */
 export const cli: PortCli = async (argv, ctx) => {
   const [verb, ...rest] = argv;
@@ -632,7 +640,7 @@ export const cli: PortCli = async (argv, ctx) => {
       const warnings: string[] = [];
       const problems = validate(ctx.root, warnings);
       problems.forEach((p) => console.error(`problem: ${p}`));
-      try { warnings.push(...bindingWarnings(loadBinding(ctx.root))); } catch { /* reported as a problem */ }
+      try { { const lb = loadBinding(ctx.root); warnings.push(...bindingWarnings(lb), ...pathWarnings(ctx.root, lb)); } } catch { /* reported as a problem */ }
       warnings.forEach((m) => console.error(`warn: ${m}`));
       try {
         const info = missingKeysLine(missingBindingKeys(readFileSync(join(packageRoot(), 'templates/binding.yml'), 'utf8'), readFileSync(join(ctx.root, BINDING_PATH), 'utf8')));

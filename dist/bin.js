@@ -12057,6 +12057,7 @@ __export(install_exports, {
   implementerToken: () => implementerToken,
   missingBindingKeys: () => missingBindingKeys,
   packageRoot: () => packageRoot,
+  pathWarnings: () => pathWarnings,
   probeFailure: () => probeFailure,
   redact: () => redact2,
   selfHostedRunner: () => selfHostedRunner,
@@ -12471,6 +12472,10 @@ function cliPin(root) {
   else if (process.platform !== "win32" && !(statSync(launcher).mode & 73)) out.push(`fail cli pin: ${LAUNCHER} is not executable; chmod +x ${LAUNCHER}`);
   return out;
 }
+function pathWarnings(root, b) {
+  const paths = b?.paths ?? {};
+  return Object.entries(paths).filter(([k, v]) => !["factory", "light_verify", "lane_areas", "no_proof"].includes(k) && typeof v === "string" && v && !existsSync8(join10(root, v))).map(([k, v]) => `paths.${k} names ${v}, which does not exist in the project; the skills will read nothing there`);
+}
 var import_yaml5, START, END, POINTER, INSTALL_LOCK, LEGACY_LOCK, TIERS4, FORGES, INIT_FLAGS, flagsOf, need2, parseJson, readJson2, filesUnder, posix2, Installer, missingKeysLine, MCP_FILES, CLI_PIN, CLI_PACKAGE, LAUNCHER, IGNORED, isSha, isTag, envNames, redact2, firstLines, probeFailure, cli8;
 var init_install = __esm({
   "src/install.ts"() {
@@ -12696,7 +12701,10 @@ ${END}`;
           const problems = validate(ctx.root, warnings);
           problems.forEach((p) => console.error(`problem: ${p}`));
           try {
-            warnings.push(...bindingWarnings(loadBinding(ctx.root)));
+            {
+              const lb = loadBinding(ctx.root);
+              warnings.push(...bindingWarnings(lb), ...pathWarnings(ctx.root, lb));
+            }
           } catch {
           }
           warnings.forEach((m) => console.error(`warn: ${m}`));

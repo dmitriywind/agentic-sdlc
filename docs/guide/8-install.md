@@ -40,6 +40,7 @@ install it.
 2. **Fill in `.agents/binding.yml`**. The file documents every key. Set at least the owners, the board
    options (`init` reads the repo from `git remote origin`), `commands.*`, `product.environments`,
    `product.delivery` and `models`. `.agents/bin/agentic-sdlc validate` names every key still missing.
+   It also warns, per `paths.*` file key, when the named file is missing: the skills then read nothing there.
    The Claude Code plugin also brings a subagent per tier, a `sdlc-reviewer` that can only read files and
    run `agentic-sdlc` commands, and `agentic-sdlc` itself on the Bash path. Codex and Cursor can install
    the package as a plugin for the skills and the MCP server.
