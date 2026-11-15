@@ -10,7 +10,7 @@ How the factory is built. For the exact rules, read the contract,
 |---|---|---|
 | Skills | the plugin (Claude, Codex, Cursor) or `.agents/skills/` | The process: every rule. The same for every project. |
 | Binding | `.agents/binding.yml` | Your project's values: board, owners, commands, environments, models. |
-| CLI | `agentic-sdlc` (and its MCP server) | The mechanism: board, forge and Git verbs, the checks, dispatch, the run ledger. |
+| CLI | `agentic-sdlc` (and its MCP server) | The mechanism: board, forge and Git verbs, the checks, dispatch, the run ledger. The MCP server speaks both protocol eras: a client that opens with `initialize` is served as before (2025-11-25 and earlier), and a client that sends its version in each request's `_meta` (2026-07-28) is served without a handshake. |
 
 A project changes only its binding. A skill never calls a vendor tool: it calls the CLI.
 

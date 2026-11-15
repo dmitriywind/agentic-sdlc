@@ -139,3 +139,101 @@ test('board_milestone sets and clears a milestone; forge_run and forge_list take
   assert.equal(by('board_milestone').annotations.readOnlyHint, false);
   for (const p of ['limit', 'since', 'checks']) assert.ok(p in by('forge_list').inputSchema.properties, p);
 });
+
+// Conformance, written by hand from the revision texts: 2025-11-25 basic/lifecycle, and 2026-07-28 basic/index (_meta, resultType, error codes),
+// basic/versioning, basic/transports/stdio, server/discover, server/tools and server/utilities/caching.
+const M = 'io.modelcontextprotocol/';
+const meta = (extra: object = {}) => ({ _meta: { [`${M}protocolVersion`]: '2026-07-28', [`${M}clientCapabilities`]: {}, [`${M}clientInfo`]: { name: 't', version: '1' }, ...extra } });
+const modern = (ctx: any, method: string, params: object = {}, id: unknown = 7) => handle({ jsonrpc: '2.0', id, method, params: { ...meta(), ...params } }, ctx) as Promise<any>;
+
+test('conformance 2025-11-25: initialize, then tools/list and tools/call answer without resultType, ttlMs or _meta; ping answers {}', async () => {
+  const { ctx } = fakeCtx(mkdtempSync(join(tmpdir(), 'mcp-')), {}, () => ({}));
+  const init: any = await handle(rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 't', version: '1' } }), ctx);
+  assert.equal(init.jsonrpc, '2.0');
+  assert.equal(init.id, 1);
+  assert.deepEqual(Object.keys(init.result).sort(), ['capabilities', 'protocolVersion', 'serverInfo']);
+  assert.deepEqual(init.result.capabilities, { tools: {} });
+  assert.equal(init.result.serverInfo.name, 'agentic-sdlc');
+  assert.equal(await handle({ jsonrpc: '2.0', method: 'notifications/initialized' }, ctx), null);
+  assert.deepEqual(((await handle(rpc('ping'), ctx)) as any).result, {});
+  const list: any = await handle(rpc('tools/list'), ctx);
+  assert.deepEqual(Object.keys(list.result), ['tools']);
+  const res: any = await call(ctx, 'board_create', { title: 'T', body: 'b', status: 'Backlog' });
+  assert.equal(res.result.resultType, undefined);
+  assert.equal(res.result._meta, undefined);
+  assert.equal(res.result.content[0].type, 'text');
+  assert.equal((await call(ctx, 'nope', {})).error.code, -32602);
+});
+
+test('conformance 2026-07-28: server/discover and stateless tools/list carry resultType, ttlMs, cacheScope and serverInfo', async () => {
+  const { ctx } = fakeCtx('.', {}, () => ({}));
+  const d = await modern(ctx, 'server/discover');
+  assert.equal(d.id, 7);
+  assert.equal(d.result.resultType, 'complete');
+  assert.deepEqual(d.result.supportedVersions.slice(0, 2), ['2026-07-28', '2025-11-25']);
+  assert.deepEqual(d.result.capabilities, { tools: {} });
+  assert.equal(d.result._meta[`${M}serverInfo`].name, 'agentic-sdlc');
+  assert.ok(Number.isInteger(d.result.ttlMs) && d.result.ttlMs >= 0);
+  assert.ok(['public', 'private'].includes(d.result.cacheScope));
+  const l = await modern(ctx, 'tools/list');
+  assert.equal(l.result.resultType, 'complete');
+  assert.ok(Number.isInteger(l.result.ttlMs) && l.result.ttlMs >= 0);
+  assert.ok(['public', 'private'].includes(l.result.cacheScope));
+  assert.equal(l.result.nextCursor, undefined);
+  assert.equal(l.result._meta[`${M}serverInfo`].name, 'agentic-sdlc');
+  for (const t of l.result.tools) {
+    assert.equal(typeof t.name, 'string');
+    assert.equal(t.inputSchema.type, 'object');
+  }
+  assert.deepEqual(l.result.tools.map((t: any) => t.name), ((await handle(rpc('tools/list'), ctx)) as any).result.tools.map((t: any) => t.name));
+  assert.equal(l.result.tools.length, 41);
+  assert.equal((await modern(ctx, 'tools/list', { cursor: 'x' })).error.code, -32602);
+});
+
+test('conformance 2026-07-28: tools/call results are complete; a failing tool is isError, an unknown tool or bad argument is -32602', async () => {
+  const { ctx } = fakeCtx(mkdtempSync(join(tmpdir(), 'mcp-')), {}, () => ({}));
+  const ok = await modern(ctx, 'tools/call', { name: 'board_create', arguments: { title: 'T', body: 'b', status: 'Backlog' } });
+  assert.equal(ok.result.resultType, 'complete');
+  assert.equal(ok.result.content[0].type, 'text');
+  assert.equal(ok.result.isError, undefined);
+  assert.equal(ok.result.structuredContent.id, '1');
+  assert.equal(ok.result._meta[`${M}serverInfo`].name, 'agentic-sdlc');
+  const fail = await modern(ctx, 'tools/call', { name: 'board_get', arguments: { id: '99' } });
+  assert.deepEqual([fail.result.resultType, fail.result.isError], ['complete', true]);
+  const unknown = await modern(ctx, 'tools/call', { name: 'nope', arguments: {} });
+  assert.deepEqual([unknown.id, unknown.error.code, 'result' in unknown], [7, -32602, false]);
+  const bad = await modern(ctx, 'tools/call', { name: 'board_get', arguments: {} });
+  assert.equal(bad.error.code, -32602);
+  assert.equal(bad.error.data, undefined);
+});
+
+test('conformance 2026-07-28: a missing _meta field is -32602, an unsupported version is -32022 listing the supported ones, ping and initialize-era methods are -32601', async () => {
+  const { ctx } = fakeCtx('.', {}, () => ({}));
+  const noCaps: any = await handle({ jsonrpc: '2.0', id: 3, method: 'tools/list', params: { _meta: { [`${M}protocolVersion`]: '2026-07-28' } } }, ctx);
+  assert.deepEqual([noCaps.id, noCaps.error.code], [3, -32602]);
+  const noVersion: any = await handle({ jsonrpc: '2.0', id: 4, method: 'tools/list', params: { _meta: { [`${M}clientCapabilities`]: {} } } }, ctx);
+  assert.equal(noVersion.error.code, -32602);
+  const noMeta: any = await handle({ jsonrpc: '2.0', id: 5, method: 'server/discover' }, ctx);
+  assert.deepEqual([noMeta.id, noMeta.error.code], [5, -32602]);
+  for (const method of ['tools/list', 'tools/call', 'server/discover']) {
+    const r: any = await handle({ jsonrpc: '2.0', id: 6, method, params: meta({ [`${M}protocolVersion`]: '1900-01-01' }) }, ctx);
+    assert.equal(r.id, 6);
+    assert.equal(r.error.code, -32022, method);
+    assert.equal(r.error.message, 'Unsupported protocol version');
+    assert.equal(r.error.data.requested, '1900-01-01');
+    assert.ok(r.error.data.supported.includes('2026-07-28') && r.error.data.supported.includes('2025-11-25'));
+  }
+  assert.equal((await modern(ctx, 'ping')).error.code, -32601);
+  assert.equal((await modern(ctx, 'logging/setLevel', { level: 'info' })).error.code, -32601);
+  assert.equal((await modern(ctx, 'resources/list')).error.code, -32601);
+  assert.equal(await handle({ jsonrpc: '2.0', method: 'notifications/cancelled', params: meta() }, ctx), null);
+});
+
+test('conformance: --allow filters the tools in both shapes, and a modern request needs no earlier initialize', async () => {
+  const { ctx } = fakeCtx('.', {}, () => ({}));
+  const names = async (allow: Set<string>) => (await handle({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: meta() }, ctx, allow) as any).result.tools.map((t: any) => t.name);
+  assert.ok(!(await names(new Set())).includes('forge_approve'));
+  assert.ok((await names(allowList('approve'))).includes('forge_approve'));
+  const refused: any = await handle({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'forge_approve', arguments: { n: '1' }, ...meta() } }, ctx);
+  assert.equal(refused.error.code, -32602);
+});
