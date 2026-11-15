@@ -37,7 +37,7 @@ sequenceDiagram
 | Operator, security, compliance | `owners.operator`, `owners.security`, `owners.compliance` | Optional. Deploy and incident asks, security findings, release evidence gaps. With no such role, the ask goes to the product or factory owner. |
 | Anyone else | | A pull request like any other, through the same checks. A Signal or `SECURITY.md` to report. |
 
-Each owner setting takes one account or a list. Any account in the list counts as the owner: any factory owner's approval passes a `guardrail` change, and a reply from any of them settles a hold. A reply from an account in `owners.bots` never does. The first account is the primary, the one an ask is addressed to.
+Each owner setting takes one account or a list. Any account in the list counts as the owner: any factory owner's approval passes a `guardrail` change, and a reply from any of them settles a hold. A reply from an account only in `owners.bots` never does; an account in both (one person running the factory) counts when the comment carries no factory marker. The first account is the primary, the one an ask is addressed to.
 
 ## A week with it
 

@@ -15,7 +15,7 @@ working status; it is never a status and calls no other skill.
    `paths.sources_before_question`. A source that answers a Ruling question settles it; for every
    other trigger a source may supply options but never settles it. An owner reply on the ticket
    after its last `ask` (`board comments <id> --kind ask --last 1 --trusted`, then the newer
-   comments with `--author` per owner entry, never a bot) settles every trigger that ask named, unless new facts appeared since:
+   comments with `--author` per owner entry, never a bot-only account; an account that is both owner and bot counts when the comment carries no marker) settles every trigger that ask named, unless new facts appeared since:
    a changed Size, Lane or criteria, or a trigger the ask did not name (a new diff or a later run
    alone is not new). For a CR with no ticket, read the same on the CR (`forge comments <n>`). Done
    when each source is named with what it says.

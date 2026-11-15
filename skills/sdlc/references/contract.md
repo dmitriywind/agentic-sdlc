@@ -50,7 +50,7 @@ author is in the row below.
 |---|---|---|
 | Spec, heartbeat, scores, done line, verdict, note | `owners.bots` or any owner role | `--trusted` |
 | Verify evidence | `owners.bots` | `--author` per bot entry |
-| Reply to an ask (releases a hold) | any owner role, never a bot | `board holds` (`replied`) |
+| Reply to an ask (releases a hold) | any owner role, never a bot-only account (an owner that is also a bot: unmarked comments count) | `board holds` (`replied`) |
 | Manual-check confirmation | the owner the criterion names (`owners.product` when it names none) | `--author` per entry |
 | Release go-ahead | `owners.product` | `--author` per entry |
 | Grade of a run | `owners.product` or `owners.factory` | `ledger` joins it |

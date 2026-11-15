@@ -87,6 +87,9 @@ const firstLine = (body: string) => body.split('\n')[0];
 /** Does this comment body open with a marker of this kind (and ref)? */
 export const isMarked = (body: string, kind: Kind, ref?: string, ctx: MarkerCtx = {}) => firstLine(body).includes(matches(kind, ref, ctx));
 
+/** Does this comment open with any factory marker (the registry's kinds)? A person's comment never does. */
+export const isFactoryComment = (body: string, ctx: MarkerCtx = {}) => KINDS.some((k) => isMarked(body, k, undefined, ctx));
+
 /** The body with its marker first. A body that already opens with the exact marker is not stamped twice. */
 export function stampBody(body: string, kind: Kind, ref?: string, ctx: MarkerCtx = {}): string {
   const line = stamp(kind, ref, ctx);

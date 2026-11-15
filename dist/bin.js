@@ -7911,7 +7911,7 @@ function selectComments(list, o) {
   }
   return o.last ? out.slice(0, o.last) : out;
 }
-var KINDS, html, REGISTRY, isKind, VERB_ONLY, oneLine, firstLine, isMarked, VERDICT_LINE;
+var KINDS, html, REGISTRY, isKind, VERB_ONLY, oneLine, firstLine, isMarked, isFactoryComment, VERDICT_LINE;
 var init_comments = __esm({
   "src/comments.ts"() {
     "use strict";
@@ -7947,6 +7947,7 @@ var init_comments = __esm({
     };
     firstLine = (body) => body.split("\n")[0];
     isMarked = (body, kind, ref, ctx = {}) => firstLine(body).includes(matches(kind, ref, ctx));
+    isFactoryComment = (body, ctx = {}) => KINDS.some((k) => isMarked(body, k, void 0, ctx));
     VERDICT_LINE = /^Verdict:[ \t]*(PASS|REMEDIATION REQUIRED)[ \t]*$/gm;
   }
 });
@@ -8796,7 +8797,7 @@ async function holds(board, b) {
     const after = ask ? all.filter((c) => !asked(c) && Date.parse(c.createdAt) > Date.parse(ask.createdAt)) : [];
     const reply = after.find((c) => {
       const a = c.author?.toLowerCase();
-      return !!a && owners.has(a) && !bots.has(a);
+      return !!a && owners.has(a) && (!bots.has(a) || !isFactoryComment(c.body, { specMarker: b.spec_marker }));
     });
     out.push({
       id: item.id,

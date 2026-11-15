@@ -1,7 +1,7 @@
 import type { AdapterContext, Binding, Board, Comment, Hold, Item, LogicalField, PortCli } from '../ports.ts';
 import { ownersFor } from '../ports.ts';
 import { validateBinding } from '../binding.ts';
-import { isMarked, matches, parseKind, parseWritableKind, selectComments, stamp, stampBody } from '../comments.ts';
+import { isFactoryComment, isMarked, matches, parseKind, parseWritableKind, selectComments, stamp, stampBody } from '../comments.ts';
 import { UsageError, bodyFile, parseStrict, type VerbSpec } from '../forge/util.ts';
 import { createGithubBoard } from './github.ts';
 import { createGithubIssuesBoard } from './github-issues.ts';
@@ -73,7 +73,7 @@ export async function hold(board: Board, b: Binding, id: string, kind: string, b
   return item;
 }
 
-/** `board holds`: every ticket with the human label, its last ask, and the owner-role reply after it if any (a bot never counts). */
+/** `board holds`: every ticket with the human label, its last ask, and the owner-role reply after it if any (a bot-only account never counts; an owner that is also a bot counts on an unmarked comment). */
 export async function holds(board: Board, b: Binding): Promise<Hold[]> {
   const o = ownersFor(b.owners, 'board');
   const owners = new Set([...o.product, ...o.factory, ...o.operator, ...o.security, ...o.compliance].map((x) => x.toLowerCase()));
@@ -84,7 +84,7 @@ export async function holds(board: Board, b: Binding): Promise<Hold[]> {
     const ask = all.find(asked);
     const line = ask?.body.split('\n')[0].slice(matches('ask').length).replace(/^:\s*/, '').trim();
     const after = ask ? all.filter((c) => !asked(c) && Date.parse(c.createdAt) > Date.parse(ask.createdAt)) : [];
-    const reply = after.find((c) => { const a = c.author?.toLowerCase(); return !!a && owners.has(a) && !bots.has(a); });
+    const reply = after.find((c) => { const a = c.author?.toLowerCase(); return !!a && owners.has(a) && (!bots.has(a) || !isFactoryComment(c.body, { specMarker: b.spec_marker })); });
     out.push({
       id: item.id, kind: line || 'unspecified', askedAt: ask?.createdAt ?? item.updatedAt, replied: !!reply,
       ...(reply ? { reply: { author: reply.author, createdAt: reply.createdAt, ...(reply.url ? { url: reply.url } : {}) } } : {}),

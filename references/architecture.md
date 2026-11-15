@@ -114,7 +114,7 @@ Every verb takes only the flags it lists: an unknown flag, a value flag with no 
 | `close <id> --reason completed\|not_planned` | Close (and move to Done or Cancelled) | `Item` |
 | `child <parent> <child>` | Link a sub-issue | `Item` |
 | `hold <id> --kind <trigger> --body-file <f>` | Adds `board.labels.human` and posts the ask with its `ask` marker for `<trigger>` (the `escalate` trigger, lower case) | `Item` |
-| `holds` | The held tickets. A reply is a comment by any owner role, never `owners.bots`, after the last ask | `[{ id, kind, askedAt, replied: boolean, reply? }]` |
+| `holds` | The held tickets. A reply is a comment by any owner role, never an `owners.bots`-only account, after the last ask; an account in both lists counts when its comment carries no factory marker | `[{ id, kind, askedAt, replied: boolean, reply? }]` |
 | `release <id>` | Removes `board.labels.human`; the ticket keeps its Status | `Item` |
 
 `Item = { id, title, url, status, kind?, labels[], fields: Record<logicalField,string>, milestone?, parent?, children[], assignees[], createdAt, updatedAt, statusChangedAt? }`. `statusChangedAt` is when the ticket entered its status; `ledger measures` reads it for tickets at Done. `github-issues` sets it to the issue's `closed_at` for a closed issue at Done and leaves it unset otherwise; `github` (Projects) never sets it.
