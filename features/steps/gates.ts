@@ -193,7 +193,7 @@ Then('one Signal is opened with the labels {string}', (w, labels: string) => {
   assert.equal(w.gate.created.length, 1, JSON.stringify(w.gate.created));
   assert.deepEqual(w.gate.created[0].labels, list(labels));
 });
-Then('the Signal body mentions {string}', (w, text: string) => assert.ok(w.gate.created.at(-1)?.body.includes(text), w.gate.created.at(-1)?.body));
+Then('the Signal body mentions {string}', (w, text: string) => assert.ok(w.gate.created.at(-1)?.body.includes(text), String(w.gate.created.at(-1)?.body)));
 Then('the Signal body does not mention {string}', (w, text: string) => { assert.ok(w.gate.created.length, 'no Signal was opened'); assert.ok(!w.gate.created.at(-1)!.body.includes(text), w.gate.created.at(-1)!.body); });
 Then('the forge was asked about the tickets {string} only', (w, ids: string) => { assert.deepEqual(w.gate.asked, list(ids)); assert.equal(w.gate.listed, 0); });
 
