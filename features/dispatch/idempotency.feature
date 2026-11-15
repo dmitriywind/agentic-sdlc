@@ -51,3 +51,19 @@ Feature: A dispatch starts one run per key
       When dispatch runs "build --ticket 1"
       Then the result "kind" is "harness"
 
+
+  Rule: A cycle lock dies with its time budget
+
+    Scenario: An unended cycle claim older than time_budget_minutes does not block the next cycle
+      Given the binding has "stall_minutes" set to the JSON "600"
+      And the binding has "cycle.time_budget_minutes" set to the JSON "45"
+      And dispatch runs "sdlc --ticket 2"
+      And the comments of the ticket "2" are 60 minutes old
+      When dispatch runs "sdlc --ticket 2"
+      Then the result "kind" is "claim"
+
+    Scenario: A cycle that ended with its done line does not block the next cycle
+      Given dispatch runs "sdlc --ticket 2"
+      And the comment "<!-- agentic-sdlc:done 2-sdlc -->" is posted on the ticket "2"
+      When dispatch runs "sdlc --ticket 2"
+      Then the result "kind" is "claim"

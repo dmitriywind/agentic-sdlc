@@ -27,6 +27,7 @@ The routing order and every rule of the cycle are in [`skills/sdlc/SKILL.md`](..
 |---|---|
 | One cycle at a time; a second start stops at Claim. | Two cycles never claim the same ticket. |
 | A second start of the same step is skipped inside `cycle.dedupe_minutes`, and while the first run has not finished until `stall_minutes`. | A scheduler that fires twice does no harm; keep `stall_minutes` above your longest stage run. |
+| A cycle's claim ends with its done line on every exit (idle, holds only, failed), and goes stale after `cycle.time_budget_minutes` if the cycle died first. | A cycle that only held tickets never blocks the next one. |
 | Each cycle releases the hold (`board release`) on a ticket whose owner has replied. | An owner who only comments is never stuck. |
 | Nothing new starts after `cycle.time_budget_minutes`. | The heartbeat is always written before the job times out. |
 | A stage may carry caps (`executors.<stage>.max_turns`, `max_tokens`, `max_minutes`); a run that ends on one is recorded `capped` and treated as a failed run. | A runaway run costs a bounded amount. |

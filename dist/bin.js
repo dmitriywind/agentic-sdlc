@@ -11045,7 +11045,7 @@ ${usage}`);
           const at = mine ? Date.parse(mine.createdAt) : NaN;
           const later = (c) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
           const finished = mine && all.some((c) => later(c) && c.body.includes(stamp("done", key)));
-          const stall = Number(b.stall_minutes) || 0;
+          const stall = skill === "sdlc" ? Number(b.cycle?.time_budget_minutes) || Number(b.stall_minutes) || 0 : Number(b.stall_minutes) || 0;
           const age = Number.isNaN(at) ? 0 : (Date.now() - at) / 6e4;
           if (mine && !finished && (age < window || age < stall)) {
             console.log(JSON.stringify({ skipped: true, key, since: mine.createdAt, comment: mine.id, reason: age < window ? "double fire" : "the previous run has not finished" }));

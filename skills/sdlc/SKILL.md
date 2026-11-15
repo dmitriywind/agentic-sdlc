@@ -106,6 +106,9 @@ the run is a double fire or still going: leave it.
 
 Rules for a cycle:
 
+- Every exit after the lock ends the cycle with its done line (step 9): the idle exit, a cycle that only
+  held tickets or sent them to a person, and a cycle that failed. Without it the lock holds until the
+  time budget passes. Only `{ skipped: true }` writes nothing.
 - Route only by the Routing tables. Only `cycle.max_implementations`, `cycle.min_ready`, an
   exhausted error budget and `cycle.max_tokens_per_ticket` hold a routed ticket back. A ticket
   `ledger summary` marks `overBudget: true` gets no further dispatch: run `escalate` (Money) with
