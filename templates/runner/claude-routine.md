@@ -4,7 +4,7 @@ Profile: individual or individual-api (also works on Team and Enterprise seats o
 Install at: claude.ai/code/routines, or `/schedule` in Claude Code. The task belongs to, and acts as, one claude.ai account.
 Usage: scheduled runs draw the same subscription usage as interactive work. The shortest schedule interval is 1 hour.
 Skills: a cloud session loads no repo plugin, only `.claude/skills/`. Install with
-`npx --no agentic-sdlc init --harness claude --no-plugin` and commit `.claude/skills/` and `.mcp.json`.
+the package's `init --harness claude --no-plugin` (`npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v<version> init ...`) and commit `.claude/skills/` and `.mcp.json`.
 Board: the GitHub proxy refuses GraphQL and every `orgs/*` and `users/*` route, so a `github` (Projects v2)
 board is out of reach; `doctor` fails on it in a cloud session. Use one of:
 - `github-issues`: reached through `repos/{owner}/{repo}/...`, with the session's own GitHub auth.
@@ -39,8 +39,8 @@ Two identities (`forge.review_identity` set): two routines, two cloud environmen
    `vcs.factory_change_pattern: claude/sdlc/<name>` in the binding, or allow unrestricted branch pushes on the routine.
 
 ## Environment setup script
-A cloud session does not run `npm ci` at start, so `node_modules` is missing and the committed `.mcp.json`
-(`npx --no agentic-sdlc mcp`) cannot start the MCP server. Save this as the environment's setup script
+The committed `.mcp.json` starts the MCP server through `.agents/bin/agentic-sdlc`, which installs the pinned CLI on first use.
+Save this as the environment's setup script, so that install is done before the session starts
 (Settings > Environment > Setup script). It runs as root, from the directory that holds the repo checkouts, before the
 session starts, and cannot read the environment's secrets, so it installs only; `.agents/runner-setup.sh` also runs
 `doctor`, which needs the tokens, so do not use it here. Replace `<repo>` with the checkout's directory name.
@@ -48,12 +48,12 @@ session starts, and cannot read the environment's secrets, so it installs only; 
 ```sh
 if [ -d <repo> ]; then
   cd <repo>
-  if [ -f package-lock.json ] && grep -q '"node_modules/agentic-sdlc"' package-lock.json; then npm ci --ignore-scripts; fi
+  .agents/bin/agentic-sdlc validate || true   # installs the CLI pinned in .agents/cli.json
 fi
 ```
 
-It needs `agentic-sdlc` pinned as a devDependency in the lockfile (`init` does this); a repo that does not pin it
-has no `npx --no` target, so pin it. npm registry hosts are reachable at the default network level.
+The pin is `.agents/cli.json` (`init` writes it). The install fetches the package from github.com through npm, so
+the environment's network must reach github.com and the npm registry.
 Unproved: this has not been run in a cloud session. Still open: confirm that the MCP server connects in the session
 after this script, and that the script's result is cached across sessions.
 

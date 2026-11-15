@@ -180,12 +180,14 @@ export const cli: PortCli = async (argv, ctx) => {
     const ticket = f.ticket ?? '', cr = f.cr ?? '', workdir = f.workdir ?? ctx.root;
     const b = ctx.binding;
     const file = relative(ctx.root, step.file).replaceAll('\\', '/');
-    // review/review: with a separate review identity the review runs in its own runtime, started by the fire command
-    // the cycle's environment holds; otherwise it is an ordinary step. The start record says which (`via`).
-    const fire = skill === REVIEW_STEP && b.forge?.review_identity && ctx.env[REVIEW_FIRE_ENV] && !Object.keys(b.executors).some((k) => k !== 'default' && stepIdOf(k) === skill)
-      ? ctx.env[REVIEW_FIRE_ENV] : undefined;
+    // review/review: with a review identity the review runs in its own runtime. Outside it (AGENTIC_SDLC_ROLE is not
+    // `review`) dispatch starts nothing locally: it runs the fire command the cycle's environment holds, once, or leaves
+    // the start to the runner's job dependency, and prints kind `fire`. Inside the review runtime, and with no identity,
+    // it is an ordinary step. An executor the binding names for the step wins. The start record says which (`via`).
+    const outside = skill === REVIEW_STEP && !!b.forge?.review_identity && ctx.env.AGENTIC_SDLC_ROLE !== 'review' && !Object.keys(b.executors).some((k) => k !== 'default' && stepIdOf(k) === skill);
+    const fire = outside ? ctx.env[REVIEW_FIRE_ENV] || undefined : undefined;
     const ex: Executor = fire ? { kind: 'command', run: fire } : executorFor(b, skill);
-    const via = skill === REVIEW_STEP ? (fire ? 'review-runtime' : 'executor') : undefined;
+    const via = skill === REVIEW_STEP ? (outside ? (fire ? 'review-runtime' : 'job-dependency') : 'executor') : undefined;
     const startedAt = new Date().toISOString();
 
     const judge = skill === 'learn/judge' ? judgeTier(b, f['run-model']) : undefined;
@@ -199,7 +201,9 @@ export const cli: PortCli = async (argv, ctx) => {
     // A judge's marker goes on the heartbeat ticket: the judged ticket may be at Ideas, which the factory never touches.
     const target = (skill === 'learn/judge' ? '' : ticket) || b.heartbeat?.ticket;
     const window = Number(b.cycle?.dedupe_minutes) || 0; // unset or 0: no check (the binding template sets 10)
-    let key: string | undefined;
+    // The run's key (the done line's ref) is always given; the dispatch lock only runs with a dedupe window.
+    let key = [ticket || cr || 'factory', skill, f.run].filter(Boolean).join('-');
+    let locked = false;
     let isBot: ((c: { author?: string }) => boolean) | undefined;
     if (window > 0 && target) {
       let head = '';
@@ -210,6 +214,7 @@ export const cli: PortCli = async (argv, ctx) => {
         } catch { /* no head: the key still separates CR and skill */ }
       }
       key = [ticket || cr || 'factory', skill, f.run, head].filter(Boolean).join('-');
+      locked = true;
       const trusted = ownersFor(b.owners, 'board').bots.map((a) => a.toLowerCase());
       const closer = ex.kind === 'assign' ? String((ex as { user?: string }).user ?? '').toLowerCase() : '';
       const bot = isBot = (c: { author?: string }) => trusted.includes(String(c.author).toLowerCase()) || (!!closer && String(c.author).toLowerCase() === closer);
@@ -232,18 +237,20 @@ export const cli: PortCli = async (argv, ctx) => {
     /** Prints the start record; the marker was posted before the executor started. */
     let marker: string | undefined;
     const done = async (kind: string, ref: string | null, extra: object = {}) => {
-      console.log(JSON.stringify({ kind, ref: ref ?? (kind === 'assign' ? marker ?? null : null), startedAt, ...(run ? { run } : {}), ...(key ? { key, done: stamp('done', key) } : {}), ...(via ? { via } : {}), ...extra }));
+      console.log(JSON.stringify({ kind, ref: ref ?? (kind === 'assign' ? marker ?? null : null), startedAt, ...(run ? { run } : {}), key, done: stamp('done', key), ...(via ? { via } : {}), ...extra }));
       return 0;
     };
-    const doneLine = key ? stamp('done', key) : undefined;
+    const doneLine = stamp('done', key);
     // forge.provenance on: the run id (the dispatch key, else ticket-skill-start time) goes to the executor and into the start record, for the Agent-Run trailer and the run row's id.
-    const run = (b.forge?.provenance ?? 'off') === 'off' ? undefined : key ?? [ticket || (cr ? `cr${cr}` : 'factory'), skill, startedAt.replace(/\D/g, '')].join('-');
+    const run = (b.forge?.provenance ?? 'off') === 'off' ? undefined : locked ? key : [ticket || (cr ? `cr${cr}` : 'factory'), skill, startedAt.replace(/\D/g, '')].join('-');
     // The cycle claims itself with `dispatch sdlc`: a marker only, never a run, and no executor check.
     if (skill === 'sdlc') {
-      if (key) await boardOf().comment(target!, `${stamp('dispatch', key)}\nagentic-sdlc: cycle claimed`);
-      return await done('claim', null, doneLine ? { done: doneLine } : {});
+      if (locked) await boardOf().comment(target!, `${stamp('dispatch', key)}\nagentic-sdlc: cycle claimed`);
+      return await done('claim', null);
     }
 
+    // No fire command: the runner's job dependency starts the review runtime; nothing starts here.
+    if (outside && !fire) return await done('fire', null);
     const skillTier = step.tier;
     const stage = resolveStage(b, ex, judge?.tier ?? skillTier, judge?.model);
     // The fire command only POSTs a trigger: the review itself runs in the review runtime, not on this machine.
@@ -257,12 +264,12 @@ export const cli: PortCli = async (argv, ctx) => {
     const hasLimits = Object.keys(limits).length > 0;
     const info = { ...(judge ?? {}), model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox, ...(hasLimits ? { limits } : {}) };
     // Claim before start: a second fire sees the marker even while this executor is still starting.
-    if (key || ex.kind === 'assign') {
-      marker = (await boardOf().comment(target!, `${stamp('dispatch', key ?? `${ticket}-${skill}`)}\nagentic-sdlc: run step ${skill} (${ex.kind})${limitsText(limits)}${key ? `; close with ${stamp('done', key)}` : ''}`)).id;
-      const k = key ?? `${ticket}-${skill}`;
+    if (locked || ex.kind === 'assign') {
+      marker = (await boardOf().comment(target!, `${stamp('dispatch', key)}\nagentic-sdlc: run step ${skill} (${ex.kind})${limitsText(limits)}; close with ${stamp('done', key)}`)).id;
+      const k = key;
       // Two overlapping cycles can both pass the check above. Re-read: the earliest unfinished marker inside
       // the window owns the run, any later one stands down. Its own done line is not posted: it would end the owner's block.
-      if (key && isBot) {
+      if (locked && isBot) {
         const all = (await boardOf().comments(target!)).filter(isBot);
         const markers = all.filter((c) => c.body.trimStart().startsWith(matches('dispatch', key)));
         const order = (x: { createdAt: string; id: string }, y: { createdAt: string; id: string }) =>
@@ -311,7 +318,7 @@ export const cli: PortCli = async (argv, ctx) => {
         child.unref();
         if (!child.pid) throw new Error(`could not start the command executor for ${skill}; see ${log}`);
         sent = true;
-        return await done('command', String(child.pid), { log, ...info });
+        return await done(fire ? 'fire' : 'command', String(child.pid), { log, ...info });
       } finally { closeSync(fd); }
     }
     const stageBody = { model: stage.model, mcps: Object.entries(stage.mcps).map(([name, m]) => ({ name, url: m.url })), sandbox: stage.sandbox, ...(hasLimits ? { limits } : {}) };

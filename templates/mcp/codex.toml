@@ -1,3 +1,3 @@
 [mcp_servers.agentic-sdlc]
-command = "npx"
-args = ["--no-install", "agentic-sdlc", "mcp"]
+command = ".agents/bin/agentic-sdlc"
+args = ["mcp"]

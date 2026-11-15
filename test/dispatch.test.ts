@@ -132,7 +132,7 @@ test('webhook and managed bodies carry model, mcps (names and urls) and sandbox,
 
 test('harness prints the resolved stage', async () => {
   const r = await run({ default: { kind: 'harness', mcps: ['db'], secrets: ['S'], sandbox: 'container', model: { id: 'm1' } } }, ['build', '--ticket', '1'], {}, undefined, { models, mcps });
-  assert.deepEqual({ ...r.out, startedAt: 0, instruction: 0 }, { kind: 'harness', ref: null, startedAt: 0, instruction: 0, model: 'm1', tier: 'deep', mcps: { db: { command: 'db-mcp' } }, secrets: ['S'], sandbox: 'container' });
+  assert.deepEqual({ ...r.out, startedAt: 0, instruction: 0 }, { kind: 'harness', ref: null, startedAt: 0, key: '1-build', done: '<!-- agentic-sdlc:done 1-build -->', instruction: 0, model: 'm1', tier: 'deep', mcps: { db: { command: 'db-mcp' } }, secrets: ['S'], sandbox: 'container' });
 });
 
 test('managedRequest builds each vendor start-a-run call and never needs a model for claude', async () => {
@@ -321,21 +321,37 @@ test('executors resolve per step: skill/step, then skill, then default; an old s
   assert.match((await run(ex, ['build', '--ticket', '1'])).cmd, /dflt/);
 });
 
-test('review/review: with a review identity and a fire command it starts in the review runtime, else like any step', async () => {
+test('review/review: outside the review runtime a review identity fires the review run; inside it and without an identity it is an ordinary step', async () => {
   const fire = 'curl -fsS -X POST https://x/fire -H "Authorization: Bearer $REVIEW_FIRE_TOKEN"';
   const env = { AGENTIC_REVIEW_FIRE_CMD: fire, REVIEW_FIRE_TOKEN: 't', AGENTIC_REVIEW_TOKEN: 'secret', PATH: '/bin' };
   const two = { forge: { review_identity: 'rev-bot' } };
   const r = await run({ default: { kind: 'harness' } }, ['review/review', '--cr', '3', '--unattended'], env, undefined, two);
-  assert.equal(r.out.kind, 'command');
+  assert.equal(r.out.kind, 'fire');
   assert.equal(r.out.via, 'review-runtime');
+  assert.equal(r.out.key, '3-review/review');
   assert.match(r.cmd, /https:\/\/x\/fire/);
   assert.equal(r.childEnv.REVIEW_FIRE_TOKEN, 't');
   assert.equal(r.childEnv.AGENTIC_REVIEW_TOKEN, undefined);
+  const jobs = await run({ default: { kind: 'harness' } }, ['review/review', '--cr', '3'], {}, undefined, two);
+  assert.equal(jobs.out.kind, 'fire', 'no fire command: the runner\'s job dependency starts it');
+  assert.equal(jobs.out.via, 'job-dependency');
+  assert.equal(jobs.cmd, '', 'nothing is started here');
+  const inside = await run({ default: { kind: 'harness' } }, ['review/review', '--cr', '3'], { ...env, AGENTIC_SDLC_ROLE: 'review' }, undefined, two);
+  assert.equal(inside.out.kind, 'harness');
+  assert.equal(inside.out.via, 'executor');
+  assert.equal(inside.cmd, '');
   const one = await run({ default: { kind: 'harness' } }, ['review/review', '--cr', '3'], env, undefined, { forge: { review_identity: '' } });
   assert.equal(one.out.kind, 'harness');
   assert.equal(one.out.via, 'executor');
-  const unset = await run({ default: { kind: 'harness' } }, ['review/review', '--cr', '3'], {}, undefined, two);
-  assert.equal(unset.out.via, 'executor');
   const own = await run({ default: { kind: 'harness' }, 'review/review': { kind: 'command', run: 'mine' } }, ['review/review', '--cr', '3'], env, undefined, two);
   assert.match(own.cmd, /mine/);
+  assert.equal(own.out.kind, 'command');
+});
+
+test('dispatch prints the done-line key even with no dedupe window, and posts no dispatch comment then', async () => {
+  const r = await run({ default: { kind: 'harness' } }, ['plan/shape', '--ticket', '9']);
+  assert.equal(r.out.key, '9-plan/shape');
+  assert.equal(r.out.done, '<!-- agentic-sdlc:done 9-plan/shape -->');
+  assert.match(r.out.instruction, /<!-- agentic-sdlc:done 9-plan\/shape -->/);
+  assert.deepEqual(r.calls, []);
 });

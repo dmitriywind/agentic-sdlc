@@ -2,5 +2,5 @@
 # Git client hook, installed by `agentic-sdlc init` at .agents/hooks/pre-push.
 # Enable: git config core.hooksPath .agents/hooks
 # Refuses a push of a branch outside the binding's patterns. Server-side CI repeats the check.
-# Runs the project's pinned agentic-sdlc devDependency.
-exec npx --no agentic-sdlc gate branch-names --stdin-prepush
+# Runs the CLI pinned in .agents/cli.json, through the launcher.
+exec "$(dirname "$0")/../bin/agentic-sdlc" gate branch-names --stdin-prepush

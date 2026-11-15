@@ -33,6 +33,14 @@ test('validateBinding reports each broken rule', () => {
   for (const s of ['version must be 2', "board.adapter 'x'", "lacks 'Ready'", 'not in sizes', 'models.deep', '<ticket>', 'environments', 'vibes', 'magic']) assert.match(p, new RegExp(s));
 });
 
+test('validateBinding: cycle.land_wait_minutes is a whole number of minutes (0 allowed), cycle.max_rework a positive integer', () => {
+  const msgs = (cycle: object) => validateBinding({ ...structuredClone(good), cycle } as any).join('\n');
+  assert.equal(msgs({ land_wait_minutes: 0, max_rework: 3 }), '');
+  assert.equal(msgs({ land_wait_minutes: 5 }), '');
+  for (const v of [-1, 1.5, '5']) assert.match(msgs({ land_wait_minutes: v }), /cycle\.land_wait_minutes must be a whole number of minutes/);
+  for (const v of [0, 2.5, 'x']) assert.match(msgs({ max_rework: v }), /cycle\.max_rework must be a positive integer/);
+});
+
 test('validateBinding requires the factory owner and factory path globs', () => {
   const a = structuredClone(good) as any;
   a.paths.factory = [];

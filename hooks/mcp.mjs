@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The plugin's MCP server: the project's pinned agentic-sdlc devDependency, else the plugin's committed build.
+// The plugin's MCP server: the project's launcher (.agents/bin/agentic-sdlc, the pin in .agents/cli.json), else its node_modules build, else the plugin's committed build.
 // Never npx: the npm name agentic-sdlc belongs to another package.
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -7,11 +7,13 @@ import { join } from 'node:path';
 
 const pkg = join(import.meta.dirname, '..');
 const project = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-const bin = [join(project, 'node_modules', 'agentic-sdlc', 'dist', 'bin.js'), join(pkg, 'dist', 'bin.js')].find((p) => existsSync(p));
+const launcher = join(project, '.agents', 'bin', 'agentic-sdlc');
+const viaLauncher = process.platform !== 'win32' && existsSync(launcher);
+const bin = viaLauncher ? launcher : [join(project, 'node_modules', 'agentic-sdlc', 'dist', 'bin.js'), join(pkg, 'dist', 'bin.js')].find((p) => existsSync(p));
 if (!bin) { console.error(`agentic-sdlc: no dist/bin.js in ${pkg}; reinstall the plugin`); process.exit(1); }
 // The review runtime (AGENTIC_SDLC_ROLE=review) gets the guarded tools; nothing else does.
 const allow = process.env.AGENTIC_SDLC_ROLE === 'review' ? ['--allow', 'approve,status'] : [];
-const child = spawn(process.execPath, [bin, 'mcp', ...allow, ...process.argv.slice(2)], { cwd: project, stdio: 'inherit' });
+const child = spawn(viaLauncher ? bin : process.execPath, [...(viaLauncher ? [] : [bin]), 'mcp', ...allow, ...process.argv.slice(2)], { cwd: project, stdio: 'inherit' });
 child.on('error', (e) => { console.error(`agentic-sdlc: cannot start ${bin}: ${e.message}`); process.exit(1); });
 child.on('exit', (code) => process.exit(code ?? 1));
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));

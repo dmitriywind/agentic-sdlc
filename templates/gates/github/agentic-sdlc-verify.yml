@@ -52,7 +52,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       # forge.options.token_env: the job token is read-only, so the status post fails by design; the job's exit code is the check.
       AGENTIC_FORGE_TOKEN: ${{ github.token }}
-      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
       CR: ${{ github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,19 +62,9 @@ jobs:
         with:
           node-version: 22
       - name: Install
-        run: npm ci          # set: the binding's commands.install (puts the pinned agentic-sdlc devDependency in node_modules)
+        run: npm ci          # set: the binding's commands.install
       - name: Proofs on base
-        run: |
-          export PATH="$PWD/node_modules/.bin:$PATH"
-          if ! command -v agentic-sdlc >/dev/null; then
-            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
-            v="$AGENTIC_SDLC_VERSION"
-            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
-            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
-            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
-            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
-          fi
-          agentic-sdlc gate proofs-on-base --cr "$CR"
+        run: .agents/bin/agentic-sdlc gate proofs-on-base --cr "$CR"
 
   skill-regression:
     name: skill-regression
@@ -83,7 +72,6 @@ jobs:
     runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that run CR or agent code
     timeout-minutes: 15
     env:
-      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
       BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -98,16 +86,4 @@ jobs:
         with:
           node-version: 22
       - if: steps.factory.outputs.run == 'true'
-        run: |
-          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
-            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          else
-            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
-            v="$AGENTIC_SDLC_VERSION"
-            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
-            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
-            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
-            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
-          fi
-      - if: steps.factory.outputs.run == 'true'
-        run: agentic-sdlc gate skill-regression
+        run: .agents/bin/agentic-sdlc gate skill-regression

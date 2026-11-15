@@ -34,7 +34,7 @@ owner opens at Backlog).
 .codex-plugin/plugin.json    Codex plugin manifest: skills and the MCP server (mcp.json)
 .cursor-plugin/plugin.json   Cursor plugin manifest: skills and the MCP server (mcp.json)
 agents/                      plugin subagents: sdlc-fast, sdlc-balanced, sdlc-deep, sdlc-reviewer
-bin/agentic-sdlc             plugin shim: the CLI on the Bash PATH (the project's pinned build, else dist/bin.js)
+bin/agentic-sdlc             plugin shim: the CLI on the Bash PATH (the project's `.agents/bin/agentic-sdlc`, else its node_modules build, else dist/bin.js)
 evals/                       plugin evals for skill triggering (`claude plugin eval`)
 hooks/                       plugin hooks (hooks.json, guard.mjs) and the plugin's MCP launcher (mcp.mjs)
 skills/                      the skill pack: seven skills, one per phase (section 5)
@@ -53,6 +53,7 @@ templates/
   binding.yml                the binding template with every key documented
   gates/github/              GitHub Actions workflows and the trunk ruleset
   gates/hooks/               pre-push
+  bin/                       the launcher init installs at .agents/bin/agentic-sdlc
   mcp/                       the MCP server entry per harness
   runner/                    scheduler templates and the cycle and review prompts
 src/
@@ -149,13 +150,13 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `run <id>` | One CI run by id; a run that does not exist fails (exit 1) | `Run` |
 | `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
 
-`queue` owns the CR decisions the skills only obey. `ticket` is the one id the CR closes (absent for a factory or dependency CR), `class` the approval gate's class, `since` when the row's state began, `reason` one line for the action. `reworks` counts the CR's trusted fail verdicts and red-check `note`s. The first match wins:
+`queue` owns the CR decisions the skills only obey. `ticket` is the one id the CR closes (absent for a factory or dependency CR), `class` the approval gate's class, `since` when the row's state began, `reason` one line for the action. `reworks` counts the CR's trusted fail verdicts and trusted `note`s (a `note` names the cause of a red check or a request to a person's CR). A check named by `forge.review_check_name` or `human-approval` never counts as red, pending or missing here. The first match wins:
 
 | Action | When |
 |---|---|
-| `escalate` | `reworks` has reached `cycle.max_rework` (3 when unset), or a required check other than the review and human-approval statuses is pending or missing longer than `stall_minutes` after `pushedAt` |
-| `rework` | the head has a trusted fail verdict, or a required check is red (`wait` instead while the newest `note` for the head names a Signal that is still open) |
-| `review` | no trusted verdict for the head (a draft, or a ready CR whose head changed) |
+| `escalate` | `reworks` has reached `cycle.max_rework` (3 when unset) and the CR needs another rework (the `rework` row below, without its `wait`), or a required check other than the review and human-approval statuses is pending or missing longer than `stall_minutes` after `pushedAt` (no `pushedAt`: the clock has not started) |
+| `rework` | the head has a trusted fail verdict, or a required check is red (`wait` instead while the newest trusted `note` for the head names a Signal, written `Signal <id>`, that is still open) |
+| `review` | no trusted verdict for the head (a draft, or a ready CR whose head changed); review itself stops with no verdict while a check is pending |
 | `sync` | a ready CR behind the trunk |
 | `land` | a pass verdict on the head, the CR ready and open |
 | `wait` | anything else |
@@ -433,8 +434,9 @@ executors:
 
 **Where `review/review` runs.** With `forge.review_identity` empty, it runs like any step. With it
 set, a `dispatch review/review` outside the review runtime (`AGENTIC_SDLC_ROLE` not `review`) starts
-nothing locally: it runs `AGENTIC_REVIEW_FIRE_CMD` once (or relies on the runner's job dependency)
-and prints `{ kind: 'fire' }`; the cycle writes no run row for it. Inside the review runtime the
+nothing locally: it runs `AGENTIC_REVIEW_FIRE_CMD` once (or, with it unset, relies on the runner's job
+dependency) and prints `{ kind: 'fire' }` (`via` is `review-runtime` or `job-dependency`); the cycle
+writes no run row for it. An `executors` entry for `review/review` wins over this. Inside the review runtime the
 same dispatch runs on its executor, and the review runtime's own `review` heartbeat holds the row.
 The navigator never branches on this.
 
@@ -461,8 +463,11 @@ A run that ends on a cap records outcome `capped`.
 
 `agentic-sdlc dispatch <skill>[/<step>] [--ticket <id>] [--cr <n>] (at least one; none for
 learn/improve) [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]` posts its `dispatch`
-comment, starts the executor and prints `{ kind, ref, startedAt }` plus the run's done-line `key`;
-for `harness` it prints the task for the navigator and starts nothing. The idempotency key is
+comment, starts the executor and prints `{ kind, ref, startedAt, key, done }`: `key` is the run's
+done-line key (the `--ref` of its `done` comment) and `done` the stamped line; for `harness` it also
+prints the instruction for the navigator and starts nothing. The key is printed in every setup; the
+`dispatch` comment and the checks below run only with `cycle.dedupe_minutes` above 0 (or for an
+`assign` executor). The idempotency key is
 `<ticket, cr or factory>-<skill>/<step>[-<run>][-<CR head sha>]`. A second dispatch with the same
 key, while the `dispatch` comment is younger than `cycle.dedupe_minutes` or `stall_minutes`
 (whichever is longer) and its run has not finished, prints `{ skipped: true }`. A run has finished
@@ -470,7 +475,7 @@ when its own `done` comment (`--kind done --ref <key>`) appears after the `dispa
 by a bot or by the `assign` executor's user; other runs' comments never count. So a double fire is
 skipped for `dedupe_minutes`, and a run with no done line blocks a second dispatch until
 `stall_minutes`: keep `stall_minutes` above the longest step run. With `dedupe_minutes` unset or 0
-the check is off. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses a step whose sandbox is
+the check is off and no `dispatch` comment is posted. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses a step whose sandbox is
 `local` or unset, except one that names `sandbox: local` when the runner sets `AGENTIC_SDLC_LOCAL=1`
 (`templates/runner/local.md`). The ledger row records `executor` and `ref`, so the bench and
 `learn/improve` compare executors as they compare models. `dispatch learn/judge` prints `{ skip:
@@ -521,9 +526,28 @@ prompt in `templates/runner/cycle-prompt.md`.
 
 | Runtime | How it reaches the ports |
 |---|---|
-| Agent with a shell (Claude Code, Codex, Cursor, CI cron with a headless agent CLI) | `npx --no agentic-sdlc <group> <verb>` |
+| Agent with a shell (Claude Code, Codex, Cursor, CI cron with a headless agent CLI) | `agentic-sdlc <group> <verb>`: the launcher `.agents/bin/agentic-sdlc`, on PATH in the plugin and the runner templates |
 | Agent with MCP but no shell | `agentic-sdlc mcp` (stdio). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. `initialize` answers the client's protocol version when the server supports it (2025-11-25 down to 2024-11-05), else the newest; a request whose `_meta` carries `io.modelcontextprotocol/protocolVersion` and `clientCapabilities` is served per revision 2026-07-28 with no handshake (`server/discover`, `tools/list`, `tools/call` only; results carry `resultType: "complete"`, `tools/list` and `server/discover` add `ttlMs` and `cacheScope`, a missing field is -32602, an unsupported version is -32022 with `data.supported`, `ping` is -32601); every tool carries a title and annotations (read-only, destructive, idempotent, open-world); `tools/call` checks arguments against the input schema and answers -32602 on a bad one; an object result also comes back as `structuredContent`. |
 | Agent with only vendor MCP tools | the vendor tools that `board.mcp` maps to the board verbs; forge steps need a shell or the MCP server; gates still run in CI |
+
+**The CLI pin.** The CLI ships from Git only (the npm name `agentic-sdlc` is another project) and is pinned
+by a factory file, never by the product's `package.json`, so a product that is not a Node project needs nothing and an
+upgrade is one factory change. `.agents/cli.json` is `{ "package": "github:dmitriywind/agentic-sdlc", "ref": "<ref>" }`;
+`ref` is a 40-hex commit sha (immutable) or a version tag `v<version>` (a tag can move: `doctor` warns). `init` writes it
+with the running package's `v<version>`, or `--ref <sha|vX.Y.Z>`. `init --upgrade` moves the ref to the running
+package's, unless the file was edited to a sha that `init` did not write (the install lock tracks what it wrote);
+`--force` or `--ref` moves it anyway. `.agents/bin/agentic-sdlc` is the one launcher (POSIX sh, installed executable):
+it reads the pin and installs that ref once with
+`npm i --prefix .agents/.cli/<ref> --ignore-scripts --allow-git=root --no-save --no-audit --no-fund "<package>#<ref>"`
+(into a temporary folder, then renamed; npm's output goes to stderr), then execs
+`node .agents/.cli/<ref>/node_modules/agentic-sdlc/dist/bin.js "$@"`. It refuses a ref or package that could read as
+an option or leave the folder, and ends with one line when node or npm is missing or the ref cannot be fetched.
+`init` adds `.agents/.cli/` to `.gitignore` once. Everything that runs the CLI goes through the launcher: every workflow
+job, the pre-push hook, `runner-setup.sh` (which also puts `.agents/bin` on `PATH` in GitHub Actions) and the MCP entry
+(`command: ".agents/bin/agentic-sdlc", args: ["mcp"]`). A job that holds a secret checks out the base ref only, so its
+launcher and pin are the trunk's, never the CR's. `init` writes no dependency and no `.npmrc` into the product; when
+`package.json` still pins `agentic-sdlc` as a devDependency it prints `npm rm agentic-sdlc`. `doctor` checks that
+`.agents/cli.json` parses, that its ref is a sha or a version tag, and that the launcher exists and is executable.
 
 **Local execution.** A scheduler on your own machine (`templates/runner/local.md`) runs the same cycle
 prompt with no sandbox. An unattended `dispatch` refuses a `local` or unset sandbox, unless the stage
@@ -661,11 +685,13 @@ binding's `spec_marker`.
 | `manual-check` | `review/review` | ticket | the head sha |
 | `ask` | `board hold` (from `escalate`); `escalate` for a CR with no ticket (on the CR and on `heartbeat.ticket`); the navigator for a step with no ticket past `cycle.failure_limit` | ticket, CR, heartbeat ticket | the trigger, via `board hold --kind` |
 | `heartbeat` | the navigator (`kind: cycle`), the review runtime (`kind: review`), `learn/improve` (`kind: learn`) | heartbeat ticket | none |
-| `scores` | `ledger record` (`learn/judge`) | heartbeat ticket | the run id |
+| `scores` | `ledger record` (`learn/judge`) | heartbeat ticket | none (the run id is in the JSON body) |
 | `release-proposal` | `ship` | release request | the revision |
 | `release-cut` | `ship` | release request | the version |
 | `dispatch` | `dispatch` | the subject's ticket, else heartbeat ticket | the key |
 | `done` | every run, last | the run's ticket; heartbeat ticket for a CR with no ticket | the key `dispatch` gave |
+
+`comment --kind` refuses the kinds only one verb writes: `verdict` (`forge verdict`), `dispatch` (`dispatch`) and `scores` (`ledger record`).
 
 An owner's grade is a comment `agentic-sdlc:grade <run-id> <scorer> <value>` (section 6.3).
 

@@ -53,7 +53,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       AGENTIC_FORGE_TOKEN: ${{ github.token }}
       AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
-      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
       CR: ${{ github.event.pull_request.number }}
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
     steps:
@@ -66,25 +65,13 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - name: Install agentic-sdlc (the trunk's pinned devDependency)
-        run: |
-          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
-            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          else
-            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
-            v="$AGENTIC_SDLC_VERSION"
-            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
-            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
-            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
-            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
-          fi
 
       - name: Branch names
         if: github.event_name != 'merge_group'
         run: |
           # A ref that starts with - could be read as an option.
           case "$HEAD_REF" in -*) echo "::error::branch name starts with -"; exit 1 ;; esac
-          agentic-sdlc gate branch-names --ref "$HEAD_REF"
+          .agents/bin/agentic-sdlc gate branch-names --ref "$HEAD_REF"
 
       - name: Ticket linkage on the queue commit
         # A merge queue commit needs every required context; linkage was proven on the PR head.
@@ -95,7 +82,7 @@ jobs:
 
       - name: Ticket linkage
         if: github.event_name != 'merge_group' && github.event.pull_request.draft == false
-        run: agentic-sdlc gate linkage --cr "$CR"
+        run: .agents/bin/agentic-sdlc gate linkage --cr "$CR"
 
 
   human-approval:
@@ -118,7 +105,6 @@ jobs:
       AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
       AGENTIC_FORGE_TOKEN: ${{ github.token }}   # one identity posts human-approval with this job's token (pinned to Actions)
       AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
-      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
       # Empty on a fork PR's review event: every step after checkout is then skipped.
       CR: ${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number }}
     steps:
@@ -140,22 +126,9 @@ jobs:
         if: env.CR != ''
         with:
           node-version: 22
-      - name: Install agentic-sdlc (the trunk's pinned devDependency)
-        if: env.CR != ''
-        run: |
-          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
-            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          else
-            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
-            v="$AGENTIC_SDLC_VERSION"
-            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
-            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
-            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
-            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
-          fi
       - name: Human approval
         if: env.CR != ''
-        run: agentic-sdlc gate approval --cr "$CR"
+        run: .agents/bin/agentic-sdlc gate approval --cr "$CR"
 
   review-gate:
     # One identity: posts status review on the head from the newest trusted review-pr report for it,
@@ -175,7 +148,6 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       AGENTIC_FORGE_TOKEN: ${{ github.token }}
-      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
       CR: ${{ github.event.issue.number || github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -185,20 +157,8 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - name: Install agentic-sdlc (the trunk's pinned devDependency)
-        run: |
-          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
-            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          else
-            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
-            v="$AGENTIC_SDLC_VERSION"
-            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
-            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
-            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
-            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
-          fi
       - name: Review status from the report
-        run: agentic-sdlc gate review --cr "$CR"
+        run: .agents/bin/agentic-sdlc gate review --cr "$CR"
 
   agent-provenance:
     # Posts status agent-provenance on the head with this job's token: every agent commit of the CR carries
@@ -217,7 +177,6 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       AGENTIC_FORGE_TOKEN: ${{ github.token }}
-      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
       CR: ${{ github.event.pull_request.number }}
     steps:
       # Base branch only: the binding in force is the trunk's, not the PR's.
@@ -228,18 +187,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - name: Install agentic-sdlc (the trunk's pinned devDependency)
-        run: |
-          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
-            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          else
-            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
-            v="$AGENTIC_SDLC_VERSION"
-            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
-            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
-            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
-            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
-          fi
       - name: Agent provenance on the queue commit
         # A merge queue commit needs every required context; the trailers were checked on the PR head.
         if: github.event_name == 'merge_group'
@@ -248,7 +195,7 @@ jobs:
         run: gh api "repos/$GITHUB_REPOSITORY/statuses/$QUEUE_SHA" -f state=success -f context=agent-provenance -f description='checked on the PR head' >/dev/null
       - name: Agent provenance
         if: github.event_name == 'pull_request_target'
-        run: agentic-sdlc gate provenance --cr "$CR"
+        run: .agents/bin/agentic-sdlc gate provenance --cr "$CR"
 
   carry-statuses:
     # A merge queue needs every required check on its own commit. Required, proofs-on-base and

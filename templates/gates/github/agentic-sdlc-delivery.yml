@@ -50,20 +50,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - name: Install agentic-sdlc (the pinned devDependency)
-        env:
-          AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
-        run: |
-          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
-            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          else
-            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
-            v="$AGENTIC_SDLC_VERSION"
-            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
-            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
-            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
-            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
-          fi
       - name: Git identity for tags
         run: |
           git config user.name "agentic-sdlc"
@@ -83,16 +69,16 @@ jobs:
             *) echo "conclusion $CONCLUSION: nothing shipped"; exit 0 ;;
           esac
           # set: the deploy/publish workflow for the first environment; its env name must match product.environments
-          if [ "$RUN_NAME" = "Deploy staging" ]; then agentic-sdlc gate shipped first-env --sha "$RUN_SHA" --result "$result"; fi
+          if [ "$RUN_NAME" = "Deploy staging" ]; then .agents/bin/agentic-sdlc gate shipped first-env --sha "$RUN_SHA" --result "$result"; fi
           # set: the deploy/publish workflow for the last environment; its env name must match product.environments
           # The last environment ships from a release line, or from the trunk under continuous delivery.
           if [ "$RUN_NAME" = "Deploy production" ]; then
             case "$DELIVERY:$HEAD_BRANCH" in
-              release-line:"$RELEASE_PREFIX"*) agentic-sdlc gate shipped last-env --sha "$RUN_SHA" --result "$result" ;;
+              release-line:"$RELEASE_PREFIX"*) .agents/bin/agentic-sdlc gate shipped last-env --sha "$RUN_SHA" --result "$result" ;;
               continuous:"$TRUNK")
                 # Continuous delivery has no release ready check: missing release evidence reports the deploy as failed.
-                if [ "$result" = success ] && ! agentic-sdlc gate evidence --sha "$RUN_SHA"; then result=failure; fi
-                agentic-sdlc gate shipped last-env --sha "$RUN_SHA" --result "$result" ${VERSION:+--version "$VERSION"} ;;
+                if [ "$result" = success ] && ! .agents/bin/agentic-sdlc gate evidence --sha "$RUN_SHA"; then result=failure; fi
+                .agents/bin/agentic-sdlc gate shipped last-env --sha "$RUN_SHA" --result "$result" ${VERSION:+--version "$VERSION"} ;;
             esac
           fi
 
@@ -103,7 +89,7 @@ jobs:
           github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && github.event.workflow_run.name == 'CI' &&
           (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out') &&
           (github.event.workflow_run.head_branch == env.TRUNK || startsWith(github.event.workflow_run.head_branch, env.RELEASE_PREFIX))
-        run: agentic-sdlc gate signal-on-red --run "$RUN_ID"
+        run: .agents/bin/agentic-sdlc gate signal-on-red --run "$RUN_ID"
 
       - name: Merged
         if: (github.event_name == 'push' && github.ref_name == env.TRUNK) || github.event_name == 'workflow_dispatch'
@@ -112,4 +98,4 @@ jobs:
         run: |
           # A dispatch input: a sha only, never something that starts with - .
           case "$MERGED_SHA" in ""|*[!0-9a-f]*) echo "::error::sha must be hex"; exit 1 ;; esac
-          agentic-sdlc gate merged --sha "$MERGED_SHA"
+          .agents/bin/agentic-sdlc gate merged --sha "$MERGED_SHA"

@@ -149,6 +149,7 @@ export function validateBinding(b: Binding): string[] {
     if (v !== undefined && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
   }
   if (x.cycle?.land_wait_minutes !== undefined && !(Number.isInteger(x.cycle.land_wait_minutes) && x.cycle.land_wait_minutes >= 0)) p.push('cycle.land_wait_minutes must be a whole number of minutes');
+  if (x.cycle?.max_rework !== undefined && !(Number.isInteger(x.cycle.max_rework) && x.cycle.max_rework > 0)) p.push('cycle.max_rework must be a positive integer');
   if (x.cycle?.max_tokens_per_ticket !== undefined && !(Number.isInteger(x.cycle.max_tokens_per_ticket) && x.cycle.max_tokens_per_ticket > 0)) p.push('cycle.max_tokens_per_ticket must be a positive integer');
   const bb = x.learning?.bench_budget;
   if (bb !== undefined) {

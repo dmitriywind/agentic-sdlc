@@ -33,7 +33,6 @@ jobs:
     env:
       REVISION: ${{ inputs.revision }}
       VERSION: ${{ inputs.version }}
-      AGENTIC_SDLC_VERSION: ${{ vars.AGENTIC_SDLC_VERSION }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,18 +41,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - name: Install agentic-sdlc (the trunk's pinned devDependency)
-        run: |
-          if grep -q '"node_modules/agentic-sdlc"' package-lock.json 2>/dev/null; then
-            npm ci --ignore-scripts && echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          else
-            # AGENTIC_SDLC_VERSION (repo variable): an exact version or a 40-hex commit SHA; a SHA is the immutable choice (a tag can move).
-            v="$AGENTIC_SDLC_VERSION"
-            if printf '%s' "$v" | grep -Eq '^[0-9a-f]{40}$'; then ref="$v"
-            elif printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then ref="v$v"
-            else echo "::error::set the repo variable AGENTIC_SDLC_VERSION to an exact version or a 40-hex commit SHA, or pin agentic-sdlc as a devDependency"; exit 1; fi
-            npm i -g --ignore-scripts --allow-git=root "github:dmitriywind/agentic-sdlc#$ref"
-          fi
       - name: Cut the release line
         env:
           RELEASE_TOKEN: ${{ secrets.AGENTIC_RELEASE_TOKEN }}
@@ -65,4 +52,4 @@ jobs:
           header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$RELEASE_TOKEN" | base64 -w0)"
           echo "::add-mask::$header"
           export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="$header"
-          agentic-sdlc vcs cut "$REVISION" "$VERSION"
+          .agents/bin/agentic-sdlc vcs cut "$REVISION" "$VERSION"

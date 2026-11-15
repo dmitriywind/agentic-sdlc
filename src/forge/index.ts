@@ -1,5 +1,5 @@
 import { ownersFor, type AdapterContext, type Forge, type PortCli } from '../ports.ts';
-import { matches, parseKind, selectComments, stampBody } from '../comments.ts';
+import { matches, parseKind, parseWritableKind, selectComments, stampBody } from '../comments.ts';
 import { land, queue, verdict } from './flow.ts';
 import { UsageError, bodyFile, guard, parseStrict, type VerbSpec } from './util.ts';
 import { github } from './github.ts';
@@ -64,7 +64,7 @@ export const cli: PortCli = (argv, ctx) =>
       }
       case 'comment': {
         if (a.has('ref') && !a.has('kind')) throw new UsageError('forge comment: --ref needs --kind');
-        const text = a.has('kind') ? stampBody(body(), parseKind(a.get('kind')!), a.get('ref'), { specMarker: ctx.binding.spec_marker }) : body();
+        const text = a.has('kind') ? stampBody(body(), parseWritableKind(a.get('kind')!), a.get('ref'), { specMarker: ctx.binding.spec_marker }) : body();
         return f.comment(n(), text);
       }
       case 'verdict': {
@@ -79,7 +79,8 @@ export const cli: PortCli = (argv, ctx) =>
       case 'queue': {
         const { depsOf, approvalWho } = await import('../gates.ts');
         const d = depsOf(ctx);
-        return queue(f, ctx.binding, (cr) => approvalWho(d, cr));
+        const open = async (id: string) => !ctx.binding.board.done_statuses.includes((await d.board.get(id)).status);
+        return queue(f, ctx.binding, (cr) => approvalWho(d, cr), Date.now(), open);
       }
       case 'comments': {
         if (a.has('kind') && a.has('marker')) throw new UsageError('forge comments: --kind and --marker together');

@@ -60,22 +60,6 @@ Feature: Implement a spec
     And it fixes each Important finding first
     And it opens no second CR
 
-  # Source: skills/implement-spec/SKILL.md, "Branch"
-  # Proof: test/vcs.test.ts "git: start resumes an existing change line"
-  Scenario: Rework resumes the existing change line
-    Given a change line already exists for the ticket
-    When the factory runs "vcs start" with the name of the CR's source branch
-    Then the existing change line reopens
-    And the factory does not start a new line from the trunk tip
-
-  # Source: skills/implement-spec/SKILL.md, "Branch"
-  # Proof: test/vcs.test.ts "git start: no remote branch starts from trunk; a reused branch or workdir fast-forwards to the remote"
-  Scenario: A new ticket starts from the trunk tip
-    Given no change line exists for the ticket
-    When the factory runs "vcs start" with a name that matches vcs.change_pattern
-    Then the change line starts from the trunk tip
-    And the factory works in the workdir that the command returns
-
   # Source: skills/implement-spec/SKILL.md, "Draft CR"
   # Proof: skill text only
   Scenario: A CR that is already open moves the ticket to In review
@@ -138,34 +122,6 @@ Feature: Implement a spec
     And --author keeps only the named authors
     And --last counts after the filter
 
-  # Source: references/architecture.md, "Adapter"; src/vcs/git.ts
-  # Proof: test/vcs.test.ts "git: start, changed, base, cut, tag, tags on a real repo"
-  Scenario: The vcs port runs one change line from start to drop
-    Given a trunk with one commit
-    When the factory starts a change line, commits, pushes, cuts, tags and drops it
-    Then the change line is a worktree under .agents/work
-    And "vcs changed" lists the files the line changed from the trunk
-    And the push, the cut ref and the tags reach the remote
-    And "vcs checkout-tests" puts the base tree back and keeps only the named test paths
-    And "vcs drop" removes the worktree and the branch
-
-  # Source: src/vcs/git.ts, "snapshot"
-  # Proof: test/vcs.test.ts "git: snapshot is a detached tree outside the root; changed sees edits, adds and deletes; drop removes it"
-  Scenario: A snapshot is a detached tree that holds no later commit
-    Given a repo with a commit after the revision to snapshot
-    When the factory takes a snapshot of the revision
-    Then the tree is outside the repo root and holds no later commit
-    And "changed" lists edits, adds and deletes in the tree
-    And "drop" removes the tree
-
-  # Source: src/exec.ts, "http"
-  # Proof: test/exec.test.ts "http retries 429 and 5xx up to 3 tries honouring Retry-After (seconds or date, capped at 30s), and does not retry 4xx, nor 5xx on POST"
-  Scenario: A call that can be retried is retried, and one that cannot is not
-    Given a board or forge API that answers 429 or 5xx
-    When the adapter makes the call
-    Then it tries up to 3 times and waits the Retry-After time, at most 30 seconds
-    And it does not retry a 4xx, nor a 5xx on POST
-
   # Source: src/exec.ts, "ghRetry"
   # Proof: test/forge.test.ts "gh reads retry up to 3 tries on 429, a rate-limit 403 and 5xx, honouring a retry-after hint; writes retry only on a rate limit"
   # Proof: test/board-adapters.test.ts "the GitHub boards retry a milestone write on a rate limit but not on a 5xx; a read retries on both"
@@ -176,29 +132,6 @@ Feature: Implement a spec
     When an adapter makes a write call
     Then it retries only a 429 or a rate limit, never a 5xx
     And it does not retry any other 403
-
-  # Source: src/exec.ts, "http"
-  # Proof: test/exec.test.ts "http aborts a request that never gets a response"
-  Scenario: A call that gets no answer is aborted
-    Given an API that never answers
-    When the adapter makes the call
-    Then the call fails after the time limit
-
-  # Source: src/exec.ts, "http"
-  # Proof: test/exec.test.ts "http returns the raw text of a 2xx that is not JSON, and keeps the URL path out of an error"
-  Scenario: A success answer that is not JSON still counts, and an error shows no URL path
-    Given a webhook that answers 200 with plain text, and one that answers 403
-    When the adapter makes each call
-    Then the first call succeeds and returns the text
-    And the second error names the method, the host and the status, never the path, which may hold a secret
-
-  # Source: src/exec.ts, "http"
-  # Proof: test/exec.test.ts "http keeps the URL out of a failed call and tries once when asked"
-  Scenario: A failed call never prints its URL
-    Given a call whose URL holds a secret and that fails before any answer
-    When the adapter makes the call
-    Then the error names the method and the cause, never the URL
-    And a caller can ask for a single attempt and its own time limit
 
   # Source: src/mcp.ts
   # Proof: test/mcp.test.ts "tools/list has board_move with a schema; unknown method is -32601"
@@ -251,10 +184,3 @@ Feature: Implement a spec
     When the server starts with --allow approve,status
     Then those tools are listed
     And any other --allow value is a usage error
-
-  # Source: dist/bin.js; src/init.ts
-  # Proof: test/dist-smoke.test.ts "bundled CLI: init, validate, and an MCP tool call"
-  Scenario: The built CLI installs a project, validates it and serves an MCP call
-    Given the built dist/bin.js and an empty project
-    When the CLI runs "init", "validate" and one MCP tool call
-    Then each step succeeds

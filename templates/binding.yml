@@ -157,7 +157,7 @@ priorities: [P0, High, Default, Low] # first is the highest
 p0_setters: [owner, plan/triage] # who may set the first priority
 max_subissue_depth: 1           # sub-issues of sub-issues are not allowed beyond this
 spec_marker: "spec.md"          # first line of the spec comment
-stall_minutes: 60               # a ready CR with a required check red or missing this long returns to review/review; also how long an unfinished
+stall_minutes: 60               # a required check still pending or missing this long after a push goes to escalate (forge queue); also how long an unfinished
                                 # run blocks a second dispatch: keep it above the longest stage run
 parallel_agents: 3              # most subagents running at once
 
@@ -167,7 +167,8 @@ cycle:                          # Run one cycle (sdlc skill)
   time_budget_minutes: 45       # start nothing new after this; keep it below the runner job timeout (templates: 60)
   failure_limit: 2              # a step failing in this many heartbeats in a row is escalated
   dedupe_minutes: 10            # a second dispatch of the same skill and subject this soon is a double fire: skipped (0: no dispatch lock at all)
-  max_rework: 3                 # unset: 3. review/review sends a CR back this many times at most; the next REMEDIATION REQUIRED goes to escalate
+  max_rework: 3                 # unset: 3. A CR is sent back to rework this many times at most (fail verdicts and red-check notes); the next one goes to escalate
+  land_wait_minutes: 5          # unset: 5. forge land waits this long for the required checks before it prints waiting (the queue says land again next cycle)
   # max_tokens_per_ticket: 2000000 # unset: no limit. A ticket whose runs reported more tokens in total gets no further dispatch and goes to escalate; ledger summary marks it overBudget
 
 heartbeat:

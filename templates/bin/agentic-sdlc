@@ -1,0 +1,28 @@
+#!/bin/sh
+# agentic-sdlc launcher, installed by `agentic-sdlc init` at .agents/bin/agentic-sdlc.
+# Runs the CLI pinned in .agents/cli.json: installs it once under .agents/.cli/<ref>/ (git-ignored), then runs it.
+# Needs node and npm. Upgrade by running the new package's `init`, which rewrites .agents/cli.json.
+set -eu
+fail() { echo "agentic-sdlc: $*" >&2; exit 1; }
+root=$(cd "$(dirname "$0")/../.." && pwd)
+pin="$root/.agents/cli.json"
+[ -f "$pin" ] || fail "$pin is missing; run agentic-sdlc init"
+command -v node >/dev/null 2>&1 || fail "node is not installed (agentic-sdlc needs node 22 or later)"
+field() { node -e 'const v=require(process.argv[1])[process.argv[2]]; console.log(typeof v==="string"?v:"")' "$pin" "$1"; }
+package=$(field package) || fail "cannot read $pin"
+ref=$(field ref) || fail "cannot read $pin"
+# Both end up in a path and an npm argument: refuse anything that could read as an option or leave the folder.
+case "$package" in ""|-*|*[!0-9A-Za-z._:/@-]*) fail "$pin: package is missing or not a package spec" ;; esac
+case "$ref" in ""|-*|*[!0-9A-Za-z._+-]*) fail "$pin: ref is missing or not a commit sha or version tag" ;; esac
+dir="$root/.agents/.cli/$ref"
+bin="$dir/node_modules/agentic-sdlc/dist/bin.js"
+if [ ! -f "$bin" ]; then
+  command -v npm >/dev/null 2>&1 || fail "npm is not installed (agentic-sdlc needs npm to fetch $package#$ref)"
+  tmp="$dir.tmp$$"
+  rm -rf "$tmp"; mkdir -p "$tmp"
+  # npm prints to stderr here: stdout stays the CLI's. --ignore-scripts: the package runs no install code.
+  npm i --prefix "$tmp" --ignore-scripts --allow-git=root --no-save --no-audit --no-fund "$package#$ref" >&2 \
+    || { rm -rf "$tmp"; fail "cannot fetch $package#$ref (check the network and that the ref exists)"; }
+  rm -rf "$dir"; mv "$tmp" "$dir"
+fi
+exec node "$bin" "$@"

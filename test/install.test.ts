@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cli, probeFailure, cloudBoard, deliveryWorkflow, implementerToken, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../src/install.ts';
+import { cli, cliPin, probeFailure, cloudBoard, deliveryWorkflow, implementerToken, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../src/install.ts';
 import { parse } from 'yaml';
 import { fakeCtx } from './helpers.ts';
 import { writePack } from './skillfix.ts';
@@ -21,6 +21,7 @@ function fixture() {
   w(join(pkg, 'templates/gates/hooks/pre-push'), '#!/bin/sh\n');
   for (const n of ['cycle-prompt.md', 'review-prompt.md']) w(join(pkg, 'templates/runner', n), n);
   cpSync(join(import.meta.dirname, '../templates/mcp'), join(pkg, 'templates/mcp'), { recursive: true });
+  cpSync(join(import.meta.dirname, '../templates/bin'), join(pkg, 'templates/bin'), { recursive: true });
   cpSync(join(import.meta.dirname, '../templates/gates/github/ruleset.trunk.json'), join(pkg, 'templates/gates/github/ruleset.trunk.json'));
   process.env.AGENTIC_SDLC_PACKAGE = pkg;
   return mkdtempSync(join(tmpdir(), 'proj-'));
@@ -43,7 +44,7 @@ test('init writes skills, binding, gates, pointer; second run is idempotent and 
   assert.ok(existsSync(join(root, '.github/workflows/gate.yml')));
   assert.ok(existsSync(join(root, '.agents/cycle-prompt.md')) && existsSync(join(root, '.agents/review-prompt.md')));
   assert.ok(existsSync(join(root, '.agents/hooks/pre-push')));
-  if (process.platform !== 'win32') assert.ok(statSync(join(root, '.agents/hooks/pre-push')).mode & 0o100, 'hook is executable');
+  if (process.platform !== 'win32') for (const p of ['.agents/hooks/pre-push', '.agents/bin/agentic-sdlc']) assert.ok(statSync(join(root, p)).mode & 0o100, `${p} is executable`);
   const binding = readFileSync(join(root, '.agents/binding.yml'), 'utf8');
   assert.match(binding, /adapter: jira/);
   writeFileSync(join(root, '.agents/binding.yml'), binding + '# edited\n');
@@ -55,6 +56,7 @@ test('init writes skills, binding, gates, pointer; second run is idempotent and 
   assert.equal(agents2.match(/agentic-sdlc:start/g)!.length, 1);
   assert.match(agents2, /^# Mine/);
   assert.match(agents2, /\/agentic-sdlc:sdlc/);
+  assert.match(agents2, /\.agents\/bin\/agentic-sdlc/, 'the pointer names the CLI');
 });
 
 test('init keeps an edited skill file unless --force, and updates an unedited one', async () => {
@@ -181,7 +183,7 @@ test('init --harness claude: tier subagents from binding.models, @AGENTS.md impo
   assert.equal(readFileSync(join(fresh, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
 });
 
-test('init --harness claude writes no .mcp.json (the plugin serves MCP); --no-plugin merges it and pins npx -y to the Git tag', async () => {
+test('init --harness claude writes no .mcp.json (the plugin serves MCP); --no-plugin merges it with the launcher as the command', async () => {
   const plain = fixture();
   await quiet(() => cli(['init', '--harness', 'claude'], fakeCtx(plain, {}, () => ({})).ctx));
   assert.ok(!existsSync(join(plain, '.mcp.json')));
@@ -192,7 +194,8 @@ test('init --harness claude writes no .mcp.json (the plugin serves MCP); --no-pl
   assert.ok(existsSync(join(root, '.claude/skills/sdlc/SKILL.md')));
   const m = JSON.parse(readFileSync(join(root, '.mcp.json'), 'utf8')).mcpServers;
   assert.equal(m.other.url, 'x');
-  assert.deepEqual(m['agentic-sdlc'].args, ['-y', '--allow-git=root', 'github:dmitriywind/agentic-sdlc#v9.9.9', 'mcp']);
+  assert.equal(m['agentic-sdlc'].command, '.agents/bin/agentic-sdlc');
+  assert.deepEqual(m['agentic-sdlc'].args, ['mcp']);
   assert.equal(m['agentic-sdlc'].type, 'stdio');
 });
 
@@ -210,16 +213,48 @@ test('init reads the repo from a GitHub origin, and --no-plugin prints no plugin
   assert.doesNotMatch(out.join('\n'), /install the Claude Code plugin/);
 });
 
-test('init pins the CLI as a devDependency when package.json exists, and the MCP entry follows', async () => {
+test('init writes the CLI pin as a factory file and touches neither package.json nor .npmrc', async () => {
   const root = fixture();
-  w(join(root, 'package.json'), '{\n    "name": "p"\n}\n');
+  const pj = '{\n    "name": "p"\n}\n';
+  w(join(root, 'package.json'), pj);
   const { ctx } = fakeCtx(root, {}, () => ({}));
   await quiet(() => cli(['init', '--harness', 'cursor'], ctx));
-  const pj = readFileSync(join(root, 'package.json'), 'utf8');
-  assert.equal(JSON.parse(pj).devDependencies['agentic-sdlc'], 'github:dmitriywind/agentic-sdlc#v9.9.9');
-  assert.match(pj, /^ {4}"name"/m, 'keeps the indent');
-  assert.equal(readFileSync(join(root, '.npmrc'), 'utf8'), 'allow-git=root\n', 'npm 12 refuses git dependencies by default');
-  assert.deepEqual(JSON.parse(readFileSync(join(root, '.cursor/mcp.json'), 'utf8')).mcpServers['agentic-sdlc'].args, ['--no-install', 'agentic-sdlc', 'mcp']);
+  assert.deepEqual(JSON.parse(readFileSync(join(root, '.agents/cli.json'), 'utf8')), { package: 'github:dmitriywind/agentic-sdlc', ref: 'v9.9.9' });
+  assert.equal(readFileSync(join(root, 'package.json'), 'utf8'), pj);
+  assert.ok(!existsSync(join(root, '.npmrc')));
+  const entry = JSON.parse(readFileSync(join(root, '.cursor/mcp.json'), 'utf8')).mcpServers['agentic-sdlc'];
+  assert.deepEqual([entry.command, entry.args], ['.agents/bin/agentic-sdlc', ['mcp']]);
+  const none = fixture();
+  await quiet(() => cli(['init'], fakeCtx(none, {}, () => ({})).ctx));
+  assert.ok(existsSync(join(none, '.agents/cli.json')) && !existsSync(join(none, 'package.json')), 'a product with no package.json needs none');
+});
+
+test('init reports a devDependency pin and never edits package.json', async () => {
+  const root = fixture();
+  const pj = JSON.stringify({ devDependencies: { 'agentic-sdlc': 'github:dmitriywind/agentic-sdlc#v0.0.1' } });
+  w(join(root, 'package.json'), pj);
+  const lines = await capture(() => cli(['init'], fakeCtx(root, {}, () => ({})).ctx));
+  assert.ok(lines.some((m) => /npm rm agentic-sdlc/.test(m) && /\.agents\/cli\.json/.test(m)), lines.join('|'));
+  assert.equal(readFileSync(join(root, 'package.json'), 'utf8'), pj);
+  const clean = fixture();
+  w(join(clean, 'package.json'), '{}');
+  assert.ok(!(await capture(() => cli(['init'], fakeCtx(clean, {}, () => ({})).ctx))).some((m) => /npm rm/.test(m)));
+});
+
+test('init adds .agents/.cli/ to .gitignore once and keeps the rest of the file', async () => {
+  const root = fixture();
+  w(join(root, '.gitignore'), 'node_modules');
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  await quiet(() => cli(['init'], ctx));
+  assert.equal(readFileSync(join(root, '.gitignore'), 'utf8'), 'node_modules\n.agents/.cli/\n');
+  const fresh = fixture();
+  await quiet(() => cli(['init'], fakeCtx(fresh, {}, () => ({})).ctx));
+  assert.equal(readFileSync(join(fresh, '.gitignore'), 'utf8'), '.agents/.cli/\n');
+  const mine = fixture();
+  w(join(mine, '.gitignore'), '/.agents/.cli\n');
+  await quiet(() => cli(['init'], fakeCtx(mine, {}, () => ({})).ctx));
+  assert.equal(readFileSync(join(mine, '.gitignore'), 'utf8'), '/.agents/.cli\n');
 });
 
 test('init keeps an existing agentic-sdlc MCP entry unless --force', async () => {
@@ -242,7 +277,7 @@ test('init --harness codex appends the TOML table once and keeps one the adopter
   const t = readFileSync(join(root, '.codex/config.toml'), 'utf8');
   assert.match(t, /^model = "x"/);
   assert.equal(t.split("[mcp_servers.agentic-sdlc]").length - 1, 1);
-  assert.ok(t.includes('args = ["-y","--allow-git=root","github:dmitriywind/agentic-sdlc#v9.9.9","mcp"]'), t);
+  assert.ok(t.includes('command = ".agents/bin/agentic-sdlc"\nargs = ["mcp"]'), t);
   assert.ok(!existsSync(join(root, '.claude/skills')));
   const own = fixture();
   const mine = 'x = 1\n[mcp_servers."agentic-sdlc"]\ncommand = "mine"\n';
@@ -407,32 +442,118 @@ test('doctor: a Claude cloud session fails a GitHub Projects board and names the
   assert.equal(cloudBoard({ board: { adapter: 'jira' } }, { CLAUDE_CODE_REMOTE: 'true' }), undefined);
 });
 
-test('init refuses an unknown board, an unknown flag and a package.json that is not JSON, before it writes anything', async () => {
-  for (const args of [['--board', 'bogus'], ['--forse']]) {
+test('init refuses an unknown board, an unknown flag and a bad --ref, before it writes anything', async () => {
+  for (const args of [['--board', 'bogus'], ['--forse'], ['--ref', 'main']]) {
     const root = fixture();
     assert.equal(await quiet(() => cli(['init', ...args], fakeCtx(root, {}, () => ({})).ctx)), 1);
     assert.ok(!existsSync(join(root, '.agents')));
   }
-  const root = fixture();
-  w(join(root, 'package.json'), '{ // comment\n}');
-  const errs: string[] = [];
-  const e = console.error; console.error = (s: string) => errs.push(s);
-  try { assert.equal(await cli(['init', '--board', 'local'], fakeCtx(root, {}, () => ({})).ctx), 1); } finally { console.error = e; }
-  assert.match(errs.join('\n'), /package\.json is not valid JSON/);
-  assert.ok(!existsSync(join(root, '.agents')));
 });
 
-test('init moves its own older CLI pin to the package version and keeps a pin the project chose', async () => {
-  const run = async (have: string) => {
-    const root = fixture();
-    w(join(root, 'package.json'), JSON.stringify({ devDependencies: { 'agentic-sdlc': have } }));
-    await quiet(() => cli(['init', '--board', 'local'], fakeCtx(root, {}, () => ({})).ctx));
-    return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).devDependencies['agentic-sdlc'];
-  };
-  assert.equal(await run('github:dmitriywind/agentic-sdlc#v0.0.1'), 'github:dmitriywind/agentic-sdlc#v9.9.9');
-  const sha = 'github:dmitriywind/agentic-sdlc#' + 'a'.repeat(40);
-  assert.equal(await run(sha), sha);
-  assert.equal(await run('file:../fork'), 'file:../fork');
+test('init moves the CLI pin on upgrade, keeps a sha the project set, and --ref sets it', async () => {
+  const sha40 = 'a'.repeat(40);
+  const pin = (root: string) => JSON.parse(readFileSync(join(root, '.agents/cli.json'), 'utf8'));
+  const pkgOf = () => process.env.AGENTIC_SDLC_PACKAGE!;
+  const root = fixture();
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  assert.equal(pin(root).ref, 'v9.9.9');
+  w(join(pkgOf(), 'package.json'), '{"name":"agentic-sdlc","version":"9.10.0"}');
+  await quiet(() => cli(['init', '--upgrade'], ctx));
+  assert.equal(pin(root).ref, 'v9.10.0', 'an unedited pin follows the package');
+  writeFileSync(join(root, '.agents/cli.json'), JSON.stringify({ package: 'github:me/fork', ref: sha40 }));
+  w(join(pkgOf(), 'package.json'), '{"name":"agentic-sdlc","version":"9.11.0"}');
+  const lines = await capture(() => cli(['init', '--upgrade'], ctx));
+  assert.deepEqual(pin(root), { package: 'github:me/fork', ref: sha40 }, 'a hand-set sha is kept');
+  assert.ok(lines.some((m) => m.startsWith('kept .agents/cli.json')), lines.join('|'));
+  await quiet(() => cli(['init', '--ref', 'v1.2.3'], ctx));
+  assert.deepEqual(pin(root), { package: 'github:me/fork', ref: 'v1.2.3' }, '--ref moves it and keeps the package');
+  await quiet(() => cli(['init', '--ref', sha40], ctx));
+  assert.equal(pin(root).ref, sha40);
+  writeFileSync(join(root, '.agents/cli.json'), JSON.stringify({ package: 'github:dmitriywind/agentic-sdlc', ref: 'b'.repeat(40) }));
+  await quiet(() => cli(['init', '--force'], ctx));
+  assert.equal(pin(root).ref, 'v9.11.0', '--force follows the package');
+  // a sha that init itself wrote (--ref) is not a hand edit: the next plain upgrade moves it
+  await quiet(() => cli(['init', '--ref', sha40], ctx));
+  await quiet(() => cli(['init'], ctx));
+  assert.equal(pin(root).ref, 'v9.11.0');
+});
+
+test('doctor: the CLI pin parses, a tag warns, a sha is ok, and the launcher must exist and be executable', async () => {
+  const root = fixture();
+  assert.match(cliPin(root).join('|'), /fail cli pin: \.agents\/cli\.json is missing.*fail cli pin: \.agents\/bin\/agentic-sdlc is missing/);
+  await quiet(() => cli(['init'], fakeCtx(root, {}, () => ({})).ctx));
+  assert.match(cliPin(root).join('|'), /^warn: cli pin: ref v9\.9\.9 is a tag, and a tag can move/);
+  assert.equal(cliPin(root).length, 1);
+  w(join(root, '.agents/cli.json'), JSON.stringify({ package: 'github:x/y', ref: 'c'.repeat(40) }));
+  assert.deepEqual(cliPin(root), ['ok   cli pin: github:x/y at commit cccccccccccc']);
+  w(join(root, '.agents/cli.json'), JSON.stringify({ package: 'github:x/y', ref: 'main' }));
+  assert.match(cliPin(root)[0], /^fail cli pin: ref 'main'/);
+  w(join(root, '.agents/cli.json'), '{ nope');
+  assert.match(cliPin(root)[0], /^fail cli pin: .*not valid JSON/);
+  if (process.platform !== 'win32') {
+    execFileSync('chmod', ['644', join(root, '.agents/bin/agentic-sdlc')]);
+    assert.ok(cliPin(root).some((l) => /^fail cli pin: .*not executable/.test(l)));
+  }
+});
+
+test('the stock workflows and runner templates run the CLI through the launcher and read no AGENTIC_SDLC_VERSION', () => {
+  const root = join(import.meta.dirname, '..');
+  const files = ['gates/github', 'runner'].flatMap((d) => readdirSync(join(root, 'templates', d)).filter((n) => n.endsWith('.yml') || n.endsWith('.sh') || n.endsWith('.md')).map((n) => join(root, 'templates', d, n)));
+  files.push(join(root, 'templates/gates/hooks/pre-push'));
+  for (const p of files) {
+    const text = readFileSync(p, 'utf8');
+    assert.doesNotMatch(text, /AGENTIC_SDLC_VERSION/, p);
+    assert.doesNotMatch(text, /--no-install|npx --no agentic-sdlc|"node_modules\/agentic-sdlc"|npm i -g --ignore-scripts/, p);
+  }
+  const wf = readdirSync(join(root, 'templates/gates/github')).filter((n) => n.endsWith('.yml'));
+  const calls = wf.map((n) => readFileSync(join(root, 'templates/gates/github', n), 'utf8').match(/(?<![\w./-])agentic-sdlc (?:gate|vcs) /g) ?? []);
+  assert.deepEqual(calls.flat(), [], 'every CLI call in a workflow is .agents/bin/agentic-sdlc');
+  assert.match(readFileSync(join(root, 'templates/gates/github/agentic-sdlc-cr.yml'), 'utf8'), /\.agents\/bin\/agentic-sdlc gate approval/);
+  assert.match(readFileSync(join(root, 'templates/gates/hooks/pre-push'), 'utf8'), /\.\.\/bin\/agentic-sdlc" gate branch-names/);
+  assert.match(readFileSync(join(root, 'templates/runner/setup.sh'), 'utf8'), /^\.agents\/bin\/agentic-sdlc validate/m);
+  // a job that holds secrets checks out the base ref, so its launcher and cli.json are the trunk's
+  const cr = parse(readFileSync(join(root, 'templates/gates/github/agentic-sdlc-cr.yml'), 'utf8'));
+  for (const [name, job] of Object.entries<any>(cr.jobs).filter(([, j]) => j.steps.some((s: any) => /\.agents\/bin\/agentic-sdlc/.test(s.run ?? '')))) {
+    const co = job.steps.find((s: any) => /^actions\/checkout@/.test(s.uses ?? ''));
+    assert.match(String(co?.with?.ref), /base\.ref|default_branch/, `${name} checks out the base`);
+  }
+});
+
+test('the launcher installs the pinned ref once under .agents/.cli/<ref>/ and execs node with the arguments', { skip: process.platform === 'win32' }, () => {
+  const proj = mkdtempSync(join(tmpdir(), 'launch-'));
+  const launcher = join(proj, '.agents/bin/agentic-sdlc');
+  w(launcher, readFileSync(join(import.meta.dirname, '../templates/bin/agentic-sdlc'), 'utf8'));
+  execFileSync('chmod', ['755', launcher]);
+  w(join(proj, '.agents/cli.json'), JSON.stringify({ package: 'github:acme/tool', ref: 'v1.2.3' }));
+  const fake = mkdtempSync(join(tmpdir(), 'fakenpm-'));
+  const log = join(fake, 'npm.log');
+  // The stub records its arguments and lays out what npm would: <prefix>/node_modules/agentic-sdlc/dist/bin.js
+  w(join(fake, 'npm'), `#!/bin/sh
+echo "$*" >> "${log}"
+while [ $# -gt 0 ]; do [ "$1" = --prefix ] && prefix="$2"; shift; done
+mkdir -p "$prefix/node_modules/agentic-sdlc/dist"
+echo 'console.log(JSON.stringify(process.argv.slice(2)))' > "$prefix/node_modules/agentic-sdlc/dist/bin.js"
+`);
+  execFileSync('chmod', ['755', join(fake, 'npm')]);
+  const env = { PATH: `${fake}:${dirname(process.execPath)}:/usr/bin:/bin` };
+  const run = (...args: string[]) => execFileSync(launcher, args, { cwd: tmpdir(), env, encoding: 'utf8' });
+  assert.deepEqual(JSON.parse(run('board', 'list', '--status', 'Ready')), ['board', 'list', '--status', 'Ready']);
+  assert.deepEqual(JSON.parse(run('gate', 'linkage')), ['gate', 'linkage'], 'the second call runs the same install');
+  const calls = readFileSync(log, 'utf8').trim().split('\n');
+  assert.equal(calls.length, 1, 'installed once');
+  assert.ok(calls[0].startsWith(`i --prefix ${proj}/.agents/.cli/v1.2.3.tmp`), calls[0]);
+  assert.ok(calls[0].endsWith('--ignore-scripts --allow-git=root --no-save --no-audit --no-fund github:acme/tool#v1.2.3'), calls[0]);
+  assert.ok(existsSync(join(proj, '.agents/.cli/v1.2.3/node_modules/agentic-sdlc/dist/bin.js')));
+  assert.deepEqual(readdirSync(join(proj, '.agents/.cli')), ['v1.2.3'], 'no temp folder is left');
+  // a new ref installs again, beside the old one
+  w(join(proj, '.agents/cli.json'), JSON.stringify({ package: 'github:acme/tool', ref: 'd'.repeat(40) }));
+  run('doctor');
+  assert.equal(readFileSync(log, 'utf8').trim().split('\n').length, 2);
+  // a ref that could leave the folder or read as an option is refused before npm runs
+  w(join(proj, '.agents/cli.json'), JSON.stringify({ package: 'github:acme/tool', ref: '../x' }));
+  assert.throws(() => execFileSync(launcher, ['doctor'], { env, encoding: 'utf8', stdio: 'pipe' }), /ref is missing or not a commit sha or version tag/);
+  assert.equal(readFileSync(log, 'utf8').trim().split('\n').length, 2);
 });
 
 test('doctor: the forge probe reads check data, so a token without checks read scope fails', async () => {
@@ -492,7 +613,7 @@ test('init --upgrade updates an unedited workflow, keeps an edited one, and --fo
   const lines = await capture(() => cli(['init', '--upgrade'], ctx));
   assert.equal(readFileSync(gate, 'utf8'), 'on: pull_request\n', 'unedited: follows the package');
   assert.ok(lines.some((m) => m === 'updated .github/workflows/gate.yml'), lines.join('|'));
-  assert.ok(lines.some((m) => m.startsWith('upgrade: run npm install')), lines.join('|'));
+  assert.ok(lines.some((m) => m.startsWith('upgrade: review the kept files')), lines.join('|'));
   writeFileSync(gate, 'mine\n');
   w(join(pkg, 'templates/gates/github/gate.yml'), 'on: schedule\n');
   writeFileSync(binding, readFileSync(binding, 'utf8') + '# mine\n');
