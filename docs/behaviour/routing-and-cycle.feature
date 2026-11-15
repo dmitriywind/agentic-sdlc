@@ -367,3 +367,27 @@ Feature: Routing and the unattended cycle
     And the body holds no secret value
     And each managed vendor gets its own start-a-run call
     And a managed claude or antigravity stage that pins a model is refused
+
+  # Source: src/dispatch.ts, "limitsOf"; skills/sdlc/references/executors.md
+  # Proof: test/dispatch.test.ts "limits: a stage inherits executors.default caps and each executor kind is handed them"
+  # Proof: test/dispatch.test.ts "validateBinding: executor caps and cycle.max_tokens_per_ticket are positive integers; bench_budget knows runs and minutes only"
+  Scenario: A stage's caps reach its executor
+    Given executors.release sets max_turns and executors.default sets max_minutes
+    When release is dispatched
+    Then the caps are filled into a command, set in its environment and printed as limits
+    And a stage that sets no cap inherits the default's
+
+  # Source: skills/sdlc/SKILL.md, "Rules for every step"
+  # Proof: skill text only
+  Scenario: A capped run is a failed run
+    Given a run ended on its turn, token or minute cap
+    When the cycle writes the heartbeat
+    Then the run row has outcome "capped" and the same path as a timed-out run
+
+  # Source: src/ledger.ts, "ticketUse"; skills/sdlc/SKILL.md, "Rules for every step"
+  # Proof: test/ledger.test.ts "summarise: tokens per ticket, top 20 by tokens, over-budget tickets marked and always listed; capped is a hard fact"
+  Scenario: A ticket over its token budget gets no further dispatch
+    Given cycle.max_tokens_per_ticket is set and a ticket's runs reported more tokens
+    When ledger summary runs
+    Then the ticket is marked overBudget
+    And the cycle calls escalate-to-human instead of dispatching it

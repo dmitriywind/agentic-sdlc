@@ -241,3 +241,20 @@ Feature: Judge runs and improve the factory
     Then it groups the results of that suite by model and by executor name
     And it shows pass rate and median minutes
     And it marks the models that no other model beats on both
+
+  # Source: src/bench.ts, "runBench" (budget); learning.bench_budget
+  # Proof: test/bench.test.ts "runBench budget: over max_runs refuses before any case starts unless allowed; max_minutes skips the rest, never as failures"
+  # Proof: test/bench.test.ts "agentCommand fills the stage caps into a command executor, empty when unset"
+  Scenario: A bench run stays inside its budget
+    Given learning.bench_budget sets max_runs and max_minutes
+    When "bench run" plans more runs than max_runs
+    Then it refuses unless "--allow-over-budget" is given
+    And after max_minutes no new case starts and the rest are recorded "skipped: budget"
+
+  # Source: src/bench.ts, "compare" and "report"
+  # Proof: test/bench.test.ts "compare and report: a result with budget-skipped cases is incomplete, never a pass"
+  Scenario: A result with budget-skipped cases is incomplete
+    Given a bench result with cases skipped on budget
+    When it is compared or reported
+    Then compare is regressed with an insufficient reason
+    And report leaves it off the Pareto front

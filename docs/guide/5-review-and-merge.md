@@ -30,6 +30,10 @@ sequenceDiagram
 | `human-approval` | The approvals its class needs are on the latest commit (below). |
 | `skill-regression` | A factory change keeps the skill pack valid. A product change passes it. |
 
+## Who made each commit
+
+A seventh check, `agent-provenance`, is off until you set `forge.provenance`. When it is on, every commit an agent makes ends with `Agent-Run` and `Agent-Model` trailers, and the pull request body lists the run ids. The check reads the commits of the pull request and lists each as agent or human. With `warn` it only reports. With `require` it fails when an agent commit has no trailers, and you add it to the required checks yourself. A squash merge keeps one commit, so the check's report on the pull request is the record. [docs/forges.md](../forges.md) maps the checks to the SLSA Source track.
+
 ## Who must approve
 
 | Class | Is | Needs |

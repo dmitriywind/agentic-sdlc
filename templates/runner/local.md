@@ -21,7 +21,7 @@ git pull --ff-only && sh .agents/runner-setup.sh && claude -p "$(sed '1,/^---$/d
   --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git add *)" "Bash(git commit *)" "Bash(git push *)" "Bash(npm run *)" "Bash(npm test *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc" \
   --disallowedTools "Bash(npx --no agentic-sdlc forge approve *)"
 ```
-Set the npm entries to the binding's `commands.fast_check` and `commands.verify`. The login is your
+This `--max-turns` caps the orchestrator session. A stage's own cap is `executors.<stage>.max_turns`: a `command` executor passes it with `--max-turns {max_turns}` (or `$AGENTIC_SDLC_MAX_TURNS`), so keep any fixed `--max-turns` equal to the binding value. Set the npm entries to the binding's `commands.fast_check` and `commands.verify`. The login is your
 subscription (`claude` logged in, or `CLAUDE_CODE_OAUTH_TOKEN`); the runner setup fails when
 `ANTHROPIC_API_KEY` is set under an individual profile. With two identities, run the review the same
 way with `review-prompt.md`, `AGENTIC_REVIEW_TOKEN` and `AGENTIC_SDLC_ROLE=review` in its environment only.

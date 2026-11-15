@@ -121,6 +121,35 @@ One-time setup (private repos need a plan with Environments: Pro, Team or Enterp
 4. Repo variables (Settings > Secrets and variables > Actions > Variables): `AGENTIC_SDLC_VERSION`, an exact version or a 40-hex commit SHA, which the workflows install when the repo does not pin `agentic-sdlc` as a devDependency; a SHA is the immutable choice, a tag can move. Without it those jobs fail. The runner workflows also read `AGENTIC_AGENT_CLI_VERSION`, an exact version of the Claude Code or Codex CLI, and fail without it.
 5. `init` installs `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events to `human-approval`; it must stay in place or approvals do not update. A fork PR's review event carries no PR number, so its approval updates on the next PR event.
 
+## Agent provenance and the SLSA Source track
+
+Gate `provenance` (binding `forge.provenance: off | warn | require`, default `off`) checks that every
+commit an agent made on a change line ends with `Agent-Run` and `Agent-Model` trailers (the rule is in
+the skill contract, section Provenance). Set `warn` to see the report on each CR. Set `require` to fail
+the status `agent-provenance`, and then add `agent-provenance` to `forge.required_checks` and to the
+trunk ruleset's required status checks (pin it to the Actions app); `validate` warns when `require` is
+set without it. The trunk's squash merge drops the per-commit trailers, so the status and its report on
+the CR are the record. The gate matches commits by author or committer in `owners.bots`: with one
+identity, where the agent commits as the owner's own account, it cannot tell agent work from human work,
+and a commit whose email the forge links to no account is matched by the name git recorded, which the
+committer chooses.
+
+The table maps what the shipped setup does to the requirements of the
+[SLSA v1.2 Source track](https://slsa.dev/spec/v1.2/source-requirements). It is a map, not a claim of a level.
+
+| Source-track requirement (level) | Provided by | Gap |
+|---|---|---|
+| Choose an SCS that can reach the level (L1) | GitHub, a version control system | GitHub issues no SLSA source provenance attestations itself, so no level above L1 can be shown from the SCS. |
+| Revisions and repositories are uniquely identifiable (L1) | Git commit ids, the repository's URL | None. |
+| Access controls on sensitive operations (L2) | Trunk ruleset: a CR with one approving review, required checks, no deletion; `owners.bots` hold no bypass right when the two-identity setup is followed | The shipped ruleset lets repo admins bypass in a pull request (`bypass_actors`); with one identity the implementer is the owner and holds that right. |
+| Reliable change history: no force push, only descendants (L2) | `non_fast_forward`, `deletion` and `required_linear_history` rules on the trunk | The ruleset's bypass actors; squash merge rewrites the CR's commits into one. |
+| Tags are not moved or deleted (L2) | Release ruleset: `creation`, `update`, `deletion`, `non_fast_forward` on release lines | Repo admins bypass (`always`); release tags are not covered by a tag ruleset. |
+| Identity management, activity attributed to authenticated identities (L2) | GitHub accounts and the review identity; gate `provenance` attributes agent commits to a run and model | Commit authorship is a claim the committer sets unless commits are signed; no signed-commit rule ships. One-identity mode merges agent and human under one account. Trailers are the agent's own text, not signed. |
+| Source provenance attestations for each revision, created with the branch update (L2) | None. `agent-provenance`, `human-approval` and `review` statuses are evidence on the CR | No attestation is issued or signed, and the statuses are not tied to the trunk revision. A squash merge makes a new revision with no provenance. |
+| Continuous technical controls on named references, recorded in attestations (L3) | The trunk ruleset and required checks (`ticket-linkage`, `Required`, `proofs-on-base`, `review`, `human-approval`, `skill-regression`, `agent-provenance` when set) | Controls are enforced but not recorded in a Source VSA. |
+| Human readable changes (L2) | The CR's diff on the forge | None. |
+| Two-party review of protected branches (L4) | `forge.human_approval` (a human approval on the head for the Full lane, or `always`), `require_last_push_approval`, stale reviews dismissed | Fast-lane product CRs, `tuning` CRs and the review-pr agent's approval need no second person; one-identity mode has no approving review at all; admin bypass. Agents count as a "Trusted Robot" only if the organization says so. |
+
 ## Secret exposure
 The review token is readable only in the trunk-only Environment `agentic-review`. The release token
 is readable only in `agentic-release`, after the Product owner approves the run. The release workflow hands it to the cut step only; checkout does not store it. The merge queue runs the queue commit's copy of the CR workflow with the review Environment, so keep `.github/**` in `paths.factory`. Delivery tokens are

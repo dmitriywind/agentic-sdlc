@@ -130,6 +130,8 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `approve <n>` | Approving review as `review_identity`, with `options.review_token_env`. Refused with one identity: GitHub refuses an approval from the CR's author | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
 | `runs [--ref <r>] [--failed]` | CI runs | `Run[]` |
+
+The port also has `commits(n)`, used by gate `provenance` and not a CLI verb: every commit of the CR, oldest first, as `{ sha, message, author, committer, authorName, committerName, parents }` (logins empty when the forge links no account). It throws when the list may be cut off (GitHub lists at most 250 commits), so the gate fails closed.
 | `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
 
 The forge may implement `closing(id)`: the merged CRs whose body closes ticket `id` (GitHub searches the body). Gates use it to look up a ticket's merges without listing every merged CR. The search index can trail a merge, so a ticket the search finds no merge for is also looked up in `list({ state: 'merged' })`.
@@ -168,6 +170,7 @@ change line `start` opens.
 | `review --cr <n>` | One identity only (`forge.review_identity` empty): posts status `review` on the head from the newest `review-pr` report for that head by a trusted author (`owners.bots`, `owners.product`, `owners.factory`): success on `Verdict: PASS`, failure on `REMEDIATION REQUIRED`, pending with no report. Posts with the CI job's token. With two identities it does nothing. |
 | `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. Done records a fact: a held ticket moves and keeps its label; a Cancelled ticket stays. A push with no CR changes nothing. No CR-pipeline gate writes the board; besides this gate only `shipped` moves a ticket (In review to Done, when a deploy reports first). |
 | `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
+| `provenance --cr <n>` | Off unless `forge.provenance` is `warn` or `require`. Reads the CR's commits through the forge API (no CR code runs) and posts status `agent-provenance`. A commit whose author or committer is in `owners.bots` (forge names) needs well-formed `Agent-Run` and `Agent-Model` trailers (the last paragraph of the message, one value each); other commits are `human`, a merge commit (the forge's branch update) is `merge`. Prints `{ commits: [{ sha, by, run?, model?, ok }], agentCommits, humanCommits, missing }`. `warn` always succeeds; `require` fails on a missing or malformed trailer and on commits it cannot read. A squash merge drops the trailers, so the status and report on the CR are the record; `merged` is untouched. Not in `forge.required_checks` by default: with `require`, add it there and to the trunk ruleset (`validate` warns otherwise). |
 | `signal-on-red --run <id>` | A red trunk or release-line run opens a Signal with a redacted evidence bundle. Other refs are ignored. |
 | `skill-regression` | A change under `paths.factory` keeps the skill pack valid: frontmatter, links, scorers. |
 
@@ -208,6 +211,9 @@ Keys this contract relies on by name:
   --trusted`, spec authors) use `board`; forge reads (the approval gate, `forge comments --trusted`) use `forge`.
 - `heartbeat.ticket`: the id of the ticket that holds heartbeat comments; `validate` fails when it is empty.
   `init --board local` creates it (status Cancelled, so no route reads it) and sets it.
+- `forge.provenance: off | warn | require` (default `off`): gate `provenance` (section 3.4). When it is
+  not `off`, `dispatch` also prints `run` (the dispatch key, else `<ticket>-<skill>-<start time>`) and
+  puts it in the executor's task as the `Agent-Run` value; it is the run row's `id`.
 - `forge.human_approval: full-lane | always | never` (default `full-lane`), `forge.review_identity`
   (empty: one identity), `forge.options.review_token_env` (set exactly when `review_identity` is, and
   never equal to `token_env`; `validate` fails otherwise), `forge.required_checks`.
@@ -475,7 +481,7 @@ token: `individual-api` names a managed executor's key otherwise (`executors.<sk
   the approving review for its own CR, and a CR's code never sees the review token.
 
 In both, `forge status` refuses the contexts the gates own (`human-approval`, `ticket-linkage`,
-`proofs-on-base`), and `review-pr` **never runs CR code**: it reads `Required` and `proofs-on-base`
+`proofs-on-base`, `agent-provenance`), and `review-pr` **never runs CR code**: it reads `Required` and `proofs-on-base`
 from CI and runs no install or test command. The MCP server's default tool list has no `forge_status`,
 so a one-identity cycle that has no shell starts it with `mcp --allow status`. Unattended jobs set
 `AGENTIC_SDLC_UNATTENDED=1`.

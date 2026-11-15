@@ -22,6 +22,8 @@ The routing order and every rule of the cycle are in [`skills/sdlc/SKILL.md`](..
 | A second start of the same step is skipped inside `cycle.dedupe_minutes`, and while the first run has not finished until `stall_minutes`. | A scheduler that fires twice does no harm; keep `stall_minutes` above your longest stage run. |
 | Each cycle removes the hold from a ticket whose owner has replied. | An owner who only comments is never stuck. |
 | Nothing new starts after `cycle.time_budget_minutes`. | The heartbeat is always written before the job times out. |
+| A stage may carry caps (`executors.<stage>.max_turns`, `max_tokens`, `max_minutes`); a run that ends on one is recorded `capped` and treated as a failed run. | A runaway run costs a bounded amount. |
+| A ticket whose runs used more than `cycle.max_tokens_per_ticket` tokens gets no further run and goes to a person. | One ticket cannot spend without limit; `ledger summary` lists tokens per ticket. |
 | A failed step goes into the heartbeat's `errors`; the cycle goes on. | One failure does not stop other work. |
 | A step that failed in the last `cycle.failure_limit` heartbeats on the same main-branch commit is held for a person. | No endless retries; a fix to the factory gives the step a fresh start. |
 
