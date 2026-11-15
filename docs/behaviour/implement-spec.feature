@@ -192,6 +192,14 @@ Feature: Implement a spec
     Then the first call succeeds and returns the text
     And the second error names the method, the host and the status, never the path, which may hold a secret
 
+  # Source: src/exec.ts, "http"
+  # Proof: test/exec.test.ts "http keeps the URL out of a failed call and tries once when asked"
+  Scenario: A failed call never prints its URL
+    Given a call whose URL holds a secret and that fails before any answer
+    When the adapter makes the call
+    Then the error names the method and the cause, never the URL
+    And a caller can ask for a single attempt and its own time limit
+
   # Source: src/mcp.ts
   # Proof: test/mcp.test.ts "tools/list has board_move with a schema; unknown method is -32601"
   # Proof: test/mcp.test.ts "board tools create, move with only_from (a refusal is isError), set and assign"

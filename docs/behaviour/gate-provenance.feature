@@ -19,10 +19,18 @@ Feature: Gate provenance (agent commits carry trailers)
   Scenario: Agent commits with trailers pass and other commits are only listed
     Given forge.provenance is require
     And a CR with agent commits that carry Agent-Run and Agent-Model
-    And a commit by a human and a branch-update merge commit
+    And a commit by a human and a branch-update merge commit made by the forge's web identity
     When the gate runs
     Then status agent-provenance is success
     And the report counts the agent and human commits
+
+  # Source: src/gates.ts, "provenance"
+  # Proof: test/gates.test.ts "provenance: a merge commit by anyone but the forge web identity is checked like an agent commit"
+  Scenario: A merge commit by anyone but the forge is checked for trailers
+    Given a merge commit whose committer is not the forge's web identity
+    And its author or committer is in owners.bots
+    When the gate runs with forge.provenance require
+    Then it is an agent commit and needs Agent-Run and Agent-Model trailers
 
   # Source: src/gates.ts, "provenance"
   # Proof: test/gates.test.ts "provenance: a missing, malformed or body-only trailer fails under require and passes under warn"
@@ -39,6 +47,13 @@ Feature: Gate provenance (agent commits carry trailers)
     Given forge.provenance is off or unset
     When the gate runs
     Then it reads no commits and posts no status
+
+  # Source: src/forge/util.ts, "parseArgs"
+  # Proof: test/gates.test.ts "gate cli: --k=v is the same as --k v"
+  Scenario: A gate flag takes "--k=v" as well as "--k v"
+    When the adopter runs "gate provenance --cr=1"
+    Then it is the same as "gate provenance --cr 1"
+    And a flag with no value exits 2 with "--k needs a value"
 
   # Source: src/gates.ts, "provenance"
   # Proof: test/gates.test.ts "provenance: commits the forge cannot list fail closed under require"

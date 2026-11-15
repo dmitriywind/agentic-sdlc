@@ -6,7 +6,7 @@ import { parseArgs } from 'node:util';
 import { parse } from 'yaml';
 import type { Binding, Board, Comment, CR, Forge, Item, PortCli } from './ports.ts';
 import { ownersFor } from './ports.ts';
-import { cdEventsFromRuns, otlpTraces, repoOf, sendCdEvent, sendOtlp, type CycleMeta } from './telemetry.ts';
+import { cdEventsFromRuns, otlpTraces, repoOf, sendCdEvent, sendOtlp, sinkOf, type CycleMeta } from './telemetry.ts';
 
 export const HEARTBEAT_MARKER = '<!-- heartbeat -->';
 
@@ -69,6 +69,8 @@ export function pickRescores(rescores: Rescore[]): Map<string, Map<string, Score
 
 function applyRescores(r: LedgerRun, m: Map<string, ScoreValue> | undefined): LedgerRun {
   if (!m) return r;
+  // A run with a hard fact (failed, timeout, capped) is capped, never dropped from the medians: its `unscorable` is ignored.
+  if (m.get(SCORE_SCORER) === 'unscorable' && hardFacts(r)) { m = new Map(m); m.delete(SCORE_SCORER); }
   const s = m.get(SCORE_SCORER);
   const { score: _old, ...rest } = r;
   return { ...(s === 'unscorable' ? rest : r), scores: { ...r.scores, ...Object.fromEntries(m) }, ...(typeof s === 'number' ? { score: s } : {}) };
@@ -313,6 +315,7 @@ export function scoresComment(p: Pick<Awaited<ReturnType<typeof plan>>, 'run' | 
   for (const [k, v] of Object.entries<unknown>(scores)) {
     const s = p.scorers.find((x) => x.name === k);
     if (!s) errors.push(`scorer ${k} does not apply to ${p.run.skill} (applies: ${p.scorers.map((x) => x.name).join(', ')})`);
+    else if (v === 'unscorable' && k === SCORE_SCORER && p.cap) errors.push(`scorer ${k}: unscorable is not allowed while a hard fact caps the run (${p.cap.facts.join('; ')}): grade it 0 to ${p.cap.score}`);
     else if (v === 'unscorable') { if (!(typeof reasonOf[k] === 'string' && reasonOf[k].trim())) errors.push(`scorer ${k}: unscorable needs a reason in reasons.${k}`); }
     else if (s.scale === 'pass-fail' ? v !== 'pass' && v !== 'fail' : !(Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 4)) errors.push(`scorer ${k}: ${JSON.stringify(v)} is not on scale ${s.scale}`);
   }
@@ -376,10 +379,12 @@ export async function measures(o: { board: Board; forge?: Forge; binding: Bindin
   } else if (o.forge) reworkRate = none('no ticket reached Done in the window');
 
   const slo = b.product.slo;
-  let errorBudget: { max: number; windowDays: number; actual: number | null; exhausted: boolean } | undefined;
+  let errorBudget: { max: number; windowDays: number; actual: number | null; exhausted: boolean; why?: string } | undefined;
   if (slo) {
-    const actual = changeFailures(items, b, slo.window_days, now).rate;
-    errorBudget = { max: slo.change_failure_rate_max, windowDays: slo.window_days, actual: round(actual), exhausted: actual !== null && actual > slo.change_failure_rate_max };
+    const w = changeFailures(items, b, slo.window_days, now);
+    // Failures with no change shipped have no rate: the budget is spent, not unknown.
+    errorBudget = { max: slo.change_failure_rate_max, windowDays: slo.window_days, actual: round(w.rate), exhausted: w.rate !== null ? w.rate > slo.change_failure_rate_max : w.failures.length > 0,
+      ...(w.rate === null && w.failures.length ? { why: 'change failures in the window and no change shipped to the last environment' } : {}) };
   }
   return {
     window: { days, from: new Date(from).toISOString(), to: new Date(now).toISOString() },
@@ -498,6 +503,8 @@ export const cli: PortCli = async (argv, ctx) => {
         else console.log(JSON.stringify(doc));
       } else {
         const events = cdEventsFromRuns(rows, meta, b);
+        // Resolve the sink first: with no events the loop would never reach it.
+        if (a.values.send && !sinkOf(b, ctx.env, 'cdevents')) throw new Error('telemetry.cdevents_sink_env is unset in the binding: nothing to send to');
         if (a.values.send) { for (const ev of events) await sendCdEvent(ctx, ev); console.log(JSON.stringify({ sent: 'cdevents', events: events.length })); }
         else if (a.values.out) writeFileSync(resolve(ctx.root, a.values.out), events.map((e) => `${JSON.stringify(e)}\n`).join(''));
         else for (const ev of events) console.log(JSON.stringify(ev));

@@ -83,3 +83,12 @@ Feature: Gate merged
     When "gate merged" moved the ticket of a merged CR
     Then one dev.cdevents.change.merged event for that CR is posted
     And a send that fails writes one line to stderr and never fails the gate
+    And that line never shows the sink URL
+
+  # Source: src/telemetry.ts, "emitGateEvent"
+  # Proof: test/telemetry.test.ts "emitGateEvent: a message never carries the sink URL, and the send stops at the deadline after one attempt"
+  Scenario: A gate waits at most 5 seconds for its telemetry
+    Given a sink that does not answer
+    When a gate posts its CDEvent
+    Then it makes one attempt and gives up after 5 seconds in total
+    And one line goes to stderr and the gate result is unchanged

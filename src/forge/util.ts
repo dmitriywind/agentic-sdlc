@@ -4,8 +4,8 @@ import type { AdapterContext, CR } from '../ports.ts';
 
 export class UsageError extends Error {}
 
-/** The flags a verb accepts: `value` flags take an argument (repeatable), `bool` flags take none. */
-export type VerbSpec = { value?: string[]; bool?: string[] };
+/** The flags a verb accepts: `value` flags take an argument (repeatable), `bool` flags take none, `num` lists the value flags that take a whole number. */
+export type VerbSpec = { value?: string[]; bool?: string[]; num?: string[] };
 export type Flags = ReturnType<typeof parseStrict>;
 
 /**
@@ -15,7 +15,11 @@ export type Flags = ReturnType<typeof parseStrict>;
 export function parseStrict(group: string, verb: string, argv: string[], spec: VerbSpec = {}) {
   const pos: string[] = [];
   const flags: Record<string, string[]> = {};
-  const value = spec.value ?? [], bool = spec.bool ?? [];
+  const value = spec.value ?? [], bool = spec.bool ?? [], num = spec.num ?? [];
+  const push = (k: string, v: string) => {
+    if (num.includes(k) && !/^\d+$/.test(v)) throw new UsageError(`--${k} needs a whole number, got '${v}'`);
+    (flags[k] ??= []).push(v);
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--') || a.length <= 2) { pos.push(a); continue; }
@@ -25,10 +29,10 @@ export function parseStrict(group: string, verb: string, argv: string[], spec: V
       if (eq >= 0) throw new UsageError(`--${k} takes no value`);
       (flags[k] ??= []).push('true');
     } else if (value.includes(k)) {
-      if (eq >= 0) (flags[k] ??= []).push(a.slice(eq + 1));
+      if (eq >= 0) push(k, a.slice(eq + 1));
       else {
         if (i + 1 >= argv.length) throw new UsageError(`--${k} needs a value`);
-        (flags[k] ??= []).push(argv[++i]);
+        push(k, argv[++i]);
       }
     } else throw new UsageError(`unknown flag --${k} for ${group} ${verb}`);
   }
@@ -59,8 +63,12 @@ export function parseArgs(argv: string[], bool: string[] = []) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--') && a.length > 2) {
-      const k = a.slice(2);
-      if (bool.includes(k)) (flags[k] ??= []).push('true');
+      const eq = a.indexOf('=');
+      const k = a.slice(2, eq < 0 ? undefined : eq);
+      if (bool.includes(k)) {
+        if (eq >= 0) throw new UsageError(`--${k} takes no value`);
+        (flags[k] ??= []).push('true');
+      } else if (eq >= 0) (flags[k] ??= []).push(a.slice(eq + 1));
       else {
         if (i + 1 >= argv.length) throw new UsageError(`--${k} needs a value`);
         (flags[k] ??= []).push(argv[++i]);

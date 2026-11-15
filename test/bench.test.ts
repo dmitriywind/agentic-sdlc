@@ -318,6 +318,22 @@ test('agentCommand fills the stage caps into a command executor, empty when unse
   assert.equal(agentCommand({ kind: 'command', run: 'bot {max_turns} {max_minutes}' }, b, v), `bot ${quote('40')} ${quote('')}`);
 });
 
+test('buildCases says when the merged-CR cap was hit', async () => {
+  const board = { list: async () => [], comments: async () => [], get: async () => ({}) } as unknown as Board;
+  const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ n: String(i), state: 'merged', closes: [] }));
+  const run = async (n: number, o = {}) => {
+    const lines: string[] = [];
+    const e = console.error; console.error = (s: string) => { lines.push(s); };
+    try { await buildCases(board, { list: async () => rows(n) } as unknown as Forge, binding, 5, o); } finally { console.error = e; }
+    return lines;
+  };
+  assert.deepEqual(await run(99), []);
+  const hit = await run(100);
+  assert.equal(hit.length, 1);
+  assert.match(hit[0], /older CRs were not read.*--merged-limit.*--since/);
+  assert.equal((await run(7, { mergedLimit: 7 })).length, 1);
+});
+
 test('buildCases reads a bounded list of merged CRs: the newest few hundred by default, --merged-limit and --since override', async () => {
   const asked: any[] = [];
   const board = { list: async () => [], comments: async () => [], get: async () => ({}) } as unknown as Board;

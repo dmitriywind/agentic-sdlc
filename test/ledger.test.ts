@@ -211,7 +211,7 @@ test('summarise: tokens per ticket, top 20 by tokens, over-budget tickets marked
 });
 
 test('unscorable: needs a reason, is counted per scorer, and is left out of rates, medians, clusters and the cap', () => {
-  const p = { run: run({ id: 'a' }) as any, scorers: [{ name: 'done-conditions', scale: '0-4', applies_to: '*' }, { name: 'redundant-tests', scale: 'pass-fail', applies_to: '*' }] as any, cap: { score: 1, facts: ['red'] } };
+  const p = { run: run({ id: 'a' }) as any, scorers: [{ name: 'done-conditions', scale: '0-4', applies_to: '*' }, { name: 'redundant-tests', scale: 'pass-fail', applies_to: '*' }] as any, cap: null };
   assert.throws(() => scoresComment(p, { scores: { 'done-conditions': 3, 'redundant-tests': 'unscorable' } }), /unscorable needs a reason/);
   const body = scoresComment(p, { scores: { 'done-conditions': 'unscorable', 'redundant-tests': 'unscorable' }, reasons: { 'done-conditions': 'no diff', 'redundant-tests': 'no diff' } }, 'T');
   assert.deepEqual(JSON.parse(body.split('\n')[2]).scores, { 'done-conditions': 'unscorable', 'redundant-tests': 'unscorable' }); // no cap on a non-grade
@@ -230,6 +230,18 @@ test('unscorable: needs a reason, is counted per scorer, and is left out of rate
   const [g] = flattenRuns([grade, hb]);
   assert.equal(g.scores!['done-conditions'], 'unscorable');
   assert.equal(g.score, undefined);
+});
+
+test('unscorable: done-conditions is refused while a hard fact caps the run, and a human unscorable grade on a failed run is ignored', () => {
+  const p = { run: run({ id: 'a' }) as any, scorers: [{ name: 'done-conditions', scale: '0-4', applies_to: '*' }, { name: 'redundant-tests', scale: 'pass-fail', applies_to: '*' }] as any, cap: { score: 1, facts: ['red'] } };
+  assert.throws(() => scoresComment(p, { scores: { 'done-conditions': 'unscorable' }, reasons: { 'done-conditions': 'no diff' } }), /unscorable is not allowed while a hard fact caps the run/);
+  const ok = scoresComment(p, { scores: { 'done-conditions': 4, 'redundant-tests': 'unscorable' }, reasons: { 'redundant-tests': 'no diff' } }, 'T');
+  assert.deepEqual(JSON.parse(ok.split('\n')[2]).scores, { 'done-conditions': 1, 'redundant-tests': 'unscorable' });
+  const hb = beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: 'f', outcome: 'failed', score: 1 })] });
+  const grade: Comment = { id: 'g1', author: 'o', createdAt: '2026-11-08T01:00:00Z', body: 'agentic-sdlc:grade f done-conditions unscorable' };
+  const [f] = flattenRuns([grade, hb]);
+  assert.equal(f.score, 1);
+  assert.equal(f.scores?.['done-conditions'], undefined);
 });
 
 test('measures: DORA from the board and forge, null with a why, and the error budget', async () => {
@@ -264,4 +276,11 @@ test('measures: DORA from the board and forge, null with a why, and the error bu
   assert.match((empty.changeFailureRate as { why?: string }).why!, /no change shipped/);
   assert.equal(empty.reworkRate.value, null);
   assert.equal(empty.errorBudget, undefined);
+  // Failures and nothing shipped: no rate, and the budget is exhausted.
+  const sig = { id: '9', title: 's', status: 'Signals', labels: ['signal:deploy'], fields: {}, createdAt: new Date(now - 864e5).toISOString(), updatedAt: new Date(now).toISOString() };
+  const spent = await measures({ board: { list: async () => [sig] } as any, binding, now });
+  assert.equal(spent.errorBudget?.actual, null);
+  assert.equal(spent.errorBudget?.exhausted, true);
+  assert.match(spent.errorBudget?.why ?? '', /no change shipped/);
+  assert.equal((await measures({ board: { list: async () => [] } as any, binding, now })).errorBudget?.exhausted, false);
 });

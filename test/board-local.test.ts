@@ -128,4 +128,12 @@ test('board cli: an unknown flag, a flag without a value and an unreadable --bod
   assert.equal(JSON.parse(r.out).milestone, 'M2');
   r = await run('set', '1', 'size', '--clear', '--oops');
   assert.equal(r.code, 2);
+  r = await run('milestone', '1', 'M3', '--clear');
+  assert.equal(r.code, 2);
+  assert.match(r.err, /a name and --clear together/);
+  for (const v of ['abc', '1.5', '-1', '']) {
+    r = await run('comments', '1', '--last', v);
+    assert.deepEqual([r.code, r.err], [2, `--last needs a whole number, got '${v}'`]);
+  }
+  assert.equal((await run('comments', '1', '--last=1')).code, 0);
 });

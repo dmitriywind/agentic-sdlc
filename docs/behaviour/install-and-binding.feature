@@ -44,7 +44,9 @@ Feature: Install and validate the binding
     And a workflow the adopter edited is kept and the line names the package file with the new version
     And "--force" overwrites the edited workflow
     And no flag rewrites .agents/binding.yml: to regenerate it the adopter deletes the file
-    And the last lines say how many files are new, updated, kept and stale, and what to run next
+    And the last lines say how many files are new, updated, kept and stale
+    And when a file was new or updated or the CLI pin moved, the last line says what to run next
+    And when nothing changed, the last line is "install: up to date"
 
   # Source: src/install.ts, "init" (binding)
   # Proof: test/install.test.ts "init --force on a local board creates no second heartbeat ticket"
@@ -198,6 +200,13 @@ Feature: Install and validate the binding
     When the adopter runs "agentic-sdlc init --harness claude --no-plugin --board github-issues"
     Then the binding's forge.options.repo and board.options.repo name that repo
     And the init log does not ask to install the plugin
+
+  # Source: src/install.ts, "doctor"
+  # Proof: test/install.test.ts "doctor: the forge probe reads check data, so a token without checks read scope fails"
+  Scenario: doctor probes the forge with check data
+    Given a forge token that cannot read checks or commit statuses
+    When the adopter runs "agentic-sdlc doctor"
+    Then doctor prints "fail forge.list" and exits 1
 
   # Source: src/install.ts, "doctor" and "deliveryWorkflow"
   # Proof: test/install.test.ts "doctor: the delivery workflow must name the trunk and release line"
@@ -626,6 +635,10 @@ Feature: Install and validate the binding
     When "--body-file" names a file that cannot be read
     Then it exits 2 and names the flag and the path
     And "--k=v" is the same as "--k v"
+    When a numeric flag ("--last", "--limit") has a value that is not a whole number
+    Then it exits 2 and names the flag and the value
+    When "board milestone <id> <name> --clear" gives a name and "--clear" together
+    Then it exits 2
 
   # Source: src/forge/github.ts, "list"
   # Proof: test/forge.test.ts "forge list: --limit and --since bound the read, and without --checks no check data is fetched"
@@ -635,6 +648,14 @@ Feature: Install and validate the binding
     Then it gets the newest CRs merged since the date, at most 2
     And each CR has no checks, unless "--checks" reads them
     And "bench build" and "bench propose" read only the newest merged CRs, or those from "--merged-limit" and "--since"
+
+  # Source: src/bench.ts, "buildCases"
+  # Proof: test/bench.test.ts "buildCases says when the merged-CR cap was hit"
+  Scenario: Bench says when it did not read every merged CR
+    Given the forge returned as many merged CRs as the cap allows
+    When "bench build" or "bench propose" reads them
+    Then one stderr line says older CRs were not read
+    And it names "--merged-limit" and "--since"
 
   # Source: src/forge/github.ts, "run"
   # Proof: test/forge.test.ts "forge run reads one CI run by id; a missing run fails; cli list and run take their flags"
@@ -654,8 +675,9 @@ Feature: Install and validate the binding
   # Source: hooks/guard.mjs, "sdlc-reviewer"
   # Proof: test/guard.test.ts "the sdlc-reviewer agent runs only the agentic-sdlc CLI in Bash"
   Scenario: The reviewer agent runs no code but the CLI
-    When the sdlc-reviewer agent runs a Bash command that is not an "agentic-sdlc" call
+    When the sdlc-reviewer agent runs a Bash command that is not a call to the "agentic-sdlc" command from PATH or "npx --no agentic-sdlc"
     Then the guard hook exits with code 2
+    And a path to a file named "agentic-sdlc", "node <file>", a pipe, an expansion and a redirection to a file exit with code 2
     And "agentic-sdlc forge view 3" from that agent exits with code 0
 
   # Source: bin/agentic-sdlc

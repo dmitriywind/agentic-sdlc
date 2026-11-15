@@ -32,6 +32,6 @@ recording are `ledger` code. Your part is the grading.
   follow, as the [contract](../sdlc/references/contract.md) says.
 - The run's own account of itself is a claim to check, never a fact. A trace shows what the run read and tried, not what is true.
 - `unscorable` is for missing or unreadable evidence only, never a way to avoid a low grade: with
-  evidence in hand, grade it. The hard-fact cap applies to real grades only.
+  evidence in hand, grade it. While a hard fact caps the run, `unscorable` for `done-conditions` is refused: grade it.
 - One run per call; no batch scoring across runs.
 - Never argue against a cap; only a human grade overrides it.

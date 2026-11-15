@@ -152,6 +152,14 @@ Feature: Judge runs and improve the factory
     And the value is left out of medians, failure rates, failure clusters and the hard-fact cap
     And a human grade may be "unscorable" too
 
+  # Source: src/ledger.ts, "scoresComment" and "applyRescores"; skills/judge-run/SKILL.md, "Rules"
+  # Proof: test/ledger.test.ts "unscorable: done-conditions is refused while a hard fact caps the run, and a human unscorable grade on a failed run is ignored"
+  Scenario: A capped run is never unscorable for done-conditions
+    Given a run that failed, timed out, hit a cap or has a red check on its head
+    When the judge records "unscorable" for done-conditions
+    Then "ledger record" exits 1 and names the hard fact
+    And a human "unscorable" grade for done-conditions on that run is ignored
+
   # Source: src/ledger.ts, "measures", "changeFailures"; references/architecture.md, "6. The self-improvement loop", item 8
   # Proof: test/ledger.test.ts "measures: DORA from the board and forge, null with a why, and the error budget"
   Scenario: The ledger computes DORA measures and the error budget from the board and the forge
@@ -161,6 +169,7 @@ Feature: Judge runs and improve the factory
     And a measure the data cannot give is null with a "why"
     And with product.slo set it prints errorBudget with max, actual and exhausted
     And only review-pr reports by owners.bots count toward rework
+    And with failures in the window and no change shipped, actual is null with a "why" and exhausted is true
 
   # Source: scorers/spec-quality.md, scorers/triage-accuracy.md
   # Proof: skill text only
@@ -292,10 +301,18 @@ Feature: Judge runs and improve the factory
   # Proof: test/telemetry.test.ts "ledger export: otlp and cdevents print to stdout, write --out, and --send posts through ctx.http"
   Scenario: Nothing is sent unless the binding says where
     Given the binding has no telemetry keys
-    Then "ledger export --send" refuses and nothing is posted
+    Then "ledger export --send" refuses and nothing is posted, also when there are no events to send
     When telemetry.otlp_endpoint_env or telemetry.cdevents_sink_env names an env var that holds a URL
     Then "ledger export --send" posts the document to "<url>/v1/traces", or each CDEvent as a CloudEvents binary-mode request
     And the headers come from the env var telemetry.headers_env names
+
+  # Source: src/telemetry.ts, "sinkOf"
+  # Proof: test/telemetry.test.ts "delivery: a malformed sink or one with credentials is refused, naming only the env var"
+  Scenario: A sink URL that is malformed or holds credentials is refused
+    Given the env var a telemetry key names holds a value that is not an http or https URL, or a URL with a user name or password
+    When a document or an event would be sent
+    Then it fails with a message that names the env var and never shows the value
+    And the credentials belong in the env var telemetry.headers_env names
 
   # Source: src/binding.ts, "telemetry"
   # Proof: test/telemetry.test.ts "validate: telemetry keys name env vars, never URLs"

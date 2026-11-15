@@ -7,7 +7,7 @@ export const exec: Exec = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { encoding: 'utf8', cwd: opts.cwd, input: opts.input, env: opts.env ?? process.env, stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024 });
 
 /** HTTP JSON call for REST adapters. Tests pass a fake. */
-export type Http = (method: string, url: string, opts?: { headers?: Record<string, string>; body?: unknown }) => Promise<any>;
+export type Http = (method: string, url: string, opts?: { headers?: Record<string, string>; body?: unknown; tries?: number; timeoutMs?: number }) => Promise<any>;
 
 /** The wait between HTTP retries. Tests swap it with setSleep. */
 let sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -31,23 +31,43 @@ export function retryWait(retryAfter: string | null, attempt: number, now = Date
   return Math.min(MAX_WAIT_MS, Math.max(0, ms));
 }
 
+/** An error message with every URL (and the given strings, such as the one that was called) replaced by `<url>`: a URL may hold a secret. */
+export function scrubUrl(message: string, ...urls: (string | undefined)[]): string {
+  let out = message.replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, '<url>');
+  for (const u of urls) {
+    if (!u) continue;
+    const parts = [u];
+    try { const x = new URL(u); parts.push(x.origin, x.username, x.password); } catch { /* not a URL: only the string itself */ }
+    for (const p of parts.sort((a, b) => b.length - a.length)) if (p.length > 2) out = out.split(p).join('<url>');
+  }
+  return out;
+}
+
 /**
  * Retries 429 for every method, and 5xx except on POST: a POST that failed with 5xx may still have
  * started something (a session, a comment), so it is not sent twice.
  */
 export const http: Http = async (method, url, opts = {}) => {
+  const tries = opts.tries ?? TRIES;
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch(url, {
-      method,
-      headers: { 'content-type': 'application/json', accept: 'application/json', ...opts.headers },
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-    });
-    const text = await res.text();
+    let res: Response, text: string;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: { 'content-type': 'application/json', accept: 'application/json', ...opts.headers },
+        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+        signal: AbortSignal.timeout(opts.timeoutMs ?? HTTP_TIMEOUT_MS),
+      });
+      text = await res.text();
+    } catch (e) {
+      // A fetch error can quote the URL, which may hold a secret.
+      const cause = (e as { cause?: { message?: string } }).cause?.message;
+      throw new Error(scrubUrl(`${method} request failed: ${(e as Error).message}${cause ? ` (${cause})` : ''}`, url));
+    }
     // A 2xx whose body is not JSON (a webhook answering `accepted`) still succeeded: the write is not repeated.
     if (res.ok) { try { return text ? JSON.parse(text) : {}; } catch { return { raw: text }; } }
     const retry = res.status === 429 || (res.status >= 500 && method.toUpperCase() !== 'POST');
-    if (!retry || attempt >= TRIES) throw new Error(`${method} ${new URL(url).host} -> ${res.status}: ${text.slice(0, 300)}`);
+    if (!retry || attempt >= tries) throw new Error(`${method} ${new URL(url).host} -> ${res.status}: ${text.slice(0, 300)}`);
     await sleep(retryWait(res.headers.get('retry-after'), attempt));
   }
 };

@@ -53,3 +53,18 @@ test('http returns the raw text of a 2xx that is not JSON, and keeps the URL pat
   const bad = await withFetch([[400, {}, 'no']], () => http('POST', 'https://h/hooks/secret-token', { body: {} }));
   assert.match((bad.result as Error).message, /^POST h -> 400: no$/);
 });
+
+test('http keeps the URL out of a failed call and tries once when asked', async () => {
+  const real = globalThis.fetch;
+  let n = 0;
+  globalThis.fetch = (async (url: string) => { n++; throw new TypeError(`Failed to parse URL from ${url}`, { cause: new Error(`bad ${url}`) }); }) as typeof fetch;
+  try {
+    const url = 'https://user:s3cret@h/hooks/tok-123';
+    const e = await http('POST', url, { body: {}, tries: 1 }).catch((x: Error) => x);
+    assert.match((e as Error).message, /^POST request failed/);
+    assert.doesNotMatch((e as Error).message, /s3cret|tok-123|h\/hooks/);
+  } finally { globalThis.fetch = real; }
+  assert.equal(n, 1);
+  const bad = await withFetch([[503], [200]], () => http('GET', 'https://h/x', { tries: 1 }));
+  assert.equal(bad.calls.length, 1);
+});

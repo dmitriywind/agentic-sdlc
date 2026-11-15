@@ -145,6 +145,37 @@ test('delivery: nothing is sent unless the binding names the env vars; headers c
   assert.throws(() => sinkOf(binding, {}, 'otlp'), /env var OTLP is empty/);
 });
 
+test('delivery: a malformed sink or one with credentials is refused, naming only the env var', async () => {
+  for (const v of ['not a url', 'ftp://sink.example/x', 'https://user:pw@sink.example/x', 'https://tok@sink.example/x']) {
+    for (const kind of ['otlp', 'cdevents'] as const) {
+      const e = (() => { try { sinkOf(binding, { OTLP: v, SINK: v }, kind); } catch (x) { return x as Error; } })();
+      assert.match(e?.message ?? '', new RegExp(`env var ${kind === 'otlp' ? 'OTLP' : 'SINK'} `));
+      assert.doesNotMatch(e?.message ?? '', /pw|tok@|sink\.example|not a url/);
+    }
+  }
+});
+
+test('emitGateEvent: a message never carries the sink URL, and the send stops at the deadline after one attempt', async () => {
+  const lines: string[] = [];
+  const ev = changeMergedEvent(binding, { cr: '1', sha: 's' });
+  const leak: any = async () => { throw new Error('connect failed to https://sink.example/events?token=abc'); };
+  assert.equal(await emitGateEvent({ binding, env, http: leak }, ev, (l) => lines.push(l)), false);
+  assert.deepEqual(lines, ['telemetry: CDEvent not sent: connect failed to <url>']);
+  lines.length = 0;
+  const seen: any[] = [];
+  const never: any = (...a: any[]) => { seen.push(a); return new Promise(() => {}); };
+  assert.equal(await emitGateEvent({ binding, env, http: never }, ev, (l) => lines.push(l), 20), false);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /^telemetry: CDEvent not sent: no answer within 20 ms$/);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0][2].tries, 1);
+  assert.equal(seen[0][2].timeoutMs, 20);
+  lines.length = 0;
+  assert.equal(await emitGateEvent({ binding, env: { ...env, SINK: 'https://u:p@sink.example/x' }, http: never }, ev, (l) => lines.push(l), 20), false);
+  assert.equal(lines.length, 1);
+  assert.doesNotMatch(lines[0], /sink\.example|u:p/);
+});
+
 test('delivery: OTLP posts to <endpoint>/v1/traces and a CDEvent as a CloudEvents binary request', async () => {
   const calls: any[] = [];
   const http: any = async (...a: any[]) => { calls.push(a); return {}; };
@@ -248,6 +279,11 @@ test('ledger export: otlp and cdevents print to stdout, write --out, and --send 
   assert.equal(calls.length, 1 + 4);
   assert.equal((await run(['export', '--format', 'otlp', '--send'])).result, 0);
   assert.equal((await captured(() => ledgerCli(['export', '--format', 'otlp', '--send'], { ...ctx, binding: { ...b, telemetry: undefined } }))).result, 1);
+  const noSink = { ...ctx, binding: { ...b, telemetry: { ...b.telemetry, cdevents_sink_env: undefined } } };
+  const empty = await captured(() => ledgerCli(['export', '--format', 'cdevents', '--send', '--run', 'nope'], noSink));
+  assert.equal(empty.result, 1);
+  assert.match(empty.err, /cdevents_sink_env is unset/);
+  assert.equal(empty.out, '');
   assert.equal((await run(['export'])).result, 2);
   assert.equal((await run(['export', '--format', 'otlp', '--since', 'x'])).result, 2);
 });

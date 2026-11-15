@@ -424,6 +424,28 @@ test('init moves its own older CLI pin to the package version and keeps a pin th
   assert.equal(await run('file:../fork'), 'file:../fork');
 });
 
+test('doctor: the forge probe reads check data, so a token without checks read scope fails', async () => {
+  const root = fixture();
+  const row = { number: 1, title: 't', html_url: 'u', state: 'open', body: '', head: { ref: 'x', sha: 's1' }, base: { ref: 'main', sha: 'b1' } };
+  const seen: string[] = [];
+  const answer = (c: string) => {
+    seen.push(c);
+    if (/check-runs/.test(c)) throw new Error('HTTP 403: Resource not accessible by personal access token');
+    return /pulls\?/.test(c) ? [row] : /pulls\/1/.test(c) ? row : '';
+  };
+  const { ctx } = fakeCtx(root, {}, answer);
+  await quiet(() => cli(['init', '--board', 'local'], ctx));
+  const bf = join(root, '.agents/binding.yml');
+  writeFileSync(bf, readFileSync(join(import.meta.dirname, '../templates/binding.yml'), 'utf8').replace(/^(\s*adapter:\s*)github(\s*#.*)?$/m, '$1local').replace(/^(\s*ticket:\s*)""/m, '$1"1"'));
+  const out: string[] = [];
+  const l = console.log, e = console.error; console.log = (m: string) => { out.push(m); }; console.error = (m: string) => { out.push(m); };
+  let code: number;
+  try { code = await cli(['doctor'], ctx); } finally { console.log = l; console.error = e; }
+  assert.ok(seen.some((c) => /check-runs/.test(c)), out.join('\n'));
+  assert.equal(code, 1);
+  assert.ok(out.some((m) => /^fail forge\.list:/.test(m)), out.join('\n'));
+});
+
 test('doctor: a failed probe shows the command\'s first stderr line and hides the value of every env var the binding names', () => {
   const line = probeFailure('Command failed: gh api repos/acme/shop/pulls\nHTTP 403: bad credentials hunter2hunter2\nmore', { GH_PAT_X: 'hunter2hunter2' }, { forge: { options: { token_env: 'GH_PAT_X' } } });
   assert.equal(line, 'Command failed: gh api repos/acme/shop/pulls (HTTP 403: bad credentials ***)');
@@ -466,6 +488,8 @@ test('init --upgrade updates an unedited workflow, keeps an edited one, and --fo
   const kept = await capture(() => cli(['init', '--upgrade'], ctx));
   assert.equal(readFileSync(gate, 'utf8'), 'mine\n');
   assert.ok(kept.includes(`kept .github/workflows/gate.yml (local edits; see ${join(pkg, 'templates/gates/github/gate.yml')} for the new version)`), kept.join('|'));
+  assert.ok(kept.includes('install: up to date'), kept.join('|'));
+  assert.ok(!kept.some((m) => m.startsWith('upgrade:')), kept.join('|'));
   await quiet(() => cli(['init', '--force'], ctx));
   assert.equal(readFileSync(gate, 'utf8'), 'on: schedule\n');
   assert.match(readFileSync(binding, 'utf8'), /# mine/, '--force never rewrites the binding');

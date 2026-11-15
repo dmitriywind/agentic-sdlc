@@ -1,6 +1,7 @@
 // Standard telemetry for runs and deploys: OpenTelemetry GenAI spans (OTLP/HTTP JSON) and CDEvents.
 // Mechanism only, opt-in: nothing is sent unless the binding's `telemetry` names the env vars that hold the URLs.
 import { createHash } from 'node:crypto';
+import { scrubUrl } from './exec.ts';
 import type { AdapterContext, Binding } from './ports.ts';
 import type { LedgerRun } from './ledger.ts';
 
@@ -214,6 +215,11 @@ export function sinkOf(b: Binding, env: NodeJS.ProcessEnv, kind: 'otlp' | 'cdeve
   if (!name) return undefined;
   const url = env[name];
   if (!url) throw new Error(`telemetry: env var ${name} is empty`);
+  // The message names the variable only: the value may hold a secret.
+  let u: URL;
+  try { u = new URL(url); } catch { throw new Error(`telemetry: env var ${name} is not a valid http(s) URL`); }
+  if (!/^https?:$/.test(u.protocol)) throw new Error(`telemetry: env var ${name} is not a valid http(s) URL`);
+  if (u.username || u.password) throw new Error(`telemetry: env var ${name} must not hold credentials in the URL: use the headers variable`);
   const h = t?.headers_env ? env[t.headers_env] : undefined;
   return { url: kind === 'otlp' ? `${url.replace(/\/+$/, '')}/v1/traces` : url, headers: h ? parseHeaders(h) : {} };
 }
@@ -230,26 +236,34 @@ export async function sendOtlp(ctx: Net, doc: unknown): Promise<void> {
 }
 
 /** POSTs one CDEvent as a CloudEvents HTTP binary-mode request (headers `ce-*`, the CDEvent as the JSON body). */
-export async function sendCdEvent(ctx: Net, ev: CdEvent): Promise<void> {
+export async function sendCdEvent(ctx: Net, ev: CdEvent, send: { tries?: number; timeoutMs?: number } = {}): Promise<void> {
   const s = sinkOf(ctx.binding, ctx.env, 'cdevents');
   if (!s) throw new Error('telemetry.cdevents_sink_env is unset in the binding: nothing to send to');
   const c = ev.context;
   const headers = { 'ce-specversion': '1.0', 'ce-id': c.id, 'ce-source': c.source, 'ce-type': c.type, 'ce-time': c.timestamp, 'ce-subject': ev.subject.id, ...s.headers };
-  await ctx.http('POST', s.url, { headers, body: ev });
+  await ctx.http('POST', s.url, { headers, body: ev, ...send });
 }
 
+/** The longest a gate waits for its telemetry, in total. */
+export const GATE_TELEMETRY_DEADLINE_MS = 5000;
+
 /**
- * Best-effort send from a gate: nothing happens when the sink is unset; a failure (or a skipped event) writes one
- * line to `warn` and never throws, so a gate never fails on telemetry. Returns true when the event was sent.
+ * Best-effort send from a gate: nothing happens when the sink is unset; a failure, a skipped event or the deadline
+ * writes one line to `warn` and never throws, so a gate never fails on telemetry. One attempt, `deadlineMs` in total.
+ * A message never carries the sink URL. Returns true when the event was sent.
  */
-export async function emitGateEvent(ctx: Net, ev: CdEvent | { skip: string }, warn: (line: string) => void = (l) => process.stderr.write(`${l}\n`)): Promise<boolean> {
+export async function emitGateEvent(ctx: Net, ev: CdEvent | { skip: string }, warn: (line: string) => void = (l) => process.stderr.write(`${l}\n`), deadlineMs = GATE_TELEMETRY_DEADLINE_MS): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    if (!ctx.binding.telemetry?.cdevents_sink_env) return false;
+    const name = ctx.binding.telemetry?.cdevents_sink_env;
+    if (!name) return false;
     if ('skip' in ev) { warn(`telemetry: CDEvent not sent: ${ev.skip}`); return false; }
-    await sendCdEvent(ctx, ev);
+    const late = new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error(`no answer within ${deadlineMs} ms`)), deadlineMs); });
+    await Promise.race([sendCdEvent(ctx, ev, { tries: 1, timeoutMs: deadlineMs }), late]);
     return true;
   } catch (e) {
-    warn(`telemetry: CDEvent not sent: ${(e as Error).message.split('\n')[0].slice(0, 200)}`);
+    const name = ctx.binding.telemetry?.cdevents_sink_env;
+    warn(`telemetry: CDEvent not sent: ${scrubUrl((e as Error).message.split('\n')[0], name ? ctx.env[name] : undefined).slice(0, 200)}`);
     return false;
-  }
+  } finally { clearTimeout(timer); }
 }

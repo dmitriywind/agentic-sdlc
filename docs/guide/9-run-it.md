@@ -16,7 +16,7 @@ when no heartbeat arrived in time; schedule it where a failure alerts you.
 `ledger measures` prints deploy frequency, lead time, change failure rate, time to restore and
 rework rate over the last 30 days (`--days <n>`), computed from the board and the forge. A measure
 the data cannot give is `null` with a reason. Set `product.slo` (`change_failure_rate_max` and
-`window_days`) to give the factory an error budget: when the failure rate passes it, the cycle starts
+`window_days`) to give the factory an error budget: when the failure rate passes it, or the window has failures and no shipped change, the cycle starts
 no new feature ticket and works only bugs, Signals and reviews in flight, and the heartbeat says
 `budget: exhausted`.
 
@@ -56,7 +56,7 @@ If the delivery workflow fails on a merge, start it by hand with the commit's sh
    package dropped is reported as `stale` and left in place. A file with no lock entry counts as edited
    unless it equals the package's. `--force` overwrites your edits to those files. No flag rewrites
    `.agents/binding.yml`: to regenerate it, delete it. `init` and `validate` list the binding keys the
-   template has and yours lacks.
+   template has and yours lacks. When nothing changed, `init` ends with `install: up to date`.
 4. Run `npm install`, merge the kept files by hand, then run `validate` and `doctor` and one cycle by hand.
 
 With many repos, each repo pins its own version: upgrade one at a time.
