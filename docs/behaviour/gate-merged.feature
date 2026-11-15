@@ -75,20 +75,3 @@ Feature: Gate merged
     Given the change request found for a trunk commit is still open
     When the merged gate runs for that commit
     Then no ticket moves, and the gate reports that the change request is not merged
-
-  # Source: src/telemetry.ts, "changeMergedEvent" and src/gates.ts, "cli"
-  # Proof: test/telemetry.test.ts "emitGateEvent: a failed send writes one line and never throws"
-  Scenario: A merge is posted as a change merged CDEvent, best effort
-    Given telemetry.cdevents_sink_env names an env var that holds a URL
-    When "gate merged" moved the ticket of a merged CR
-    Then one dev.cdevents.change.merged event for that CR is posted
-    And a send that fails writes one line to stderr and never fails the gate
-    And that line never shows the sink URL
-
-  # Source: src/telemetry.ts, "emitGateEvent"
-  # Proof: test/telemetry.test.ts "emitGateEvent: a message never carries the sink URL, and the send stops at the deadline after one attempt"
-  Scenario: A gate waits at most 5 seconds for its telemetry
-    Given a sink that does not answer
-    When a gate posts its CDEvent
-    Then it makes one attempt and gives up after 5 seconds in total
-    And one line goes to stderr and the gate result is unchanged

@@ -20,12 +20,12 @@ sequenceDiagram
 
 | You get | From | You do |
 |---|---|---|
-| A "Needs human" comment on a ticket | `escalate-to-human` | Reply in a comment. |
-| A request to approve a Full-lane change | `review-pr` | Approve the pull request, or merge it as admin with one identity. |
-| A request to confirm a `manual` criterion | `review-pr` | Reply that you checked it on this version. |
-| A release ready for approval | `release` | Approve the release workflow run. |
-| A factory change of class `guardrail` | `improve-factory` | Review and approve it as the factory owner. |
-| A question about an unclear idea | `backlog-grooming` | Answer it, or leave the ticket in Ideas. |
+| A "Needs human" comment on a ticket | `escalate`, inside any step | Reply in a comment. |
+| A request to approve a Full-lane change | `escalate`, when `forge land` reports that a person must approve | Approve the pull request's latest commit, and reply on the ticket. |
+| A request to confirm a `manual` criterion | `review/review` | Reply that you checked it on this version. |
+| A release ready for approval | `ship` | Reply to the proposal, then approve the release workflow run. |
+| A factory change of class `guardrail` | `learn/improve` | Review and approve it as the factory owner. |
+| A question about an unclear idea | `plan/groom` | Answer it, or leave the ticket in Ideas. |
 
 ## Who you are
 
@@ -35,9 +35,9 @@ sequenceDiagram
 | Factory owner | `owners.factory` | The settings, the skills and the checks; approves `guardrail` factory changes. |
 | The factory | `owners.bots` | The cycle and the review run. Only these accounts' heartbeats count. |
 | Operator, security, compliance | `owners.operator`, `owners.security`, `owners.compliance` | Optional. Deploy and incident asks, security findings, release evidence gaps. With no such role, the ask goes to the product or factory owner. |
-
-Each owner setting takes one account or a list. Any account in the list counts as the owner: any factory owner's approval passes a `guardrail` change, and a reply from any of them settles a hold. The first account is the primary, the one an ask is addressed to.
 | Anyone else | | A pull request like any other, through the same checks. A Signal or `SECURITY.md` to report. |
+
+Each owner setting takes one account or a list. Any account in the list counts as the owner: any factory owner's approval passes a `guardrail` change, and a reply from any of them settles a hold. A reply from an account in `owners.bots` never does. The first account is the primary, the one an ask is addressed to.
 
 ## A week with it
 

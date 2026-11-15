@@ -1,23 +1,44 @@
 # 5. Review and merge
 <!-- group: Understand -->
 
-`implement-spec` opens a **draft** pull request. CI and `review-pr` then decide whether it merges.
+`build` opens a **draft** pull request. CI and `review/review` then decide whether it merges.
 The review never runs the change's code: CI runs it, with no secrets, and the review reads the
-result. Switch between one and two identities, and between the Fast and Full lane, to see what changes.
+result. It publishes one verdict for the latest commit with `forge verdict`. On a pass it marks the
+pull request ready and calls `forge land`, the only way anything merges: it waits for the required
+checks, then turns on auto-merge, or reports who must approve. Switch between one and two
+identities, and between the Fast and Full lane, to see what changes.
 
 <!-- viz: review -->
 ```mermaid
 sequenceDiagram
-  participant I as implement-spec
+  participant I as build
   participant CI as CI checks
-  participant R as review-pr
+  participant R as review/review
   participant G as GitHub
   I->>G: Draft pull request
   G->>CI: Tests and checks
-  R->>G: Review report (Verdict PASS)
-  CI-->>G: review = success
-  R->>G: Ready, merge when all checks are green
+  R->>G: forge verdict: report, Verdict PASS
+  Note over G: review = success
+  R->>G: forge ready, then forge land
+  G->>G: Merge when all checks are green
 ```
+
+## One identity or two
+
+The factory acts on GitHub as one account or two. `forge.review_identity` decides it, and you
+pick it once, in [7. Choose your setup](7-choose.md). The skills are the same in both: the CLI does
+what differs.
+
+| | One identity | Two identities |
+|---|---|---|
+| Accounts | Yours. | An implementer account and a separate review app. |
+| Where the review runs | In the cycle, as a fresh agent context. | In a separate review run, the only one that holds the review token. |
+| The `review` status | CI posts it from the report. | `forge verdict` posts it as the review app, with an approving review. |
+| A Full-lane approval | A collaborator approves the latest commit, or you merge as admin. | A human approves the latest commit. |
+
+The trade-off is real. With one identity the review is a separate context, not a separate account,
+so the branch rules cannot prove that an agent did not post its own `review` status. With two, no
+implementer can post that status or approve its own change.
 
 ## The six required checks
 
@@ -45,13 +66,16 @@ A seventh check, `agent-provenance`, is off until you set `forge.provenance`. Wh
 
 ## When review says no
 
+Each open pull request gets one next action from `forge queue`; the cycle acts on it.
+
 | Finding | Where it goes |
 |---|---|
-| A criterion not met, a bug, a security issue | The ticket goes back to In progress with the findings, until `cycle.max_rework` reports have asked for it; then a person is asked. |
+| A criterion not met, a bug, a security issue | A fail verdict. The queue says `rework`: `build` sends the ticket back to In progress, fixes each finding and pushes. After `cycle.max_rework` reworks, a person is asked. |
 | The spec or scope is wrong | The pull request goes back to draft; the ticket goes to Backlog. |
-| A pull request a person opened | Back to draft with the report; that person fixes it. |
-| A red check | Back to draft. A cause in the code goes to In progress; a cause elsewhere becomes a Signal. |
-| It is behind the main branch | It is brought up to date and reviewed again. |
+| A pull request a person opened | `build` never pushes to it: a note gives that person the findings. |
+| A red check | The queue says `rework`. A cause in the change: `build` fixes it. A cause elsewhere becomes a Signal, and the pull request waits until it closes. |
+| It is behind the main branch | The queue says `sync`: it is brought up to date, and the new commit is reviewed again. |
+| A check stays pending past `stall_minutes` | The queue says `escalate`: a person is asked. |
 
 GitHub setup (rulesets, tokens, private repos on GitHub Free) is in [forges.md](../forges.md).
 

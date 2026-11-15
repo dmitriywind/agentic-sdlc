@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import type { Dirent } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { agentCommand, buildCases, diverse, quote, resolveExecutor, runBench, shell, stratify, fill, wilsonLower } from '../../src/bench.ts';
+import { BENCH_STEP, agentCommand, benchStepFile, buildCases, diverse, quote, resolveExecutor, runBench, shell, stratify, fill, wilsonLower } from '../../src/bench.ts';
 import type { BenchCase } from '../../src/bench.ts';
 import { exec } from '../../src/exec.ts';
 import type { Board, CR, Forge, Item, Vcs } from '../../src/ports.ts';
@@ -94,7 +94,7 @@ When('the bench builds {int} cases', async (w, n: number) => {
 Then('the forge was asked for the newest {int} merged change requests since {string}', (w, n: number, since: string) => {
   assert.deepEqual(bench(w).asked.at(-1), { state: 'merged', limit: n, since: since || undefined });
 });
-Then('the forge was asked for these limits, in turn:', (w, t: DataTable) => assert.deepEqual(bench(w).asked.map((q) => q.limit), t.hashes().map((r) => Number(r.limit))));
+Then('the error output has {int} lines', (w, n: number) => assert.equal(w.last.stderr.split('\n').filter(Boolean).length, n));
 
 Given('these bench cases:', (w, t: DataTable) => {
   bench(w).cases = t.hashes().map((r) => ({ id: r.id, ticket: r.id, title: 'T', spec: 's', baseSha: 'base', headSha: 'head', oracleTests: ['test/a.test.ts'], size: r.size, area: r.area, ...(r.merged ? { mergedAt: r.merged } : {}) }));
@@ -201,10 +201,12 @@ Then('the agent command is {string}', (w, expected: string) => {
   const vars: Record<string, string> = { model: 'm', ticket: '7', prompt_file: 'p.md', workdir: 'w', skill: 'build', max_turns: '40', max_minutes: '' };
   assert.equal(w.state.command, expected.replace(/<(\w+)>/g, (_m, k: string) => quote(vars[k])));
 });
+/** A table cell cannot hold these characters: <LF> a line feed, <NUL> a NUL, <BS> a backslash, <DQ> a double quote. */
+const chars = (s: string) => s.replaceAll('<LF>', '\n').replaceAll('<NUL>', '\0').replaceAll('<BS>', '\\').replaceAll('<DQ>', '"');
 When('{string} is quoted for a {word} shell', (w, value: string, shellName: string) => {
-  try { w.state.quoted = quote(value.replace('<LF>', '\n').replace('<NUL>', '\0'), shellName === 'windows'); done(w, w.state.quoted); } catch (e) { failed(w, e); }
+  try { w.state.quoted = quote(chars(value), shellName === 'windows'); done(w, w.state.quoted); } catch (e) { failed(w, e); }
 });
-Then('the quoted value is {string}', (w, expected: string) => assert.equal(w.state.quoted, expected));
+Then('the quoted value is {string}', (w, expected: string) => assert.equal(w.state.quoted, chars(expected)));
 When('a command that prints its arguments is run with the values {string} and {string}', (w, a: string, b: string) => {
   done(w, JSON.parse(shell(exec, `node -e "console.log(JSON.stringify(process.argv.slice(1)))" ${fill('{a} {b}', { a, b })}`, tmpdir())));
 });
@@ -221,3 +223,9 @@ Given('that result is of the suite {string}', (w, suite: string) => amend(w, { s
 Given('that result is of the executor {string} of the kind {string}', (w, executor: string, kind: string) => amend(w, { executor, executorKind: kind }));
 
 When('the Wilson lower bound of {int} passes in {int} trials is computed', (w, pass: number, n: number) => done(w, { lower: wilsonLower(pass, n) }));
+
+// ---- the step the bench replays ----
+Given('an installed pack whose skills are named with the prefix {string}', (w, prefix: string) => {
+  w.write(`.agents/skills/${prefix}build/SKILL.md`, `---\nname: ${prefix}build\ndescription: d\nmetadata:\n  tier: deep\n---\nbody\n`);
+});
+When('the file of the bench step is looked up in the project', (w) => done(w, { step: BENCH_STEP, file: relative(w.root, benchStepFile(w.root)).replaceAll('\\', '/') }));

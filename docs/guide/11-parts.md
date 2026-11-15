@@ -10,7 +10,7 @@ How the factory is built. For the exact rules, read the contract,
 |---|---|---|
 | Skills | the plugin (Claude, Codex, Cursor) or `.agents/skills/` | The process: every rule. The same for every project. |
 | Binding | `.agents/binding.yml` | Your project's values: board, owners, commands, environments, models. |
-| CLI | `agentic-sdlc` (and its MCP server) | The mechanism: board, forge and Git verbs, the checks, dispatch, the run ledger. The MCP server speaks both protocol eras: a client that opens with `initialize` is served as before (2025-11-25 and earlier), and a client that sends its version in each request's `_meta` (2026-07-28) is served without a handshake. |
+| CLI | `agentic-sdlc` (and its MCP server) | The mechanism: board, forge and Git verbs, the checks, dispatch, the run ledger. The MCP server speaks both protocol eras: a client that opens with `initialize` gets the handshake (2025-11-25 and earlier), and a client that sends its version in each request's `_meta` (2026-07-28) is served without a handshake. |
 
 A project changes only its binding. A skill never calls a vendor tool: it calls the CLI.
 
@@ -25,31 +25,34 @@ flowchart LR
   cli --> g[("Git")]:::board
 ```
 
-## Eleven skills
+## Seven skills, one per phase
 
-Seven run in every project. Four run only when the binding asks for them.
+Each skill is one phase of the process. A skill with several steps keeps each in its own file, and
+a step is what runs: `dispatch plan/shape --ticket 12`. A skill with one step runs by its name. The
+cycle runs every step in a fresh context, and the run ledger, the bench and the scorers name a run
+by its step.
 
-| Stage | Skill | Does | Runs |
+| Skill | Phase | Steps | Runs |
 |---|---|---|---|
-| Navigate | `sdlc` | Runs one cycle: routes each ticket to the next skill. | always |
-| Intake | `triage-signal` | Turns one raw signal into Backlog, Ideas or Cancelled. | always |
-| Intake | `backlog-grooming` | Sets Priority, merges duplicates, groups work. | always |
-| Plan | `shape` | Takes a Backlog ticket to Ready: size, criteria with proof, lane, spec. | always |
-| Build | `implement-spec` | Writes the proof first, then the code, then opens a draft pull request. | always |
-| Check | `review-pr` | Reviews the pull request against its ticket and CI, then merges it or sends it back. | always |
-| Check | `verify-ux` | Uses the running change as a user for `computer-use` criteria. Apart from `review-pr` because it runs the change's code. | a criterion names `computer-use` |
-| Ship | `release` | Chooses what ships, sets the version, cuts the release line. | release-line delivery |
-| People | `escalate-to-human` | Decides whether a person must act; holds the ticket with one question. | always |
-| Learn | `judge-run` | Grades each finished run. | `learning.enabled` |
-| Learn | `improve-factory` | Proposes one factory change, with proof. | `learning.enabled` |
+| `sdlc` | The navigator: routes each ticket and pull request to its next step, and runs one cycle. | one | always |
+| `plan` | Signals, Ideas and Backlog to Ready. | `triage` (one Signal to Backlog, Ideas or Cancelled), `groom` (Priority, duplicates, initiatives), `shape` (size, criteria with proofs, lane, spec) | always |
+| `build` | Ready to In review: the proof first, then the code, then a draft pull request; also every rework, a red check included. | one | always |
+| `review` | In review to merged, or sent back. | `review` (grades the pull request against its ticket and CI, publishes the verdict, lands it), `verify` (uses a preview of the change as a user, for `computer-use` criteria) | always; `verify` when a criterion names `computer-use` |
+| `ship` | The release line: chooses what ships, sets the version, cuts the line. | one | release-line delivery |
+| `escalate` | Any status: decides whether a person must act, and holds the ticket with one question. | one, inside the calling step | always |
+| `learn` | The learning loop. | `judge` (grades each finished run), `improve` (one factory change, with proof) | `learning.enabled` |
+
+Under the Claude Code plugin a skill is `agentic-sdlc:<skill>`. A copied install
+(`.agents/skills/`, `.claude/skills/`) names each one `sdlc-<skill>`; `sdlc` stays `sdlc`.
 
 ## Who runs a step
 
-`executors.<skill>.kind` picks who runs each skill: `harness` (a subagent of the cycle), `command`
+`executors.<step>.kind` picks who runs each step (a key `<skill>/<step>`, or a skill name for all
+its steps): `harness` (a fresh-context worker of the cycle), `command`
 (a local CLI), `webhook` (a bot over HTTP), `managed` (a managed agent) or `assign` (a hosted coding
 agent). Each entry may also name its MCP servers, its secrets (env var names only; nothing else is
 passed), its sandbox (`cloud`, `container` or `local`) and its model. Results come back only as
-board and forge writes. The rules are in [`executors.md`](../../skills/sdlc/references/executors.md).
+board and forge writes. The rules are in [the contract, section 7](../../references/architecture.md#7-executors-who-runs-each-step).
 
 ## Trust boundaries
 
@@ -59,7 +62,7 @@ board and forge writes. The rules are in [`executors.md`](../../skills/sdlc/refe
 | CI checks (gates) | no: the CLI only, with the rules from the main branch | the job token, the board token | no |
 | The cycle and implementers | their own work, in their sandbox | forge and board tokens | no |
 | The review | no: it reads CI results and the diff | forge and board tokens | only with two identities |
-| `verify-ux` | yes: a preview, in a browser | test credentials | no |
+| `review/verify` | yes: a preview, in a browser | test credentials | no |
 
 The `provenance` gate is one of the CI checks: it reads a pull request's commits through the forge and never runs them. Agents write the `Agent-Run` and `Agent-Model` trailers on their own commits, so the trailers say which run made a commit; they do not prove it.
 
@@ -71,8 +74,10 @@ accounts outside `owners`.
 | Path | Holds |
 |---|---|
 | `.agents/binding.yml` | Every project value. The one file a project changes. |
-| `.agents/skills/` | The skill pack (Claude with the plugin reads the plugin's copy). |
-| `.agents/scorers/` | The scorers `judge-run` uses. |
+| `.agents/cli.json` | The CLI pin: the package and the tag or commit it runs. |
+| `.agents/bin/agentic-sdlc` | The launcher: it installs the pinned CLI in `.agents/.cli/` (ignored by Git) on first use and runs it. Every workflow, hook and runner calls it. |
+| `.agents/skills/` | The skill pack, as `sdlc-<skill>` (Claude with the plugin reads the plugin's copy). |
+| `.agents/scorers/` | The scorers `learn/judge` uses. |
 | `.agents/cycle-prompt.md`, `review-prompt.md`, `runner-setup.sh` | What a scheduler runs. |
 | `.agents/hooks/pre-push` | Refuses a push to the main branch. |
 | `.github/workflows/agentic-sdlc-*.yml`, `.github/rulesets/` | The checks and the branch protection. |

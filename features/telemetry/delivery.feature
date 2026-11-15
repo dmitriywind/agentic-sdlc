@@ -55,6 +55,14 @@ Feature: Sending the export
         | resourceSpans.0.scopeSpans.0.spans.length     | 4            |
         | resourceSpans.0.resource.attributes.0.value.stringValue | agentic-sdlc |
 
+    Scenario: Headers are separated by commas, and a value may hold an equals sign
+      Given the telemetry variable "HDRS" holds "authorization=Bearer a=b, x-team=core"
+      When I run "ledger export --format otlp --send" against the recording sink
+      Then request 1 has these headers:
+        | header        | value      |
+        | authorization | Bearer a=b |
+        | x-team        | core       |
+
     Scenario: Rejected spans fail the send
       Given the sink rejects 2 spans
       When I run "ledger export --format otlp --send" against the recording sink

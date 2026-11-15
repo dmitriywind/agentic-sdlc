@@ -1,12 +1,15 @@
-// Gates run in-process against in-memory board and forge fakes (features/support/fakes.ts).
-// The one CR of a scenario is number "1" with head "h1". State kept on w.state: gate (the last gate result).
+// Gates run in-process against in-memory board, forge and VCS fakes (features/support/fakes.ts).
+// A scenario's CRs are named by number; CR "n" has the head "h<n>" and the base "base". The approval scenarios use the one CR "1".
+// State kept on w.state: gate (the last gate result), error (what the last gate threw), skill (the skill files of a classify scenario).
 import assert from 'node:assert/strict';
-import { approval } from '../../src/gates.ts';
+import { approval, approvalWho, branchNames, linkage, merged, proofsOnBase, provenance, proofRunner, review as reviewGate, shipped, signalOnRed, trailers, type Deps } from '../../src/gates.ts';
 import { diffOf, baseBinding } from '../support/fakes.ts';
+import { packFiles, writePack } from '../support/skillfix.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import type { World } from '../support/world.ts';
 
 const CR = '1';
+const list = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean);
 
 /** Adds a path to the diff of the scenario's CR. */
 const changes = (w: World, path: string) => {
@@ -76,3 +79,205 @@ Then('only the status {string} is posted', (w, context: string) => {
   assert.ok(w.gate.statuses.length > 0);
   assert.ok(w.gate.statuses.every((s) => s.context === context), JSON.stringify(w.gate.statuses));
 });
+
+// ======== the other gates ========
+
+/** Runs a gate against the scenario's fakes; keeps its result in `gate`, or what it threw in `error`. */
+const run = async (w: World, fn: (d: Deps) => unknown) => {
+  w.state.error = undefined;
+  w.state.gate = undefined;
+  try { w.state.gate = await fn(w.gateDeps()); } catch (e) { w.state.error = e as Error; }
+};
+const result = (w: World) => {
+  assert.ok(!w.state.error, `the gate failed: ${w.state.error?.message}`);
+  return w.state.gate;
+};
+const show = (v: unknown) => (v === undefined ? '<absent>' : Array.isArray(v) ? v.join(', ') : String(v));
+const item = (w: World, id: string) => {
+  const i = w.gate.items.find((x) => x.id === id);
+  assert.ok(i, `no ticket ${id}`);
+  return i;
+};
+
+// ---- Given: the board and the forge ----
+Given('these tickets are on the board:', (w, t: DataTable) => {
+  for (const r of t.hashes()) {
+    const { id, status, labels, ...fields } = r;
+    w.gate.ticket(id, status, Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== '')), list(labels ?? ''));
+  }
+});
+Given('these CRs are on the forge:', (w, t: DataTable) => {
+  for (const r of t.hashes()) {
+    const c: Record<string, unknown> = {};
+    if (r.source) c.source = r.source;
+    if (r.closes !== undefined) c.closes = list(r.closes);
+    if (r.author) c.author = r.author;
+    if (r.merge) c.mergeSha = r.merge;
+    if (r.target) c.target = r.target;
+    if (r.state) c.state = r.state;
+    if (r.head) c.headSha = r.head;
+    w.gate.cr(r.cr, c);
+    if (r.changes) w.gate.diffs.set(r.cr, diffOf(...list(r.changes)));
+  }
+});
+Given('the CR {string} has the diff:', (w, n: string, diff: string) => { w.gate.diffs.set(n, diff + '\n'); });
+Given('the forge cannot return the diff of the CR {string}', (w, n: string) => { w.gate.diffs.set(n, new Error('HTTP 406: diff too large')); });
+Given('the forge answers the lookup of a CR by its merge sha with the error {string}', (w, message: string) => { w.gate.viewBySha = new Error(message); });
+Given('the CI job cannot post statuses', (w) => { w.gate.statusError = new Error('env var named by options.review_token_env (unset) is not set'); });
+
+// ---- Given: the VCS ----
+Given('every merge is an ancestor of the deployed revision', (w) => { w.gate.ancestry = { known: new Map(), others: true }; });
+Given('the ancestry of the merges in the deployed revision is:', (w, t: DataTable) => {
+  w.gate.ancestry = { known: new Map(t.hashes().map((r) => [r.merge, r.ancestor === 'yes' ? true : r.ancestor === 'no' ? false : undefined])), others: false };
+});
+Given('the tag {string} already exists', (w, name: string) => { w.gate.tags.push(name); });
+Given('the push of the release tag is rejected', (w) => { w.gate.tagError = new Error('push rejected'); });
+Given('the forge can search merged CRs by the ticket they close', (w) => { w.gate.searchByTicket = true; });
+Given('the forge search index does not show the merge yet', (w) => { w.gate.indexTrails = true; });
+Given('a deploy of a later environment sets Shipped of the ticket {string} to {string} while the gate runs', (w, id: string, value: string) => { w.gate.meanwhile.set(id, value); });
+
+// ---- When ----
+When('the branch-names gate checks {string}', (w, name: string) => { w.state.refused = branchNames(w.gateDeps().binding, [name]); });
+When('the linkage gate runs for the CR {string}', (w, n: string) => run(w, (d) => linkage(d, n)));
+When('the approval gate asks who may approve the CR {string}', (w, n: string) => run(w, async (d) => approvalWho(d, await d.forge.view(n))));
+When('the proofs-on-base gate runs for the CR {string}', (w, n: string) => run(w, (d) => proofsOnBase(d, n)));
+When('the review gate runs for the CR {string}', (w, n: string) => run(w, (d) => reviewGate(d, n)));
+When('the provenance gate runs for the CR {string}', (w, n: string) => run(w, (d) => provenance(d, n)));
+When('the merged gate runs for the sha {string}', (w, sha: string) => run(w, (d) => merged(d, sha)));
+When('the shipped gate runs for {string} with the result {string} at the revision {string}', (w, env: string, res: string, sha: string) => run(w, (d) => shipped(d, env, sha, res)));
+When('the shipped gate runs for {string} with the result {string} at the revision {string} and the version {string}', (w, env: string, res: string, sha: string, v: string) => run(w, (d) => shipped(d, env, sha, res, v)));
+When('the signal-on-red gate runs for the run {string}', (w, id: string) => run(w, (d) => signalOnRed(d, id)));
+When('the proof runner runs a command that {string}', (w, how: string) => {
+  const failure: Record<string, unknown> = {
+    'exits 0': undefined,
+    'exits 1': Object.assign(new Error('x'), { status: 1 }),
+    'overflows the output buffer': Object.assign(new Error('big'), { code: 'ENOBUFS' }),
+    'is killed by a signal': Object.assign(new Error('kill'), { status: null }),
+  };
+  assert.ok(how in failure, `unknown command: ${how}`);
+  w.state.error = undefined;
+  try { w.state.proof = proofRunner(() => { if (failure[how]) throw failure[how]; })('cmd') ? 'passing' : 'failing'; } catch (e) { w.state.error = e as Error; }
+});
+When('the trailers are read from the message:', (w, text: string) => { w.state.trailers = trailers(text); });
+
+// ---- Then: the result of the last gate ----
+Then('the gate passes', (w) => {
+  const r = result(w);
+  assert.ok(r.ok !== false, JSON.stringify(r));
+});
+Then('the gate fails with {string}', (w, text: string) => {
+  const said = [w.state.error?.message, ...(w.state.gate?.errors ?? [])].filter(Boolean).join('\n');
+  assert.ok(said.includes(text), `the gate said: ${said || '(nothing)'}`);
+  if (w.state.gate) assert.equal(w.state.gate.ok, false);
+});
+Then('the result {string} is {string}', (w, key: string, value: string) => assert.equal(show(result(w)[key]), value, key));
+Then('the result {string} lists {string}', (w, key: string, value: string) => assert.equal(show(result(w)[key]), value === 'nothing' ? '' : value, key));
+Then('the result {string} mentions {string}', (w, key: string, text: string) => assert.ok(show(result(w)[key]).includes(text), `${key}: ${show(result(w)[key])}`));
+Then('the gate skips with {string}', (w, text: string) => assert.ok(String(result(w).skipped).includes(text), JSON.stringify(result(w))));
+
+// ---- Then: statuses ----
+Then('no status is posted', (w) => assert.deepEqual(w.gate.statuses, []));
+Then('these statuses were posted:', (w, t: DataTable) =>
+  assert.deepEqual(w.gate.statuses.map((s) => ({ sha: s.sha, context: s.context, state: s.state })), t.hashes().map((r) => ({ sha: r.sha, context: r.context, state: r.state }))));
+Then('the status is posted as {string}', (w, as: string) => assert.equal(w.gate.statuses.at(-1)?.as, as));
+
+// ---- Then: the board ----
+Then('the ticket {string} is at {string}', (w, id: string, status: string) => assert.equal(item(w, id).status, status));
+Then('the ticket {string} has Shipped {string}', (w, id: string, v: string) => assert.equal(item(w, id).fields.shipped, v));
+Then('the ticket {string} has Release Version {string}', (w, id: string, v: string) => assert.equal(item(w, id).fields.release_version, v));
+Then('the ticket {string} has no Release Version', (w, id: string) => assert.equal(item(w, id).fields.release_version, undefined));
+Then('the ticket {string} keeps the label {string}', (w, id: string, label: string) => assert.ok(item(w, id).labels.includes(label)));
+Then('the release tags are {string}', (w, tags: string) => assert.deepEqual(w.gate.tags, tags === 'none' ? [] : list(tags)));
+Then('no Signal is opened', (w) => assert.deepEqual(w.gate.created, []));
+Then('one Signal is opened with the labels {string}', (w, labels: string) => {
+  assert.equal(w.gate.created.length, 1, JSON.stringify(w.gate.created));
+  assert.deepEqual(w.gate.created[0].labels, list(labels));
+});
+Then('the Signal body shows none of {string}', (w, words: string) => {
+  const body = w.gate.created[0].body;
+  for (const x of words.split('|')) assert.ok(!body.includes(x), `the body shows ${x}:\n${body}`);
+});
+Then('the Signal title is plain and at most {int} characters', (w, n: number) => {
+  const t = w.gate.created[0].title;
+  assert.ok(t.length <= n && /^[A-Za-z0-9 ._/:@()-]+$/.test(t), t);
+});
+Then('the forge was asked about the tickets {string} only', (w, ids: string) => { assert.deepEqual(w.gate.asked, list(ids)); assert.equal(w.gate.listed, 0); });
+
+// ---- Then: branch-names and proofs ----
+Then('the change line is allowed', (w) => assert.deepEqual(w.state.refused, []));
+Then('the change line is refused', (w) => assert.equal(w.state.refused.length, 1));
+Then('the proof runner answers {string}', (w, answer: string) => {
+  if (answer === 'not a test result') { assert.match(w.state.error?.message ?? '', /proof runner failed/); return; }
+  assert.ok(!w.state.error, w.state.error?.message);
+  assert.equal(w.state.proof, answer);
+});
+Given('the proofs {string} pass on the merge base', (w, files: string) => { for (const f of list(files)) w.gate.passingProofs.add(f); });
+Then('the proof files were run alone, one command each: {string}', (w, files: string) => {
+  assert.equal(w.gate.ran.length, list(files).length);
+  list(files).forEach((f) => assert.equal(w.gate.ran.filter((c) => c.includes(f)).length, 1, `${f}: ${w.gate.ran.join(' | ')}`));
+});
+Then('no proof was run', (w) => assert.deepEqual(w.gate.ran, []));
+Then('the merge base had the tests {string} and the tree went back to the head', (w, files: string) => assert.deepEqual(w.gate.tree, [`BASE1:${files}`, 'HEAD1:']));
+
+// ---- Given and Then: comments and commits ----
+Given('{string} commented on the CR {string}:', (w, author: string, n: string, body: string) => {
+  const list = w.gate.comments.get(n) ?? [];
+  list.push({ id: String(list.length), author, createdAt: '', body, url: `u${list.length}` });
+  w.gate.comments.set(n, list);
+});
+Given('these commits are on the CR {string}:', (w, n: string, t: DataTable) => {
+  w.gate.commits.set(n, t.hashes().map((r) => ({
+    sha: r.sha.repeat(40), message: r.message.replace(/\\n/g, '\n'), author: r.author, committer: r.committer || r.author,
+    authorName: r.author, committerName: r.committer || r.author, parents: Number(r.parents || 1),
+  })));
+});
+Given('the forge cannot list the commits of the CR {string}', (w, n: string) => { w.gate.commits.set(n, new Error('forge: CR c has 250 or more commits')); });
+Given('the forge fails if the commits of the CR {string} are read', (w, n: string) => { w.gate.commits.set(n, new Error('must not be read')); });
+Then('the commits are classed as {string}', (w, by: string) => assert.equal(result(w).commits.map((c: { by: string }) => c.by).join(', '), by));
+Then('the commit {string} names the run {string} and the model {string}', (w, sha: string, run: string, model: string) => {
+  const c = result(w).commits.find((x: { sha: string }) => x.sha === sha.repeat(12));
+  assert.deepEqual([c?.run, c?.model], [run, model]);
+});
+Then('the report names the problem {string}', (w, text: string) => assert.ok(result(w).missing.some((m: string) => m.includes(text)), result(w).missing.join('\n')));
+Then('the report names {int} problems', (w, n: number) => assert.equal(result(w).missing.length, n, result(w).missing.join('\n')));
+Then('the report names no problem', (w) => assert.deepEqual(result(w).missing, []));
+Then('the trailer {string} is {string}', (w, key: string, value: string) => assert.deepEqual(w.state.trailers[key], [value]));
+Then('no trailer is read', (w) => assert.deepEqual(w.state.trailers, {}));
+
+// ---- Given: the classify scenarios ----
+Given('the file {string} at the base of the CR is:', (w, path: string, text: string) => { w.gate.files.set(`base:${path}`, text + '\n'); });
+Given('the file {string} at the head of the CR is:', (w, path: string, text: string) => { w.gate.files.set(`h${CR}:${path}`, text + '\n'); });
+Given('the skill {string} has a bench suite', (w, skill: string) => w.write('.agents/bench/suites/s.json', JSON.stringify({ name: 's', skill, cases: [{ id: '1' }] })));
+Given('a CR that changes the binding file so that its head sets {string} to {string}', (w, key: string, value: string) => {
+  w.gate.cr(CR);
+  changes(w, '.agents/binding.yml');
+  const b = baseBinding();
+  w.gate.files.set(`base:.agents/binding.yml`, JSON.stringify(b));
+  const [k, sub] = key.split('.');
+  w.gate.files.set(`h${CR}:.agents/binding.yml`, JSON.stringify({ ...b, [k]: { ...(b[k] as object), [sub]: value } }));
+});
+
+type Skill = { base: string; head: string; text: boolean; extra: boolean; steps?: [string, string] };
+const SKILL = '.agents/skills/a/SKILL.md';
+const skillMd = (tier: string, body: string, extra: string) => `---\nname: a\ndescription: d\nmetadata:\n  tier: ${tier}\n${extra}---\n${body}`;
+const stepsMd = (two: string) => `---\nname: a\ndescription: d\nmetadata:\n  steps:\n    one: { tier: fast }\n    two: { tier: ${two} }\n---\nrules\n`;
+/** The skill "a" at the base and at the head of the CR, from what the scenario said about it so far. */
+const writeSkill = (w: World, s: Skill) => {
+  w.state.skill = s;
+  if (s.steps) { w.gate.files.set(`base:${SKILL}`, stepsMd(s.steps[0])); w.gate.files.set(`h${CR}:${SKILL}`, stepsMd(s.steps[1])); return; }
+  w.gate.files.set(`base:${SKILL}`, skillMd(s.base, 'rules\n', ''));
+  w.gate.files.set(`h${CR}:${SKILL}`, skillMd(s.head, s.text ? 'other rules\n' : 'rules\n', s.extra ? 'license: x\n' : ''));
+};
+const skill = (w: World): Skill => w.state.skill ?? { base: 'fast', head: 'fast', text: false, extra: false };
+Given('a CR that changes the skill {string}', (w, name: string) => { assert.equal(name, 'a'); w.gate.cr(CR); changes(w, SKILL); writeSkill(w, skill(w)); });
+Given('the skill {string} has the tier {string} at the base and {string} at the head', (w, _n: string, base: string, head: string) => writeSkill(w, { ...skill(w), base, head }));
+Given('the step {string} of the skill {string} has the tier {string} at the base and {string} at the head', (w, _step: string, _n: string, base: string, head: string) => writeSkill(w, { ...skill(w), steps: [base, head] }));
+Given('the text of the skill {string} differs at the head', (w, _n: string) => writeSkill(w, { ...skill(w), text: true }));
+Given('the frontmatter of the skill {string} has one more key at the head', (w, _n: string) => writeSkill(w, { ...skill(w), extra: true }));
+Given('the CR deletes the skill {string}', (w, _n: string) => { w.gate.diffs.set(CR, (w.gate.diffs.get(CR) as string) + 'deleted file mode 100644\n'); });
+
+// ---- Given: the installed skill pack (skill-regression) ----
+Given('the project has the installed fixture skill pack', (w) => writePack(w.path('.agents', 'skills'), packFiles('sdlc-')));
+Given('the installed skill file {string} is:', (w, file: string, text: string) => w.write(`.agents/skills/${file}`, text + '\n'));
+Given('the scorer file {string} is:', (w, file: string, text: string) => w.write(`.agents/scorers/${file}`, text + '\n'));
+Given('the project has no installed skill pack', () => {});

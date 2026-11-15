@@ -6,8 +6,8 @@ What you do after the first cycle: watch it, upgrade it, and keep the repo and t
 ## Watch it
 
 ```bash
-npx --no agentic-sdlc ledger summary
-npx --no agentic-sdlc ledger stale --max-hours 3
+.agents/bin/agentic-sdlc ledger summary
+.agents/bin/agentic-sdlc ledger stale --max-hours 3
 ```
 
 `ledger summary` reads the heartbeats: runs, outcomes and failures by cluster. `ledger stale` fails
@@ -27,9 +27,9 @@ environment variable, never a URL or a token: `otlp_endpoint_env` (an OTLP/HTTP 
 `cdevents_sink_env` (a CDEvents sink URL) and `headers_env` (request headers as `name=value,name2=value2`).
 
 ```bash
-npx --no agentic-sdlc ledger export --format otlp --since 7            # print one OTLP/HTTP JSON document
-npx --no agentic-sdlc ledger export --format otlp --send               # post it to <endpoint>/v1/traces
-npx --no agentic-sdlc ledger export --format cdevents --out events.jsonl
+.agents/bin/agentic-sdlc ledger export --format otlp --since 7   # print one OTLP/HTTP JSON document
+.agents/bin/agentic-sdlc ledger export --format otlp --send      # post it to <endpoint>/v1/traces
+.agents/bin/agentic-sdlc ledger export --format cdevents --out events.jsonl
 ```
 
 `--since` takes a number of days or an ISO time; `--run <id>` exports one run. OTLP has one trace
@@ -47,10 +47,16 @@ If the delivery workflow fails on a merge, start it by hand with the commit's sh
 
 ## Upgrade
 
+An upgrade is one factory change: the new package's `init --upgrade` rewrites the pin and the
+installed files together.
+
 1. Read `git log v<yours>..v<new>` and the contract diff.
-2. Run `npm uninstall agentic-sdlc`, then the `npm i` line with the new tag. npm 12 refuses to change
-   a Git dependency in place (`EALLOWGIT`).
-3. Run `init --upgrade`. `init` records the hash of every file it installs from the package in
+2. On a factory change line, run the new package once:
+   `npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v<new> init --upgrade`. It moves the
+   `ref` in `.agents/cli.json` to the new tag, unless you pinned a commit sha that `init` did not
+   write (`--ref <sha>` or `--force` moves it anyway). A tag can move; a sha cannot, and
+   `doctor` warns on a tag.
+3. `init` records the hash of every file it installs from the package in
    `.agents/install.lock.json`. A file still at its recorded hash is updated, a file you edited is kept
    (the line names the package file with the new version), a new file is written, and a file the
    package dropped is reported as `stale` and left in place. A file with no lock entry, or a lock entry
@@ -61,7 +67,9 @@ If the delivery workflow fails on a merge, start it by hand with the commit's sh
    a released version only in those values is updated. A kept pre-push hook keeps its mode. `--force` overwrites your edits to those files. No flag rewrites
    `.agents/binding.yml`: to regenerate it, delete it. `init` and `validate` list the binding keys the
    template has and yours lacks. When nothing changed, `init` ends with `install: up to date`, or `install: nothing to update; N kept (differ from every released version)` when it kept files.
-4. Run `npm install`, merge the kept files by hand, then run `validate` and `doctor` and one cycle by hand.
+4. Merge the kept files by hand, run `.agents/bin/agentic-sdlc validate` and `doctor` (the launcher
+   installs the new pin on first use), then one cycle by hand. Open the change as a factory pull
+   request: it goes through the checks like any other.
 
 With many repos, each repo pins its own version: upgrade one at a time.
 
@@ -70,7 +78,7 @@ With many repos, each repo pins its own version: upgrade one at a time.
 1. List what the old process does that the skills do not. Each item becomes a setting, a doc that
    `paths.importance_doc` points to, or a gap to report upstream.
 2. Copy the old values into the binding.
-3. Delete the old copies of the skills. A project replaces the binding, never the skills.
+3. Delete your own copies of the process. A project replaces the binding, never the skills.
 
 ## Recommended around the factory
 

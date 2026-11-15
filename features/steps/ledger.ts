@@ -10,7 +10,7 @@ import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import { Outcome, REPO, type World } from '../support/world.ts';
 
 // ---- running a CLI module in-process, as the Outcome of the last run ----
-/** Runs `fn` with console.log, console.error and stderr captured ; `w.last` then holds what it printed and the exit code it returned. */
+/** Runs `fn` with console.log, console.error and stderr captured; `w.last` then holds what it printed and the exit code it returned. */
 export async function capture(w: World, fn: () => Promise<number>): Promise<Outcome> {
   const out: string[] = [], err: string[] = [];
   const so = process.stdout.write, se = process.stderr.write, log = console.log, cerr = console.error;
@@ -135,7 +135,7 @@ const walk = (v: any, segs: string[]): any => { // eslint-disable-line @typescri
   return walk(v?.[s], rest);
 };
 const near = (a: number, b: number) => Math.abs(a - b) < 0.0015;
-const show = (v: unknown) => (v === undefined ? '<absent>' : Array.isArray(v) ? v.map(show).join(', ') : v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v));
+const show = (v: unknown): string => (v === undefined ? '<absent>' : Array.isArray(v) ? v.map(show).join(', ') : v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v));
 export const pick = (v: unknown, path: string) => walk(v, path.split('.'));
 const at = (w: World, path: string) => pick(w.last.json(), path);
 

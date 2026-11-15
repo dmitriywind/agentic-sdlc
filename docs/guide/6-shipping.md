@@ -13,7 +13,7 @@ flowchart LR
 
 | | Continuous | Release line |
 |---|---|---|
-| What ships | Every merge, environment by environment. | What the Product owner approves, cut as a release line. |
+| What ships | Every merge, environment by environment. | What the Product owner approves: `ship` proposes the contents and cuts the release line. |
 | Who starts a release | Nobody: each deploy reports itself. | You open a release request (a Backlog ticket with the `release` label); a P0 fix opens one by itself. |
 | The last environment | Deploys from the main branch. | Deploys from the release line, after your approval. Agents never approve it. |
 | Evidence | | With `product.evidence`, the release is ready only when `commands.evidence_check` passes. |
