@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
 import { shippedOptions } from '../src/binding.ts';
-import { approval, approvers, merged, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, provenance, review, shipped, trailers, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
+import { approval, approvalWho, approvers, merged, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, provenance, review, shipped, trailers, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
 import { PROOF_FILE } from '../src/bench.ts';
 
 const binding = {
@@ -763,4 +763,12 @@ test('provenance: trailers are the key: value lines of the last paragraph only',
   assert.deepEqual(trailers('subject only'), {});
   assert.deepEqual(trailers('s\n\nAgent-Run: r1 \nnot a trailer\nCo-Authored-By: A <a@b>'), { 'agent-run': ['r1'], 'co-authored-by': ['A <a@b>'] });
   assert.deepEqual(trailers('s\n\nAgent-Run: in body\n\nfooter text'), {});
+});
+
+test('approvalWho: the class and the owner entries that may approve it, shared with forge land and forge queue', async () => {
+  const f = fakes([item('1', 'In review')], { g: { closes: ['1'] }, p: { closes: ['1'] } }, { g: 'diff --git a/.agents/binding.yml b/.agents/binding.yml\n', p: 'diff --git a/src/x.ts b/src/x.ts\n' });
+  f.d.binding = { ...binding, owners: { product: 'po', factory: ['fo', 'fo2'], bots: ['factory-bot'] }, forge: { review_identity: 'reviewer' } };
+  const cr = (n: string) => ({ ...({ n, closes: ['1'], baseSha: 'b', headSha: 'h' } as any) });
+  assert.deepEqual(await approvalWho(f.d, cr('g')), { class: 'guardrail', who: ['fo', 'fo2'] });
+  assert.deepEqual(await approvalWho(f.d, cr('p')), { class: 'product-full', who: ['po'] });
 });

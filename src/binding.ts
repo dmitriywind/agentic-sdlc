@@ -148,6 +148,7 @@ export function validateBinding(b: Binding): string[] {
     const v = x.learning?.[k];
     if (v !== undefined && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
   }
+  if (x.cycle?.land_wait_minutes !== undefined && !(Number.isInteger(x.cycle.land_wait_minutes) && x.cycle.land_wait_minutes >= 0)) p.push('cycle.land_wait_minutes must be a whole number of minutes');
   if (x.cycle?.max_tokens_per_ticket !== undefined && !(Number.isInteger(x.cycle.max_tokens_per_ticket) && x.cycle.max_tokens_per_ticket > 0)) p.push('cycle.max_tokens_per_ticket must be a positive integer');
   const bb = x.learning?.bench_budget;
   if (bb !== undefined) {
@@ -199,7 +200,7 @@ export function bindingWarnings(b: Binding): string[] {
   for (const l of x?.board?.env_labels ?? []) if (String(l).startsWith('env:') && !envs.includes(String(l).slice(4))) w.push(`board.env_labels '${l}' names no product.environments entry`);
   if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push('product.evidence is set but commands.evidence_check is unset: no release can show its evidence');
   if (x?.forge?.provenance === 'require' && !(x.forge.required_checks ?? []).includes('agent-provenance')) w.push("forge.provenance is require but 'agent-provenance' is not in forge.required_checks: the gate can fail without blocking a merge; add it here and to the trunk ruleset");
-  if (x?.forge?.review_runtime !== undefined) w.push('forge.review_runtime is unused: review-pr always runs in its own runtime; remove it');
+  if (x?.forge?.review_runtime !== undefined) w.push('forge.review_runtime is unused: review/review runs where forge.review_identity says; remove it');
   const size = x?.learning?.bench_size, min = x?.learning?.bench_min_cases ?? 20;
   if (size !== undefined && Number(size) < min) w.push(`learning.bench_size ${size} is below bench_min_cases ${min}: bench compare reports regressed for every change`);
   if (x?.learning?.enabled === true && !x.agent_command) w.push('learning.enabled is true but agent_command is unset: bench cannot run');

@@ -10,6 +10,13 @@ import { median } from './ledger.ts';
 import type { Exec } from './exec.ts';
 import type { AdapterContext, Binding, Board, Executor, Forge, PortCli, Vcs } from './ports.ts';
 import { limitsOf, ownersFor } from './ports.ts';
+import { findStep, readSkills } from './skills.ts';
+
+/** The step the bench replays. */
+export const BENCH_STEP = 'build';
+/** Its file in a tree's installed pack; the copied-install path when the pack cannot say. */
+export const benchStepFile = (root: string): string =>
+  findStep(readSkills(join(root, '.agents', 'skills')), BENCH_STEP)?.file ?? join(root, '.agents/skills/sdlc-build/SKILL.md');
 
 export interface BenchCase {
   id: string; ticket: string; title: string; spec: string; baseSha: string; headSha: string; oracleTests: string[];
@@ -17,7 +24,7 @@ export interface BenchCase {
   area?: string; // the most touched top-two-level directory of the CR's product files
   mergedAt?: string; // the ticket's last update, as the merge time
 }
-/** scorerInput: the prompt and the agent's changed files, for judge-run to score later. */
+/** scorerInput: the prompt and the agent's changed files, for learn/judge to score later. */
 export interface CaseResult { id: string; trial?: number; pass: boolean; minutes: number; error?: string; scorerInput?: string; skipped?: 'budget' /* not run: learning.bench_budget was spent; never a failure, never a pass */ }
 export interface BenchResult { model: string; executor: string; executorKind?: string; factory?: string; suite?: string; at: string; cases: CaseResult[]; passRate: number; minutes: number }
 export interface Suite { name: string; cases: BenchCase[] }
@@ -49,7 +56,7 @@ export function agentCommand(e: Executor, binding: Binding, vars: { model: strin
     if (!binding.agent_command) throw new Error('binding.agent_command is not set');
     return fill(binding.agent_command, vars);
   }
-  if (e.kind === 'command') { const l = limitsOf(binding, e); return fill(e.run, { ...vars, skill: 'implement-spec', cr: '', max_turns: String(l.max_turns ?? ''), max_tokens: String(l.max_tokens ?? ''), max_minutes: String(l.max_minutes ?? '') }); }
+  if (e.kind === 'command') { const l = limitsOf(binding, e); return fill(e.run, { ...vars, skill: BENCH_STEP, cr: '', max_turns: String(l.max_turns ?? ''), max_tokens: String(l.max_tokens ?? ''), max_minutes: String(l.max_minutes ?? '') }); }
   throw new Error(`executor kind ${e.kind} cannot run on the bench; use harness or command`);
 }
 
@@ -213,7 +220,7 @@ export async function runBench(
   try {
     const binding = factory ? loadBinding(factory.workdir) : o.binding;
     if (cases[0]) command(binding, cases[0], '<scratch>', '<workdir>'); // a bad executor fails before any case starts
-    const skillPath = join(factory?.workdir ?? o.root, '.agents/skills/implement-spec/SKILL.md');
+    const skillPath = benchStepFile(factory?.workdir ?? o.root);
     const isProof = rule(binding, 'proof_pattern', PROOF_FILE);
     const isConfig = rule(binding, 'verify_config_pattern', VERIFY_CONFIG);
     const scratch = mkdtempSync(join(tmpdir(), 'agentic-bench-prompts-'));
@@ -445,7 +452,7 @@ export const cli: PortCli = async (argv, ctx) => {
       const trials = a.values.trials ? Number(a.values.trials) : binding.learning?.bench_trials ?? 3;
       if ((!a.values.model && !a.values.executor) || !(Number.isInteger(trials) && trials > 0)) return (console.error(USAGE), 2);
       const executor = a.values.executor ? resolveExecutor(a.values.executor, binding) : undefined;
-      // An executor run without --model uses the implement-spec tier's model; it only fills {model}.
+      // An executor run without --model uses the build tier's model; it only fills {model}.
       const model = a.values.model ?? binding.models.balanced;
       // The --executor name groups the report; inline JSON has none.
       const executorName = a.values.executor ? (a.values.executor.trim().startsWith('{') ? 'inline' : a.values.executor) : undefined;

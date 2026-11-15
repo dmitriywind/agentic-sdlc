@@ -1,7 +1,7 @@
-import type { AdapterContext, Binding, Board, Comment, Item, LogicalField, PortCli } from '../ports.ts';
+import type { AdapterContext, Binding, Board, Comment, Hold, Item, LogicalField, PortCli } from '../ports.ts';
 import { ownersFor } from '../ports.ts';
 import { validateBinding } from '../binding.ts';
-import { selectComments } from '../comments.ts';
+import { isMarked, matches, parseKind, selectComments, stamp, stampBody } from '../comments.ts';
 import { UsageError, bodyFile, parseStrict, type VerbSpec } from '../forge/util.ts';
 import { createGithubBoard } from './github.ts';
 import { createGithubIssuesBoard } from './github-issues.ts';
@@ -60,6 +60,39 @@ function checked(b: Board, ctx: AdapterContext): Board {
 
 const Usage = UsageError;
 
+const asked = (c: Comment) => isMarked(c.body, 'ask');
+const byTime = (x: Comment, y: Comment) => Date.parse(y.createdAt) - Date.parse(x.createdAt);
+
+/** `board hold`: the human label, then the ask with the trigger as its marker ref. The trigger is one non-empty line. */
+export async function hold(board: Board, b: Binding, id: string, kind: string, body: string): Promise<{ id: string; kind: string; comment: { id: string; url?: string } }> {
+  const trigger = kind.trim();
+  if (!trigger || /[\r\n]/.test(trigger)) throw new Usage('board hold: --kind is one non-empty line');
+  const text = body.replace(/^### Needs human[^\n]*\n+/, '');
+  await board.label(id, 'add', b.board.labels.human);
+  const comment = await board.comment(id, `${stamp('ask', trigger)}\n\n${text.trim()}\n`);
+  return { id, kind: trigger, comment };
+}
+
+/** `board holds`: every ticket with the human label, its last ask, and the owner-role reply after it if any (a bot never counts). */
+export async function holds(board: Board, b: Binding): Promise<Hold[]> {
+  const o = ownersFor(b.owners, 'board');
+  const owners = new Set([...o.product, ...o.factory, ...o.operator, ...o.security, ...o.compliance].map((x) => x.toLowerCase()));
+  const bots = new Set(o.bots.map((x) => x.toLowerCase()));
+  const out: Hold[] = [];
+  for (const item of await board.list({ label: b.board.labels.human })) {
+    const all = [...(await board.comments(item.id))].sort(byTime);
+    const ask = all.find(asked);
+    const line = ask?.body.split('\n')[0].slice(matches('ask').length).replace(/^:\s*/, '').trim();
+    const after = ask ? all.filter((c) => !asked(c) && Date.parse(c.createdAt) > Date.parse(ask.createdAt)) : [];
+    const reply = after.find((c) => { const a = c.author?.toLowerCase(); return !!a && owners.has(a) && !bots.has(a); });
+    out.push({
+      id: item.id, kind: line || 'unspecified', askedAt: ask?.createdAt ?? item.updatedAt, replied: !!reply,
+      ...(reply ? { reply: { author: reply.author, createdAt: reply.createdAt, ...(reply.url ? { url: reply.url } : {}) } } : {}),
+    });
+  }
+  return out;
+}
+
 /** The flags each verb accepts; anything else is a usage error. */
 const VERBS: Record<string, VerbSpec> = {
   list: { value: ['status', 'label', 'search'] },
@@ -70,8 +103,11 @@ const VERBS: Record<string, VerbSpec> = {
   label: {},
   assign: { bool: ['none'] },
   milestone: { bool: ['clear'] },
-  comment: { value: ['body-file'] },
-  comments: { value: ['last', 'marker', 'author'], bool: ['trusted'], num: ['last'] },
+  comment: { value: ['body-file', 'kind', 'ref'] },
+  comments: { value: ['last', 'marker', 'author', 'kind', 'ref'], bool: ['trusted'], num: ['last'] },
+  hold: { value: ['kind', 'body-file'] },
+  holds: {},
+  release: {},
   close: { value: ['reason'] },
   child: {},
 };
@@ -82,7 +118,9 @@ const USAGE = `usage: agentic-sdlc board <verb>
   move <id> <status> [--only-from <s>]    set <id> <field> <value> | --clear
   milestone <id> <name> | --clear
   label <id> add|remove <label>           assign <id> <user> | --none
-  comment <id> --body-file <f>            comments <id> [--last <n>] [--marker <text>] [--author <a>]... [--trusted]
+  comment <id> --body-file <f> [--kind <kind> [--ref <value>]]
+  comments <id> [--last <n>] [--kind <kind> [--ref <value>] | --marker <text>] [--author <a>]... [--trusted]
+  hold <id> --kind <trigger> --body-file <f>    holds    release <id>
   close <id> --reason completed|not_planned    child <parent> <child>`;
 
 export const cli: PortCli = async (argv, base) => {
@@ -116,13 +154,24 @@ export const cli: PortCli = async (argv, base) => {
         out = await board.label(id, a.pos[1], a.pos[2]);
         break;
       case 'assign': need(a.has('none') ? 1 : 2); out = await board.assign(id, a.has('none') ? null : a.pos[1]); break;
-      case 'comment': need(1); out = await board.comment(id, body()); break;
+      case 'comment': {
+        need(1);
+        if (a.has('ref') && !a.has('kind')) throw new Usage('board comment: --ref needs --kind');
+        out = await board.comment(id, a.has('kind') ? stampBody(body(), parseKind(a.get('kind')!), a.get('ref'), { specMarker: base.binding.spec_marker }) : body());
+        break;
+      }
+      case 'hold': need(1); out = await hold(board, base.binding, id, req('kind'), body()); break;
+      case 'holds': out = await holds(board, base.binding); break;
+      case 'release': need(1); out = await board.label(id, 'remove', base.binding.board.labels.human); break;
       case 'comments': {
         need(1);
+        if (a.has('kind') && a.has('marker')) throw new Usage('board comments: --kind and --marker together');
+        if (a.has('ref') && !a.has('kind')) throw new Usage('board comments: --ref needs --kind');
+        const marker = a.has('kind') ? matches(parseKind(a.get('kind')!), a.get('ref'), { specMarker: base.binding.spec_marker }) : a.get('marker');
         // --trusted: the binding's bots and owners, added to any --author.
-        out = selectComments(await board.comments(id, { marker: a.get('marker') }), {
+        out = selectComments(await board.comments(id, { marker }), {
           owners: ownersFor(base.binding.owners, 'board'), authors: a.all('author'), trusted: a.has('trusted'),
-          last: a.get('last') ? Number(a.get('last')) : undefined, marker: a.get('marker'),
+          last: a.get('last') ? Number(a.get('last')) : undefined, marker,
         });
         break;
       }

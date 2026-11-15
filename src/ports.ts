@@ -104,6 +104,23 @@ export interface Forge {
   run(id: string): Promise<Run>;
 }
 
+/** `forge verdict`: status is `posted` when the review identity posted the status (and approval), `ci` when CI's review gate reads the report. */
+export interface VerdictResult { verdict: 'PASS' | 'REMEDIATION REQUIRED'; comment: { id: string; url?: string }; status: 'posted' | 'ci' }
+
+/** `forge land`: blocking lists what holds the CR (check: a required check name or `draft`). needsHuman: the only wait left is a human approval; who: the forge accounts that may give it. */
+export interface LandResult {
+  state: 'merged' | 'armed' | 'waiting' | 'blocked';
+  blocking: { check: string; state: string }[];
+  needsHuman?: { class: string; who: string[] };
+}
+
+export type QueueAction = 'review' | 'rework' | 'land' | 'sync' | 'wait' | 'escalate';
+/** `forge queue`: one row per open CR. since: when the CR last moved (head push or newest trusted comment); absent when unknown. */
+export interface QueueRow { n: string; ticket?: string; class: string; action: QueueAction; reason: string; reworks: number; since?: string }
+
+/** `board holds`: a ticket with the human label. replied: an owner-role account commented after the last ask. */
+export interface Hold { id: string; kind: string; askedAt: string; replied: boolean; reply?: { author: string; createdAt: string; url?: string } }
+
 export interface Vcs {
   start(name: string): Promise<{ workdir: string; ref: string }>;
   head(): Promise<{ ref: string; sha: string }>;
@@ -260,7 +277,7 @@ export interface Binding {
   agent_command?: string;
   commands: {
     setup?: string; install: string; fast_check: string; verify: string; light_verify?: string; rollback?: string;
-    /** Deploys a CR head for verify-ux (run by that skill, not by the CLI). */
+    /** Deploys a CR head for review/verify (run by that step, not by the CLI). */
     preview?: string;
     /** Runs proof files on the merge base; {files} is filled. Without it, gate proofs-on-base fails closed. */
     proofs_on_base?: string;
@@ -277,11 +294,12 @@ export interface Binding {
   spec_marker: string;
   stall_minutes: number;
   parallel_agents: number;
-  cycle: { max_implementations: number; min_ready: number; time_budget_minutes: number; failure_limit: number; dedupe_minutes?: number; max_rework?: number; max_tokens_per_ticket?: number };
+  cycle: { max_implementations: number; min_ready: number; time_budget_minutes: number; failure_limit: number; dedupe_minutes?: number; max_rework?: number; land_wait_minutes?: number; max_tokens_per_ticket?: number };
   heartbeat: { ticket: string };
   /** delivery: release-line (default) cuts release lines for the last environment; continuous ships every environment from the trunk. */
   product: { environments: string[]; proofs: string[]; delivery?: 'release-line' | 'continuous'; evidence?: ('sbom' | 'provenance' | 'signature')[]; slo?: { change_failure_rate_max: number; window_days: number } };
-  executors: { default: Executor; [skill: string]: Executor };
+  /** Who runs each step: the key is `<skill>/<step>`, else `<skill>`, else `default` is used (a one-step skill is named by the skill alone). */
+  executors: { default: Executor; [step: string]: Executor };
   learning: {
     /** The self-improvement loop runs only when true (default false). */
     enabled?: boolean;

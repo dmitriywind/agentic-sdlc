@@ -16,7 +16,7 @@ test('tools/list has board_move with a schema; unknown method is -32601', async 
   assert.deepEqual(t.inputSchema.required, ['id', 'status']);
   assert.equal(t.inputSchema.properties.only_from.type, 'string');
   const names = r.result.tools.map((x: any) => x.name);
-  assert.equal(names.length, 41);
+  assert.equal(names.length, 47);
   for (const n of ['forge_approve', 'forge_status', 'vcs_tag']) assert.ok(!names.includes(n), n);
   assert.equal(((await handle(rpc('nope'), ctx)) as any).error.code, -32601);
 });
@@ -186,7 +186,7 @@ test('conformance 2026-07-28: server/discover and stateless tools/list carry res
     assert.equal(t.inputSchema.type, 'object');
   }
   assert.deepEqual(l.result.tools.map((t: any) => t.name), ((await handle(rpc('tools/list'), ctx)) as any).result.tools.map((t: any) => t.name));
-  assert.equal(l.result.tools.length, 41);
+  assert.equal(l.result.tools.length, 47);
   assert.equal((await modern(ctx, 'tools/list', { cursor: 'x' })).error.code, -32602);
 });
 

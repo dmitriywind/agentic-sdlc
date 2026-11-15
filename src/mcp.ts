@@ -30,8 +30,11 @@ const TOOLS: Record<string, Spec> = {
   board_label: S('board', 'label', ['id', 'op', 'label'], {}, 'Add or remove a label (op: add|remove).'),
   board_assign: S('board', 'assign', ['id'], { user: 'pos', none: 'boolean' }, 'Assign a user, or none.'),
   board_milestone: S('board', 'milestone', ['id'], { name: 'pos', clear: 'boolean' }, 'Set the milestone of an item, or clear it.'),
-  board_comment: S('board', 'comment', ['id'], {}, 'Comment on an item.', [], true),
-  board_comments: S('board', 'comments', ['id'], { last: 'integer', marker: 'string', author: 'strings', trusted: 'boolean' }, 'Read comments, newest first; trusted keeps the binding bots and owners.'),
+  board_comment: S('board', 'comment', ['id'], { kind: 'string', ref: 'string' }, 'Comment on an item; kind stamps the marker first line (ref is its value).', [], true),
+  board_comments: S('board', 'comments', ['id'], { last: 'integer', marker: 'string', kind: 'string', ref: 'string', author: 'strings', trusted: 'boolean' }, 'Read comments, newest first; kind (with ref) filters by marker; trusted keeps the binding bots and owners.'),
+  board_hold: S('board', 'hold', ['id'], { kind: 'string' }, 'Hold a ticket for a human: adds the human label and posts the ask (kind is the trigger); body is the ask.', ['kind'], true),
+  board_holds: S('board', 'holds', [], {}, 'Held tickets: id, kind, askedAt, replied (an owner replied after the last ask), reply.'),
+  board_release: S('board', 'release', ['id'], {}, 'Release a held ticket: removes the human label.'),
   board_close: S('board', 'close', ['id'], { reason: 'string' }, 'Close an item (reason: completed|not_planned).', ['reason']),
   board_child: S('board', 'child', ['parent', 'child'], {}, 'Attach child to parent.'),
   forge_open: S('forge', 'open', [], { source: 'string', title: 'string', draft: 'boolean' }, 'Open a change request.', ['source', 'title'], true),
@@ -44,8 +47,11 @@ const TOOLS: Record<string, Spec> = {
   forge_automerge: S('forge', 'automerge', ['n'], {}, 'Enable automerge.'),
   forge_approve: S('forge', 'approve', ['n'], {}, 'Approve a change request.'),
   forge_approvals: S('forge', 'approvals', ['n'], {}, 'Reviews of a change request: user, state, sha.'),
-  forge_comment: S('forge', 'comment', ['n'], {}, 'Comment on a change request.', [], true),
-  forge_comments: S('forge', 'comments', ['n'], { last: 'integer', marker: 'string', author: 'strings', trusted: 'boolean' }, 'Read change request comments, newest first; trusted keeps the binding bots and owners.'),
+  forge_comment: S('forge', 'comment', ['n'], { kind: 'string', ref: 'string' }, 'Comment on a change request; kind stamps the marker first line (ref is its value).', [], true),
+  forge_comments: S('forge', 'comments', ['n'], { last: 'integer', marker: 'string', kind: 'string', ref: 'string', author: 'strings', trusted: 'boolean' }, 'Read change request comments, newest first; kind (with ref) filters by marker; trusted keeps the binding bots and owners.'),
+  forge_verdict: S('forge', 'verdict', ['n'], { pass: 'boolean', fail: 'boolean' }, 'Post the review report for the head (body) with its one Verdict line; with a review identity also the review status and, on pass, the approval. Exactly one of pass or fail.', [], true),
+  forge_land: S('forge', 'land', ['n'], { wait: 'integer' }, 'Wait (minutes, default cycle.land_wait_minutes or 5) for the required checks, then arm or perform the merge: merged, armed, waiting or blocked.'),
+  forge_queue: S('forge', 'queue', [], {}, 'Every open change request with its one next action: review, rework, land, sync, wait or escalate.'),
   forge_cut: S('forge', 'cut', ['revision', 'version'], {}, 'Ask the release workflow to cut a release line.'),
   forge_status: S('forge', 'status', ['n'], { context: 'string', state: 'string', description: 'string', url: 'string' }, 'Post a commit status (n is the sha; state: pending|success|failure).', ['context', 'state', 'description']),
   forge_runs: S('forge', 'runs', [], { ref: 'string', failed: 'boolean' }, 'List CI runs.'),
@@ -88,10 +94,10 @@ const META = 'io.modelcontextprotocol/';
 const SERVER_INFO = () => ({ name: 'agentic-sdlc', version: version() });
 
 // Tool annotations come from these sets, keyed by tool name; no per-tool boilerplate.
-const READ = new Set(['board_list', 'board_get', 'board_comments', 'forge_view', 'forge_diff', 'forge_list', 'forge_approvals', 'forge_comments', 'forge_runs', 'forge_run',
+const READ = new Set(['board_list', 'board_get', 'board_comments', 'board_holds', 'forge_queue', 'forge_view', 'forge_diff', 'forge_list', 'forge_approvals', 'forge_comments', 'forge_runs', 'forge_run',
   'vcs_head', 'vcs_changed', 'vcs_base', 'vcs_tags', 'ledger_runs', 'ledger_summary', 'ledger_plan', 'ledger_hash', 'ledger_stale']);
 const DESTRUCTIVE = new Set(['board_close', 'vcs_drop']);
-const IDEMPOTENT = new Set(['board_move', 'board_set', 'board_label', 'board_assign', 'board_milestone', 'board_close', 'forge_ready', 'forge_draft', 'forge_sync', 'forge_automerge',
+const IDEMPOTENT = new Set(['board_release', 'forge_land', 'board_move', 'board_set', 'board_label', 'board_assign', 'board_milestone', 'board_close', 'forge_ready', 'forge_draft', 'forge_sync', 'forge_automerge',
   'forge_approve', 'forge_status', 'vcs_push', 'vcs_drop', 'ledger_record']);
 const LOCAL = new Set(['vcs_start', 'vcs_head', 'vcs_changed', 'vcs_base', 'vcs_tags', 'vcs_drop', 'ledger_hash']); // never reach an external system
 const annotations = (name: string) => {
