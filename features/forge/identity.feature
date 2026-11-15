@@ -9,14 +9,14 @@ Feature: The github forge posts as the identity the binding names
   Background:
     Given the github forge for the repo "o/r"
     And the forge option "token_env" is "TOK"
-    And the environment variable "TOK" is "t"
+    And the forge credential variable "TOK" is "t"
 
   Rule: With two identities the review token posts the status and the approval
 
     Background:
       Given the forge has the review identity "reviewer"
       And the forge option "review_token_env" is "REV"
-      And the environment variable "REV" is "r"
+      And the forge credential variable "REV" is "r"
       And the repo has the open pull request 5 at the head "h"
 
     Scenario: The review status is posted with the review token

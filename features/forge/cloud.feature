@@ -7,7 +7,7 @@ Feature: In a Claude cloud session the forge is REST only
 
   Background:
     Given the github forge without a repo option
-    And the session is a Claude cloud session
+    And the forge session is a Claude cloud session
     And the repo has the open pull request 5 at the head "h"
 
   Rule: Every verb is a REST call under the repo
@@ -46,7 +46,7 @@ Feature: In a Claude cloud session the forge is REST only
     Scenario: An approval is a REST call
       Given the forge has the review identity "reviewer"
       And the forge option "review_token_env" is "REV"
-      And the environment variable "REV" is "r"
+      And the forge credential variable "REV" is "r"
       When the forge runs approve on "5"
       Then every call is a gh api call under "repos/{owner}/{repo}/"
 

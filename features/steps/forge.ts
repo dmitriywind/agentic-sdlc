@@ -83,7 +83,7 @@ function route(w: World, g: Fake, args: string[], input?: string): string {
   }
   if (p === 'pulls') {
     const state = /state=(\w+)/.exec(qs ?? '')?.[1] ?? 'open';
-    const page = Number(/page=(\d+)/.exec(qs ?? '')?.[1] ?? 1);
+    const page = Number(/(?:^|&)page=(\d+)/.exec(qs ?? '')?.[1] ?? 1);
     const rows = g.pulls.filter((x) => state === 'all' || x.state === state).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
     return args.includes('--slurp') ? JSON.stringify([rows]) : JSON.stringify(rows.slice((page - 1) * 100, page * 100));
   }
@@ -151,8 +151,8 @@ Given('the github forge without a repo option', (w) => { w.binding({ forge: { ad
 Given('the forge option {string} is {string}', (w, key: string, value: string) => { w.binding({ forge: { options: { [key]: value } } }); });
 Given('the forge has the review identity {string}', (w, who: string) => { w.binding({ forge: { review_identity: who } }); });
 Given('the forge requires the checks {string}', (w, list: string) => { w.binding({ forge: { required_checks: csv(list) } }); });
-Given('the environment variable {string} is {string}', (w, name: string, value: string) => { w.env[name] = value; });
-Given('the session is a Claude cloud session', (w) => { w.env.CLAUDE_CODE_REMOTE = 'true'; });
+Given('the forge credential variable {string} is {string}', (w, name: string, value: string) => { w.env[name] = value; });
+Given('the forge session is a Claude cloud session', (w) => { w.env.CLAUDE_CODE_REMOTE = 'true'; });
 Given('the repo refuses draft pull requests', (w) => { fake(w).noDraft = true; });
 Given('GitHub refuses to arm auto-merge', (w) => { fake(w).noAutoMerge = true; });
 Given('the gh calls fail {int} times with {string} before they answer', (w, times: number, message: string) => {
