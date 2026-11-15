@@ -88,7 +88,7 @@ class Installer {
     }
   }
   /** Install `data` at `rel`. `src` is the package file it comes from (named when a differing file is kept). `quiet` hides wrote/updated lines. Returns false when a differing file is kept. */
-  put(rel: string, data: string | Buffer, src?: string, quiet = false): boolean {
+  put(rel: string, data: string | Buffer, src?: string, quiet = false, legacy?: (text: string) => boolean): boolean {
     rel = posix(rel);
     this.offered.add(rel);
     const to = join(this.root, rel), want = sha(data);
@@ -96,7 +96,7 @@ class Installer {
     if (existsSync(to)) {
       const bytes = readFileSync(to), have = sha(bytes);
       if (have === want) { this.lock[rel] = want; return true; }
-      if (have === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel))) how = 'updated';
+      if (have === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel)) || (!(rel in this.lock) && legacy?.(bytes.toString('utf8')))) how = 'updated';
       else if (this.force) how = 'overwrote';
       else {
         this.counts.kept++;
@@ -212,7 +212,9 @@ function registerMcp(pkg: string, root: string, harness: string, force: boolean,
     const want = JSON.parse(snippet);
     const doc = cur.trim() ? parseJson(cur, rel) : {};
     // The project may have tuned its entry (args, env): keep it unless --force.
-    if (doc.mcpServers?.['agentic-sdlc'] && !force) { log.push(`kept ${rel}`); return; }
+    const had = doc.mcpServers?.['agentic-sdlc'];
+    const old = had?.command === 'npx' && Array.isArray(had.args) && had.args.includes('agentic-sdlc'); // written by an older release
+    if (had && !force && !old) { log.push(`kept ${rel}`); return; }
     doc.mcpServers = { ...doc.mcpServers, ...want.mcpServers };
     next = JSON.stringify(doc, null, 2) + '\n';
   }
@@ -291,7 +293,7 @@ You run one step of the agentic-sdlc process at the ${tier} tier. Your task name
 (\`.agents/skills/sdlc-<skill>/steps/<step>.md\`, or the skill's \`SKILL.md\` for a one-step skill). Read it, follow it to
 its last Done when, and report the result and the evidence. Call the CLI as \`agentic-sdlc <group> <verb>\` (it is \`${LAUNCHER}\`).
 Do not start subagents.
-`);
+`, undefined, false, (t) => t.includes('npx --no agentic-sdlc')); // an older release wrote no hash we know: its text is the evidence
   }
   const file = join(root, 'CLAUDE.md');
   const cur = existsSync(file) ? readFileSync(file, 'utf8') : '';
@@ -315,7 +317,10 @@ function originRepo(root: string): string | undefined {
 
 async function init(root: string, argv: string[], log: string[]) {
   const f = flagsOf(argv);
-  const board = f.board ?? 'github', forge = f.forge ?? 'github', vcs = f.vcs ?? 'git', harness = f.harness ?? 'generic';
+  const board = f.board ?? 'github', forge = f.forge ?? 'github', vcs = f.vcs ?? 'git';
+  // An upgrade without --harness reuses what the install has: tier agents or .claude/skills mean Claude Code.
+  const prior = f.upgrade === 'true' && f.harness === undefined && (existsSync(join(root, '.claude/skills')) || existsSync(join(root, '.claude/agents')) && readdirSync(join(root, '.claude/agents')).some((n) => /^sdlc-.*\.md$/.test(n)));
+  const harness = f.harness ?? (prior ? 'claude' : 'generic');
   const force = f.force === 'true';
   const profile = f.profile ?? 'individual';
   if (!ADAPTERS.board.includes(board)) throw new Error(`--board must be one of ${ADAPTERS.board.join('|')}, got '${board}'`);
@@ -334,7 +339,7 @@ async function init(root: string, argv: string[], log: string[]) {
   inst.skills('skills', '.agents/skills', true);
   // Claude Code gets skills and the MCP server from the plugin, unless --no-plugin
   // (a Claude cloud session loads no repo plugin, only .claude/skills).
-  const noPlugin = harness === 'claude' && f['no-plugin'] === 'true';
+  const noPlugin = harness === 'claude' && (f['no-plugin'] === 'true' || (f.upgrade === 'true' && existsSync(join(root, '.claude/skills'))));
   if (noPlugin) inst.skills('skills', '.claude/skills', true);
   else for (const n of filesUnder(skills)) inst.skip(join('.claude/skills', inst.installedName(n)));
   pinCli(inst, version, f.ref, force);

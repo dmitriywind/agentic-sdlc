@@ -12114,7 +12114,9 @@ ${snippet.trim()}`);
   } else {
     const want = JSON.parse(snippet);
     const doc = cur.trim() ? parseJson(cur, rel) : {};
-    if (doc.mcpServers?.["agentic-sdlc"] && !force) {
+    const had = doc.mcpServers?.["agentic-sdlc"];
+    const old = had?.command === "npx" && Array.isArray(had.args) && had.args.includes("agentic-sdlc");
+    if (had && !force && !old) {
       log.push(`kept ${rel}`);
       return;
     }
@@ -12186,7 +12188,7 @@ You run one step of the agentic-sdlc process at the ${tier} tier. Your task name
 (\`.agents/skills/sdlc-<skill>/steps/<step>.md\`, or the skill's \`SKILL.md\` for a one-step skill). Read it, follow it to
 its last Done when, and report the result and the evidence. Call the CLI as \`agentic-sdlc <group> <verb>\` (it is \`${LAUNCHER}\`).
 Do not start subagents.
-`);
+`, void 0, false, (t) => t.includes("npx --no agentic-sdlc"));
   }
   const file = join10(root, "CLAUDE.md");
   const cur = existsSync8(file) ? readFileSync9(file, "utf8") : "";
@@ -12209,7 +12211,9 @@ function originRepo(root) {
 }
 async function init(root, argv, log) {
   const f = flagsOf(argv);
-  const board = f.board ?? "github", forge = f.forge ?? "github", vcs = f.vcs ?? "git", harness = f.harness ?? "generic";
+  const board = f.board ?? "github", forge = f.forge ?? "github", vcs = f.vcs ?? "git";
+  const prior = f.upgrade === "true" && f.harness === void 0 && (existsSync8(join10(root, ".claude/skills")) || existsSync8(join10(root, ".claude/agents")) && readdirSync6(join10(root, ".claude/agents")).some((n) => /^sdlc-.*\.md$/.test(n)));
+  const harness = f.harness ?? (prior ? "claude" : "generic");
   const force = f.force === "true";
   const profile = f.profile ?? "individual";
   if (!ADAPTERS.board.includes(board)) throw new Error(`--board must be one of ${ADAPTERS.board.join("|")}, got '${board}'`);
@@ -12225,7 +12229,7 @@ async function init(root, argv, log) {
   const skills = need2(pkg, "skills");
   const inst = new Installer(root, pkg, force, log);
   inst.skills("skills", ".agents/skills", true);
-  const noPlugin = harness === "claude" && f["no-plugin"] === "true";
+  const noPlugin = harness === "claude" && (f["no-plugin"] === "true" || f.upgrade === "true" && existsSync8(join10(root, ".claude/skills")));
   if (noPlugin) inst.skills("skills", ".claude/skills", true);
   else for (const n of filesUnder(skills)) inst.skip(join10(".claude/skills", inst.installedName(n)));
   pinCli(inst, version3, f.ref, force);
@@ -12534,7 +12538,7 @@ ${END}`;
         }
       }
       /** Install `data` at `rel`. `src` is the package file it comes from (named when a differing file is kept). `quiet` hides wrote/updated lines. Returns false when a differing file is kept. */
-      put(rel, data, src, quiet = false) {
+      put(rel, data, src, quiet = false, legacy) {
         rel = posix2(rel);
         this.offered.add(rel);
         const to = join10(this.root, rel), want = sha(data);
@@ -12545,7 +12549,7 @@ ${END}`;
             this.lock[rel] = want;
             return true;
           }
-          if (have === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel))) how = "updated";
+          if (have === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel)) || !(rel in this.lock) && legacy?.(bytes.toString("utf8"))) how = "updated";
           else if (this.force) how = "overwrote";
           else {
             this.counts.kept++;
