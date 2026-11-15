@@ -23,7 +23,8 @@ Follow the [common contract](../sdlc/references/contract.md). What matters most 
    <the lowest Shipped among its Done children>` and `board close <id> --reason completed`. Done
    when every grouping is settled, before any shape.
 3. **Prioritise.** Order by user impact, risk reduction and dependency, blockers first. Set the
-   Priority field from `priorities` and the milestone, per `paths.roadmap_doc`. Nice-to-have work
+   Priority field from `priorities` and the milestone (`board milestone <id> <name>`, `--clear` to
+   drop it), per `paths.roadmap_doc`. Nice-to-have work
    goes to `board.later_milestone` (see [Board](../sdlc/references/board.md#board)). When no doc ranks the
    item (a new project), judge it by the ticket's own stated impact and set a priority below the first;
    when the board has no milestones, set none. Done when every unheld Backlog item has a Priority,

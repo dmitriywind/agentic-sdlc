@@ -14,6 +14,7 @@ meaning of each verb is unchanged. Write bodies to a file and pass `--body-file`
 | Set or clear Size, Priority, Lane, Shipped, Release Version | `board set <id> <field> <value>` / `--clear` |
 | Add or drop `bug`, `feature`, `needs-human`, `signal:<stream>` | `board label <id> add\|remove <label>` |
 | Clear the assignee | `board assign <id> --none` |
+| Set or clear the milestone of a ticket | `board milestone <id> <name>` / `--clear` |
 | Ticket comment (spec, decision, ask) | `board comment <id> --body-file <f>` |
 | Find a spec, heartbeat or evidence comment by a trusted author | `board comments <id> [--last <n>] [--marker <text>] --trusted` |
 | Cancel or complete and close | `board close <id> --reason not_planned\|completed` |
@@ -29,7 +30,7 @@ meaning of each verb is unchanged. Write bodies to a file and pass `--body-file`
 | Find the CR of a revision | `forge view --sha <sha>` |
 | Last release tag | `vcs tags --prefix <vcs.tag_prefix>` (first row) |
 | Read the diff | `forge diff <n>` |
-| List open CRs | `forge list --state open` |
+| List open CRs (`--checks` when the checks, `behind` or `pushedAt` are read; `--limit <n>`, `--since <date>` bound the list) | `forge list --state open [--checks]` |
 | Mark ready, or back to draft | `forge ready <n>`, `forge draft <n>` |
 | Bring the CR up to the trunk | `forge sync <n>` |
 | Merge when every required check is green | `forge automerge <n>` |
@@ -39,6 +40,7 @@ meaning of each verb is unchanged. Write bodies to a file and pass `--body-file`
 | Read CR comments (review report, owner reply on a factory CR) by a trusted author | `forge comments <n> [--last <k>] [--marker <text>] --trusted` |
 | Read the CR's reviews | `forge approvals <n>` |
 | Read CI runs | `forge runs [--ref <r>] [--failed]` |
+| Read one CI run | `forge run <id>` |
 | Start a stage | `dispatch <skill> --ticket <id>` or `--cr <n>`, `[--run-model <m>]` |
 | Runs, measures, learning due | `ledger runs`, `ledger summary` |
 | Judge input and output | `ledger plan --run <id>`, `ledger record --run <id> --file <scores.json>` |

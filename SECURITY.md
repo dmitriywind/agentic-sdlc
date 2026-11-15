@@ -22,7 +22,7 @@ the contract (`references/architecture.md`, sections 3.4 and 10) is the full sta
   cannot approve its own CR. Give the factory's
   accounts no admin or bypass right on the trunk.
 - **Gate statuses only from gates.** `forge status` refuses the contexts `human-approval`,
-  `ticket-linkage` and `proofs-on-base`, so an agent with the review token cannot forge a gate.
+  `ticket-linkage`, `proofs-on-base` and `agent-provenance`, so an agent with the review token cannot forge a gate.
   Where the forge allows it, pin `ticket-linkage` and `proofs-on-base` to the Actions app in the trunk
   ruleset. `human-approval` and `review` post with the review token: pin them to the review app when it is an App.
 - **CI never runs CR code with secrets.** The `Required` check and the `proofs-on-base` gate run

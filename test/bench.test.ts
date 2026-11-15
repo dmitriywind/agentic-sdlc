@@ -317,3 +317,19 @@ test('agentCommand fills the stage caps into a command executor, empty when unse
   const v = { model: 'm', ticket: '1', prompt_file: 'p', workdir: 'w' };
   assert.equal(agentCommand({ kind: 'command', run: 'bot {max_turns} {max_minutes}' }, b, v), `bot ${quote('40')} ${quote('')}`);
 });
+
+test('buildCases reads a bounded list of merged CRs: the newest few hundred by default, --merged-limit and --since override', async () => {
+  const asked: any[] = [];
+  const board = { list: async () => [], comments: async () => [], get: async () => ({}) } as unknown as Board;
+  const forge = { list: async (q: any) => (asked.push(q), []) } as unknown as Forge;
+  await buildCases(board, forge, binding, 5);
+  await buildCases(board, forge, binding, 50);
+  await buildCases(board, forge, binding, Infinity, { perSize: Infinity });
+  await buildCases(board, forge, binding, 5, { mergedLimit: 7, since: '2026-01-01' });
+  assert.deepEqual(asked, [
+    { state: 'merged', limit: 100, since: undefined },
+    { state: 'merged', limit: 500, since: undefined },
+    { state: 'merged', limit: 500, since: undefined },
+    { state: 'merged', limit: 7, since: '2026-01-01' },
+  ]);
+});

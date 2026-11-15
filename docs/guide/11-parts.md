@@ -14,6 +14,8 @@ How the factory is built. For the exact rules, read the contract,
 
 A project changes only its binding. A skill never calls a vendor tool: it calls the CLI.
 
+Each CLI verb takes only the flags it lists. An unknown flag, a flag with no value and a `--body-file` that cannot be read stop the verb with a usage error (exit 2). When GitHub answers a read with a rate limit or a server error, the CLI tries again up to three times and waits as long as GitHub asks. A write is tried again only on a rate limit, because a server error may follow a write that went through. Lists are bounded: `forge list` takes `--limit` and `--since`, and returns no check results unless asked with `--checks`.
+
 ```mermaid
 flowchart LR
   sk["Skills"]:::agent --> cli["agentic-sdlc CLI<br/>and MCP server"]:::ci

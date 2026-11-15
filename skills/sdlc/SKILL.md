@@ -82,7 +82,7 @@ leaves the CR ready, and a fixed outside cause clears a red gate, so such a draf
 In order:
 
 1. **Read state.** First `dispatch sdlc --ticket <heartbeat.ticket>`: when it prints `{ skipped: true }`
-   another cycle is running; stop and write nothing. List the board once (`board list`). Read open CRs (`forge list`), the last
+   another cycle is running; stop and write nothing. List the board once (`board list`). Read open CRs (`forge list --checks`), the last
    `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --last <n> --marker
    "<!-- heartbeat -->" --trusted`) and `ledger summary`. When `product.slo` is set, also
    `ledger measures`: while it prints `errorBudget.exhausted: true`, the cycle claims no new `feature`
@@ -128,7 +128,7 @@ In order:
    runs include the judge runs of step 3 and, with one identity, the `review-pr` runs of step 6; the
    `improve-factory` run is in its own `learn` heartbeat, and the review runtime writes a `review`
    heartbeat for its runs, so every run is in the ledger once.
-8. **Review hand-off.** Only with a `forge.review_identity`: `forge list` again, since this cycle may
+8. **Review hand-off.** Only with a `forge.review_identity`: `forge list --checks` again, since this cycle may
    have opened CRs. Fire the review runtime once, as the runner prompt says, only when a CR needs a
    review. Done when it was fired, or no CR needs a review, or the binding has one identity.
 

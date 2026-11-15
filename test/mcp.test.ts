@@ -124,3 +124,18 @@ test('a verb whose output is a JSON object also returns structuredContent; array
   assert.ok(Array.isArray(JSON.parse(l.result.content[0].text)));
   assert.equal(l.result.structuredContent, undefined);
 });
+
+test('board_milestone sets and clears a milestone; forge_run and forge_list take their arguments and forge_run is read only', async () => {
+  const { ctx } = fakeCtx(mkdtempSync(join(tmpdir(), 'mcp-')), {}, () => ({}));
+  await call(ctx, 'board_create', { title: 'T', body: 'b', status: 'Backlog' });
+  const set = await call(ctx, 'board_milestone', { id: '1', name: 'M1' });
+  assert.equal(JSON.parse(set.result.content[0].text).milestone, 'M1');
+  const clr = await call(ctx, 'board_milestone', { id: '1', clear: true });
+  assert.equal(JSON.parse(clr.result.content[0].text).milestone, undefined);
+  const tools = ((await handle(rpc('tools/list'), ctx)) as any).result.tools;
+  const by = (n: string) => tools.find((t: any) => t.name === n);
+  assert.equal(by('forge_run').annotations.readOnlyHint, true);
+  assert.deepEqual(by('forge_run').inputSchema.required, ['id']);
+  assert.equal(by('board_milestone').annotations.readOnlyHint, false);
+  for (const p of ['limit', 'since', 'checks']) assert.ok(p in by('forge_list').inputSchema.properties, p);
+});
