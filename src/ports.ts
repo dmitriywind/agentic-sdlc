@@ -32,6 +32,8 @@ export interface Board {
   set(id: string, field: LogicalField, value: string | null): Promise<Item>;
   label(id: string, op: 'add' | 'remove', label: string): Promise<Item>;
   assign(id: string, user: string | null): Promise<Item>;
+  /** Sets the ticket's milestone (the place `create --milestone` puts it), or clears it with null. */
+  milestone(id: string, name: string | null): Promise<Item>;
   comment(id: string, body: string): Promise<{ id: string; url?: string }>;
   comments(id: string, q?: { last?: number; marker?: string }): Promise<Comment[]>;
   close(id: string, reason: 'completed' | 'not_planned'): Promise<Item>;
@@ -65,6 +67,9 @@ export interface CR {
 /** assoc: the reviewer's relation to the repo (OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE ...), when the forge reports it. */
 export interface Review { user: string; state: string; sha: string; assoc?: string }
 
+/** One commit of a CR, oldest first. author and committer: forge logins, empty when the forge links no account to the commit email; authorName and committerName: the names git recorded. */
+export interface CrCommit { sha: string; message: string; author: string; committer: string; authorName: string; committerName: string; parents: number }
+
 export interface Run { id: string; name: string; ref: string; sha: string; state: 'pending' | 'success' | 'failure'; url: string; at: string }
 
 export interface Forge {
@@ -72,7 +77,11 @@ export interface Forge {
   view(n: string): Promise<CR>;
   viewBySha(sha: string): Promise<CR>;
   diff(n: string): Promise<string>;
-  list(q?: { state?: 'open' | 'merged' | 'all' }): Promise<CR[]>;
+  /**
+   * limit: the newest n by update; since: an ISO date, merged (state merged) or updated since. Without `checks`,
+   * each CR has `checks: []` and no `pushedAt`, and `behind` is false: a list row carries no check data.
+   */
+  list(q?: { state?: 'open' | 'merged' | 'all'; limit?: number; since?: string; checks?: boolean }): Promise<CR[]>;
   /** Merged CRs whose body closes ticket `id`. Optional: without it, callers filter list({ state: 'merged' }). */
   closing?(id: string): Promise<CR[]>;
   /** Asks the forge to cut a release line through its release workflow, which the Product owner approves. Optional. */
@@ -88,7 +97,11 @@ export interface Forge {
   status(sha: string, s: { context: string; state: 'pending' | 'success' | 'failure'; description: string; url?: string }, opts?: { as?: 'ci' }): Promise<void>;
   approve(n: string): Promise<void>;
   approvals(n: string): Promise<Review[]>;
+  /** Every commit of the CR, oldest first, with message and authors (gate provenance). Throws when the list cannot be read whole. */
+  commits(n: string): Promise<CrCommit[]>;
   runs(q?: { ref?: string; failed?: boolean }): Promise<Run[]>;
+  /** One CI run by id; throws when it does not exist. */
+  run(id: string): Promise<Run>;
 }
 
 export interface Vcs {
@@ -138,6 +151,20 @@ export interface StageDef {
   secrets?: string[];
   sandbox?: 'cloud' | 'container' | 'local';
   model?: { tier?: 'fast' | 'balanced' | 'deep'; id?: string };
+  /** Per-run caps, positive integers; a stage that sets none inherits executors.default (section 6, `limitsOf`). */
+  max_turns?: number;
+  max_tokens?: number;
+  max_minutes?: number;
+}
+
+export const LIMIT_KEYS = ['max_turns', 'max_tokens', 'max_minutes'] as const;
+export type Limits = { [K in (typeof LIMIT_KEYS)[number]]?: number };
+
+/** A stage's caps: its own, else the default executor's, per key. Only set keys appear. */
+export function limitsOf(b: Pick<Binding, 'executors'>, ex: StageDef): Limits {
+  const out: Limits = {};
+  for (const k of LIMIT_KEYS) { const v = ex[k] ?? b.executors?.default?.[k]; if (v !== undefined) out[k] = v; }
+  return out;
 }
 
 export type Executor = StageDef &
@@ -162,11 +189,16 @@ export interface McpServer { url?: string; command?: string; token_env?: string 
 
 /** An account: one name on both ports, or one name per port. */
 export type Who = string | { board: string; forge: string };
-export type Owners = { product?: string; factory?: string; bots: string[] };
-/** The owners as the board or the forge names them. */
+/** An owner role: one account or a list of them. The first entry is the primary, the one a skill asks or assigns. */
+export type WhoList = Who | Who[];
+/** Every role as a list of account names (empty when unset). */
+export type Owners = { product: string[]; factory: string[]; operator: string[]; security: string[]; compliance: string[]; bots: string[] };
+/** The owners as the board or the forge names them; every role is a list, any member counts as the owner. */
 export function ownersFor(o: Binding['owners'] | undefined, side: 'board' | 'forge'): Owners {
-  const one = (w: Who | undefined) => (typeof w === 'object' && w ? w[side] : w) || undefined;
-  return { product: one(o?.product), factory: one(o?.factory), bots: (o?.bots ?? []).map(one).filter((x): x is string => !!x) };
+  const list = (w: WhoList | undefined): string[] =>
+    (w === undefined || w === null ? [] : Array.isArray(w) ? w : [w])
+      .map((x) => (typeof x === 'object' && x ? x[side] : x)).filter((x): x is string => !!x);
+  return { product: list(o?.product), factory: list(o?.factory), operator: list(o?.operator), security: list(o?.security), compliance: list(o?.compliance), bots: list(o?.bots) };
 }
 
 /** The parsed binding. src/binding.ts validates it; keys follow references/architecture.md section 4. */
@@ -176,8 +208,10 @@ export interface Binding {
    * organization: API keys and managed agents, a separate review identity (architecture.md section 10). */
   profile: 'individual' | 'individual-api' | 'organization';
   /** bots: the accounts the factory runs as; only their heartbeat comments are trusted. Each account is one
-   * name, or `{ board, forge }` when the board and the forge know the person by different names. */
-  owners: { product: Who; factory: Who; bots: Who[] };
+   * name, or `{ board, forge }` when the board and the forge know the person by different names.
+   * product and factory take one account or a list (the first is the primary); operator, security and
+   * compliance are optional roles of the same shape. */
+  owners: { product: WhoList; factory: WhoList; operator?: WhoList; security?: WhoList; compliance?: WhoList; bots: Who[] };
   board: {
     adapter: 'github' | 'github-issues' | 'jira' | 'linear' | 'local';
     options: Record<string, unknown>;
@@ -200,6 +234,8 @@ export interface Binding {
     review_identity: string;
     /** Who must approve besides the agent review (status human-approval). Absent: full-lane. */
     human_approval?: 'full-lane' | 'always' | 'never';
+    /** Gate provenance: agent commits carry Agent-Run and Agent-Model trailers. off (default) does nothing; warn reports; require fails the check `agent-provenance`. */
+    provenance?: 'off' | 'warn' | 'require';
     review_check_name: string;
     verify_check_name: string;
     required_checks: string[];
@@ -239,10 +275,10 @@ export interface Binding {
   spec_marker: string;
   stall_minutes: number;
   parallel_agents: number;
-  cycle: { max_implementations: number; min_ready: number; time_budget_minutes: number; failure_limit: number; dedupe_minutes?: number; max_rework?: number };
+  cycle: { max_implementations: number; min_ready: number; time_budget_minutes: number; failure_limit: number; dedupe_minutes?: number; max_rework?: number; max_tokens_per_ticket?: number };
   heartbeat: { ticket: string };
   /** delivery: release-line (default) cuts release lines for the last environment; continuous ships every environment from the trunk. */
-  product: { environments: string[]; proofs: string[]; delivery?: 'release-line' | 'continuous'; evidence?: ('sbom' | 'provenance' | 'signature')[] };
+  product: { environments: string[]; proofs: string[]; delivery?: 'release-line' | 'continuous'; evidence?: ('sbom' | 'provenance' | 'signature')[]; slo?: { change_failure_rate_max: number; window_days: number } };
   executors: { default: Executor; [skill: string]: Executor };
   learning: {
     /** The self-improvement loop runs only when true (default false). */
@@ -256,6 +292,8 @@ export interface Binding {
     bench_min_cases?: number;
     /** bench run trials per case, and the trials compare needs (default 3). */
     bench_trials?: number;
+    /** bench run caps: planned runs (cases x trials) and elapsed minutes. Bench results carry no token count, so there is no token cap. */
+    bench_budget?: { max_runs?: number; max_minutes?: number };
   };
 }
 

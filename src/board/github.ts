@@ -1,6 +1,7 @@
 // GitHub Projects v2 through `gh`. Field and option ids are looked up by name and cached.
 import type { AdapterContext, Board, Comment, Item, LogicalField } from '../ports.ts';
 import { MovedError } from '../ports.ts';
+import { ghRetry } from '../exec.ts';
 
 type Field = { id: string; name: string; options?: { id: string; name: string }[] };
 const DEFAULT_FIELDS: Record<LogicalField, string> = { size: 'Size', priority: 'Priority', lane: 'Lane', shipped: 'Shipped', release_version: 'Release Version' };
@@ -15,27 +16,28 @@ export function createGithubBoard(ctx: AdapterContext): Board {
     if (!t) throw new Error(`set ${o.token_env} (board.options.token_env) for the GitHub board`);
     return { ...ctx.env, GH_TOKEN: t };
   };
-  const gh = (args: string[]) => ctx.exec('gh', args, { env: env() });
-  const json = (args: string[]) => JSON.parse(gh(args) || 'null');
+  // Every gh call retries on a rate limit, and a read also on a 5xx (ghRetry).
+  const gh = async (args: string[]) => ghRetry(ctx.exec, args, { env: env() });
+  const json = async (args: string[]) => JSON.parse((await gh(args)) || 'null');
   const fieldName = (f: LogicalField) => ctx.binding?.board?.fields?.[f] ?? DEFAULT_FIELDS[f];
   let projectId: string | undefined;
   let fieldCache: Field[] | undefined;
-  const pid = () => (projectId ??= json(['project', 'view', num, '--owner', o.owner, '--format', 'json']).id);
-  const fields = () => (fieldCache ??= json(['project', 'field-list', num, '--owner', o.owner, '--format', 'json']).fields as Field[]);
-  const field = (name: string) => {
-    const f = fields().find((x) => x.name === name);
+  const pid = async () => (projectId ??= (await json(['project', 'view', num, '--owner', o.owner, '--format', 'json'])).id);
+  const fields = async () => (fieldCache ??= (await json(['project', 'field-list', num, '--owner', o.owner, '--format', 'json'])).fields as Field[]);
+  const field = async (name: string) => {
+    const f = (await fields()).find((x) => x.name === name);
     if (!f) throw new Error(`the board has no field '${name}'`);
     return f;
   };
-  const itemId = (id: string) =>
-    json(['project', 'item-add', num, '--owner', o.owner, '--url', `https://github.com/${o.repo}/issues/${id}`, '--format', 'json']).id as string;
-  const edit = (id: string, f: Field, rest: string[]) =>
-    gh(['project', 'item-edit', '--project-id', pid(), '--id', itemId(id), '--field-id', f.id, ...rest]);
-  const setOption = (id: string, name: string, option: string) => {
-    const f = field(name);
+  const itemId = async (id: string) =>
+    (await json(['project', 'item-add', num, '--owner', o.owner, '--url', `https://github.com/${o.repo}/issues/${id}`, '--format', 'json'])).id as string;
+  const edit = async (id: string, f: Field, rest: string[]) =>
+    gh(['project', 'item-edit', '--project-id', await pid(), '--id', await itemId(id), '--field-id', f.id, ...rest]);
+  const setOption = async (id: string, name: string, option: string) => {
+    const f = await field(name);
     const opt = f.options?.find((x) => x.name === option);
     if (!opt) throw new Error(`the board has no field '${name}' with an option '${option}'`);
-    edit(id, f, ['--single-select-option-id', opt.id]);
+    await edit(id, f, ['--single-select-option-id', opt.id]);
   };
   // item-list keys fields by name with a lowercase first letter ("Release Version" -> "release Version").
   const raw = (it: any, name: string): string | undefined => {
@@ -55,36 +57,36 @@ export function createGithubBoard(ctx: AdapterContext): Board {
     };
   };
   const ITEM_CAP = 5000, SEARCH_CAP = 200;
-  const items = (): any[] => {
-    const all: any[] = json(['project', 'item-list', num, '--owner', o.owner, '--limit', String(ITEM_CAP), '--format', 'json']).items;
+  const items = async (): Promise<any[]> => {
+    const all: any[] = (await json(['project', 'item-list', num, '--owner', o.owner, '--limit', String(ITEM_CAP), '--format', 'json'])).items;
     if (all.length >= ITEM_CAP) throw new Error(`the board has ${ITEM_CAP} or more items: archive Done items (gh project item-archive) so every ticket is read`);
     // A Project can hold several repos' issues; ids are issue numbers, so keep only this repo's.
     const repo = String(o.repo).toLowerCase();
     return all.filter((i: any) => i.content?.number !== undefined && (!i.content.repository || String(i.content.repository).toLowerCase() === repo));
   };
   const get = async (id: string): Promise<Item> => {
-    const it = items().find((i) => String(i.content.number) === id);
+    const it = (await items()).find((i) => String(i.content.number) === id);
     if (!it) throw new Error(`#${id} is not on the board`);
     const out = toItem(it);
-    const v = json(['issue', 'view', id, '--repo', o.repo, '--json', 'body,createdAt,updatedAt,assignees,milestone,labels']);
+    const v = await json(['issue', 'view', id, '--repo', o.repo, '--json', 'body,createdAt,updatedAt,assignees,milestone,labels']);
     Object.assign(out, {
       body: v.body, createdAt: v.createdAt, updatedAt: v.updatedAt, assignees: v.assignees.map((a: any) => a.login),
       labels: v.labels.map((l: any) => l.name), milestone: v.milestone?.title,
     });
     try {
-      const subs = json(['api', `repos/${o.repo}/issues/${id}/sub_issues`]) as any[];
+      const subs = (await json(['api', `repos/${o.repo}/issues/${id}/sub_issues`])) as any[];
       out.children = subs.map((s) => String(s.number));
-      const p = json(['api', `repos/${o.repo}/issues/${id}/parent`]);
+      const p = await json(['api', `repos/${o.repo}/issues/${id}/parent`]);
       if (p?.number) out.parent = String(p.number);
     } catch { /* no sub-issue support or no parent */ }
     return out;
   };
   const move = async (id: string, status: string, onlyFrom?: string) => {
     if (onlyFrom) {
-      const cur = items().find((i) => String(i.content.number) === id)?.status ?? '';
+      const cur = (await items()).find((i) => String(i.content.number) === id)?.status ?? '';
       if (cur !== onlyFrom) throw new MovedError(id, onlyFrom, cur);
     }
-    setOption(id, 'Status', status);
+    await setOption(id, 'Status', status);
     return get(id);
   };
 
@@ -92,47 +94,51 @@ export function createGithubBoard(ctx: AdapterContext): Board {
     async list(q = {}) {
       let hits: Set<string> | undefined;
       if (q.search) {
-        const found = json(['issue', 'list', '--repo', o.repo, '--state', 'all', '--search', q.search, '--limit', String(SEARCH_CAP), '--json', 'number']) as any[];
+        const found = await json(['issue', 'list', '--repo', o.repo, '--state', 'all', '--search', q.search, '--limit', String(SEARCH_CAP), '--json', 'number']) as any[];
         if (found.length >= SEARCH_CAP) throw new Error(`the search matched ${SEARCH_CAP} or more issues: narrow it`);
         hits = new Set(found.map((x) => String(x.number)));
       }
-      return items().map(toItem).filter((i) => (!hits || hits.has(i.id)) && (!q.status?.length || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label)));
+      return (await items()).map(toItem).filter((i) => (!hits || hits.has(i.id)) && (!q.status?.length || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label)));
     },
     get,
     async create(t) {
       const args = ['issue', 'create', '--repo', o.repo, '--title', t.title, '--body', t.body];
       for (const l of t.labels ?? []) args.push('--label', l);
       if (t.milestone) args.push('--milestone', t.milestone);
-      const id = gh(args).trim().split('/').pop()!;
+      const id = (await gh(args)).trim().split('/').pop()!;
       await move(id, t.status);
       if (t.parent) await this.child(t.parent, id);
       return get(id);
     },
     move,
     async set(id, f, value) {
-      const fd = field(fieldName(f));
-      if (value === null) edit(id, fd, ['--clear']);
-      else if (fd.options) setOption(id, fd.name, value);
-      else edit(id, fd, ['--text', value]);
+      const fd = await field(fieldName(f));
+      if (value === null) await edit(id, fd, ['--clear']);
+      else if (fd.options) await setOption(id, fd.name, value);
+      else await edit(id, fd, ['--text', value]);
       return get(id);
     },
     async label(id, op, label) {
-      gh(['issue', 'edit', id, '--repo', o.repo, op === 'add' ? '--add-label' : '--remove-label', label]);
+      await gh(['issue', 'edit', id, '--repo', o.repo, op === 'add' ? '--add-label' : '--remove-label', label]);
       return get(id);
     },
     async assign(id, user) {
       // Set or clear: the one assignee replaces any other.
       const drop = (await get(id)).assignees.filter((a) => a !== user).flatMap((a) => ['--remove-assignee', a]);
       const args = ['issue', 'edit', id, '--repo', o.repo, ...(user ? ['--add-assignee', user] : []), ...drop];
-      if (args.length > 5) gh(args);
+      if (args.length > 5) await gh(args);
+      return get(id);
+    },
+    async milestone(id, name) {
+      await gh(['issue', 'edit', id, '--repo', o.repo, ...(name === null ? ['--remove-milestone'] : ['--milestone', name])]);
       return get(id);
     },
     async comment(id, body) {
-      const url = gh(['issue', 'comment', id, '--repo', o.repo, '--body', body]).trim();
+      const url = (await gh(['issue', 'comment', id, '--repo', o.repo, '--body', body])).trim();
       return { id: url.split('issuecomment-')[1] ?? url, url };
     },
     async comments(id, q = {}) {
-      const all = (json(['api', `repos/${o.repo}/issues/${id}/comments`, '--paginate', '--slurp']) as any[][]).flat();
+      const all = ((await json(['api', `repos/${o.repo}/issues/${id}/comments`, '--paginate', '--slurp'])) as any[][]).flat();
       let list: Comment[] = all
         .map((c) => ({ id: String(c.id), author: c.user?.login ?? '', createdAt: c.created_at, body: c.body ?? '', url: c.html_url }))
         .reverse();
@@ -140,12 +146,12 @@ export function createGithubBoard(ctx: AdapterContext): Board {
       return q.last ? list.slice(0, q.last) : list;
     },
     async close(id, reason) {
-      gh(['issue', 'close', id, '--repo', o.repo, '--reason', reason === 'completed' ? 'completed' : 'not planned']);
+      await gh(['issue', 'close', id, '--repo', o.repo, '--reason', reason === 'completed' ? 'completed' : 'not planned']);
       return move(id, reason === 'completed' ? 'Done' : 'Cancelled');
     },
     async child(parent, child) {
-      const cid = json(['api', `repos/${o.repo}/issues/${child}`]).id;
-      gh(['api', `repos/${o.repo}/issues/${parent}/sub_issues`, '-X', 'POST', '-F', `sub_issue_id=${cid}`]);
+      const cid = (await json(['api', `repos/${o.repo}/issues/${child}`])).id;
+      await gh(['api', `repos/${o.repo}/issues/${parent}/sub_issues`, '-X', 'POST', '-F', `sub_issue_id=${cid}`]);
       return get(parent);
     },
   };

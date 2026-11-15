@@ -1,7 +1,57 @@
 // Shared helpers for the forge, vcs and gate CLIs.
+import { readFileSync } from 'node:fs';
 import type { AdapterContext, CR } from '../ports.ts';
 
 export class UsageError extends Error {}
+
+/** The flags a verb accepts: `value` flags take an argument (repeatable), `bool` flags take none. */
+export type VerbSpec = { value?: string[]; bool?: string[] };
+export type Flags = ReturnType<typeof parseStrict>;
+
+/**
+ * The one flag parser of the board, forge and vcs CLIs. A flag the verb does not declare is a usage error;
+ * a value flag with no value is a usage error; `--k=v` and `--k v` both work. Anything else is positional.
+ */
+export function parseStrict(group: string, verb: string, argv: string[], spec: VerbSpec = {}) {
+  const pos: string[] = [];
+  const flags: Record<string, string[]> = {};
+  const value = spec.value ?? [], bool = spec.bool ?? [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith('--') || a.length <= 2) { pos.push(a); continue; }
+    const eq = a.indexOf('=');
+    const k = a.slice(2, eq < 0 ? undefined : eq);
+    if (bool.includes(k)) {
+      if (eq >= 0) throw new UsageError(`--${k} takes no value`);
+      (flags[k] ??= []).push('true');
+    } else if (value.includes(k)) {
+      if (eq >= 0) (flags[k] ??= []).push(a.slice(eq + 1));
+      else {
+        if (i + 1 >= argv.length) throw new UsageError(`--${k} needs a value`);
+        (flags[k] ??= []).push(argv[++i]);
+      }
+    } else throw new UsageError(`unknown flag --${k} for ${group} ${verb}`);
+  }
+  return {
+    pos,
+    flags,
+    get: (k: string) => flags[k]?.[0],
+    all: (k: string) => flags[k] ?? [],
+    has: (k: string) => k in flags,
+    need: (k: string) => {
+      const v = flags[k]?.[0];
+      if (v === undefined) throw new UsageError(`${group} ${verb}: --${k} is required`);
+      return v;
+    },
+  };
+}
+
+/** The text of the file named by --body-file; a file that cannot be read is a usage error. */
+export function bodyFile(a: Flags): string {
+  const path = a.need('body-file');
+  try { return readFileSync(path, 'utf8'); }
+  catch (e) { throw new UsageError(`--body-file cannot be read: ${path} (${(e as NodeJS.ErrnoException).code ?? (e as Error).message})`); }
+}
 
 export function parseArgs(argv: string[], bool: string[] = []) {
   const pos: string[] = [];

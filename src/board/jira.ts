@@ -109,6 +109,7 @@ export function createJiraBoard(ctx: AdapterContext): Board {
       await api('PUT', `/issue/${id}/assignee`, { accountId: user });
       return get(id);
     },
+    milestone(id, name) { return put(id, { fixVersions: name === null ? [] : [{ name }] }); },
     async comment(id, body) {
       const c = await api('POST', `/issue/${id}/comment`, { body: adf(body) });
       return { id: String(c.id), url: `${base}/browse/${id}?focusedCommentId=${c.id}` };

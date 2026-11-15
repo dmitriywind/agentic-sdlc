@@ -34,7 +34,8 @@ the rows back.
 | `kind` | `cycle` (the default), `review` (the review runtime) or `learn` (`improve-factory`). Only `cycle` heartbeats count cycles. |
 | `did` | One short line per step result, with the ticket id. |
 | `learning` | `lastProposal` and `benchBaseline` (see Learning). Only when `learning.enabled` is true: copied forward from the last heartbeat, changed only by `improve-factory`. |
-| `measures` | Board measures over the last 7 days (lead and cycle days, first-pass rate, DORA). Not computed unless the runner prompt asks for them; `ledger summary` prints the ones the rows give. |
+| `measures` | Board measures over the last 7 days (lead and cycle days, first-pass rate, DORA). Not computed unless the runner prompt asks for them; `ledger summary` prints the ones the rows give; `ledger measures` prints the DORA ones from the board and the forge. |
+| `budget` | `exhausted`, written only when `ledger measures` reported `errorBudget.exhausted` this cycle (`product.slo` set); left out otherwise. |
 
 `errors` holds one entry per failed step: the step name, the ticket id when there is one, the
 cause. The escalation rule counts these. A field the runner could not read is left out and named
@@ -47,13 +48,13 @@ appears in exactly one heartbeat.
 
 | Key | Value |
 |---|---|
-| `id` | Unique run id: `<heartbeat at>-<skill>-<ticket>`, or the executor's `ref` when it is unique. |
+| `id` | Unique run id: the `run` that `dispatch` printed (set when `forge.provenance` is on; the commits' `Agent-Run` trailer), else `<heartbeat at>-<skill>-<ticket>`, or the executor's `ref` when it is unique. |
 | `skill`, `skillHash` | The skill name, and the `hash` string that `agentic-sdlc ledger hash .agents/skills/<skill>` prints at the run's start (not the whole JSON object). |
 | `ticket`, `cr` | The ticket id and CR number the run worked on; empty when it had none. |
 | `tier`, `model` | The skill's tier and the model the binding mapped it to; for a non-harness executor, what the executor reported, or empty. |
 | `executor`, `ref` | The executor kind and the `ref` that `dispatch` printed (session id, bot run, assignment). |
-| `tokens`, `minutes` | What the run reported. A value the executor does not report is left out, never guessed. |
-| `outcome` | `done` (its Done-when conditions held), `sent_back`, `failed`, `escalated` or `timeout`. Anything but `done` counts as a failure. |
+| `tokens`, `minutes` | What the run reported. A value the executor does not report is left out, never guessed. `ledger summary` adds them up per ticket. |
+| `outcome` | `done` (its Done-when conditions held), `sent_back`, `failed`, `escalated`, `timeout` or `capped` (it stopped on its `executors.<stage>` turn, token or minute cap). Anything but `done` counts as a failure; `capped` caps the score like `failed` and `timeout`, and `error` names the cap. |
 | `trace` | The run id to fill `traces.uri` with, when the executor stored a full transcript there; left out otherwise. |
 | `error` | For a failure: the first line of the cause, as the run or the gate stated it. The ledger clusters on it. |
 

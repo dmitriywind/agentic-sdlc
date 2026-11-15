@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stringify } from 'yaml';
 import { bindingWarnings, loadBinding, shippedOptions, validateBinding } from '../src/binding.ts';
-import type { Binding } from '../src/ports.ts';
+import { ownersFor, type Binding } from '../src/ports.ts';
+import { selectComments } from '../src/comments.ts';
 
 const good = {
   version: 2, profile: 'individual', owners: { product: 'a', factory: 'b', bots: ['bot'] },
@@ -195,6 +196,16 @@ test('product.delivery: continuous needs no release prefix; release-line needs t
   assert.match(validateBinding(r).join('\n'), /product.delivery 'weekly'/);
 });
 
+test('product.slo: a rate from 0 to 1 and a positive whole window, or unset', () => {
+  const b = structuredClone(good) as any;
+  b.product.slo = { change_failure_rate_max: 0.15, window_days: 30 };
+  assert.deepEqual(validateBinding(b), []);
+  b.product.slo = { change_failure_rate_max: 1.5, window_days: 0 };
+  const e = validateBinding(b).join('\n');
+  assert.match(e, /change_failure_rate_max must be a number from 0 to 1/);
+  assert.match(e, /window_days must be a positive whole number/);
+});
+
 test('product.evidence: known kinds only; evidence without commands.evidence_check warns', () => {
   const b = structuredClone(good) as any;
   b.product.evidence = ['sbom', 'vibes'];
@@ -225,6 +236,32 @@ test('validateBinding: an owner is a name or { board, forge }', () => {
   b.owners = { product: { board: 'acc-1' }, factory: { forge: 'fo' }, bots: [{ board: '', forge: 'x' }] };
   const p = validateBinding(b as Binding).join(String.fromCharCode(10));
   for (const k of ['owners.factory', 'owners.product', 'owners.bots']) assert.match(p, new RegExp(k));
+});
+
+test('owners: roles take lists, ownersFor normalises them, --trusted includes every role', () => {
+  const b = structuredClone(good) as any;
+  b.owners = { product: ['a', { board: 'acc-1', forge: 'ann' }], factory: 'b', operator: ['ops'], security: { board: 's1', forge: 's2' }, compliance: ['gc'], bots: ['bot'] };
+  assert.deepEqual(validateBinding(b as Binding), []);
+  assert.deepEqual(ownersFor(b.owners, 'forge'), { product: ['a', 'ann'], factory: ['b'], operator: ['ops'], security: ['s2'], compliance: ['gc'], bots: ['bot'] });
+  assert.deepEqual(ownersFor(b.owners, 'board').product, ['a', 'acc-1']);
+  assert.deepEqual(ownersFor({ bots: ['x'] } as any, 'board'), { product: [], factory: [], operator: [], security: [], compliance: [], bots: ['x'] });
+  const list = ['bot', 'a', 'ann', 'b', 'ops', 's2', 'gc', 'stranger'].map((author) => ({ author, body: author }) as any);
+  assert.deepEqual(selectComments(list, { owners: ownersFor(b.owners, 'forge'), trusted: true }).map((c) => c.body), ['bot', 'a', 'ann', 'b', 'ops', 's2', 'gc']);
+  b.owners.product = [];
+  b.owners.operator = [''];
+  b.owners.security = [{ board: 'x' }];
+  const p = validateBinding(b as Binding).join('\n');
+  for (const k of ['owners.product must not be an empty list', 'owners.operator', 'owners.security']) assert.match(p, new RegExp(k));
+});
+
+test('owners: an unknown owners key warns and the review identity must not be an owner', () => {
+  const b = structuredClone(good) as any;
+  b.owners.sec = 'x';
+  assert.match(bindingWarnings(b as Binding).join('\n'), /owners\.sec is not a known owner role/);
+  b.forge = { ...b.forge, review_identity: 'B', options: { ...b.forge.options, review_token_env: 'T' } };
+  assert.match(validateBinding(b as Binding).join('\n'), /review_identity must not be an owner/);
+  b.owners.factory = ['b2'];
+  assert.doesNotMatch(validateBinding(b as Binding).join('\n'), /review_identity must not be an owner/);
 });
 
 test('validateBinding: an empty heartbeat.ticket is a problem', () => {

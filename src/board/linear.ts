@@ -116,6 +116,9 @@ export function createLinearBoard(ctx: AdapterContext): Board {
       return withLabels(id, (ls) => (op === 'add' ? [...new Set([...ls, label])] : ls.filter((l) => l !== label)));
     },
     assign(id, user) { return update(id, { assigneeId: user }); },
+    milestone(id, name) {
+      return withLabels(id, (ls) => [...ls.filter((l) => !l.startsWith('milestone:')), ...(name === null ? [] : [`milestone:${name}`])]);
+    },
     async comment(id, body) {
       const r = await gql(`mutation($i:CommentCreateInput!){ commentCreate(input:$i){ comment { id url } } }`, { i: { issueId: (await raw(id)).id, body } });
       return r.commentCreate.comment;

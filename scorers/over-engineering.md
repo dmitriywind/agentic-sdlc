@@ -13,3 +13,5 @@ scale: pass-fail
 **Fail** when the diff adds an abstraction with one use (an interface with one implementation, a
 factory for one product, config for a constant), re-implements a helper the tree or the standard
 library already has, or adds a dependency for what a few lines do.
+
+Unscorable when the CR diff or the tree at its base cannot be read.

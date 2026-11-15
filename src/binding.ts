@@ -43,6 +43,7 @@ export const HUMAN_APPROVAL = ['full-lane', 'always', 'never'];
 const SANDBOXES =['cloud', 'container', 'local'];
 const PROFILES = ['individual', 'individual-api', 'organization'];
 export const DELIVERY = ['release-line', 'continuous'];
+export const PROVENANCE = ['off', 'warn', 'require'];
 const EVIDENCE = ['sbom', 'provenance', 'signature'];
 const TIERS = ['fast', 'balanced', 'deep'];
 const STATUSES = ['Ideas', 'Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done', 'Cancelled'];
@@ -55,8 +56,18 @@ export function validateBinding(b: Binding): string[] {
   if (x.version !== 2) p.push('version must be 2');
   if (!PROFILES.includes(x.profile)) p.push(`profile '${x.profile}' must be one of ${PROFILES.join('|')}`);
   const who = (w: any) => (typeof w === 'string' && !!w) || (!!w && typeof w === 'object' && typeof w.board === 'string' && !!w.board && typeof w.forge === 'string' && !!w.forge);
-  if (!who(x.owners?.factory)) p.push('owners.factory must name the factory owner (a name, or { board, forge })');
-  if (x.owners?.product !== undefined && !who(x.owners.product)) p.push('owners.product must be a name, or { board, forge }');
+  // A role is one entry or a non-empty list of entries; an entry is a name or { board, forge }.
+  const role = (k: string) => {
+    const v = x.owners?.[k], l = Array.isArray(v) ? v : [v];
+    if (Array.isArray(v) && !v.length) p.push(`owners.${k} must not be an empty list`);
+    else if (!l.every(who)) p.push(`owners.${k} must be a name or { board, forge }, or a list of them`);
+  };
+  if (x.owners?.factory === undefined) p.push('owners.factory must name the factory owner (a name, or { board, forge }, or a list of them)');
+  else role('factory');
+  for (const k of ['product', 'operator', 'security', 'compliance']) if (x.owners?.[k] !== undefined) role(k);
+  const ids = (v: any) => (Array.isArray(v) ? v : v === undefined ? [] : [v]).flatMap((e: any) => (typeof e === 'object' && e ? [e.board, e.forge] : [e])).filter(Boolean).map((s: unknown) => String(s).toLowerCase());
+  const rev = String(x.forge?.review_identity ?? '').toLowerCase();
+  if (rev && ['product', 'factory', 'operator', 'security', 'compliance'].some((k) => ids(x.owners?.[k]).includes(rev))) p.push('forge.review_identity must not be an owner: the review identity is a bot separate from every owner');
   if (Array.isArray(x.owners?.bots) && !x.owners.bots.every(who)) p.push('owners.bots entries must be names, or { board, forge }');
   if (!Array.isArray(x.paths?.factory) || !x.paths.factory.length || x.paths.factory.some((g: unknown) => typeof g !== 'string')) p.push('paths.factory must list the factory path globs');
   if (!Array.isArray(x.owners?.bots) || !x.owners.bots.length) p.push('owners.bots must list the accounts the factory runs as');
@@ -94,6 +105,11 @@ export function validateBinding(b: Binding): string[] {
     if (pr.delivery === 'release-line' && Array.isArray(pr.environments) && pr.environments.length < 2) p.push('product.delivery release-line needs two or more environments; use continuous');
     const ev = (pr.evidence ?? []).filter((k: string) => !EVIDENCE.includes(k));
     if (ev.length) p.push(`product.evidence has unknown kinds: ${ev.join(', ')} (known: ${EVIDENCE.join(', ')})`);
+    if (pr.slo !== undefined) {
+      const s = pr.slo;
+      if (!s || typeof s !== 'object' || typeof s.change_failure_rate_max !== 'number' || !(s.change_failure_rate_max >= 0 && s.change_failure_rate_max <= 1)) p.push('product.slo.change_failure_rate_max must be a number from 0 to 1');
+      if (!s || typeof s !== 'object' || !Number.isInteger(s.window_days) || !(s.window_days > 0)) p.push('product.slo.window_days must be a positive whole number');
+    }
     const bad = (pr.proofs ?? []).filter((k: string) => !PROOFS.includes(k));
     if (bad.length) p.push(`product.proofs has unknown kinds: ${bad.join(', ')}`);
   }
@@ -103,6 +119,7 @@ export function validateBinding(b: Binding): string[] {
     if (e?.kind === 'managed' && e.api !== undefined && !MANAGED_APIS.includes(e.api)) p.push(`executors.${k}.api '${e.api}' is not one of ${MANAGED_APIS.join('|')}`);
     for (const m of e?.mcps ?? []) if (!x.mcps?.[m]) p.push(`executors.${k}.mcps '${m}' is not in the binding's mcps`);
     for (const v of e?.secrets ?? []) if (!/^[A-Z_][A-Z0-9_]*$/.test(String(v))) p.push(`executors.${k}.secrets '${v}' is not an env var name`);
+    for (const lk of ['max_turns', 'max_tokens', 'max_minutes']) if (e?.[lk] !== undefined && !(Number.isInteger(e[lk]) && e[lk] > 0)) p.push(`executors.${k}.${lk} must be a positive integer`);
     if (e?.sandbox !== undefined && !SANDBOXES.includes(e.sandbox)) p.push(`executors.${k}.sandbox '${e.sandbox}' is not one of ${SANDBOXES.join('|')}`);
     if (e?.model !== undefined) {
       const { tier, id } = e.model ?? {};
@@ -110,7 +127,8 @@ export function validateBinding(b: Binding): string[] {
       else if (tier !== undefined && !TIERS.includes(tier)) p.push(`executors.${k}.model.tier '${tier}' is not one of ${TIERS.join('|')}`);
     }
   }
-  if (['human-approval', 'ticket-linkage', 'proofs-on-base'].includes(x.forge?.review_check_name)) p.push(`forge.review_check_name '${x.forge.review_check_name}' is a gate's context`);
+  if (x.forge?.provenance !== undefined && !PROVENANCE.includes(x.forge.provenance)) p.push(`forge.provenance '${x.forge.provenance}' is not one of ${PROVENANCE.join('|')}`);
+  if (['human-approval', 'ticket-linkage', 'proofs-on-base', 'agent-provenance'].includes(x.forge?.review_check_name)) p.push(`forge.review_check_name '${x.forge.review_check_name}' is a gate's context`);
   const rid = String(x.forge?.review_identity ?? ''), rt = x.forge?.options?.review_token_env;
   if (rid && !rt) p.push('forge.review_identity is set but forge.options.review_token_env is unset: name its token, or empty review_identity for one identity');
   if (!rid && rt) p.push('forge.options.review_token_env is set but forge.review_identity is empty: name the review identity, or remove review_token_env for one identity');
@@ -129,6 +147,15 @@ export function validateBinding(b: Binding): string[] {
   for (const k of ['bench_min_cases', 'bench_trials']) {
     const v = x.learning?.[k];
     if (v !== undefined && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
+  }
+  if (x.cycle?.max_tokens_per_ticket !== undefined && !(Number.isInteger(x.cycle.max_tokens_per_ticket) && x.cycle.max_tokens_per_ticket > 0)) p.push('cycle.max_tokens_per_ticket must be a positive integer');
+  const bb = x.learning?.bench_budget;
+  if (bb !== undefined) {
+    if (!bb || typeof bb !== 'object' || Array.isArray(bb)) p.push('learning.bench_budget must be { max_runs, max_minutes }');
+    else for (const [k, v] of Object.entries<any>(bb)) {
+      if (!['max_runs', 'max_minutes'].includes(k)) p.push(`learning.bench_budget.${k} is not a bench cap (max_runs, max_minutes; bench results carry no token count)`);
+      else if (!(Number.isInteger(v) && v > 0)) p.push(`learning.bench_budget.${k} must be a positive integer`);
+    }
   }
   if (x.learning?.enabled !== undefined && typeof x.learning.enabled !== 'boolean') p.push('learning.enabled must be true or false');
   for (const k of ['preview', 'proofs_on_base', 'evidence_check']) if (x.commands?.[k] !== undefined && typeof x.commands[k] !== 'string') p.push(`commands.${k} must be a command line`);
@@ -156,6 +183,7 @@ export function validateBinding(b: Binding): string[] {
 export function bindingWarnings(b: Binding): string[] {
   const w: string[] = [];
   const x = b as any;
+  for (const k of Object.keys(x?.owners ?? {})) if (!['product', 'factory', 'operator', 'security', 'compliance', 'bots'].includes(k)) w.push(`owners.${k} is not a known owner role (product, factory, operator, security, compliance, bots); remove it`);
   if (x?.product?.kind !== undefined) w.push('product.kind is unused; remove it');
   if (x?.board?.milestone !== undefined) w.push('board.milestone is unused; remove it');
   const hb = String(x?.heartbeat?.ticket ?? '');
@@ -163,6 +191,7 @@ export function bindingWarnings(b: Binding): string[] {
   const envs: string[] = x?.product?.environments ?? [];
   for (const l of x?.board?.env_labels ?? []) if (String(l).startsWith('env:') && !envs.includes(String(l).slice(4))) w.push(`board.env_labels '${l}' names no product.environments entry`);
   if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push('product.evidence is set but commands.evidence_check is unset: no release can show its evidence');
+  if (x?.forge?.provenance === 'require' && !(x.forge.required_checks ?? []).includes('agent-provenance')) w.push("forge.provenance is require but 'agent-provenance' is not in forge.required_checks: the gate can fail without blocking a merge; add it here and to the trunk ruleset");
   if (x?.forge?.review_runtime !== undefined) w.push('forge.review_runtime is unused: review-pr always runs in its own runtime; remove it');
   const size = x?.learning?.bench_size, min = x?.learning?.bench_min_cases ?? 20;
   if (size !== undefined && Number(size) < min) w.push(`learning.bench_size ${size} is below bench_min_cases ${min}: bench compare reports regressed for every change`);

@@ -34,6 +34,9 @@ sequenceDiagram
 | Product owner | `owners.product` | Ideas, Priority and P0, answers to holds, Full-lane and release approvals. |
 | Factory owner | `owners.factory` | The settings, the skills and the checks; approves `guardrail` factory changes. |
 | The factory | `owners.bots` | The cycle and the review run. Only these accounts' heartbeats count. |
+| Operator, security, compliance | `owners.operator`, `owners.security`, `owners.compliance` | Optional. Deploy and incident asks, security findings, release evidence gaps. With no such role, the ask goes to the product or factory owner. |
+
+Each owner setting takes one account or a list. Any account in the list counts as the owner: any factory owner's approval passes a `guardrail` change, and a reply from any of them settles a hold. The first account is the primary, the one an ask is addressed to.
 | Anyone else | | A pull request like any other, through the same checks. A Signal or `SECURITY.md` to report. |
 
 ## A week with it

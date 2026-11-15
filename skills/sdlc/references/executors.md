@@ -15,7 +15,7 @@ executors:
 | Kind | Start | Result comes back by |
 |---|---|---|
 | `harness` | A subagent loads `.agents/skills/<skill>/SKILL.md` (or the plugin skill), model by its tier. | The subagent's own board and forge writes. |
-| `command` | The CLI runs `run` with `{skill} {ticket} {cr} {workdir} {prompt_file} {mcps_file} {model}` filled in. | Exit code plus the bot's board and forge writes. |
+| `command` | The CLI runs `run` with `{skill} {ticket} {cr} {workdir} {prompt_file} {mcps_file} {model} {max_turns} {max_tokens} {max_minutes}` filled in. | Exit code plus the bot's board and forge writes. |
 | `webhook` | The CLI POSTs the task (`skill`, `ticket`, `cr`) as JSON to the URL. | The bot's board and forge writes; the next cycle reads them. |
 | `managed` | The CLI starts a run on a managed-agent API, shaped by `api`: `claude` (Managed Agents `POST /v1/sessions`), `cursor` (Cloud Agents `POST /v1/agents`), `antigravity` (Gemini Interactions), or `generic` (`POST <endpoint>/sessions`). | Same. The run id goes in the ledger row. |
 | `assign` | The CLI assigns the ticket (or CR) to the bot user and adds the skill name as a comment. | Same. |
@@ -24,6 +24,20 @@ Every executor entry may also declare `mcps` (names from the binding's `mcps` ma
 only these), `secrets` (env var names the stage may receive; nothing else is passed), `sandbox`
 (`cloud`, `container` or `local`) and `model` (`{ tier }` or `{ id }`). Secrets reach an executor
 only when listed, and never through a board or CR comment.
+
+A stage may also cap a run: `max_turns`, `max_tokens` and `max_minutes`, each a positive integer, each
+inherited from `executors.default` when the stage sets none. `dispatch` hands the caps to the
+executor and prints them as `limits`; it enforces none of them itself, because it detaches from the run.
+
+| Kind | How the caps arrive | Who enforces |
+|---|---|---|
+| `harness` | `limits` in the printed task, and a sentence in the instruction; the navigator passes both to the subagent. | The harness's own turn limit, or the subagent stopping at the cap. |
+| `command` | `{max_turns}`, `{max_tokens}`, `{max_minutes}` in `run` (an unset cap fills as an empty quoted word, so pass a flag only for a cap you set), and `AGENTIC_SDLC_MAX_TURNS`, `AGENTIC_SDLC_MAX_TOKENS`, `AGENTIC_SDLC_MAX_MINUTES` in the child's environment (set only for a cap that is set; `${AGENTIC_SDLC_MAX_TURNS:-200}` gives a default). | The command's own flags, for example `claude -p --max-turns {max_turns}`; the detached child is not watched. |
+| `webhook` | `limits` in the JSON body. | The bot. |
+| `managed` | A sentence in the task text; `limits` in the `generic` body. | The managed agent. |
+| `assign` | A sentence in the dispatch marker comment. | The bot. |
+
+A run that ends on a cap records outcome `capped` ([heartbeat](heartbeat.md#runs)).
 
 `agentic-sdlc dispatch <skill> [--ticket <id>] [--cr <n>] (at least one; none for improve-factory) [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]`
 posts its marker, starts the executor and prints `{ kind, ref, startedAt }`; for `harness` it prints

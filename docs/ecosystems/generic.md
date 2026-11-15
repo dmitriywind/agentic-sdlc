@@ -43,7 +43,7 @@ Stdio, inside the agent's session. Register the server in the tool's MCP config:
 ```
 The server is stdio only; a bot that cannot spawn a process uses route 3.
 - The server holds the board and forge tokens of the process that started it. Run it as the implementer identity, never with the review token.
-- By default it leaves out `forge_approve` and `forge_status`. Only a server for the review runtime starts with `mcp --allow approve,status`; a one-identity cycle with no shell starts with `mcp --allow status`.
+- By default it leaves out `forge_approve` and `forge_status`. Only a server for the review runtime starts with `mcp --allow approve,status`; a one-identity cycle with no shell starts with `mcp --allow status`. Under the Claude Code plugin's hook, that runner also sets `AGENTIC_SDLC_ALLOW_STATUS=1`; the hook otherwise blocks `forge_status` outside the review role.
 
 ## Route 3: vendor MCP tools only
 Map the vendor's tools to the board verbs in the binding:

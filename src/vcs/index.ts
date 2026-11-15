@@ -1,5 +1,5 @@
 import type { AdapterContext, PortCli, Vcs } from '../ports.ts';
-import { UsageError, guard, parseArgs } from '../forge/util.ts';
+import { UsageError, guard, parseStrict, type VerbSpec } from '../forge/util.ts';
 import { git } from './git.ts';
 
 const adapters = { git };
@@ -10,10 +10,18 @@ export function createVcs(ctx: AdapterContext): Vcs {
   return make(ctx);
 }
 
+/** The flags each verb accepts; anything else is a usage error. */
+const VERBS: Record<string, VerbSpec> = {
+  start: {}, head: {}, base: {}, push: {}, cut: {}, tag: {}, drop: {}, 'checkout-tests': {},
+  changed: { value: ['since'] },
+  tags: { value: ['prefix'] },
+};
+
 export const cli: PortCli = (argv, ctx) =>
   guard(async () => {
     const [verb, ...rest] = argv;
-    const a = parseArgs(rest, ['stdin-prepush']);
+    if (!verb || !Object.hasOwn(VERBS, verb)) throw new UsageError(`unknown vcs verb: ${verb ?? ''}`);
+    const a = parseStrict('vcs', verb, rest, VERBS[verb]);
     const v = createVcs({ ...ctx, options: ctx.binding.vcs.options ?? {} });
     const need = (i: number) => {
       if (!a.pos[i]) throw new UsageError(`vcs ${verb}: missing argument`);

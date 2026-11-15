@@ -38,11 +38,10 @@ jobs:
     runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that run CR or agent code
     timeout-minutes: 60
     steps:
-      # pin to a commit SHA (actions/checkout, actions/setup-node)
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ secrets.AGENTIC_FORGE_TOKEN }}   # a GITHUB_TOKEN push starts no workflow run
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - name: Install the agent CLI (no secrets in this step)
@@ -79,10 +78,10 @@ jobs:
     env:
       AGENTIC_SDLC_ROLE: review   # the plugin hook allows forge approve only here
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ secrets.AGENTIC_FORGE_TOKEN }}   # a GITHUB_TOKEN push starts no workflow run
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - name: Install the agent CLI (no secrets in this step)
@@ -117,10 +116,10 @@ jobs:
     runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       # Not runner-setup.sh: its doctor probes the forge too, which this job has no token for, so it would stay red.

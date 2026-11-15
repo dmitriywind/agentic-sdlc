@@ -96,7 +96,7 @@ Adapters that call an HTTP API retry 429 and 5xx responses with backoff (3 tries
 | `label <id> add\|remove <label>` | Add or remove a label | `Item` |
 | `assign <id> <user\|--none>` | Set or clear the assignee | `Item` |
 | `comment <id> --body-file <f>` | Add a comment | `{ id, url }` |
-| `comments <id> [--last <n>] [--marker <text>] [--author <a>]… [--trusted]` | Comments, newest first; first-line and author filters (`--last` counts after them). `--trusted` is `--author` for every entry of `owners.bots`, `owners.product` and `owners.factory` | `Comment[]` |
+| `comments <id> [--last <n>] [--marker <text>] [--author <a>]… [--trusted]` | Comments, newest first; first-line and author filters (`--last` counts after them). `--trusted` is `--author` for every entry of `owners.bots`, `owners.product`, `owners.factory` and the optional `owners.operator`, `owners.security`, `owners.compliance` | `Comment[]` |
 | `close <id> --reason completed\|not_planned` | Close (and move to Done or Cancelled) | `Item` |
 | `child <parent> <child>` | Link a sub-issue | `Item` |
 
@@ -164,7 +164,7 @@ change line `start` opens.
 | `branch-names` | A change line outside the binding's patterns, the dependency lines `dependabot/` and `renovate/`, and the trunk is refused. |
 | `linkage` | Posts check `ticket-linkage`: a product CR closes exactly one open ticket and names it in its source. |
 | `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base, or when a product CR changes only `paths.no_proof`. |
-| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (an owner, member or collaborator of the repo, not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by `owners.factory`. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
+| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (an owner, member or collaborator of the repo, not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by any `owners.factory` entry. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
 | `review --cr <n>` | One identity only (`forge.review_identity` empty): posts status `review` on the head from the newest `review-pr` report for that head by a trusted author (`owners.bots`, `owners.product`, `owners.factory`): success on `Verdict: PASS`, failure on `REMEDIATION REQUIRED`, pending with no report. Posts with the CI job's token. With two identities it does nothing. |
 | `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. Done records a fact: a held ticket moves and keeps its label; a Cancelled ticket stays. A push with no CR changes nothing. No CR-pipeline gate writes the board; besides this gate only `shipped` moves a ticket (In review to Done, when a deploy reports first). |
 | `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
@@ -199,7 +199,12 @@ groups are `version`, `profile`, `owners`, `board`, `forge`, `vcs`, `product`, `
 Keys this contract relies on by name:
 
 - `owners.product`, `owners.factory` and each entry of `owners.bots`: one account name, or `{ board, forge }`
-  when the board and the forge name the person differently. Board reads (ledger, dispatch, `board comments
+  when the board and the forge name the person differently. `owners.product` and `owners.factory` also take a
+  list of such entries (any member counts as the owner; the first is the primary, the one a skill asks or
+  assigns). `owners.operator`, `owners.security` and `owners.compliance` are optional roles of the same shape,
+  default absent; `ownersFor` normalises every role to a list and `--trusted` includes them; their process
+  meaning is in `escalate-to-human`. An unknown key under `owners` is a warning; `forge.review_identity`
+  must not be any owner. Board reads (ledger, dispatch, `board comments
   --trusted`, spec authors) use `board`; forge reads (the approval gate, `forge comments --trusted`) use `forge`.
 - `heartbeat.ticket`: the id of the ticket that holds heartbeat comments; `validate` fails when it is empty.
   `init --board local` creates it (status Cancelled, so no route reads it) and sets it.
@@ -212,6 +217,8 @@ Keys this contract relies on by name:
   `proofs-on-base` gate: a command with `{files}`, run once per new proof file), `commands.preview` (optional: deploys
   a CR head for `verify-ux`), `commands.rollback`, `commands.evidence_check` (exits 0 when every
   `product.evidence` kind exists for `{sha}`; the release ready check runs it).
+- `product.slo: { change_failure_rate_max: <0..1>, window_days: <n> }` (optional; unset: no error
+  budget). `validate` rejects a rate outside 0 to 1 and a non-positive window.
 - `product.delivery: release-line | continuous` (default `release-line`; continuous needs no
   `vcs.release_prefix` and has no In release), `product.evidence: [sbom | provenance | signature]`,
   `paths.no_proof` (globs a product CR may change with no proof file).
@@ -219,6 +226,11 @@ Keys this contract relies on by name:
   younger than it is a double fire and is skipped (unset or 0: no dispatch check at all; the template sets 10). A run has finished when its own done line `<!-- agentic-sdlc:done <key> -->` appears after the
   dispatch marker (posted by a bot, or by the `assign` executor's user); other runs' comments never count. `dispatch` hands that line to every executor in its task.
   An unfinished run blocks a second dispatch until `stall_minutes`, which must exceed the longest stage run.
+- `executors.<stage>.max_turns`, `max_tokens`, `max_minutes` (optional positive integers, inherited from
+  `executors.default`): per-run caps `dispatch` hands to the executor and prints as `limits`; the
+  executor enforces them (section 7). A run that ends on one has outcome `capped`.
+- `cycle.max_tokens_per_ticket` (optional): the tokens a ticket's runs may report in total; `ledger
+  summary` marks a ticket over it `overBudget: true`, and the cycle dispatches it no further.
 - `cycle.max_rework`: the most `REMEDIATION REQUIRED` reports `review-pr` may post on one CR before it
   escalates instead of sending the ticket back (the template sets 3).
 - `paths.factory`: a change only there is a **factory change**: no ticket, its own change pattern
@@ -226,6 +238,9 @@ Keys this contract relies on by name:
   `skill-regression`.
 - `learning.every_cycles`, `learning.min_evidence_runs`, `learning.bench_size`,
   `learning.bench_min_cases` (default 20), `learning.bench_trials` (default 3),
+  `learning.bench_budget` (optional `{ max_runs, max_minutes }`: `bench run` refuses a plan of more runs
+  than `max_runs` (cases x trials) unless `--allow-over-budget`, and starts no new case after
+  `max_minutes`),
   `learning.auto_merge_classes` (template default `[]` until a bench baseline exists),
   `learning.judge_tier`, `learning.enabled` (default `false`: `learning.due` and `learning.judge` stay false).
 
@@ -259,11 +274,16 @@ needs `agent_command`.
 2. **Scorers.** A scorer is a file `.agents/scorers/<name>.md`: frontmatter `name`, `applies_to`
    (skills, or `*`) and `scale` (`pass-fail` or `0-4`), and a body that is the rubric question.
    The package ships `done-conditions` (the 0–4 `score`), `redundant-tests`, `scope-creep`,
-   `spec-adherence` and `over-engineering`.
+   `spec-adherence`, `over-engineering`, `spec-quality` (`shape`, 0–4) and `triage-accuracy`
+   (`triage-signal`, judged from the ticket's later history). Any scorer value may be `unscorable`:
+   the judge had too little evidence (a missing or unreadable ref) and gives a short `reason`. It is
+   stored, `ledger summary` counts it per scorer (`unscorable: n`), and it is left out of medians,
+   failure rates, failure clusters and the `learning.min_evidence_runs` count. The hard-fact cap
+   applies to real grades only; a human grade may be `unscorable` too.
 3. **Judge.** `dispatch judge-run --run-model <m>` picks `models[learning.judge_tier]`, or the next
    tier when that is the run's own model, and prints `{ skip: true }` when none is independent.
    `ledger plan --run <id>` prints the applicable scorers, the evidence refs (trace, CR, diff) and
-   the hard-fact cap (failed or timed-out outcome, red check, send-back, bounce, reopen, escape,
+   the hard-fact cap (failed, timed-out or capped outcome, red check, send-back, bounce, reopen, escape,
    bench oracle red). `judge-run` grades each scorer with the model. `ledger record --run <id>
    --file <scores.json>` validates scorer names and scales, applies the cap and posts one
    `<!-- scores -->` comment on the heartbeat ticket; `ledger` reads these. A **human grade**, a
@@ -289,10 +309,25 @@ needs `agent_command`.
    <name>` nominates past tickets, which a factory CR adds. `bench run --suite <s> (--model <id> |
    --executor <e>) [--factory <rev>]` replays cases in fresh worktrees outside the root and
    records pass and minutes per case. `bench report --suite <s>` marks the Pareto front
-   of pass rate against median minutes. Only `harness` and `command` executors run on the bench.
+   of pass rate against median minutes. Only `harness` and `command` executors run on the bench. Cases a spent `learning.bench_budget` left
+   unrun are recorded `skipped: budget`, never as failures; `bench compare` and `bench report` treat
+   such a result as incomplete (`regressed`, off the Pareto front), like too few cases. Bench results
+   carry no token count, so the budget has no token cap.
 8. **Measures.** `ledger summary` reports runs, median score, failure rate and minutes by skill,
-   model, executor and scorer, and the failure clusters. The heartbeat's optional `measures` (DORA,
+   model, executor and scorer, and the failure clusters, and `tickets`: runs, tokens and minutes per ticket
+   (top 20 by tokens, plus any over `cycle.max_tokens_per_ticket`, with `ticketTotals`). The heartbeat's optional `measures` (DORA,
    cycle time, first-pass rate) are off unless the runner prompt asks for them.
+   `ledger measures [--days <n>]` (default 30) prints JSON computed from the board and the forge:
+   `deployFrequency` (tickets at Done with Shipped on the last environment, last written in the
+   window, per week), `leadTimeHours` (median from `createdAt` to entering Done, for tickets that
+   reached Done in the window), `changeFailureRate` (P0 bugs and Signals opened in the window plus
+   `signal:deploy` Signals, over changes shipped; a rollback opens no ticket, so it counts only
+   through its Signal), `timeToRestoreHours` (median open to Done of those failures) and `reworkRate`
+   (merged CRs closing a ticket that reached Done in the window, with a trusted `REMEDIATION REQUIRED`
+   `review-pr` report, over those CRs). Each carries its counts; a measure the data cannot give is
+   `null` with a `why`. With `product.slo` set it adds `errorBudget: { max, windowDays, actual,
+   exhausted }`, where `actual` is the change failure rate over `slo.window_days`; the cycle starts
+   no new `feature` ticket while `exhausted` (skills/sdlc, Run one cycle step 1).
 
 ## 7. Executors: who runs each stage
 
@@ -353,9 +388,20 @@ names `sandbox: local` and the runner sets `AGENTIC_SDLC_LOCAL=1`; an unset sand
 
 **Environment variables the mechanism reads.** `AGENTIC_SDLC_UNATTENDED=1` (dispatch refuses local
 stages), `AGENTIC_SDLC_LOCAL=1` (local execution opt-in), `AGENTIC_SDLC_ROLE=review` (the plugin hook
-allows `forge approve`, and its MCP launcher serves `forge_approve` and `forge_status`),
+allows `forge approve` and `forge status`, and its MCP launcher serves `forge_approve` and `forge_status`),
+`AGENTIC_SDLC_ALLOW_STATUS=1` (the plugin hook allows `forge status` outside the review role; a one-identity runner that starts `mcp --allow status` sets it, nothing else needs it),
 `CLAUDE_CODE_REMOTE=true` (a Claude cloud session: REST and `ccr` routes, the proxy token),
 `AGENTIC_SDLC_PACKAGE` (the package root `init` copies from; tests set it).
+
+**Install and upgrade.** `init` records the sha256 of every file it copies from the package (skills,
+scorers, workflows, rulesets as patched, the pre-push hook, runner files, generated tier agents) in
+`.agents/install.lock.json`; it reads the older `.agents/skills.lock.json` once. A re-run (`init --upgrade`
+is the same run) updates a file still at its recorded hash, keeps an edited one and names the package file
+with the new version, writes files new in the package, and reports as `stale` any recorded file the package no
+longer ships, deleting none. A file with no lock entry counts as edited unless it equals the package's.
+`--force` overwrites locally edited template files only. No flag rewrites `.agents/binding.yml` (to
+regenerate it, delete it) or adds a second heartbeat ticket; `init` and `validate` print an `info:` line
+listing the template's top- and second-level binding keys that the binding does not set.
 
 Gates always run in the forge's CI, so trunk guarantees never depend on the runtime. A gate blocks a
 merge only where the forge enforces it: `doctor` warns when the trunk has no enforced ruleset or branch

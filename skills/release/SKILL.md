@@ -18,7 +18,7 @@ The Product owner approves the last environment; this skill never does.
 
 0. **Resume.** `board comments <request> --trusted`. When the newest comment carrying
    `<!-- release-proposal` has no Product owner reply after it (`board comments <request> --author
-   <owners.product>`; a bot or Factory owner comment is never a go-ahead), stop: no comment, no
+   <owners.product>` once per entry; a reply by any entry is a go-ahead; a bot or Factory owner comment never is), stop: no comment, no
    further reads. A reply that approves goes to step 6, or to step 7 when a `<!-- release-cut`
    comment of this run's account follows it; one that changes contents, to step 3; one
    asking to refresh, to step 1. Done when the run stopped or knows its entry step.
@@ -43,13 +43,13 @@ The Product owner approves the last environment; this skill never does.
 4. **Version.** Per `vcs.version_scheme`. CalVer is `YYYY.MM.N`, `N` counting releases in that
    month from 1; semver bumps from the last release. Never reuse a version, even a failed one. Done
    when the version is unused as a tag and a release line.
-5. **Propose.** One comment on the release request, to the Product owner, its first line
+5. **Propose.** One comment on the release request, to the Product owner (the first entry of `owners.product` is the primary), its first line
    `<!-- release-proposal <revision> -->`: contents, version,
    revision, and the open signals per environment with each one's Status. For a P0, the first line names the P0
    and says only the commits needed for it are in the proposal. Then stop. Done when posted and the run has stopped.
 6. **Mark.**
    Go-ahead first: continue only after a Product owner reply on the proposal approves it
-   (`board comments <request> --author <owners.product>`; a later run resumes here). A reply that
+   (`board comments <request> --author <owners.product>` once per entry; a later run resumes here). A reply that
    changes the contents restarts at step 3. Run the ready check (step 3) again on the same revision: a P0, a Signal or a red check that
    appeared since the proposal stops the cut. Then `board set <id> release_version <version>` and
    `board set <id> shipped "In release"` on each selected ticket still On <env before last>, before

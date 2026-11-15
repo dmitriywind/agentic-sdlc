@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import { createBoard } from './board/index.ts';
 import { fill } from './bench.ts';
-import type { Binding, Board, Executor, McpServer, PortCli } from './ports.ts';
-import { ownersFor } from './ports.ts';
+import type { Binding, Board, Executor, Limits, McpServer, PortCli } from './ports.ts';
+import { limitsOf, ownersFor } from './ports.ts';
 
 const envOf = (env: NodeJS.ProcessEnv, name: string) => {
   const v = env[name];
@@ -69,10 +69,15 @@ export function childEnv(env: NodeJS.ProcessEnv, secrets: string[]): NodeJS.Proc
 }
 
 type Managed = Extract<Executor, { kind: 'managed' }>;
-type Task = { skill: string; ticket: string; cr: string; done?: string };
+type Task = { skill: string; ticket: string; cr: string; done?: string; run?: string; limits?: Limits };
 
 const subject = (t: Task) => (t.ticket ? `ticket ${t.ticket}${t.cr ? ` (change request ${t.cr})` : ''}` : `change request ${t.cr}`);
-const taskText = (t: Task) => `Run skill ${t.skill} on ${subject(t)}. Load .agents/skills/${t.skill}/SKILL.md first and follow it.${t.done ? ` Put the line ${t.done} in your closing comment.` : ''}`;
+/** The caps as one sentence for a task text, empty when none is set. */
+export const limitsText = (l: Limits = {}): string => {
+  const parts = [l.max_turns && `${l.max_turns} turns`, l.max_tokens && `${l.max_tokens} tokens`, l.max_minutes && `${l.max_minutes} minutes`].filter(Boolean);
+  return parts.length ? ` Limits for this run: at most ${parts.join(', ')}; stop at the first one you reach.` : '';
+};
+const taskText = (t: Task) => `Run skill ${t.skill} on ${subject(t)}. Load .agents/skills/${t.skill}/SKILL.md first and follow it.${limitsText(t.limits)}${t.done ? ` Put the line ${t.done} in your closing comment.` : ''}${t.run ? ` Your run id is ${t.run}: end every commit you make with the trailer Agent-Run: ${t.run}.` : ''}`;
 
 export const DISPATCH_MARKER = 'agentic-sdlc:dispatch';
 /** The line a dispatched run's closing comment carries, with its key: the run has finished. */
@@ -200,10 +205,12 @@ export const cli: PortCli = async (argv, ctx) => {
     /** Prints the start record; the marker was posted before the executor started. */
     let marker: string | undefined;
     const done = async (kind: string, ref: string | null, extra: object = {}) => {
-      console.log(JSON.stringify({ kind, ref: ref ?? (kind === 'assign' ? marker ?? null : null), startedAt, ...(key ? { key, done: `<!-- ${DONE_MARKER} ${key} -->` } : {}), ...extra }));
+      console.log(JSON.stringify({ kind, ref: ref ?? (kind === 'assign' ? marker ?? null : null), startedAt, ...(run ? { run } : {}), ...(key ? { key, done: `<!-- ${DONE_MARKER} ${key} -->` } : {}), ...extra }));
       return 0;
     };
     const doneLine = key ? `<!-- ${DONE_MARKER} ${key} -->` : undefined;
+    // forge.provenance on: the run id (the dispatch key, else ticket-skill-start time) goes to the executor and into the start record, for the Agent-Run trailer and the run row's id.
+    const run = (b.forge.provenance ?? 'off') === 'off' ? undefined : key ?? [ticket || (cr ? `cr${cr}` : 'factory'), skill, startedAt.replace(/\D/g, '')].join('-');
     // The cycle claims itself with `dispatch sdlc`: a marker only, never a run, and no executor check.
     if (skill === 'sdlc') {
       if (key) await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key} -->\nagentic-sdlc: cycle claimed`);
@@ -220,10 +227,12 @@ export const cli: PortCli = async (argv, ctx) => {
     if (local && !localOk && (f.unattended || ctx.env.AGENTIC_SDLC_UNATTENDED === '1')) {
       throw new Error(`executor for ${skill} uses sandbox ${stage.sandbox ?? 'local (unset)'}; unattended runs refuse it (local execution: sandbox local and AGENTIC_SDLC_LOCAL=1)`);
     }
-    const info = { ...(judge ?? {}), model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox };
+    const limits = limitsOf(b, ex);
+    const hasLimits = Object.keys(limits).length > 0;
+    const info = { ...(judge ?? {}), model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox, ...(hasLimits ? { limits } : {}) };
     // Claim before start: a second fire sees the marker even while this executor is still starting.
     if (key || ex.kind === 'assign') {
-      marker = (await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->\nagentic-sdlc: run skill ${skill} (${ex.kind})${key ? `; close with <!-- ${DONE_MARKER} ${key} -->` : ''}`)).id;
+      marker = (await boardOf().comment(target!, `<!-- ${DISPATCH_MARKER} ${key ?? `${ticket}-${skill}`} -->\nagentic-sdlc: run skill ${skill} (${ex.kind})${limitsText(limits)}${key ? `; close with <!-- ${DONE_MARKER} ${key} -->` : ''}`)).id;
       const k = key ?? `${ticket}-${skill}`;
       // Two overlapping cycles can both pass the check above. Re-read: the earliest unfinished marker inside
       // the window owns the run, any later one stands down. Its own done line is not posted: it would end the owner's block.
@@ -247,18 +256,18 @@ export const cli: PortCli = async (argv, ctx) => {
     }
 
     if (ex.kind === 'harness') {
-      return await done('harness', null, { instruction: `load .agents/skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ''}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
+      return await done('harness', null, { instruction: `load .agents/skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}${hasLimits ? `; ${limitsText(limits).trim()}` : ''}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ''}${run ? `; its run id is ${run}` : ''}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
     }
     if (ex.kind === 'command') {
       const dir = mkdtempSync(join(tmpdir(), 'agentic-sdlc-'));
       const promptFile = join(dir, 'prompt.md');
-      writeFileSync(promptFile, `${taskText({ skill, ticket, cr, done: doneLine })}
+      writeFileSync(promptFile, `${taskText({ skill, ticket, cr, done: doneLine, run, limits })}
 `);
       const mcpsFile = join(dir, 'mcps.json');
       writeFileSync(mcpsFile, JSON.stringify(stage.mcps, null, 2)); // env var names only
-      const vars: Record<string, string> = { skill, ticket, cr, workdir, prompt_file: promptFile, mcps_file: mcpsFile, ...(stage.model ? { model: stage.model } : {}) };
+      const vars: Record<string, string> = { skill, ticket, cr, workdir, prompt_file: promptFile, mcps_file: mcpsFile, max_turns: String(limits.max_turns ?? ''), max_tokens: String(limits.max_tokens ?? ''), max_minutes: String(limits.max_minutes ?? ''), ...(stage.model ? { model: stage.model } : {}) };
       const line = fill(ex.run, vars);
-      const env = childEnv(ctx.env, stage.secrets);
+      const env = { ...childEnv(ctx.env, stage.secrets), ...(limits.max_turns ? { AGENTIC_SDLC_MAX_TURNS: String(limits.max_turns) } : {}), ...(limits.max_tokens ? { AGENTIC_SDLC_MAX_TOKENS: String(limits.max_tokens) } : {}), ...(limits.max_minutes ? { AGENTIC_SDLC_MAX_MINUTES: String(limits.max_minutes) } : {}) };
       const logDir = join(tmpdir(), 'agentic-sdlc-runs');
       mkdirSync(logDir, { recursive: true, mode: 0o700 });
       // The log dir is predictable: refuse a symlink or another user's folder, keep it private.
@@ -279,16 +288,16 @@ export const cli: PortCli = async (argv, ctx) => {
         return await done('command', String(child.pid), { log, ...info });
       } finally { closeSync(fd); }
     }
-    const stageBody = { model: stage.model, mcps: Object.entries(stage.mcps).map(([name, m]) => ({ name, url: m.url })), sandbox: stage.sandbox };
+    const stageBody = { model: stage.model, mcps: Object.entries(stage.mcps).map(([name, m]) => ({ name, url: m.url })), sandbox: stage.sandbox, ...(hasLimits ? { limits } : {}) };
     if (ex.kind === 'webhook') {
       const headers: Record<string, string> = ex.token_env ? { authorization: `Bearer ${envOf(ctx.env, ex.token_env)}` } : {};
       const url = envOf(ctx.env, ex.url_env);
       sent = true;
-      const r = await ctx.http('POST', url, { headers, body: { skill, ticket, cr, callback: null, ...(doneLine ? { done: doneLine } : {}), ...stageBody } });
+      const r = await ctx.http('POST', url, { headers, body: { skill, ticket, cr, callback: null, ...(doneLine ? { done: doneLine } : {}), ...(run ? { run } : {}), ...stageBody } });
       return await done('webhook', r?.id ?? null);
     }
     if (ex.kind === 'managed') {
-      const req = managedRequest(ex, ctx.env, { skill, ticket, cr, done: doneLine }, stage.model, stageBody);
+      const req = managedRequest(ex, ctx.env, { skill, ticket, cr, done: doneLine, run, ...(hasLimits ? { limits } : {}) }, stage.model, stageBody);
       sent = true;
       const r = await ctx.http(...req);
       return await done('managed', r?.id ?? r?.name ?? null);

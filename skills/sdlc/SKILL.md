@@ -68,6 +68,11 @@ folder, at most `parallel_agents` at once. Each starts with `agentic-sdlc dispat
 while the first has not finished, prints `{ skipped: true }`: it is a double fire, or the first still
 runs; leave it ([Executors](references/executors.md) says how long).
 
+On Claude Code a `harness` step goes to the agent for its tier: `sdlc-<tier>` when the project has
+`.claude/agents/sdlc-<tier>.md` (its model comes from the binding's `models`), else the plugin's
+`agentic-sdlc:sdlc-<tier>`. Every `review-pr` step goes to `agentic-sdlc:sdlc-reviewer`, which can read
+files and run only `agentic-sdlc` commands, so it cannot run the CR's code.
+
 A CR **needs a review** when it is open, a `review-pr` row of the Routing table matches it, and,
 for a draft CR, the newest `<!-- review-pr` report on it (`forge comments <n> --last 1 --marker
 "<!-- review-pr" --trusted`) is not for its head sha, or is for it but is neither a `Verdict:
@@ -79,7 +84,12 @@ In order:
 1. **Read state.** First `dispatch sdlc --ticket <heartbeat.ticket>`: when it prints `{ skipped: true }`
    another cycle is running; stop and write nothing. List the board once (`board list`). Read open CRs (`forge list`), the last
    `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --last <n> --marker
-   "<!-- heartbeat -->" --trusted`) and `ledger summary`.
+   "<!-- heartbeat -->" --trusted`) and `ledger summary`. When `product.slo` is set, also
+   `ledger measures`: while it prints `errorBudget.exhausted: true`, the cycle claims no new `feature`
+   ticket (Ready to In progress in step 6) and works only bugs, Signals and the tickets and reviews
+   already in flight, and the heartbeat records `budget: exhausted`. Done when the budget state is
+   known, and no `feature` ticket moved from Ready to In progress in a cycle whose heartbeat says
+   `budget: exhausted`.
 1a. **Release holds.** For each held ticket in the listing (label `board.labels.human`): read its last
    ask (`board comments <id> --last 1 --marker "### Needs human" --trusted`) and the replies after it
    (`board comments <id> --author <owners.product> --author <owners.factory>`). When one reply is newer than
@@ -124,8 +134,14 @@ In order:
 
 Rules for every step:
 
-- Route only by the Routing table. No cap other than `cycle.max_implementations` and `cycle.min_ready`
-  holds a routed ticket back.
+- Route only by the Routing table. No cap other than `cycle.max_implementations`, `cycle.min_ready`,
+  `cycle.max_tokens_per_ticket` and an exhausted error budget (step 1) holds a routed ticket back.
+- A ticket the `ledger summary` `tickets` list marks `overBudget: true` (more tokens than
+  `cycle.max_tokens_per_ticket`; unset: no limit) gets no further dispatch: call `escalate-to-human`
+  (Money) with its tokens and runs.
+- A run that ends on its cap (`executors.<stage>.max_turns`, `max_tokens` or `max_minutes`) records
+  outcome `capped` with the cap in `error`; its ticket follows the same path as after a `timeout`
+  (a failed step: the rule below).
 - After `cycle.time_budget_minutes`, start nothing new, judge and learn included: wait for the running
   subagents, then report. The next cycle judges the runs that have no score.
   Keep `cycle.time_budget_minutes` below the runner's job timeout, so the heartbeat is always written.

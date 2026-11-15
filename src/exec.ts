@@ -51,3 +51,38 @@ export const http: Http = async (method, url, opts = {}) => {
     await sleep(retryWait(res.headers.get('retry-after'), attempt));
   }
 };
+
+/** True for a `gh` call that only reads: `gh api` GET, and the view and list subcommands. */
+export function ghReads(args: string[]): boolean {
+  if (args[0] === 'api') {
+    const i = args.findIndex((a) => a === '-X' || a === '--method');
+    if (i >= 0) return String(args[i + 1]).toUpperCase() === 'GET';
+    return !args.some((a) => ['--input', '-f', '-F', '--field', '--raw-field'].includes(a));
+  }
+  return /^(view|list|field-list|item-list)$/.test(args[1] ?? '');
+}
+
+/** What gh printed when a call failed: the error message and the captured stderr. */
+const failureText = (e: unknown) => `${(e as Error)?.message ?? ''}\n${String((e as { stderr?: unknown })?.stderr ?? '')}`;
+
+/** Seconds gh asked to wait ("Retry-After: 30", "retry after 30 seconds"), when it printed one. */
+const retryAfterOf = (text: string) => /retry[- ]after[:= ]+(\d+)/i.exec(text)?.[1] ?? null;
+
+/**
+ * Runs `gh` through `exec`, trying up to 3 times. A read retries on HTTP 429, a 403 that names a rate limit
+ * and HTTP 5xx; a write retries only on 429 and rate limits, because a write that failed with a 5xx may have
+ * happened. The wait is gh's retry-after hint, else 1s then 2s (setSleep swaps the wait in tests).
+ */
+export async function ghRetry(exec: Exec, args: string[], opts?: Parameters<Exec>[2]): Promise<string> {
+  const read = ghReads(args);
+  for (let attempt = 1; ; attempt++) {
+    try { return exec('gh', args, opts); }
+    catch (e) {
+      const text = failureText(e);
+      const limited = /HTTP 429|rate limit|too many requests/i.test(text);
+      const server = /HTTP 5\d\d/i.test(text);
+      if (!(limited || (read && server)) || attempt >= TRIES) throw e;
+      await sleep(retryWait(retryAfterOf(text), attempt));
+    }
+  }
+}

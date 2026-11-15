@@ -22,7 +22,7 @@ every session, the repo is also a plugin marketplace:
 /plugin marketplace add dmitriywind/agentic-sdlc
 /plugin install agentic-sdlc@agentic-sdlc
 ```
-The plugin's hook refuses a push to the trunk and allows `forge approve` only in the review runtime (two identities).
+The plugin's hook refuses a push to the trunk and allows `forge approve` and `forge status` only in the review runtime (two identities). A one-identity runner that serves `forge_status` over MCP sets `AGENTIC_SDLC_ALLOW_STATUS=1`; that never opens `forge approve`.
 
 What `init --harness claude` writes:
 - `.agents/binding.yml`, `.agents/scorers/`, the gate templates for your forge, the runner prompts.
@@ -59,7 +59,7 @@ Subscription only.
 
 | Option | How | Limits |
 |---|---|---|
-| Scheduled task (cloud) | Create at claude.ai/code/routines or with `/schedule`. Saved prompt, repo, connectors; schedule, API or GitHub-event trigger. Template: [`templates/runner/claude-routine.md`](../../templates/runner/claude-routine.md). Board: `github-issues`, or `jira`/`linear` with the host in the environment's allowed domains and the token as a network secret; not `github` (Projects v2), which the GitHub proxy cannot reach (no GraphQL, no `orgs/*` or `users/*`). | Research preview. Shortest interval 1 hour. 100 scheduled runs per hour per account; Run-now and API fires 30 per hour per task. Runs draw the same plan usage as interactive work. No Docker daemon; a foreground command stops at 10 minutes, so `commands.verify` runs in CI. It acts as your claude.ai user. Clone and push need GitHub (GitLab and Bitbucket cannot push back). `/schedule` needs a claude.ai login, not an API key. [docs](https://code.claude.com/docs/en/routines) |
+| Scheduled task (cloud) | Create at claude.ai/code/routines or with `/schedule`. Saved prompt, repo, connectors; schedule, API or GitHub-event trigger. Template: [`templates/runner/claude-routine.md`](../../templates/runner/claude-routine.md). Board: `github-issues`, or `jira`/`linear` with the host in the environment's allowed domains and the token as a network secret (hosts and header per adapter, and the `node_modules` setup script the MCP server needs, are in the template; neither is proved in a cloud run yet); not `github` (Projects v2), which the GitHub proxy cannot reach (no GraphQL, no `orgs/*` or `users/*`). | Research preview. Shortest interval 1 hour. 100 scheduled runs per hour per account; Run-now and API fires 30 per hour per task. Runs draw the same plan usage as interactive work. No Docker daemon; a foreground command stops at 10 minutes, so `commands.verify` runs in CI. It acts as your claude.ai user. Clone and push need GitHub (GitLab and Bitbucket cannot push back). `/schedule` needs a claude.ai login, not an API key. [docs](https://code.claude.com/docs/en/routines) |
 | CI cron with a subscription token | `claude setup-token` prints a one-year OAuth token; store it as `CLAUDE_CODE_OAUTH_TOKEN`. The template fails when `ANTHROPIC_API_KEY` is also set, since it would win and bill the API. Template: [`templates/runner/github-actions-claude.yml`](../../templates/runner/github-actions-claude.yml) | The token only makes model requests: no claude.ai connectors. `ANTHROPIC_API_KEY`, if set, wins. `--bare` ignores the subscription login. Subscription tokens are tied to one person. [auth](https://code.claude.com/docs/en/authentication), [action](https://code.claude.com/docs/en/github-actions) |
 
 Terms caveat: Anthropic does not allow third-party products to offer claude.ai login or rate limits, including agents

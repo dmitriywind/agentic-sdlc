@@ -14,3 +14,5 @@ tree at the CR base for the function, route or file under test).
 **Fail** when an added test asserts the same behaviour, on the same inputs, as an existing test or
 another added test, or when a test only restates the implementation (asserts a mock was called with
 what the code passes it). A test of a new edge case passes.
+
+Unscorable when the CR diff or the tree at its base cannot be read.

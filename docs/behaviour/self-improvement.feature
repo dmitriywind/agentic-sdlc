@@ -142,6 +142,34 @@ Feature: Judge runs and improve the factory
     And it clusters failures that have the same error once ids, paths and shas are removed
     And a cluster needs at least two runs, or for a scorer two tickets
 
+  # Source: src/ledger.ts, "byScorer", "scoresComment"; skills/judge-run/SKILL.md, "Rules"
+  # Proof: test/ledger.test.ts "unscorable: needs a reason, is counted per scorer, and is left out of rates, medians, clusters and the cap"
+  Scenario: A judge with too little evidence grades unscorable
+    Given a scorer whose evidence refs are missing or unreadable
+    When the judge records the value "unscorable" with a reason
+    Then recording without a reason fails
+    And "ledger summary" shows "unscorable: n" for the scorer
+    And the value is left out of medians, failure rates, failure clusters and the hard-fact cap
+    And a human grade may be "unscorable" too
+
+  # Source: src/ledger.ts, "measures", "changeFailures"; references/architecture.md, "6. The self-improvement loop", item 8
+  # Proof: test/ledger.test.ts "measures: DORA from the board and forge, null with a why, and the error budget"
+  Scenario: The ledger computes DORA measures and the error budget from the board and the forge
+    Given tickets shipped, P0 bugs and failed-deploy Signals, and review reports on merged CRs
+    When "ledger measures --days <n>" runs
+    Then it prints deploy frequency, lead time, change failure rate, time to restore and rework rate with their counts
+    And a measure the data cannot give is null with a "why"
+    And with product.slo set it prints errorBudget with max, actual and exhausted
+    And only review-pr reports by owners.bots count toward rework
+
+  # Source: scorers/spec-quality.md, scorers/triage-accuracy.md
+  # Proof: skill text only
+  Scenario: Shape and triage runs have scorers
+    Given a run of "shape" or "triage-signal"
+    When "ledger plan --run <id>" lists its scorers
+    Then "spec-quality" applies to shape and "triage-accuracy" to triage-signal
+    And the evidence names the ticket, since the run has no CR
+
   # Source: src/ledger.ts, "cli" (stale, hash)
   # Proof: test/ledger.test.ts "cli: plan, record and stale on a local board"
   # Proof: test/ledger.test.ts "cli: hash prints JSON, bad verb is a usage error"

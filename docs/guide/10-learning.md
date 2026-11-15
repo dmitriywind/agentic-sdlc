@@ -14,7 +14,10 @@ flowchart TB
 ```
 
 1. `judge-run` grades each finished run with the scorers in `.agents/scorers/`, on a different model
-   than the run used. Your own grades always win over the judge's.
+   than the run used. Your own grades always win over the judge's. Scorers cover shape quality and
+   triage accuracy as well as the code skills. A judge with missing or unreadable evidence grades
+   `unscorable` and says why; the run is counted as such in `ledger summary` and is no evidence for
+   a failure cluster.
 2. Every `learning.every_cycles` cycles, `improve-factory` finds the worst failure that repeats in at
    least `learning.min_evidence_runs` runs.
 3. It proposes exactly one change: a skill sentence, a setting, a check or an executor.

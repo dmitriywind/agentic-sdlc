@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse } from 'yaml';
-import type { AdapterContext, Binding, Board, CR, Forge, PortCli, Review, Vcs } from './ports.ts';
+import type { AdapterContext, Binding, Board, CR, CrCommit, Forge, PortCli, Review, Vcs } from './ports.ts';
 import { ownersFor } from './ports.ts';
 import { BINDING_PATH, shippedOptions } from './binding.ts';
 import { PROOF_FILE, fill, rule, shell } from './bench.ts';
@@ -197,7 +197,7 @@ export function approvers(reviews: Review[], sha: string): string[] {
 /**
  * Status `human-approval`. product-fast passes; product-full needs a human approval on the head
  * (forge.human_approval full-lane or always; always holds product-fast too; never passes both);
- * tuning passes when auto-mergeable, else waits for owners.factory like guardrail. A human is
+ * tuning passes when auto-mergeable, else waits for any owners.factory like guardrail. A human is
  * an owner, member or collaborator of the repo outside owners.bots and forge.review_identity. The lane is the closing ticket's Lane
  * field; anything but Fast (unset, unreadable, several tickets) counts as Full.
  */
@@ -219,7 +219,7 @@ export async function approval(d: Deps, n: string) {
   const mode = b.forge.human_approval ?? 'full-lane';
   const o = ownersFor(b.owners, 'forge');
   const bots = [...o.bots, b.forge.review_identity].filter(Boolean).map((u) => u!.toLowerCase());
-  const owner = String(o.factory ?? '').toLowerCase();
+  const owner = o.factory.map((u) => u.toLowerCase());
   let need: 'none' | 'human' | 'owner';
   if (klass === 'guardrail') need = 'owner';
   else if (klass === 'tuning') need = (b.learning?.auto_merge_classes ?? []).includes('tuning') ? 'none' : 'owner';
@@ -230,7 +230,7 @@ export async function approval(d: Deps, n: string) {
     // On a public repo anyone can submit a review: only an owner, member or collaborator counts as a human approval.
     const member = new Set(reviews.filter((r) => !!r.assoc && ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(r.assoc)).map((r) => r.user.toLowerCase()));
     const ok = approvers(reviews, cr.headSha).filter((u) => member.has(u));
-    by = need === 'owner' ? ok.find((u) => !!owner && u === owner) : ok.find((u) => !bots.includes(u));
+    by = need === 'owner' ? ok.find((u) => owner.includes(u)) : ok.find((u) => !bots.includes(u));
   }
   const pass = need === 'none' || !!by;
   const description = need === 'none' ? `${klass}: no human approval needed`
@@ -257,6 +257,64 @@ export async function review(d: Deps, n: string) {
   const description = verdict === 'CONFLICT' ? 'review-pr: the report holds conflicting verdicts' : verdict ? `review-pr: ${verdict}` : 'waits for a trusted review-pr report on this head';
   await d.forge.status(cr.headSha, { context: b.forge.review_check_name ?? 'review', state, description, ...(report?.url ? { url: report.url } : {}) }, { as: 'ci' });
   return { cr: cr.n, state, ...(verdict ? { verdict } : {}) };
+}
+
+const TRAILER_LINE = /^([A-Za-z][A-Za-z0-9-]*):[ \t]+(\S.*?)[ \t]*$/;
+const TRAILER_VALUE = /^[A-Za-z0-9][A-Za-z0-9._:/@+#[\]-]{0,127}$/;
+
+/** Git trailers: the `Key: value` lines of the message's last paragraph (keys lower case). The subject alone holds none. */
+export function trailers(message: string): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  const paras = message.replace(/\r/g, '').trimEnd().split(/\n[ \t]*\n/);
+  if (paras.length < 2) return out;
+  for (const line of paras[paras.length - 1].split('\n')) {
+    const m = TRAILER_LINE.exec(line);
+    if (m) (out[m[1].toLowerCase()] ??= []).push(m[2]);
+  }
+  return out;
+}
+
+/** The one well-formed value of a trailer; undefined when absent, repeated with different values, or malformed. */
+const trailerValue = (t: Record<string, string[]>, key: string): string | undefined => {
+  const v = [...new Set(t[key] ?? [])];
+  return v.length === 1 && TRAILER_VALUE.test(v[0]) ? v[0] : undefined;
+};
+
+/**
+ * Status `agent-provenance` (forge.provenance: off | warn | require, default off). Every commit of the CR
+ * whose author or committer is in owners.bots needs well-formed `Agent-Run` and `Agent-Model` trailers; other
+ * authors' commits are listed as human, a merge commit (the forge's branch update) as merge. warn reports and
+ * succeeds; require fails on any agent commit without them, and on commits it cannot read. No CR code runs.
+ */
+export async function provenance(d: Deps, n: string) {
+  const mode = d.binding.forge.provenance ?? 'off';
+  if (mode === 'off') return { cr: n, mode, skipped: 'forge.provenance is off' };
+  const bots = new Set(ownersFor(d.binding.owners, 'forge').bots.map((u) => u.toLowerCase()));
+  const cr = await d.forge.view(n);
+  let list: CrCommit[] | undefined;
+  let why = '';
+  try { list = await d.forge.commits(n); } catch (e) { why = String((e as Error).message ?? e).split('\n')[0]; }
+  const missing: string[] = [];
+  const commits = (list ?? []).map((c) => {
+    const sha = c.sha.slice(0, 12);
+    // A commit the forge links to no account is matched by the name git recorded.
+    const names = [c.author || c.authorName, c.committer || c.committerName].map((u) => u.toLowerCase());
+    if (c.parents > 1) return { sha, by: 'merge' as const, ok: true };
+    if (!names.some((u) => bots.has(u))) return { sha, by: 'human' as const, ok: true };
+    const t = trailers(c.message);
+    const run = trailerValue(t, 'agent-run'), model = trailerValue(t, 'agent-model');
+    if (!run) missing.push(`${sha}: Agent-Run trailer ${t['agent-run'] ? 'is malformed' : 'is missing'}`);
+    if (!model) missing.push(`${sha}: Agent-Model trailer ${t['agent-model'] ? 'is malformed' : 'is missing'}`);
+    return { sha, by: 'agent' as const, ...(run ? { run } : {}), ...(model ? { model } : {}), ok: !!run && !!model };
+  });
+  if (!list) missing.push(`commits unreadable: ${why || 'unknown'}`);
+  const agentCommits = commits.filter((c) => c.by === 'agent').length;
+  const humanCommits = commits.filter((c) => c.by === 'human').length;
+  const ok = !missing.length;
+  const state = mode === 'require' && !ok ? 'failure' : 'success';
+  const description = !list ? `commits unreadable (${mode})` : `${agentCommits} agent, ${humanCommits} human commits; ${missing.length ? `${missing.length} trailer problems` : 'all agent commits carry trailers'} (${mode})`;
+  await d.forge.status(cr.headSha, { context: 'agent-provenance', state, description: description.slice(0, 140) }, { as: 'ci' });
+  return { cr: cr.n, mode, state, ok, commits, agentCommits, humanCommits, missing, ...(state === 'failure' ? { errors: missing } : {}) };
 }
 
 /** True when every changed path matches paths.no_proof (docs, config): such a product CR needs no proof file. */
@@ -468,9 +526,8 @@ const redact = (s: string, max = 120) =>
 const cleanUrl = (u: string) => redact(String(u ?? '').replace(/^(\w+:\/\/)[^/@]*@/, '$1').replace(/[?#].*$/, ''), 200);
 
 export async function signalOnRed(d: Deps, id: string) {
-  const runs = [...(await d.forge.runs({ failed: true })), ...(await d.forge.runs({}))];
-  const run = runs.find((r) => String(r.id) === id);
-  if (!run) return { created: false, reason: `run ${redact(id, 40)} not in the recent runs` };
+  // One run by id: a run that does not exist is an error (forge.run throws), not a quiet no-op.
+  const run = await d.forge.run(id);
   if (run.state !== 'failure') return { created: false, reason: `run ${redact(id, 40)} did not fail (${redact(run.state, 20)})` };
   const v = d.binding.vcs;
   if (run.ref !== v.trunk && !(v.release_prefix && run.ref.startsWith(v.release_prefix))) return { created: false, reason: `ref ${redact(run.ref, 100)} is not trunk or a release line` };
@@ -571,6 +628,11 @@ export const cli: PortCli = (argv, base) =>
         return r;
       }
       case 'review': return review(deps(), a.need('cr'));
+      case 'provenance': {
+        const r = await provenance(deps(), a.need('cr'));
+        if ('errors' in r && r.errors?.length) process.stdout.write(JSON.stringify(r) + '\n'); // the report, then the failure
+        return fail(r as { errors?: string[] });
+      }
       case 'proofs-on-base': return fail(await proofsOnBase(deps(), a.need('cr')));
       case 'evidence': {
         const sha = a.need('sha');

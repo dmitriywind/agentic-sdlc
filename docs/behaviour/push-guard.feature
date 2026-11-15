@@ -60,6 +60,15 @@ Feature: Push guard
     And the agent sees that forge approve is for the review runtime only
     And the same command exits with code 0 when AGENTIC_SDLC_ROLE is "review"
 
+  # Source: hooks/guard.mjs, "forge status" checks
+  # Proof: test/guard.test.ts "forge status is for the review role, or a runner that sets AGENTIC_SDLC_ALLOW_STATUS"
+  Scenario: Only the review runtime posts a status, unless the runner opts in
+    Given AGENTIC_SDLC_ROLE is not "review" and AGENTIC_SDLC_ALLOW_STATUS is not "1"
+    When the agent runs "agentic-sdlc forge status <sha> --context review --state success" or calls the MCP tool "forge_status"
+    Then the hook exits with code 2
+    And the same call exits with code 0 when AGENTIC_SDLC_ROLE is "review" or AGENTIC_SDLC_ALLOW_STATUS is "1"
+    And AGENTIC_SDLC_ALLOW_STATUS does not allow forge approve
+
   # Source: hooks/guard.mjs, "forge_approve" tool check
   # Proof: test/install.test.ts "plugin guard hook blocks trunk pushes and forge approve outside the review role"
   Scenario: The MCP approve tool is blocked outside the review role

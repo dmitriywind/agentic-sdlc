@@ -135,6 +135,39 @@ test('forge approve through another launcher or a variable is blocked', () => {
   assert.equal(run('npx agentic-sdlc@latest forge approve 1', { AGENTIC_SDLC_ROLE: 'review' }), 0);
 });
 
+test('forge status is for the review role, or a runner that sets AGENTIC_SDLC_ALLOW_STATUS', () => {
+  const st = 'agentic-sdlc forge status abc --context review --state success';
+  assert.equal(run(st), 2);
+  assert.equal(run('npx --no agentic-sdlc forge status abc --context review --state success'), 2);
+  assert.equal(run('echo $(agentic-sdlc forge status abc)'), 2);
+  assert.equal(run(st, { AGENTIC_SDLC_ROLE: 'review' }), 0);
+  assert.equal(run(st, { AGENTIC_SDLC_ALLOW_STATUS: '1' }), 0);
+  assert.equal(run('agentic-sdlc forge approve 3', { AGENTIC_SDLC_ALLOW_STATUS: '1' }), 2, 'the status opt-in does not open approve');
+  const mcp = (tool: string, env: Record<string, string> = {}) => spawnSync('node', [guard], {
+    input: JSON.stringify({ cwd: tmp, tool_name: tool, tool_input: {} }),
+    env: { ...process.env, AGENTIC_SDLC_ROLE: '', ...env }, encoding: 'utf8' }).status;
+  assert.equal(mcp('mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status'), 2);
+  assert.equal(mcp('mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status', { AGENTIC_SDLC_ROLE: 'review' }), 0);
+  assert.equal(mcp('mcp__agentic-sdlc__forge_status', { AGENTIC_SDLC_ALLOW_STATUS: '1' }), 0);
+  assert.equal(mcp('mcp__agentic-sdlc__forge_approve', { AGENTIC_SDLC_ALLOW_STATUS: '1' }), 2);
+  const matcher = JSON.parse(readFileSync(fileURLToPath(new URL('../hooks/hooks.json', import.meta.url)), 'utf8')).hooks.PreToolUse[1].matcher;
+  for (const t of ['mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status', 'mcp__agentic-sdlc__forge_approve']) assert.match(t, new RegExp(`^${matcher}$`));
+});
+
+test('the sdlc-reviewer agent runs only the agentic-sdlc CLI in Bash', () => {
+  const as = (agent_type: string | undefined, command: string, env: Record<string, string> = {}) => spawnSync('node', [guard], {
+    input: JSON.stringify({ cwd: tmp, agent_type, tool_name: 'Bash', tool_input: { command } }),
+    env: { ...process.env, AGENTIC_SDLC_ROLE: '', ...env }, encoding: 'utf8' }).status;
+  const rev = 'agentic-sdlc:sdlc-reviewer';
+  for (const c of ['agentic-sdlc forge view 3', 'npx --no agentic-sdlc forge diff 3', 'agentic-sdlc forge view 3 | agentic-sdlc ledger summary',
+    'node node_modules/agentic-sdlc/dist/bin.js board get 4', '/p/bin/agentic-sdlc forge comments 3 --last 1']) assert.equal(as(rev, c), 0, c);
+  for (const c of ['npm test', 'cat .env', 'node script.js', 'agentic-sdlc forge view 3 && npm test', 'agentic-sdlc forge view 3 > out.txt',
+    'echo $(npm test)', 'x=agentic-sdlc; $x forge view 3', 'cd sub']) assert.equal(as(rev, c), 2, c);
+  assert.equal(as(rev, 'agentic-sdlc forge approve 3'), 2, 'the approve rule still applies');
+  assert.equal(as(rev, 'agentic-sdlc forge approve 3', { AGENTIC_SDLC_ROLE: 'review' }), 0);
+  for (const a of [undefined, 'agentic-sdlc:sdlc-fast', 'sdlc-fast']) assert.equal(as(a, 'npm test'), 0, String(a));
+});
+
 test('ordinary commands still pass', () => {
   for (const c of [
     'git push',
