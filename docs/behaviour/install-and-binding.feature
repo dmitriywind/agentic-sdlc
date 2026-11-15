@@ -157,19 +157,8 @@ Feature: Install and validate the binding
     Then the binding has no review_identity and no review_token_env
     And the trunk ruleset asks for no approving review, since GitHub refuses one from the CR's author
 
-  # Source: src/binding.ts, "validateBinding" (identities) and "bindingWarnings" (profile)
-  # Proof: test/binding.test.ts "identities: organization needs a review identity; review_identity and review_token_env come together and differ from token_env"
-  # Proof: test/binding.test.ts "bindingWarnings flags profile mismatches without failing validation"
-  Scenario: Validate checks the identities each profile needs
-    Then validate fails an organization binding with no forge.review_identity
-    And validate fails a review_identity without a review_token_env, a review_token_env without a review_identity, and a review_token_env equal to token_env
-    And an individual binding with a managed, webhook or assign executor gets a warning to use individual-api
-    And an individual-api binding gets no such warning
-    And an organization binding with no managed executor gets a warning
-
   # Source: src/board/index.ts, "createBoard" (scope); src/binding.ts, "validateBinding" (board.scope)
   # Proof: test/board-local.test.ts "board.scope: many repos on one board; a repo lists its own label, the home repo also the unlabelled, create adds the label"
-  # Proof: test/binding.test.ts "board.scope: a prefixed label; the home repo lists every repo label, its own included"
   Scenario: Many repos share one board through board.scope
     Given two repos whose bindings name the same board, one with board.scope.label "repo:a", one with "repo:b" and home true
     When each repo runs "board list"
@@ -177,45 +166,6 @@ Feature: Install and validate the binding
     And the home repo sees tickets labelled "repo:b" and tickets with no "repo:" label
     And "board create" in each repo adds that repo's label
     And validate fails a home binding whose board.scope.repos does not list every repo label
-
-  # Source: src/binding.ts, "validateBinding"
-  # Proof: test/binding.test.ts "validateBinding reports each broken rule"
-  Scenario: Validate lists each broken rule
-    Given a binding with a wrong version, an unknown adapter, a missing status and a change_pattern without <ticket>
-    When the adopter runs "agentic-sdlc validate"
-    Then each problem prints as a "problem:" line
-    And the command exits with code 1
-
-  # Source: src/binding.ts, "validateBinding" (adapter options)
-  # Proof: test/binding.test.ts "validateBinding rejects unknown option keys and missing required ones per adapter"
-  Scenario: Adapter options are checked per adapter
-    Given the board adapter is "jira" and its options lack "project_key" and hold an unknown key
-    When the binding is validated
-    Then the problems name the missing option
-    And the problems name the unknown option
-
-  # Source: src/binding.ts, "validateBinding" (vcs keys)
-  # Proof: test/binding.test.ts "validateBinding requires the vcs keys the gates and hook dereference"
-  Scenario: The vcs keys that the gates need are required
-    Given a binding with no vcs.trunk, vcs.release_prefix or vcs.factory_change_pattern
-    When the binding is validated
-    Then each missing key is a problem
-    And an empty vcs.tag_prefix is valid
-
-  # Source: src/binding.ts, "bindingWarnings"
-  # Proof: test/binding.test.ts "bindingWarnings flags profile mismatches without failing validation"
-  Scenario: Profile mismatches warn and do not fail
-    Given an individual profile with a managed executor
-    When the adopter runs "agentic-sdlc validate"
-    Then a "warn:" line names the executor
-    And the command exits with code 0
-
-  # Source: src/binding.ts, "bindingWarnings" (review_runtime)
-  # Proof: test/binding.test.ts "validateBinding requires each executor kind its keys; review_runtime only warns as unused"
-  Scenario: forge.review_runtime is an unused key
-    Given the binding sets forge.review_runtime
-    When the binding is validated
-    Then a warning says review-pr always runs in its own runtime
 
   # Source: src/install.ts, "doctor" and "trunkProtection"
   # Proof: test/install.test.ts "doctor: unpinned required checks warn; no repo gets a reminder"
@@ -287,22 +237,6 @@ Feature: Install and validate the binding
     Then doctor prints a "warn workflow actions" line naming the file and the action
     And the exit code is not changed
 
-  # Source: src/binding.ts, "validateBinding" (product.slo)
-  # Proof: test/binding.test.ts "product.slo: a rate from 0 to 1 and a positive whole window, or unset"
-  Scenario: The error budget needs a rate and a window
-    Given product.slo is set
-    When change_failure_rate_max is outside 0 to 1 or window_days is not a positive whole number
-    Then validation fails naming the key
-    And an unset product.slo means no error budget
-
-  # Source: src/binding.ts, "validateBinding" (product.delivery)
-  # Proof: test/binding.test.ts "product.delivery: continuous needs no release prefix; release-line needs two environments"
-  Scenario: The delivery mode decides which release keys are required
-    Given product.delivery is continuous
-    Then vcs.release_prefix is not required
-    When product.delivery is release-line with one environment
-    Then validation fails with "release-line needs two or more environments"
-
   # Source: src/install.ts, "deliveryWorkflow"
   # Proof: test/install.test.ts "doctor: env.DELIVERY must match product.delivery; continuous needs no release prefix"
   Scenario: doctor checks the delivery workflow's mode
@@ -343,56 +277,6 @@ Feature: Install and validate the binding
     Then the repo gets those labels before the issue is opened
     When the factory closes a ticket with reason not_planned
     Then the issue is closed as not planned and has "status:Cancelled"
-
-  # Source: src/binding.ts, "validateBinding" and "bindingWarnings" (product.evidence)
-  # Proof: test/binding.test.ts "product.evidence: known kinds only; evidence without commands.evidence_check warns"
-  Scenario: Release evidence needs a command that proves it
-    Given product.evidence lists sbom and provenance
-    And commands.evidence_check is unset
-    When the binding is validated
-    Then a warning says no release can show its evidence
-
-  # Source: src/binding.ts, "bindingWarnings" and "validateBinding"
-  # Proof: test/binding.test.ts "bindingWarnings: a GitHub heartbeat ticket must be a number; env labels must name an environment; an empty release prefix fails"
-  Scenario: Setups that fail at run time are named before the first cycle
-    Given a GitHub board with heartbeat.ticket "HEARTBEAT-1"
-    And board.env_labels lists "env:qa" while product.environments has no "qa"
-    When the binding is validated
-    Then a warning names each of them
-    And an empty vcs.release_prefix fails validation
-
-  # Source: src/binding.ts, "validateBinding" (owners); src/ports.ts, "ownersFor"
-  # Proof: test/binding.test.ts "owners: roles take lists, ownersFor normalises them, --trusted includes every role"
-  Scenario: An owner role can be a list, and optional roles exist
-    Given owners.product is a list of a name and { board, forge }
-    And owners.operator, owners.security and owners.compliance are set
-    When the binding is validated
-    Then it is valid and every role reads as a list
-    And "--trusted" keeps the comments of every entry of every role
-    And an empty list, or an entry that is empty or has only one of board and forge, is a problem
-
-  # Source: src/binding.ts, "validateBinding" and "bindingWarnings" (owners)
-  # Proof: test/binding.test.ts "owners: an unknown owners key warns and the review identity must not be an owner"
-  Scenario: An unknown owners key warns and the review identity is never an owner
-    Given owners has a key that is not a role
-    Then validation warns about it
-    And forge.review_identity equal to any owner entry is a problem
-
-  # Source: src/binding.ts, "validateBinding" (owners); src/ports.ts, "ownersFor"
-  # Proof: test/binding.test.ts "validateBinding: an owner is a name or { board, forge }"
-  Scenario: An owner can have one name on the board and another on the forge
-    Given owners.product is { board: "acc-1", forge: "ann" }
-    And an owners.bots entry is { board: "acc-3", forge: "bot[bot]" }
-    When the binding is validated
-    Then it has no problems
-    And an owner with only one of board and forge is a problem
-
-  # Source: src/binding.ts, "validateBinding" (heartbeat)
-  # Proof: test/binding.test.ts "validateBinding: an empty heartbeat.ticket is a problem"
-  Scenario: A binding with no heartbeat ticket fails validation
-    Given heartbeat.ticket is empty, as the template writes it
-    When the binding is validated
-    Then a problem says to create the heartbeat ticket and put its id in heartbeat.ticket
 
   # Source: src/install.ts, "init" (heartbeat ticket)
   # Proof: test/install.test.ts "init --board local creates the heartbeat ticket off every route and sets heartbeat.ticket"
@@ -505,76 +389,6 @@ Feature: Install and validate the binding
     When the adopter runs "agentic-sdlc init --forge github"
     Then init writes .github/rulesets/release.json
 
-  # Source: src/binding.ts, "loadBinding"
-  # Proof: test/binding.test.ts "loadBinding reads yaml and a good binding has no problems"
-  Scenario: A good binding has no problems
-    Given .agents/binding.yml holds a complete binding
-    When validate loads it
-    Then validate lists no problem
-
-  # Source: src/binding.ts, "validateBinding" (factory)
-  # Proof: test/binding.test.ts "validateBinding requires the factory owner and factory path globs"
-  Scenario: The factory owner and the factory paths are required
-    Given paths.factory is empty, or owners.factory is missing
-    When the adopter runs "agentic-sdlc validate"
-    Then validate names the missing key
-
-  # Source: src/binding.ts, "shippedOptions"
-  # Proof: test/binding.test.ts "shippedOptions derives from environments"
-  Scenario: The Shipped options come from the environments
-    Given product.environments is staging and production
-    Then the Shipped options are Not shipped, On staging, In release and On production
-
-  # Source: src/binding.ts, "validateBinding" (executors, traces, mcps)
-  # Proof: test/binding.test.ts "validateBinding checks executor stage fields, traces and computer-use"
-  Scenario: Validate checks executor stages, traces and MCP names
-    Given an executor stage names an unknown MCP, a bad secret name, a bad sandbox or a bad model
-    And traces.uri has no run id
-    When the adopter runs "agentic-sdlc validate"
-    Then validate names each bad field
-
-  # Source: src/binding.ts, "bindingWarnings" (bench_size)
-  # Proof: test/binding.test.ts "bindingWarnings: bench_size below bench_min_cases can never pass bench compare"
-  Scenario: A bench size below the minimum cases warns
-    Given learning.bench_size is below learning.bench_min_cases
-    When the adopter runs "agentic-sdlc validate"
-    Then validate prints a warning that bench compare can never pass
-
-  # Source: src/binding.ts, "bindingWarnings" (traces)
-  # Proof: test/binding.test.ts "bindingWarnings accepts Windows trace paths with either slash"
-  Scenario: A Windows trace path with either slash is accepted
-    Given traces.uri is a Windows path with a backslash or a slash
-    When the adopter runs "agentic-sdlc validate"
-    Then validate prints no warning
-
-  # Source: src/binding.ts, "validateBinding" (profile)
-  # Proof: test/binding.test.ts "profile is required and must be known"
-  Scenario: A binding needs a known profile
-    Given the binding has no profile, or the profile "team"
-    When the adopter runs "agentic-sdlc validate"
-    Then validate fails and names the profile
-
-  # Source: src/binding.ts, "validateBinding" (human_approval, learning, commands)
-  # Proof: test/binding.test.ts "new keys validate (approval, learning, proofs); product.kind and board.milestone only warn as unused"
-  Scenario: Validate checks the approval, learning and proof keys
-    Given forge.human_approval is unknown, or a learning number is out of range, or learning.enabled is not a boolean
-    When the adopter runs "agentic-sdlc validate"
-    Then validate names each bad key
-    And product.kind and board.milestone only warn as unused
-
-  # Source: src/binding.ts, "validateBinding" (adapters)
-  # Proof: test/binding.test.ts "v2 is Git only: hg, p4 and swarm adapters are rejected"
-  Scenario: Only the Git VCS and the GitHub forge are supported
-    Given vcs.adapter is "hg" and forge.adapter is "swarm"
-    When the adopter runs "agentic-sdlc validate"
-    Then validate fails and names both adapters
-
-  # Source: src/binding.ts, "validateBinding" (keys the gates read)
-  # Proof: test/binding.test.ts "validate checks the keys the gates read unguarded, the judge tier, auto-merge classes, mcps and managed api fields"
-  Scenario: Validate fails a binding that a gate or a stage would read wrong
-    When a binding has a non-list done_statuses, a missing bug, feature or human label, an unknown version_scheme or judge_tier, an auto-merge class other than tuning, an MCP server with both url and command, or a managed executor without its api's fields
-    Then validate names each problem and exits with code 1
-
   # Source: src/board/index.ts, "createBoard"
   # Proof: test/board-adapters.test.ts "a board verb with a missing required option fails naming the binding key and validate, not a raw gh call"
   Scenario: A board verb fails clearly when the adapter's required option is missing
@@ -662,7 +476,6 @@ Feature: Install and validate the binding
   # Source: src/board/index.ts, "milestone"
   # Proof: test/board-local.test.ts "milestone sets and clears the milestone of an existing ticket"
   # Proof: test/board-adapters.test.ts "board milestone sets or clears the milestone where create --milestone puts it, on github, github-issues, jira and linear"
-  # Proof: test/mcp.test.ts "board_milestone sets and clears a milestone; forge_run and forge_list take their arguments and forge_run is read only"
   Scenario: A ticket's milestone is set or cleared where create puts it
     Given a ticket on any board adapter
     When the factory runs "board milestone <id> <name>"
@@ -710,14 +523,6 @@ Feature: Install and validate the binding
     Then it gets that run
     And a run that does not exist exits 1
 
-  # Source: agents/, "plugin agents"
-  # Proof: test/plugin.test.ts "plugin agents: one per tier plus a reviewer that reads files and runs only the CLI"
-  Scenario: The Claude Code plugin ships a subagent per tier and a reviewer
-    Given the plugin is enabled and the project ran no init
-    Then "agentic-sdlc:sdlc-fast", "agentic-sdlc:sdlc-balanced" and "agentic-sdlc:sdlc-deep" run one skill step each
-    And "agentic-sdlc:sdlc-reviewer" has no Edit or Write tool and a turn limit
-    And a project's "sdlc-<tier>" from "init --harness claude" keeps the model from the binding
-
   # Source: hooks/guard.mjs, "sdlc-reviewer"
   # Proof: test/guard.test.ts "the sdlc-reviewer agent runs only the agentic-sdlc CLI in Bash"
   Scenario: The reviewer agent runs no code but the CLI
@@ -726,20 +531,3 @@ Feature: Install and validate the binding
     And a path to a file named "agentic-sdlc", "node <file>", a pipe, an expansion and a redirection to a file exit with code 2
     And "agentic-sdlc forge view 3" from that agent exits with code 0
 
-  # Source: bin/agentic-sdlc
-  # Proof: test/plugin.test.ts "bin/agentic-sdlc is executable and runs the plugin build when the project pins none"
-  Scenario: The plugin puts the CLI on the Bash path
-    When the agent runs "agentic-sdlc <group> <verb>" with the plugin enabled
-    Then the project's pinned build runs when it exists
-    And otherwise the plugin's own build runs
-
-  # Source: evals/
-  # Proof: test/plugin.test.ts "plugin evals: each case has a real prompt and graders with a type"
-  Scenario: The plugin ships skill-triggering evals
-    Then each case under "evals/" has a prompt and typed graders for "claude plugin eval"
-
-  # Source: .codex-plugin/plugin.json, .cursor-plugin/plugin.json
-  # Proof: test/plugin.test.ts "Codex and Cursor manifests parse, carry the package version and point at real paths"
-  Scenario: Codex and Cursor can install the package as a plugin
-    Then ".codex-plugin/plugin.json" and ".cursor-plugin/plugin.json" carry the package version
-    And both point at "skills/" and at "mcp.json", which starts "npx --no agentic-sdlc mcp"

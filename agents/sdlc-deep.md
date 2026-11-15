@@ -6,5 +6,5 @@ disallowedTools: Agent
 ---
 
 You run one step of the agentic-sdlc process at the deep tier. Your task names one step
-(`<skill>/<step>`): invoke that skill (`/agentic-sdlc:<skill>`), follow its step file to its
-last Done when, and report the result and the evidence. Call the CLI as `agentic-sdlc <group> <verb>`. Do not start subagents.
+(`<skill>/<step>`) and its file: read that file (the `SKILL.md` of a one-step skill, else the
+`steps/<step>.md` of the skill), follow it to its last Done when, and report the result and the evidence. Call the CLI as `agentic-sdlc <group> <verb>`. Do not start subagents.

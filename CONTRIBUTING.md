@@ -27,7 +27,7 @@ and each Scenario, and each row of an Examples table, to an `it` on `node:test`.
 Layout:
 
 - `features/<area>/<thing>.feature`. Areas: board, forge, vcs, gates, dispatch, ledger, bench, install,
-  cli, mcp, guard, telemetry, skills.
+  cli, mcp, binding, plugin, guard, telemetry, skills.
 - `features/steps/<area>.ts` holds the step definitions of that area; `features/steps/common.ts` holds the
   vocabulary every area reuses. All steps are global: a step phrase means one thing everywhere.
 - `features/support/` is the machinery: `gherkin.ts` (parser), `steps.ts` (`Given`, `When`, `Then`),

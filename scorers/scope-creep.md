@@ -8,7 +8,7 @@ scale: pass-fail
 
 **Question.** Did the run change anything its ticket and spec did not ask for?
 
-**Evidence.** The ticket, its spec comment and acceptance criteria; the CR diff; for `review-pr`,
+**Evidence.** The ticket, its spec comment and acceptance criteria; the CR diff; for `review/review`,
 the findings it raised.
 
 **Fail** when the diff touches a file or behaviour no criterion needs (a refactor, a rename, a

@@ -395,7 +395,7 @@ export async function measures(o: { board: Board; forge?: Forge; binding: Bindin
     leadTimeHours: leads.length ? { value: round(median(leads)), tickets: leads.length } : none('no ticket reached Done in the window with a status change time'),
     changeFailureRate: rate === null ? none('no change shipped to the last environment in the window') : { value: round(rate), failures: failures.length, changes: changes.length },
     timeToRestoreHours: restore.length ? { value: round(median(restore)), failures: restore.length } : none('no change failure in the window reached Done'),
-    // Share of merged CRs closing a ticket that reached Done in the window with a trusted REMEDIATION REQUIRED review-pr report.
+    // Share of merged CRs closing a ticket that reached Done in the window with a trusted REMEDIATION REQUIRED verdict report.
     reworkRate,
     ...(errorBudget ? { errorBudget } : {}),
   };

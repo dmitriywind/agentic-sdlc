@@ -6,7 +6,7 @@ scale: 0-4
 
 # Spec quality
 
-**Question.** Is the spec comment `shape` wrote one an implementer can build and a reviewer can check: each criterion observable and naming its proof kind, no solution design smuggled in, scope that fits the Size, open questions resolved or escalated?
+**Question.** Is the spec comment `plan/shape` wrote one an implementer can build and a reviewer can check: each criterion observable and naming its proof kind, no solution design smuggled in, scope that fits the Size, open questions resolved or escalated?
 
 **Evidence.** The ticket (body, Size, Lane) and the spec comment by a trusted author with its acceptance criteria; the questions it asked and the answers after them; the ticket's later comments, for a criterion an implementer or reviewer had to reinterpret.
 

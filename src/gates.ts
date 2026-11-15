@@ -259,18 +259,18 @@ export async function approval(d: Deps, n: string) {
 
 /**
  * Status `review` with one identity (no forge.review_identity): a cloud session cannot write commit
- * statuses, so review-pr posts only its report and CI turns the newest trusted report for the head
- * into the status. With two identities review-pr posts the status itself and this gate does nothing.
+ * statuses, so `forge verdict` posts only its report and CI turns the newest trusted report for the head
+ * into the status. With two identities `forge verdict` posts the status itself and this gate does nothing.
  */
 export async function review(d: Deps, n: string) {
   const b = d.binding;
-  if (b.forge.review_identity) return { cr: n, skipped: 'two identities: review-pr posts the review status' };
+  if (b.forge.review_identity) return { cr: n, skipped: 'two identities: forge verdict posts the review status' };
   const cr = await d.forge.view(n);
   const [report] = selectComments((await d.forge.comments(n)).reverse(), { owners: ownersFor(b.owners, 'forge'), trusted: true, marker: matches('verdict', cr.headSha) });
   // The report's one verdict line; quoted CR text may carry another, so disagreeing verdicts fail.
   const verdict = verdictOf(report?.body ?? '');
   const state = verdict === 'PASS' ? 'success' : verdict ? 'failure' : 'pending';
-  const description = verdict === 'CONFLICT' ? 'review-pr: the report holds conflicting verdicts' : verdict ? `review-pr: ${verdict}` : 'waits for a trusted review-pr report on this head';
+  const description = verdict === 'CONFLICT' ? 'review: the report holds conflicting verdicts' : verdict ? `review: ${verdict}` : 'waits for a trusted verdict report on this head';
   await d.forge.status(cr.headSha, { context: b.forge.review_check_name ?? 'review', state, description, ...(report?.url ? { url: report.url } : {}) }, { as: 'ci' });
   return { cr: cr.n, state, ...(verdict ? { verdict } : {}) };
 }

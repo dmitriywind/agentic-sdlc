@@ -7,7 +7,7 @@ Follow the [contract](contract.md). The statuses are `board.statuses`.
 | Status | Meaning | Exit | Moved in by |
 |---|---|---|---|
 | Ideas | A concept or a snoozed signal, not committed. | A human accepts (Backlog) or rejects (Cancelled). | `plan/triage` places; humans move |
-| Signals | Raw input with one `signal:<stream>` label and a redacted evidence bundle. | One decision: Ideas, Backlog or Cancelled. | intake; gates `signal-on-red` and `shipped`; `plan/triage` for an unboarded `signal:` ticket |
+| Signals | Raw input with one `signal:<stream>` label and a redacted evidence bundle. | One decision: Ideas, Backlog or Cancelled. | intake; the gate that files a Signal for a red trunk or release run, and gate `shipped`; `plan/triage` for an unboarded `signal:` ticket |
 | Backlog | Accepted; to be groomed and shaped. | Ready, once shaped. | `plan/triage`, `plan/groom`, `plan/shape` (children), any step that sends a ticket back, the Product owner |
 | Ready | The build queue: one deliverable within the size limit, criteria, lane and spec set. | `build` claims it. | `plan/shape` |
 | In progress | Built on one change line. | A draft CR closing it, fast check green. | `build` |

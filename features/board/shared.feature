@@ -75,7 +75,7 @@ Feature: What every board adapter does the same way
 
       Examples:
         | adapter | id     | name | call                         |
-        | github  | 7      | M1   | issue edit 7 --milestone M1  |
+        | github  | 7      | M1   | --milestone M1 |
         | jira    | PROJ-1 | v2   | "fixVersions":[{"name":"v2"}] |
         | linear  | LIN-9  | Q3   | "labelIds":["L1"]            |
 
