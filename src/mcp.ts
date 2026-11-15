@@ -80,8 +80,12 @@ export function allowList(arg: string | undefined): Set<string> {
   return out;
 }
 
-/** Protocol versions this server speaks, newest first; it uses only features common to all. */
+/** Legacy protocol versions (initialize handshake), newest first; the server uses only features common to all. */
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
+/** Modern protocol versions (per-request `_meta`, no handshake). */
+export const MODERN_VERSIONS = ['2026-07-28'];
+const META = 'io.modelcontextprotocol/';
+const SERVER_INFO = () => ({ name: 'agentic-sdlc', version: version() });
 
 // Tool annotations come from these sets, keyed by tool name; no per-tool boilerplate.
 const READ = new Set(['board_list', 'board_get', 'board_comments', 'forge_view', 'forge_diff', 'forge_list', 'forge_approvals', 'forge_comments', 'forge_runs', 'forge_run',
@@ -190,26 +194,58 @@ async function callTool(name: string, args: Record<string, unknown>, ctx: Ctx, a
 
 const version = () => JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version as string;
 
+/** A request is modern when its `_meta` carries the per-request protocol fields (spec 2026-07-28, basic/index "_meta"). */
+const isModern = (msg: any) => {
+  const m = msg.params?._meta;
+  return m !== null && typeof m === 'object' && (`${META}protocolVersion` in m || `${META}clientCapabilities` in m);
+};
+
 /** One JSON-RPC message in, the response out (null for notifications). */
 export async function handle(msg: any, ctx: Ctx, allow: Set<string> = new Set()): Promise<object | null> {
   const id = msg?.id;
   const ok = (result: object) => ({ jsonrpc: '2.0', id, result });
-  const err = (code: number, message: string) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
+  const err = (code: number, message: string, data?: object) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message, ...(data ? { data } : {}) } });
   if (!msg || typeof msg.method !== 'string') return err(-32600, 'invalid request');
   if (id === undefined) return null; // notifications/initialized and any other notification
+  const toolCall = async (): Promise<{ e?: object; r?: any }> => {
+    const name = msg.params?.name;
+    const s = typeof name === 'string' && served(allow).includes(name) ? TOOLS[name] : undefined;
+    if (!s) return { e: err(-32602, `unknown tool '${String(name)}'`) };
+    const bad = badArgument(s, msg.params?.arguments ?? {});
+    if (bad) return { e: err(-32602, `${name}: ${bad}`) };
+    return { r: await callTool(name, msg.params?.arguments ?? {}, ctx, allow) };
+  };
+  if (msg.method !== 'initialize' && (msg.method === 'server/discover' || isModern(msg))) {
+    // 2026-07-28: stateless; every request names its version and capabilities; every result says its resultType.
+    const m = msg.params?._meta;
+    const v = m?.[`${META}protocolVersion`];
+    if (typeof v !== 'string') return err(-32602, `_meta '${META}protocolVersion' is required`);
+    const caps = m[`${META}clientCapabilities`];
+    if (caps === null || typeof caps !== 'object' || Array.isArray(caps)) return err(-32602, `_meta '${META}clientCapabilities' is required`);
+    if (!MODERN_VERSIONS.includes(v)) return err(-32022, 'Unsupported protocol version', { supported: [...MODERN_VERSIONS, ...PROTOCOL_VERSIONS], requested: v });
+    const done = (result: object) => ok({ resultType: 'complete', ...result, _meta: { [`${META}serverInfo`]: SERVER_INFO() } });
+    switch (msg.method) {
+      case 'server/discover':
+        return done({ supportedVersions: [...MODERN_VERSIONS, ...PROTOCOL_VERSIONS], capabilities: { tools: {} }, ttlMs: 0, cacheScope: 'public' });
+      case 'tools/list':
+        if (msg.params?.cursor !== undefined) return err(-32602, 'Invalid cursor'); // this server never issues one
+        return done({ tools: served(allow).map((name) => ({ name, description: TOOLS[name].doc, title: annotations(name).title, inputSchema: schema(TOOLS[name]), annotations: annotations(name) })), ttlMs: 0, cacheScope: 'public' });
+      case 'tools/call': {
+        const { e, r } = await toolCall();
+        return e ?? done(r);
+      }
+      default: return err(-32601, `method not found: ${msg.method}`); // ping, logging/setLevel and the rest are not part of this revision's tool-only surface
+    }
+  }
   switch (msg.method) {
     case 'initialize':
-      return ok({ protocolVersion: PROTOCOL_VERSIONS.includes(msg.params?.protocolVersion) ? msg.params.protocolVersion : PROTOCOL_VERSIONS[0], serverInfo: { name: 'agentic-sdlc', version: version() }, capabilities: { tools: {} } });
+      return ok({ protocolVersion: PROTOCOL_VERSIONS.includes(msg.params?.protocolVersion) ? msg.params.protocolVersion : PROTOCOL_VERSIONS[0], serverInfo: SERVER_INFO(), capabilities: { tools: {} } });
     case 'ping': return ok({});
     case 'tools/list':
       return ok({ tools: served(allow).map((name) => ({ name, description: TOOLS[name].doc, title: annotations(name).title, inputSchema: schema(TOOLS[name]), annotations: annotations(name) })) });
     case 'tools/call': {
-      const name = msg.params?.name;
-      const s = typeof name === 'string' && served(allow).includes(name) ? TOOLS[name] : undefined;
-      if (!s) return err(-32602, `unknown tool '${String(name)}'`);
-      const bad = badArgument(s, msg.params?.arguments ?? {});
-      if (bad) return err(-32602, `${name}: ${bad}`);
-      return ok(await callTool(name, msg.params?.arguments ?? {}, ctx, allow));
+      const { e, r } = await toolCall();
+      return e ?? ok(r);
     }
     default: return err(-32601, `method not found: ${msg.method}`);
   }

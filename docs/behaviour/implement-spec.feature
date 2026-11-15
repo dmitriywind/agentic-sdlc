@@ -216,7 +216,26 @@ Feature: Implement a spec
     And a call with a missing, unknown or wrongly typed argument, or to an unknown tool, returns the JSON-RPC error -32602 naming it
     And a result that is a JSON object is also returned as structured content
 
+  # Source: src/mcp.ts
+  # Proof: test/mcp.test.ts "conformance 2025-11-25: initialize, then tools/list and tools/call answer without resultType, ttlMs or _meta; ping answers {}"
+  Scenario: A client on protocol 2025-11-25 or earlier keeps the initialize handshake
+    Given a client that sends initialize
+    When it lists the tools, calls one and pings
+    Then the replies have the shape of those revisions, with no resultType
+
+  # Source: src/mcp.ts
+  # Proof: test/mcp.test.ts "conformance 2026-07-28: server/discover and stateless tools/list carry resultType, ttlMs, cacheScope and serverInfo"
+  # Proof: test/mcp.test.ts "conformance 2026-07-28: tools/call results are complete; a failing tool is isError, an unknown tool or bad argument is -32602"
+  # Proof: test/mcp.test.ts "conformance 2026-07-28: a missing _meta field is -32602, an unsupported version is -32022 listing the supported ones, ping and initialize-era methods are -32601"
+  Scenario: A client on protocol 2026-07-28 is served without a handshake
+    Given a client that sends its protocol version and capabilities in the _meta of each request
+    When it calls server/discover, tools/list and tools/call
+    Then each result has resultType complete, and the list results have ttlMs and cacheScope
+    And a missing _meta field is -32602 and an unsupported version is -32022 naming the supported versions
+    And ping is -32601
+
   # Source: src/mcp.ts, "--allow"
+  # Proof: test/mcp.test.ts "conformance: --allow filters the tools in both shapes, and a modern request needs no earlier initialize"
   # Proof: test/mcp.test.ts "--allow approve,status serves the review-identity tools, they are refused otherwise, and --help prints usage"
   Scenario: The MCP server serves the review-identity tools only when allowed
     Given the MCP server starts without --allow
