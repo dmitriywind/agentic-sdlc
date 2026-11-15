@@ -1,4 +1,4 @@
-/* ---------- Shipping: merge, deploy each environment, a release line, a failed deploy (chapter 7) ---------- */
+/* ---------- Shipping: merge, deploy each environment, a release line, a failed deploy (chapter 6) ---------- */
 {
   const VERSION = '1.4.0';
   const SHIPPED = ['Not shipped', 'On staging', 'On production'];
@@ -97,7 +97,7 @@
         + (rel ? '<li><div class="sh-rel" role="group" aria-label="Release line"><small>Release line, before production</small>'
           + node(s.rel >= 1 ? 'done' : atRel ? 'cur' : '', 'Release request', s.rel >= 1 ? 'Backlog ticket, label release' : 'You open it; a P0 fix on staging opens one by itself', ['you', 'you'],
             atRel && s.rel === 0 ? '<button class="btn" type="button" id="sh-request">Open release request</button>' : '')
-          + node(s.rel >= 1 ? 'done' : '', 'release skill', 'Picks the commit and the version' + (s.rel >= 1 ? ': v' + VERSION : ''), ['agent', 'agent'])
+          + node(s.rel >= 1 ? 'done' : '', 'ship skill', 'Picks the commit and the version' + (s.rel >= 1 ? ': v' + VERSION : ''), ['agent', 'agent'])
           + node(s.rel >= 2 ? 'done' : atRel && s.rel === 1 ? 'cur' : '', 'Product owner approves', 'Agents never approve the last environment', ['you', 'you'],
             (s.rel >= 2 ? '' : '<button class="btn primary" type="button" id="sh-approve"' + (atRel && s.rel === 1 ? '' : ' disabled') + '>Approve</button>'))
           + node(relFailed ? 'fail' : s.rel >= 2 ? 'done' : '', 'Release line cut', relFailed ? 'Failed: left as it is' : 'release/v' + VERSION, ['ci', 'CI'])
@@ -136,7 +136,7 @@
       if (id === 'sh-request') act(() => {
         s.rel = 1;
         log('you', 'you', 'You open a release request: a Backlog ticket labelled release.');
-        log('agent', 'agent', 'The release skill picks the commit and the version: v' + VERSION + '.');
+        log('agent', 'agent', 'The ship skill picks the commit and the version: v' + VERSION + '.');
       });
       if (id === 'sh-approve') act(() => {
         s.rel = 2;

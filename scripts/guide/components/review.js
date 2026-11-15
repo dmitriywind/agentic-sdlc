@@ -1,9 +1,9 @@
-/* ---------- Review and merge: swimlanes for one or two identities, Fast or Full lane (chapter 6) ---------- */
+/* ---------- Review and merge: swimlanes for one or two identities, Fast or Full lane (chapter 5) ---------- */
 {
   const LANES = [
-    ['impl', 'implement-spec', 'agent'],
+    ['impl', 'build', 'agent'],
     ['ci', 'CI gates', 'ci'],
-    ['rev', 'review-pr', 'agent'],
+    ['rev', 'review/review', 'agent'],
     ['you', 'You / a human', 'you'],
     ['gh', 'GitHub', 'world'],
   ];
@@ -20,26 +20,30 @@
       ['read', 'rev', 'gh', 'Reads the diff, the criteria and the CI results', 'It never runs the change\'s code.'],
     ];
     if (ids === 'one') {
-      s.push(['post', 'rev', 'gh', 'Posts its report with Verdict: PASS, and no status, no approval',
+      s.push(['post', 'rev', 'gh', 'forge verdict posts the report with Verdict: PASS, and no status, no approval',
         'GitHub refuses an approval from the change\'s author; a cloud session cannot write statuses.']);
-      s.push(['ready', 'rev', 'gh', 'Marks the change request ready']);
+      s.push(['ready', 'rev', 'gh', 'forge ready marks the change request ready']);
       s.push(['gate', 'gh', 'ci', 'The review gate reads the report']);
       s.push(['status', 'ci', 'gh', 'Posts review = success']);
-      s.push(['auto', 'rev', 'gh', 'Sees review green on this head and turns on auto-merge', 'It waits up to 5 minutes; if still missing, a later cycle merges it.']);
     } else {
-      s.push(['post', 'rev', 'gh', 'Posts the review status and an approving review, as the review app']);
-      s.push(['ready', 'rev', 'gh', 'Marks ready and turns on auto-merge']);
+      s.push(['post', 'rev', 'gh', 'forge verdict posts the report, the review status and an approving review, as the review app']);
+      s.push(['ready', 'rev', 'gh', 'forge ready marks the change request ready']);
     }
     if (lane === 'full') {
       s.push(['wait', 'ci', 'gh', 'human-approval waits for a human']);
+      s.push(['land', 'rev', 'gh', 'forge land: only human-approval is missing, so it reports who must approve',
+        'escalate asks that person and holds the ticket.']);
       s.push(ids === 'one'
         ? ['human', 'you', 'gh', 'A collaborator approves the head, or you merge as admin']
         : ['human', 'you', 'gh', 'A human owner approves the head']);
       s.push(['ha', 'ci', 'gh', 'Posts human-approval = success']);
+      s.push(['merge', 'gh', 'gh', 'The next cycle\'s forge land merges: all six checks are green']);
     } else {
       s.push(['ha', 'ci', 'gh', 'human-approval passes with no human']);
+      s.push(['land', 'rev', 'gh', 'forge land sees every check green and turns on auto-merge',
+        'It waits up to cycle.land_wait_minutes; if a check is still pending, the queue says land next cycle.']);
+      s.push(['merge', 'gh', 'gh', 'Auto-merges when all six checks are green']);
     }
-    s.push(['merge', 'gh', 'gh', 'Auto-merges when all six checks are green']);
     return s;
   }
   function checks(ids, lane) {
@@ -47,7 +51,7 @@
       ['Required', 'CI job, no secrets'],
       ['proofs-on-base', 'CI gate'],
       ['ticket-linkage', 'CI gate'],
-      ['review', ids === 'one' ? 'CI review gate, from the report' : 'review-pr, as the review app'],
+      ['review', ids === 'one' ? 'CI review gate, from the report' : 'forge verdict, as the review app'],
       ['human-approval', 'approval gate, ' + (lane === 'full' ? 'after a human approves' : 'no human needed')],
       ['skill-regression', 'CI gate'],
     ];

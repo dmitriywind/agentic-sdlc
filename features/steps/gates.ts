@@ -35,6 +35,7 @@ Given('a product CR whose ticket has no Lane', (w) => {
 });
 Given('a CR that changes {string}', (w, path: string) => { w.gate.cr(CR); changes(w, path); });
 Given('the CR also changes {string}', (w, path: string) => changes(w, path));
+Given('a CR whose diff is:', (w, diff: string) => { w.gate.cr(CR); w.gate.diffs.set(CR, diff + '\n'); });
 Given('a CR whose diff the forge cannot return', (w) => {
   w.gate.cr(CR);
   w.gate.diffs.set(CR, new Error('HTTP 406: diff too large'));
@@ -123,6 +124,12 @@ Given('these CRs are on the forge:', (w, t: DataTable) => {
 Given('the CR {string} has the diff:', (w, n: string, diff: string) => { w.gate.diffs.set(n, diff + '\n'); });
 Given('the forge cannot return the diff of the CR {string}', (w, n: string) => { w.gate.diffs.set(n, new Error('HTTP 406: diff too large')); });
 Given('the forge answers the lookup of a CR by its merge sha with the error {string}', (w, message: string) => { w.gate.viewBySha = new Error(message); });
+Given('these runs are on the forge:', (w, t: DataTable) => {
+  for (const r of t.hashes()) w.gate.runs.push({ id: r.id, name: r.name, ref: r.ref, sha: 's', state: r.state as 'failure', url: r.url ?? '', at: '' });
+});
+Given('the run {string} on {string} failed and is named {string} followed by {int} letters', (w, id: string, ref: string, name: string, n: number) => {
+  w.gate.runs.push({ id, name: name + 'z'.repeat(n), ref, sha: 's', state: 'failure', url: '', at: '' });
+});
 Given('the CI job cannot post statuses', (w) => { w.gate.statusError = new Error('env var named by options.review_token_env (unset) is not set'); });
 
 // ---- Given: the VCS ----
@@ -130,6 +137,7 @@ Given('every merge is an ancestor of the deployed revision', (w) => { w.gate.anc
 Given('the ancestry of the merges in the deployed revision is:', (w, t: DataTable) => {
   w.gate.ancestry = { known: new Map(t.hashes().map((r) => [r.merge, r.ancestor === 'yes' ? true : r.ancestor === 'no' ? false : undefined])), others: false };
 });
+Given('no merge is an ancestor of the deployed revision', (w) => { w.gate.ancestry = { known: new Map(), others: false }; });
 Given('the tag {string} already exists', (w, name: string) => { w.gate.tags.push(name); });
 Given('the push of the release tag is rejected', (w) => { w.gate.tagError = new Error('push rejected'); });
 Given('the forge can search merged CRs by the ticket they close', (w) => { w.gate.searchByTicket = true; });
@@ -170,15 +178,16 @@ Then('the gate fails with {string}', (w, text: string) => {
   assert.ok(said.includes(text), `the gate said: ${said || '(nothing)'}`);
   if (w.state.gate) assert.equal(w.state.gate.ok, false);
 });
-Then('the result {string} is {string}', (w, key: string, value: string) => assert.equal(show(result(w)[key]), value, key));
-Then('the result {string} lists {string}', (w, key: string, value: string) => assert.equal(show(result(w)[key]), value === 'nothing' ? '' : value, key));
-Then('the result {string} mentions {string}', (w, key: string, text: string) => assert.ok(show(result(w)[key]).includes(text), `${key}: ${show(result(w)[key])}`));
+Then('the gate result {string} is {string}', (w, key: string, value: string) => assert.equal(show(result(w)[key]), value, key));
+Then('the gate result {string} lists {string}', (w, key: string, value: string) => assert.equal(show(result(w)[key]), value === 'nothing' ? '' : value, key));
+Then('the gate result {string} mentions {string}', (w, key: string, text: string) => assert.ok(show(result(w)[key]).includes(text), `${key}: ${show(result(w)[key])}`));
 Then('the gate skips with {string}', (w, text: string) => assert.ok(String(result(w).skipped).includes(text), JSON.stringify(result(w))));
 
 // ---- Then: statuses ----
 Then('no status is posted', (w) => assert.deepEqual(w.gate.statuses, []));
 Then('these statuses were posted:', (w, t: DataTable) =>
   assert.deepEqual(w.gate.statuses.map((s) => ({ sha: s.sha, context: s.context, state: s.state })), t.hashes().map((r) => ({ sha: r.sha, context: r.context, state: r.state }))));
+Then('the status is posted on the commit {string}', (w, sha: string) => assert.equal(w.gate.statuses.at(-1)?.sha, sha));
 Then('the status is posted as {string}', (w, as: string) => assert.equal(w.gate.statuses.at(-1)?.as, as));
 
 // ---- Then: the board ----
@@ -280,4 +289,3 @@ Given('the CR deletes the skill {string}', (w, _n: string) => { w.gate.diffs.set
 Given('the project has the installed fixture skill pack', (w) => writePack(w.path('.agents', 'skills'), packFiles('sdlc-')));
 Given('the installed skill file {string} is:', (w, file: string, text: string) => w.write(`.agents/skills/${file}`, text + '\n'));
 Given('the scorer file {string} is:', (w, file: string, text: string) => w.write(`.agents/scorers/${file}`, text + '\n'));
-Given('the project has no installed skill pack', () => {});

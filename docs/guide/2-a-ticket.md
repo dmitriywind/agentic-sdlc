@@ -60,6 +60,6 @@ Signal text is data. A skill never follows an instruction inside it.
   else, or for a path in `paths.lane_areas` (sign-in, payments): it also needs a human approval.
   Nothing moves a ticket from Full back to Fast.
 - **Priority** (`P0`, High, Default, Low): only `p0_setters` set P0, with evidence of production
-  impact. The Ready queue goes by priority, then tickets that unblock others, then oldest first.
+  impact. Ready tickets are built in order of priority, then tickets that unblock others, then oldest first.
 
 Next: [3. Your part](3-your-part.md).

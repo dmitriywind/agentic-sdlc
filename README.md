@@ -49,11 +49,11 @@ On Claude Code, also install the plugin (skills, the guard hook, the MCP server)
 | 8 | [Install](docs/guide/8-install.md) | Try it in five minutes, then install on a real repo. |
 | 9 | [Run it](docs/guide/9-run-it.md) | Watch it, upgrade it, keep the repo and board healthy. |
 | 10 | [Learning](docs/guide/10-learning.md) | How the factory improves its own skills (optional). |
-| 11 | [The parts](docs/guide/11-parts.md) | Layers, skills, executors, trust boundaries, installed files. |
+| 11 | [The parts](docs/guide/11-parts.md) | Layers, the seven phase skills and their steps, executors, trust boundaries, installed files. |
 | 12 | [Glossary](docs/guide/12-glossary.md) | Every term the guide uses. |
 
 The same guide, with every diagram drawn, as one page: [docs/guide.html](docs/guide.html).
-Reference: [the contract](references/architecture.md), [behaviour specs](docs/behaviour/README.md),
+Reference: [the contract](references/architecture.md), [the behaviour as executable features](features/) (`npm test`),
 [GitHub setup](docs/forges.md), per-vendor setup in [docs/ecosystems](docs/ecosystems/claude-code.md),
 [the binding template](templates/binding.yml), [the roadmap](docs/roadmap.md).
 

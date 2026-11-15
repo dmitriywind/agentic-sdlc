@@ -2,7 +2,7 @@
 
 Git only, and GitHub is the one forge: on other forges a CR can change the pipeline file that runs
 its own gates. The adapter is
-unit-tested against a fake process runner, not against GitHub itself yet.
+tested by executable features against a fake process runner, not against GitHub itself yet.
 Secrets: `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN`, and with two identities `AGENTIC_REVIEW_TOKEN`
 (the review identity). In a Claude cloud session the proxy is the forge login.
 
@@ -16,7 +16,7 @@ env var that `token_env` names is unset in a cloud session, the adapter uses the
 binding serves CI and the cloud. `review_token_env` never falls back.
 
 A private repo on GitHub Free has no draft pull requests and no trunk protection. There a draft CR
-is a ready PR with the `draft` label, and `forge automerge` merges directly once the CR is ready and
+is a ready PR with the `draft` label, and `forge land` (through `forge automerge`) merges directly once the CR is ready and
 every `forge.required_checks` entry is green on its head (GitHub refuses auto-merge with nothing to
 wait on). No gate can block that merge, so the review is the last check; `doctor` warns about it.
 
@@ -53,7 +53,7 @@ approves its head, or the owner merges it as admin (the ruleset lets admins bypa
 `forge.options.review_token_env` (the `forge.review_identity` account); without it they fail. The implementer's `token_env` cannot post
 `review` or approve. Give the implementer's account no admin or bypass right, and keep
 `AGENTIC_REVIEW_TOKEN` out of the implementer's runtime. The review runtime never runs CR code.
-`forge status` refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`).
+`forge status` refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`, `agent-provenance`).
 
 The implementer's token must not write commit statuses. Code that a cycle runs (`npm test`, for
 example) can read that token and post a status with raw HTTP. Use a fine-grained token with "Commit
@@ -117,7 +117,7 @@ One-time setup (private repos need a plan with Environments: Pro, Team or Enterp
    `approval-gate`, `carry-statuses` and the review job of the runner workflow (`github-actions-claude.yml`, `github-actions-codex.yml`) declare it, so no PR-ref run can read it.
 2. Add `AGENTIC_FORGE_TOKEN` as a repo secret (`proofs-on-base` falls back to the read-only job token and
    its status post fails by design; the job's exit code is the check).
-3. Release line only: create Environment `agentic-release` with the Product owner as required reviewer and deployment branches limited to the trunk. Store `AGENTIC_RELEASE_TOKEN` there: the release bot, a bypass actor of `.github/rulesets/release.json`. The shipped ruleset lets repo admins bypass too (`RepositoryRole` 5); to make the bot the only bypass actor, replace that entry with your release GitHub App (`actor_type: Integration`, its `actor_id`) after you import the ruleset. The release skill starts `forge cut <revision> <version>`, which runs `agentic-sdlc-release.yml`; the Product owner's approval of that run is the go-ahead. The cycle never holds this token.
+3. Release line only: create Environment `agentic-release` with the Product owner as required reviewer and deployment branches limited to the trunk. Store `AGENTIC_RELEASE_TOKEN` there: the release bot, a bypass actor of `.github/rulesets/release.json`. The shipped ruleset lets repo admins bypass too (`RepositoryRole` 5); to make the bot the only bypass actor, replace that entry with your release GitHub App (`actor_type: Integration`, its `actor_id`) after you import the ruleset. The `ship` step starts `forge cut <revision> <version>`, which runs `agentic-sdlc-release.yml`; the Product owner's approval of that run is the go-ahead. The cycle never holds this token.
 4. Repo variables (Settings > Secrets and variables > Actions > Variables): the workflows need none for the CLI; its version is `.agents/cli.json` (a commit SHA is the immutable choice, a tag can move: `doctor` warns). The runner workflows read `AGENTIC_AGENT_CLI_VERSION`, an exact version of the Claude Code or Codex CLI, and fail without it.
 5. `init` installs `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events to `human-approval`; it must stay in place or approvals do not update. A fork PR's review event carries no PR number, so its approval updates on the next PR event.
 
@@ -172,10 +172,10 @@ Trust limits:
   runner takes both kinds.
 - Register each runner with `--ephemeral` where you can, so no job sees the workspace of the previous one.
 - The Environments `agentic-review` and `agentic-release` still gate which jobs get those secrets. On a
-  shared runner they no longer isolate the secrets on the machine itself.
+  shared runner they do not isolate the secrets on the machine itself.
 
 ## Search lag
-`forge closing <id>` uses GitHub search, and the search index can trail a merge. When the search
+The forge's `closing` lookup (a port method, not a CLI verb) uses GitHub search, and the search index can trail a merge. When the search
 finds no merge for a ticket, `gate shipped` also reads the newest merged CRs, so a fresh merge
 still ships.
 

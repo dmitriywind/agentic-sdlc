@@ -150,7 +150,7 @@ VIZ.setup = (el) => {
     const p = pick;
     const harness = { claude: 'claude', codex: 'codex', cursor: 'cursor', other: 'generic' }[p.agent];
     const board = { issues: 'github-issues', project: 'github', jira: 'jira', linear: 'linear', local: 'local' }[p.board];
-    const cmd = ['npx --no agentic-sdlc init', '--profile ' + prof, '--harness ' + harness, '--board ' + board, '--forge github']
+    const cmd = ['npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init', '--profile ' + prof, '--harness ' + harness, '--board ' + board, '--forge github']
       .concat(p.agent === 'claude' && p.runs === 'claude' ? ['--no-plugin'] : []);
 
     const owners = {
@@ -190,7 +190,7 @@ VIZ.setup = (el) => {
     y.push('  env_labels: [' + ship[0].slice(1, -1).split(', ').map((e) => 'env:' + e).join(', ') + ']   # one per product.environments');
     y.push('product:', '  environments: ' + ship[0], '  delivery: ' + ship[1], '  proofs: ' + ship[2]);
     y.push('executors:', '  default:', '    kind: harness', '    sandbox: ' + (p.runs === 'local' ? 'local' : prof === 'organization' ? 'container' : 'cloud'));
-    if (prof === 'organization') y.push('  # validate warns until one stage runs on a managed agent, for example:', '  # implement-spec: { kind: managed, api: claude, agent_env: IMPL_AGENT_ID, environment_env: IMPL_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }');
+    if (prof === 'organization') y.push('  # validate warns until one stage runs on a managed agent, for example:', '  # build: { kind: managed, api: claude, agent_env: IMPL_AGENT_ID, environment_env: IMPL_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }');
 
     const tpl = p.runs === 'local' ? 'local.md' : p.runs === 'actions' ? (p.agent === 'codex' ? 'github-actions-codex.yml' : 'github-actions-claude.yml')
       : p.runs === 'claude' ? 'claude-routine.md' : p.runs === 'vendor' && p.agent === 'cursor' ? 'cursor-automation.md' : 'routine.md';
@@ -204,9 +204,9 @@ VIZ.setup = (el) => {
     if (p.runs === 'actions' && (p.agent === 'cursor' || p.agent === 'other')) note.push('The Actions template runs Claude Code. Replace its agent step with ' + (p.agent === 'cursor' ? 'Cursor\'s CLI' : 'your agent') + '.');
     if (prof === 'individual') note.push('Under individual the runner refuses ANTHROPIC_API_KEY, so the cycle stays on the subscription.');
     if (prof === 'individual-api') note.push('Under individual-api the runner refuses ANTHROPIC_API_KEY. Give a managed executor\'s key another name in its token_env.');
-    if (p.ids === 'one') note.push('One identity: review-pr runs in the cycle and CI posts the review status. A Full-lane change waits for a collaborator\'s approval or your admin merge.');
+    if (p.ids === 'one') note.push('One identity: review/review runs in the cycle and CI posts the review status. A Full-lane change waits for a collaborator\'s approval or your admin merge.');
     else note.push('Two identities: schedule a second run with review-prompt.md. Only that run gets AGENTIC_REVIEW_TOKEN.');
-    if (ship[1] === 'release-line') ok.push('Release-line delivery: the release skill runs and you approve each release.');
+    if (ship[1] === 'release-line') ok.push('Release-line delivery: the ship skill runs and you approve each release.');
     else ok.push('Continuous delivery: every merge ships.');
 
     const block = (id, h, text) => '<div class="su-blk"><div class="su-bh"><h4>' + h + '</h4><button class="btn" type="button" id="su-copy-' + id + '" data-copy="su-' + id + '">Copy</button></div>'

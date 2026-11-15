@@ -74,7 +74,7 @@ Feature: Every dispatch prints its key and its done line
       And the result "skip" is "true"
 
     Scenario: The judge tier wins over the model of the stage
-      Given the models are fast "f", balanced "b", deep "d"
+      Given the models are fast "f", balanced "b" and deep "d"
       And the judge tier is "balanced"
       And the executor "default" is '{"kind":"command","run":"bot","model":{"id":"pinned"}}'
       When dispatch runs "learn/judge --ticket 1 --run-model other"

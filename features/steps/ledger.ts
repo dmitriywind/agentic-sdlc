@@ -89,7 +89,6 @@ Given('the heartbeat ticket', (w) => ensureTicket(w));
 Given('a heartbeat by {string} at {string} with these runs:', (w, by: string, at: string, t: DataTable) => heartbeat(w, undefined, by, at, t.hashes()));
 Given('a heartbeat by {string} at {string} with no runs', (w, by: string, at: string) => heartbeat(w, undefined, by, at, []));
 Given('a {string} heartbeat by {string} at {string} with these runs:', (w, kind: string, by: string, at: string, t: DataTable) => heartbeat(w, kind, by, at, t.hashes()));
-Given('a {string} heartbeat by {string} at {string} with no runs', (w, kind: string, by: string, at: string) => heartbeat(w, kind, by, at, []));
 Given('a heartbeat by {string} at {string} with {int} tickets of one run each, the first using {int} tokens and each next one {int} more', (w, by: string, at: string, n: number, first: number, step: number) => {
   heartbeat(w, undefined, by, at, Array.from({ length: n }, (_, i) => ({ id: `m${i}`, ticket: `t${i}`, tokens: String(first + i * step) })));
 });

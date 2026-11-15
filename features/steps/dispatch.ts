@@ -91,7 +91,10 @@ Then('the start record has the done line {string}', (w, line: string) => assert.
 Then('the instruction matches {string}', (w, re: string) => assert.match(w.last.json().instruction, new RegExp(re)));
 
 // ---- the command executor ----
-Then('the command line is {string} followed by the quoted words {string}', (w, prefix: string, words: string) => assert.equal(w.state.spawn.line, `${prefix} ${words.split('|').map((x) => quote(x)).join(' ')}`));
+Then('the command line is the template {string} filled with the quoted words {string}', (w, template: string, words: string) => {
+  const list = words.split('|');
+  assert.equal(w.state.spawn.line, template.replace(/\{\}/g, () => quote(list.shift()!)));
+});
 Then('the command line is {string}', (w, line: string) => assert.equal(w.state.spawn.line, line));
 Then('the command line mentions {string}', (w, text: string) => assert.ok(String(w.state.spawn.line).includes(text), String(w.state.spawn.line)));
 Then('nothing is started on this machine', (w) => assert.equal(w.state.spawn.started, false));
