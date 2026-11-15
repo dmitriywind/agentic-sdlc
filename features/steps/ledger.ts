@@ -5,16 +5,20 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { HEARTBEAT_MARKER, SCORES_MARKER, measures, hardFacts, scoresComment, type LedgerRun } from '../../src/ledger.ts';
+import { HEARTBEAT_MARKER, SCORES_MARKER, measures, hardFacts, type LedgerRun } from '../../src/ledger.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
-import { Outcome, type World } from '../support/world.ts';
+import { Outcome, REPO, type World } from '../support/world.ts';
 
 // ---- running a CLI module in-process, as the Outcome of the last run ----
-/** Runs `fn` with stdout and stderr captured; `w.last` then holds what it printed and the exit code it returned. */
+/** Runs `fn` with console.log, console.error and stderr captured ; `w.last` then holds what it printed and the exit code it returned. */
 export async function capture(w: World, fn: () => Promise<number>): Promise<Outcome> {
   const out: string[] = [], err: string[] = [];
   const so = process.stdout.write, se = process.stderr.write, log = console.log, cerr = console.error;
-  process.stdout.write = ((s: string) => (out.push(String(s)), true)) as typeof process.stdout.write;
+  // Only what the source under test writes is captured: the test reporter writes to the same stream, from node's own code.
+  process.stdout.write = function (this: unknown, s: string, ...rest: unknown[]) {
+    if (new Error().stack?.includes(`${REPO}src/`)) { out.push(String(s)); return true; }
+    return (so as (...a: unknown[]) => boolean).call(process.stdout, s, ...rest);
+  } as typeof process.stdout.write;
   process.stderr.write = ((s: string) => (err.push(String(s)), true)) as typeof process.stderr.write;
   console.log = (...a: unknown[]) => { out.push(`${a.join(' ')}\n`); };
   console.error = (...a: unknown[]) => { err.push(`${a.join(' ')}\n`); };
@@ -142,6 +146,8 @@ Then('the JSON result has these values:', (w, t: DataTable) => {
     else assert.equal(show(got), r.value, r.path);
   }
 });
+Then('the JSON result {string} is {string}', (w, path: string, value: string) => assert.equal(show(at(w, path)), value, path));
+Then('the JSON result is null', (w) => assert.equal(w.last.json(), null));
 Then('the JSON result {string} holds:', (w, path: string, doc: string) => assert.deepEqual(at(w, path), JSON.parse(doc), path));
 Then('the JSON result holds:', (w, doc: string) => assert.deepEqual(w.last.json(), JSON.parse(doc)));
 
@@ -177,15 +183,10 @@ When('I measure the last {int} days', async (w, days: number) => {
 });
 
 // ---- the hard-fact cap and the scores comment, as functions ----
-Given('a failed run {string} on CR {string} whose checks are:', (w, id: string, cr: string, t: DataTable) => {
-  w.state.cap = { run: { id, outcome: 'failed', cr, skill: 'build' } as unknown as LedgerRun, checks: t.hashes().map((r) => ({ name: r.name, state: r.state })) };
+Given('a run {string} that ended {string} on CR {string} whose checks are:', (w, id: string, outcome: string, cr: string, t: DataTable) => {
+  w.state.cap = { run: { id, outcome, cr, skill: 'build' } as unknown as LedgerRun, checks: t.hashes().map((r) => ({ name: r.name, state: r.state })) };
 });
 When('the hard facts are read with the required checks {string}', (w, required: string) => {
   const { run, checks } = w.state.cap;
   w.last = new Outcome(0, JSON.stringify(hardFacts(run, { checks } as never, required.split(',').map((s) => s.trim()).filter(Boolean))), '');
-});
-When('the judge scores run {string} as {string} under the hard facts {string}', (w, id: string, scores: string, facts: string) => {
-  const p = { run: { id, skill: 'build' } as unknown as LedgerRun, scorers: [{ name: 'done-conditions', scale: '0-4', applies_to: '*' }, { name: 'redundant-tests', scale: 'pass-fail', applies_to: '*' }] as never, cap: { score: 1, facts: facts.split(';').map((s) => s.trim()) } };
-  const body = scoresComment(p, { scores: scoresOf(scores) }, 'T');
-  w.last = new Outcome(0, body.split('\n')[2], '');
 });

@@ -16,7 +16,7 @@ const requests = (w: World): Req[] => (w.state.requests ??= []);
 const sink = (w: World): Sink => (w.state.sink ??= {});
 
 // ---- the binding and the environment ----
-Given('the environment variable {string} is {string}', (w, name: string, value: string) => { w.env[name] = value; });
+Given('the telemetry variable {string} holds {string}', (w, name: string, value: string) => { w.env[name] = value; });
 Given('the telemetry sinks are configured for the repository {string}', (w, repo: string) => {
   w.binding({
     forge: { adapter: 'github', options: { repo } },
@@ -31,7 +31,7 @@ Given('the project ships to the environments {string}', (w, list: string) => w.b
 }));
 
 // ---- the sink ----
-Given('the sink fails with {string}', (w, message: string) => { sink(w).fail = message; });
+Given('the sink fails with {string}', (w, message: string) => { sink(w).fail = message.replace(/\\n/g, '\n'); });
 Given('the sink never answers', (w) => { sink(w).never = true; });
 Given('the sink rejects {int} spans', (w, n: number) => { sink(w).rejected = n; });
 
@@ -83,10 +83,13 @@ Then('the sink was asked once, with one try and a limit of {int} ms', (w, ms: nu
 });
 Then('the gate waits at most 5000 ms for its telemetry', () => assert.equal(GATE_TELEMETRY_DEADLINE_MS, 5000));
 Then('the error output is the single line {string}', (w, line: string) => assert.equal(w.last.stderr, `${line}\n`));
-Then('the error output shows none of {string}', (w, words: string) => {
-  for (const x of words.split('|')) assert.ok(!w.last.stderr.includes(x), `stderr shows "${x}":\n${w.last.stderr}`);
+Then('the output shows none of {string}', (w, words: string) => {
+  for (const x of words.split('|')) assert.ok(!w.last.output.includes(x), `the output shows "${x}":\n${w.last.output}`);
 });
+Then('the error output is empty', (w) => assert.equal(w.last.stderr, ''));
+Then('the error output says {string}', (w, text: string) => assert.ok(w.last.stderr.includes(text), w.last.stderr));
 Then('nothing was printed', (w) => assert.equal(w.last.output, ''));
+Then('nothing was printed on the standard output', (w) => assert.equal(w.last.stdout, ''));
 
 // ---- exporting twice, and a file ----
 When('I note the printed document', (w) => { w.state.exported = w.last.stdout; });
