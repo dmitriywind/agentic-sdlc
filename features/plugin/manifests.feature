@@ -18,11 +18,9 @@ Feature: Claude Code, Codex and Cursor install the package as a plugin
 
   Rule: The Cursor manifest follows the Cursor schema
 
-    Scenario: The Cursor manifest has no key its schema refuses
+    Scenario: The Cursor manifest has no key its schema refuses and its name is a lowercase slug
       Then the Cursor manifest has only keys its schema allows
-
-    Scenario: The Cursor manifest name is a lowercase slug
-      Then the Cursor manifest name is a lowercase slug
+      And the Cursor manifest name is a lowercase slug
 
   Rule: Codex and Cursor point at real paths
 

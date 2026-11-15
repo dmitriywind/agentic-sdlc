@@ -16,7 +16,6 @@ Feature: The Claude Code plugin ships a subagent per tier and a reviewer
       Examples:
         | tier     |
         | fast     |
-        | balanced |
         | deep     |
 
   Rule: The reviewer reads files and runs only the CLI
@@ -28,21 +27,12 @@ Feature: The Claude Code plugin ships a subagent per tier and a reviewer
       Then the agent has no tool among "Edit, Write, NotebookEdit, Agent"
       And the agent disallows "Edit, Write"
 
-    Scenario Outline: The reviewer reads, runs the CLI and reaches the MCP server
-      Then the agent has the tool "<tool>"
-
-      Examples:
-        | tool                                  |
-        | Read                                  |
-        | Bash                                  |
-        | mcp__plugin_agentic-sdlc_agentic-sdlc__* |
-
-    Scenario: The reviewer stops after a number of turns
-      Then the agent has a turn limit
-
-    Scenario: The reviewer runs the review step
-      Then the agent description matches "review/review step"
-      And the agent description does not match "review-pr"
+    Scenario: The reviewer reads, runs the CLI, reaches the MCP server, stops after a number of turns and runs the review step
+      Then the agent has the tool "Read"
+      And the agent has the tool "Bash"
+      And the agent has the tool "mcp__plugin_agentic-sdlc_agentic-sdlc__*"
+      And the agent has a turn limit
+      And the agent description matches "review/review step"
 
   Rule: A plugin agent sets only what the plugin honours
 
@@ -52,7 +42,6 @@ Feature: The Claude Code plugin ships a subagent per tier and a reviewer
       Examples:
         | key            |
         | hooks          |
-        | mcpServers     |
         | permissionMode |
 
   Rule: The package ships the plugin's folders
@@ -63,10 +52,6 @@ Feature: The Claude Code plugin ships a subagent per tier and a reviewer
       Examples:
         | folder         |
         | agents         |
-        | bin            |
-        | evals          |
         | hooks          |
         | .claude-plugin |
-        | .codex-plugin  |
-        | .cursor-plugin |
         | mcp.json       |

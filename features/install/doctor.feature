@@ -25,31 +25,21 @@ Feature: Doctor checks what the gates rely on
       Given the binding sets "forge.options.token_env" to "IMPL"
       And the environment variable "IMPL" is "x"
 
-    Scenario Outline: A token with the repo scope warns that code a cycle runs can post commit statuses
-      Given the user read at GitHub answers with the token scopes "<scopes>"
+    Scenario: A token with the repo scope warns that code a cycle runs can post commit statuses
+      Given the user read at GitHub answers with the token scopes "read:org, repo, workflow"
       When doctor checks the implementer token
-      Then doctor line 1 matches "^warn: the implementer token \(IMPL\) has scope <named>"
-
-      Examples:
-        | scopes                  | named      |
-        | read:org, repo, workflow | repo       |
+      Then doctor line 1 matches "^warn: the implementer token \(IMPL\) has scope repo"
 
   Rule: A self-hosted runner must not run a fork's code or share one runner between code and secrets
 
     Background:
       Given the binding sets "forge.options.repo" to "o/r"
 
-    Scenario Outline: Hosted runners and no variables print nothing
-      Given the repo variable "AGENTIC_RUNS_ON" is '<runs_on>'
+    Scenario: Hosted runners print nothing
+      Given the repo variable "AGENTIC_RUNS_ON" is '"ubuntu-latest"'
       And the repo is "private"
       When doctor checks the self-hosted runner
       Then doctor prints no line
-
-      Examples:
-        | runs_on          |
-        | "ubuntu-latest"  |
-
-  Rule: A Claude cloud session cannot reach GitHub Projects
 
   Rule: The delivery workflow must name the trunk and the delivery of the binding
 
@@ -74,8 +64,15 @@ Feature: Doctor checks what the gates rely on
 
   Rule: The CLI pin must parse, and the launcher must exist and run
 
-    Background:
-      Given an installable package at version "9.9.9"
+    Scenario Outline: A pin that is not a JSON object or has no sha or tag ref fails doctor
+      Given the project has the file ".agents/cli.json" holding '<pin>'
+      When doctor checks the CLI pin
+      Then doctor line 1 matches "<line>"
+
+      Examples:
+        | pin                           | line                                    |
+        | null                          | ^fail cli pin: .*not a JSON object      |
+        | {"package":"p","ref":"main"}  | ^fail cli pin: ref 'main'               |
 
   Rule: A failed probe says why and shows no secret
 

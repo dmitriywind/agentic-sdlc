@@ -27,8 +27,6 @@ Feature: What every board adapter does the same way
       Then the verb fails matching "board\.options\.project_number.*agentic-sdlc validate"
       And no call reaches the board
 
-  Rule: The GitHub boards take only issue numbers as ids
-
   Rule: The milestone verb sets and clears the milestone where create puts it
 
     Scenario Outline: A milestone is set

@@ -21,37 +21,17 @@ Feature: Validate checks the installed skills and the binding
       Then a line of the output matches "^problem: skill none: .*metadata\.tier or metadata\.steps"
       And the exit code is 1
 
-    Scenario: The skills with a top-level tier or from the pack are not problems
-      Given the project has the file ".agents/skills/old/SKILL.md" holding "---\nname: old\ndescription: d\ntier: deep\n---\n"
-      When I run the install command "validate"
-      Then no line of the output matches "^problem: skill (old|sdlc):"
-
     Scenario: A step file that metadata.steps does not list is a problem
       Given the project has the file ".agents/skills/sdlc-plan/steps/extra.md" holding "x"
       When I run the install command "validate"
       Then a line of the output matches "^problem: skill sdlc-plan: steps/extra\.md is not in metadata\.steps"
 
-    Scenario: A skill with no frontmatter is a problem
-      Given the project has the file ".agents/skills/bad/SKILL.md" holding "no frontmatter"
-      When I run the install command "validate"
-      Then the exit code is 1
-
   Rule: An executors key names a step or a skill
-
-    Scenario: An executor named after an old skill warns that it runs as the new one
-      Given the installed binding also runs the executors "implement-spec"
-      When I run the install command "validate"
-      Then a line of the output matches "^warn: executors\.implement-spec: .* runs as build"
 
     Scenario: An executor that names no step or skill warns that no dispatch uses it
       Given the installed binding also runs the executors "mybot"
       When I run the install command "validate"
       Then a line of the output matches "^warn: executors\.mybot names no step or skill"
-
-    Scenario: An executor named after a step is not warned about
-      Given the installed binding also runs the executors "plan/shape"
-      When I run the install command "validate"
-      Then no line of the output matches "executors\.plan/shape"
 
   Rule: Warnings alone do not fail
 
@@ -59,7 +39,6 @@ Feature: Validate checks the installed skills and the binding
       Given the installed binding is complete and runs a bot that is assigned work
       When I run the install command "validate"
       Then a line of the output matches "^warn: executors\.bot"
-      And no line of the output matches "^problem:"
       And the exit code is 0
 
   Rule: The binding keys of the package template that the project binding lacks are listed

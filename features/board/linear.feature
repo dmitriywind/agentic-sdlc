@@ -5,15 +5,11 @@ Feature: The Linear board
 
   Rule: A read follows every page or fails
 
-    Scenario: A list follows the end cursor to the last page
+    Scenario: A list and the comments follow the end cursor to the last page
       Given the linear board adapter
       And Linear holds the issues L1 and L2 and the comments k1 and k2 on two pages each
       When the factory lists the tickets
       Then the listed ticket ids are "L1, L2"
-
-    Scenario: The comments follow the end cursor to the last page
-      Given the linear board adapter
-      And Linear holds the issues L1 and L2 and the comments k1 and k2 on two pages each
       When the factory reads the comments of the ticket "LIN-1"
       Then the comment ids are "k1, k2"
 

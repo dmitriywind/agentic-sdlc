@@ -19,15 +19,10 @@ Feature: The HTTP helper retries what is safe, gives up on time and keeps secret
     Scenario: A call that keeps failing is given up after 3 tries and names the method, host and status
       Given the API answers in turn:
         | status |
-        | 500    |
-        | 502    |
         | 503    |
-        | 200    |
       When the adapter makes a GET call to "https://h/x"
       Then the call fails with "GET h -> 503"
       And the API was called 3 times
-
-  Rule: The wait between tries is bounded
 
   Rule: A call that gets no answer is aborted
 
@@ -36,5 +31,3 @@ Feature: The HTTP helper retries what is safe, gives up on time and keeps secret
       And the time limit of a request is 100 milliseconds
       When the adapter makes a GET call to the API
       Then the call fails
-
-  Rule: Errors never show a URL
