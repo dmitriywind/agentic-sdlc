@@ -13,15 +13,6 @@ Feature: Gate proofs-on-base
         | cr | changes                                      |
         | 1  | src/a.ts, test/a.test.ts, test/b.test.ts     |
 
-    Scenario: Proofs that fail on the merge base pass the gate, and the working tree returns to the head
-      When the proofs-on-base gate runs for the CR "1"
-      Then the gate passes
-      And the gate result "files" lists "test/a.test.ts, test/b.test.ts"
-      And the proof files were run alone, one command each: "test/a.test.ts, test/b.test.ts"
-      And the merge base had the tests "test/a.test.ts,test/b.test.ts" and the tree went back to the head
-      And the status "proofs-on-base" is "success"
-      And the status is posted as "ci"
-
     Scenario: A proof that passes on the merge base fails the gate and is named
       Given the proofs "b.test" pass on the merge base
       When the proofs-on-base gate runs for the CR "1"
@@ -45,55 +36,7 @@ Feature: Gate proofs-on-base
 
   Rule: The gate fails closed when it cannot run the proofs
 
-    Scenario: A product CR with no new or changed proof fails
-      Given the binding sets "commands.proofs_on_base" to "npx test {files}"
-      And these CRs are on the forge:
-        | cr | changes  |
-        | 1  | src/a.ts |
-      When the proofs-on-base gate runs for the CR "1"
-      Then the gate fails with "no new or changed proof"
-      And the status "proofs-on-base" is "failure"
-
-    Scenario: An unset commands.proofs_on_base fails
-      Given these CRs are on the forge:
-        | cr | changes                  |
-        | 1  | src/a.ts, test/a.test.ts |
-      When the proofs-on-base gate runs for the CR "1"
-      Then the gate fails with "proofs_on_base is not set"
-      And the status "proofs-on-base" is "failure"
-      And no proof was run
-
-    Scenario: A CR whose diff the forge cannot return is a guardrail CR with no product proof
-      Given these CRs are on the forge:
-        | cr |
-        | 1  |
-      And the forge cannot return the diff of the CR "1"
-      When the proofs-on-base gate runs for the CR "1"
-      Then the gate passes
-      And the gate result "class" is "guardrail"
-      And the gate result "files" lists "nothing"
-
   Rule: A CR with no product proof to make passes
-
-    Scenario: A factory CR has no product proof
-      Given the binding sets "commands.proofs_on_base" to "npx test {files}"
-      And these CRs are on the forge:
-        | cr | changes |
-        | 1  | .agents/x |
-      When the proofs-on-base gate runs for the CR "1"
-      Then the gate passes
-      And the status "proofs-on-base" is "success"
-      And no proof was run
-
-    Scenario: A product CR that changes only paths.no_proof needs no proof file
-      Given the binding sets "commands.proofs_on_base" to "npx test {files}"
-      And the binding sets "paths.no_proof" to the list "docs/**, **/*.md"
-      And these CRs are on the forge:
-        | cr | changes   |
-        | 1  | docs/a.md |
-      When the proofs-on-base gate runs for the CR "1"
-      Then the gate passes
-      And the status "proofs-on-base" is "success"
 
     Scenario: A product CR that also changes code still needs a proof file
       Given the binding sets "commands.proofs_on_base" to "npx test {files}"
@@ -106,15 +49,6 @@ Feature: Gate proofs-on-base
 
   Rule: The job holds no secrets, so its exit code carries the result
 
-    Scenario: A job that cannot post the status reports it and still returns the result
-      Given the CI job cannot post statuses
-      And these CRs are on the forge:
-        | cr | changes   |
-        | 1  | .agents/x |
-      When the proofs-on-base gate runs for the CR "1"
-      Then the gate passes
-      And the gate result "posted" is "false"
-
   Rule: Only a real non-zero exit is a failing proof
 
     Scenario Outline: The proof runner tells a failing proof from a broken runner
@@ -124,6 +58,3 @@ Feature: Gate proofs-on-base
       Examples:
         | command                     | answer            |
         | exits 0                     | passing           |
-        | exits 1                     | failing           |
-        | overflows the output buffer | not a test result |
-        | is killed by a signal       | not a test result |

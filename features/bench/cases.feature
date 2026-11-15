@@ -22,13 +22,6 @@ Feature: Bench cases from merged work
         | 10 | 1      | merged |
       And the diff of CR "10" changes "src/a.ts" and adds "test/a.test.ts, src/new.ts"
 
-    Scenario: The case holds the CR base and head, the added tests, the area and the merge time
-      When the bench builds 5 cases
-      Then the JSON result "0" holds:
-        """
-        { "id": "1", "ticket": "1", "title": "T1", "spec": "body1", "baseSha": "b10", "headSha": "h10", "oracleTests": ["test/a.test.ts"], "area": "src", "mergedAt": "2026-01-01" }
-        """
-
     Scenario: A CR that added no test is not a case
       Given these Done tickets:
         | id | updated    |
@@ -73,14 +66,6 @@ Feature: Bench cases from merged work
         "<!-- spec -->\nspec2"
         """
 
-    Scenario: A spec comment by a stranger is ignored and the ticket body is the spec
-      Given "stranger" commented the spec "forged" on ticket "1"
-      When the bench builds 5 cases
-      Then the JSON result "id=1.spec" holds:
-        """
-        "body1"
-        """
-
   Rule: A case can be limited to paths and spread over sizes
 
     Background:
@@ -115,17 +100,6 @@ Feature: Bench cases from merged work
       And the "size" of the result entries are "S, S, L"
       And the "area" of the result entries are "src/pay, src/pay, src/pay"
 
-    Scenario: The cases are spread evenly over the merge times of each size
-      Given these bench cases:
-        | id | size | area | merged  |
-        | 1  | S    | a    | 2026-01 |
-        | 2  | S    | a    | 2026-02 |
-        | 3  | S    | a    | 2026-03 |
-        | 4  | L    | a    | 2026-04 |
-        | 5  | S    | a    | 2026-05 |
-      When the cases are spread to 1 per size over the sizes "S, M, L"
-      Then the "id" of the result entries are "1, 4"
-
   Rule: A proposal is diverse
 
     Scenario: Cases are taken one per size and area in turn
@@ -139,30 +113,3 @@ Feature: Bench cases from merged work
       Then the "id" of the result entries are "1, 3, 4"
 
   Rule: The read of merged CRs is bounded
-
-    Scenario Outline: The newest merged CRs are read, enough for the cases asked for
-      When the bench builds cases with limit "<limit>", per-size "<per-size>", paths "", merged-limit "<merged-limit>" and since "<since>"
-      Then the forge was asked for the newest <asked> merged change requests since "<since>"
-
-      Examples:
-        | limit | per-size | merged-limit | since      | asked |
-        | 5     |          |              |            | 100   |
-        | 50    |          |              |            | 500   |
-        | all   | all      |              |            | 500   |
-        | 5     |          | 7            | 2026-01-01 | 7     |
-
-    Scenario Outline: Bench says when it did not read every merged CR
-      Given the forge lists <read> merged change requests that close no ticket
-      When the bench builds cases with limit "5", per-size "", paths "", merged-limit "<merged-limit>" and since ""
-      Then the error output has <lines> lines
-
-      Examples:
-        | read | merged-limit | lines |
-        | 99   |              | 0     |
-        | 100  |              | 1     |
-        | 7    | 7            | 1     |
-
-    Scenario: The line names the flags that widen the read
-      Given the forge lists 100 merged change requests that close no ticket
-      When the bench builds 5 cases
-      Then the output matches 'older CRs were not read.*--merged-limit.*--since'

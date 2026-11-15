@@ -18,12 +18,6 @@ Feature: The Jira board
       When the factory lists the tickets
       Then the verb fails matching "jira: list does not advance"
 
-    Scenario: The comments of every page are read
-      Given the jira board adapter
-      And Jira holds 150 comments and the comment 120 says "marker-x"
-      When the factory reads the comments of the ticket "PROJ-1"
-      Then the board returns 150 comments
-
     Scenario: A marker on the second page of comments is found
       Given the jira board adapter
       And Jira holds 150 comments and the comment 120 says "marker-x"

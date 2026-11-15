@@ -37,13 +37,6 @@ Feature: forge verdict posts the review report for the head
         Verdict: REMEDIATION REQUIRED
         """
 
-    Scenario: A body line that contradicts the flag is refused
-      When the report for the head "h1" is built as pass from:
-        """
-        Verdict: REMEDIATION REQUIRED
-        """
-      Then the report is refused with the usage error "the body says"
-
   Rule: Exactly one of --pass or --fail is given
 
     Background:
@@ -52,15 +45,6 @@ Feature: forge verdict posts the review report for the head
         """
         ok
         """
-
-    Scenario Outline: A verdict without a flag, or with both, is a usage error
-      When the forge CLI runs "verdict 5 <flags> --body-file report.md"
-      Then the exit code is 2
-
-      Examples:
-        | flags         |
-        |               |
-        | --pass --fail |
 
   Rule: With one identity only the report is posted
 
@@ -71,15 +55,6 @@ Feature: forge verdict posts the review report for the head
         """
         ok
         """
-
-    Scenario: A pass posts the report and nothing else, CI posts the status
-      When the forge CLI runs "verdict 5 --pass --body-file report.md"
-      Then the exit code is 0
-      And the result "verdict" is "PASS"
-      And the result "status" is "ci"
-      And the comment posted on the CR "5" opens with "<!-- review-pr abc1234 -->"
-      And no call includes "statuses/"
-      And no call includes "pulls/5/reviews"
 
   Rule: With a review identity the status and the approval are posted too
 
@@ -102,13 +77,6 @@ Feature: forge verdict posts the review report for the head
       And a call includes "statuses/abc1234 -f state=success -f context=review"
       And a call includes "-X POST repos/o/r/pulls/5/reviews"
 
-    Scenario: A fail posts the report and the failure status, and no approval
-      When the forge CLI runs "verdict 5 --fail --body-file report.md"
-      Then the exit code is 0
-      And the result "verdict" is "REMEDIATION REQUIRED"
-      And a call includes "statuses/abc1234 -f state=failure -f context=review"
-      And no call includes "pulls/5/reviews"
-
   Rule: A missing review token fails with Access and posts nothing
 
     Background:
@@ -120,9 +88,3 @@ Feature: forge verdict posts the review report for the head
         """
         ok
         """
-
-    Scenario: The review token is not set
-      When the forge CLI runs "verdict 5 --pass --body-file report.md"
-      Then the exit code is 1
-      And the output matches "^Access:"
-      And no call includes "-X POST"

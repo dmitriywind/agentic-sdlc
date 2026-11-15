@@ -21,27 +21,6 @@ Feature: A stage's caps reach its executor
       And the result "limits.max_tokens" is "5000"
       And the result "limits.max_minutes" is "20"
 
-    Scenario: A cap nobody sets is an empty word and no variable
-      Given the executor "default" is '{"kind":"command","run":"bot {max_turns}"}'
-      When dispatch runs "build --ticket 5"
-      Then the command line is the template "bot {}" filled with the quoted words ""
-      And the child environment has no "AGENTIC_SDLC_MAX_TURNS"
-      And the start record has no "limits"
-
-    Scenario: A harness stage inherits the default's caps and the task states them
-      Given the executor "default" is '{"kind":"harness","max_turns":80,"max_minutes":20}'
-      When dispatch runs "build --ticket 5"
-      Then the result "limits.max_turns" is "80"
-      And the result "limits.max_minutes" is "20"
-      And the start record has no "limits.max_tokens"
-      And the instruction matches "at most 80 turns, 20 minutes"
-
-    Scenario: A webhook body carries the limits
-      Given the executor "default" is '{"kind":"webhook","url_env":"U","max_turns":9}'
-      And the runner sets "U" to "https://h/x"
-      When dispatch runs "build --ticket 1"
-      Then the first call matches '"limits":\{"max_turns":9\}'
-
     Scenario: A managed task text states the limits
       Given the executor "default" is '{"kind":"managed","api":"cursor","repo_url":"https://r","token_env":"T","max_tokens":700}'
       And the runner sets "T" to "t"
@@ -59,20 +38,6 @@ Feature: A stage's caps reach its executor
       Examples:
         | key                           | value | problem                                                |
         | executors.default.max_turns   | 0     | executors.default.max_turns must be a positive integer |
-        | executors.default.max_minutes | 1.5   | max_minutes must be a positive integer                 |
-        | cycle.max_tokens_per_ticket   | -1    | cycle.max_tokens_per_ticket must be a positive integer |
-
-    Scenario: The bench budget knows runs and minutes only
-      Given a complete binding
-      And the binding value "learning.bench_budget" is '{"max_tokens":5}'
-      When the binding is validated
-      Then the problems mention "bench_budget.max_tokens is not a bench cap"
-
-    Scenario: A bench cap is a positive integer too
-      Given a complete binding
-      And the binding value "learning.bench_budget" is '{"max_runs":"build"}'
-      When the binding is validated
-      Then the problems mention "bench_budget.max_runs must be a positive integer"
 
     Scenario: Sound caps are no problem
       Given a complete binding

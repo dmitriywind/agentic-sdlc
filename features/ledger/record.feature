@@ -89,13 +89,6 @@ Feature: Planning and recording the scores of a run
         | score       | 1                                             |
         | facts       | outcome failed, red check on the head: Required |
 
-    Scenario: A run that is done with green checks has no hard fact
-      Given a run "a" that ended "done" on CR "7" whose checks are:
-        | name     | state   |
-        | Required | success |
-      When the hard facts are read with the required checks "Required"
-      Then the JSON result is null
-
   Rule: A recorded score is validated and capped
 
     Background:

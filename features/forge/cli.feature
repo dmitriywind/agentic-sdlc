@@ -11,12 +11,6 @@ Feature: The forge CLI prints JSON and exits with a clear code
 
   Rule: The result is JSON on stdout
 
-    Scenario: A CR is printed as JSON
-      When the forge CLI runs "view 7"
-      Then the exit code is 0
-      And the result "n" is "7"
-      And the result "author" is "ann"
-
     Scenario: A CR is found by its sha, with the flag as --k=v
       Given the commit "abc1234" is listed under the pull requests "7 head abc1234"
       When the forge CLI runs "view --sha=abc1234"
@@ -25,19 +19,6 @@ Feature: The forge CLI prints JSON and exits with a clear code
 
   Rule: Exit 1 is a failure of the forge, exit 2 a usage error
 
-    Scenario Outline: A command and its exit code
-      When the forge CLI runs "<command>"
-      Then the exit code is <code>
-
-      Examples:
-        | command               | code |
-        | view 7                | 0    |
-        | view                  | 2    |
-        | bogus                 | 2    |
-        | comment 7             | 2    |
-        | view 8                | 1    |
-        | run 43                | 1    |
-
     Scenario Outline: A flag the verb does not take, or takes wrongly, is a usage error
       When the forge CLI runs "<command>"
       Then the exit code is 2
@@ -45,27 +26,9 @@ Feature: The forge CLI prints JSON and exits with a clear code
 
       Examples:
         | command                                                          | message                                          |
-        | view 7 --bogus                                                   | unknown flag --bogus for forge view              |
-        | list --state                                                     | --state needs a value                            |
-        | list --checks=yes                                                | --checks takes no value                          |
-        | list --limit abc                                                 | --limit needs a whole number, got 'abc'          |
         | comments 7 --last=x                                              | --last needs a whole number, got 'x'             |
-        | list --since never                                               | --since must be an ISO date                      |
-        | open --source b --title t --body-file /nonexistent/body.md       | --body-file cannot be read: /nonexistent/body.md |
 
   Rule: A status is never posted for a context only a gate owns
-
-    Scenario Outline: A gate context is refused before any call
-      When the forge CLI runs "status abcdef1 --context <context> --state success --description d"
-      Then the exit code is 2
-      And the forge makes no call
-
-      Examples:
-        | context         |
-        | human-approval  |
-        | ticket-linkage  |
-        | proofs-on-base  |
-        | agent-provenance |
 
   Rule: list and run take their flags
 

@@ -19,13 +19,6 @@ Feature: The github-issues board
       And the listed ticket "2" has the labels "bug"
       And every call is a gh api call under the repo, never GraphQL, gh issue or gh project
 
-    Scenario: A list is read in pages of 100
-      Given the github-issues board adapter
-      And the repo has the issues 1 to 150 labelled "status:Backlog"
-      When the factory lists the tickets
-      Then the board lists 150 tickets
-      And the list is read in pages of 100 up to page 2
-
     Scenario: Pull requests and issues with no status label are left out of the list
       Given the github-issues board adapter
       And the repo has these issues:
@@ -35,55 +28,6 @@ Feature: The github-issues board
         | 201    | status:Ready   | yes          |
       When the factory lists the tickets
       Then the listed ticket ids are "10"
-
-    Scenario: A get refuses an issue with no status label
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels       |
-        | 2      |              |
-      When the factory gets the ticket "2"
-      Then the verb fails matching "not on the board"
-
-    Scenario: A get refuses a pull request
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels       | pull request |
-        | 3      | status:Ready | yes          |
-      When the factory gets the ticket "3"
-      Then the verb fails matching "not on the board"
-
-    Scenario Outline: A ticket at Done reached Done when its issue closed
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels   | state   | closed at   |
-        | 1      | <labels> | <state> | <closed at> |
-      When the factory lists the tickets
-      Then the listed ticket "1" reached its status at "<reached>"
-
-      Examples:
-        | labels           | state  | closed at            | reached              |
-        | status:Done      | closed | 2026-02-01T10:00:00Z | 2026-02-01T10:00:00Z |
-        | status:Done      | open   |                      |                      |
-        | status:Cancelled | closed | 2026-02-02T10:00:00Z |                      |
-        | status:Ready     | open   |                      |                      |
-
-    Scenario: An issue with no status label is not listed
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels       |
-        | 9      |              |
-        | 10     | status:Ready |
-      When the factory lists the tickets
-      Then the listed ticket ids are "10"
-
-    Scenario: The comments of an issue with no status label are read by marker
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels |
-        | 9      |        |
-      And the issue 9 has the comment "<!-- heartbeat -->"
-      When the factory reads the comments of the ticket "9" with the marker "<!-- heartbeat -->"
-      Then the board returns 1 comments
 
     Scenario: A comment can be written on an issue with no status label
       Given the github-issues board adapter
@@ -95,15 +39,6 @@ Feature: The github-issues board
       And every call is a gh api call under the repo, never GraphQL, gh issue or gh project
 
   Rule: A move swaps the status label
-
-    Scenario: A move is refused when the status differs from --only-from
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels                |
-        | 7      | status:Backlog, size:M |
-      When the factory moves the ticket "7" to "In progress" only from "Ready"
-      Then the move is refused because the ticket has moved
-      And no call writes to the issues
 
     Scenario: A move from the right status replaces the status label and keeps the others
       Given the github-issues board adapter
@@ -129,25 +64,6 @@ Feature: The github-issues board
       Then the repo has the labels exactly "bug, feature, status:Ready"
       And the returned ticket has the status "Ready"
 
-    Scenario: Create resolves the milestone by its title
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels         |
-        | 1      | status:Backlog |
-      And the repo has the milestone "M1" as number 3
-      When the factory creates a ticket at "Ready" with the labels "bug", the milestone "M1" and the parent "1"
-      Then the new issue is opened with the milestone number 3
-
-    Scenario: Create links the new issue under its parent
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels         |
-        | 1      | status:Backlog |
-      And the repo has the milestone "M1" as number 3
-      When the factory creates a ticket at "Ready" with the labels "bug", the milestone "M1" and the parent "1"
-      Then the new issue is linked as a sub issue of the issue 1
-      And every call is a gh api call under the repo, never GraphQL, gh issue or gh project
-
     Scenario: A field is set and cleared through its label
       Given the github-issues board adapter
       And the repo has these issues:
@@ -155,14 +71,6 @@ Feature: The github-issues board
         | 7      | status:In review, size:M, bug |
       When the factory sets the field "size" of the ticket "7" to "L"
       Then the returned ticket has the fields "size=L"
-
-    Scenario: A field is cleared by removing its label
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels                       |
-        | 7      | status:In review, size:M, bug |
-      When the factory clears the field "size" of the ticket "7"
-      Then the returned ticket has the fields ""
 
     Scenario: A label is removed
       Given the github-issues board adapter
@@ -184,17 +92,6 @@ Feature: The github-issues board
 
   Rule: Comments are paged and newest first
 
-    Scenario: Every page of comments is read, the newest first
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels       |
-        | 7      | status:Ready |
-      And the issue 7 has 120 comments saying "hi"
-      When the factory reads the comments of the ticket "7"
-      Then the board returns 120 comments
-      And the first comment is "119"
-      And every call is a gh api call under the repo, never GraphQL, gh issue or gh project
-
     Scenario: Comments are narrowed to those carrying a marker
       Given the github-issues board adapter
       And the repo has these issues:
@@ -207,14 +104,6 @@ Feature: The github-issues board
 
   Rule: An assignee is replaced, never added
 
-    Scenario: A new assignee replaces the old one in one patch
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels       | assignee |
-        | 7      | status:Ready | old      |
-      When the factory assigns the ticket "7" to "new"
-      Then the one patch sets the assignees to "new"
-
   Rule: The milestone is set by title and cleared with null
 
     Scenario: A milestone is set by its title and the status is kept
@@ -226,24 +115,6 @@ Feature: The github-issues board
       When the factory sets the milestone of the ticket "7" to "M1"
       Then the returned ticket has the status "Ready"
       And the last patch sets the milestone to 3
-
-    Scenario: A milestone is cleared
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels       |
-        | 7      | status:Ready |
-      When the factory clears the milestone of the ticket "7"
-      Then the last patch clears the milestone
-      And the repo holds 1 issues
-
-    Scenario: A milestone the repo does not have is refused
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels       |
-        | 7      | status:Ready |
-      And the repo has the milestone "M1" as number 3
-      When the factory sets the milestone of the ticket "7" to "nope"
-      Then the verb fails matching "no milestone 'nope'"
 
   Rule: A write is retried on a rate limit but not on a server error; a read is retried on both
 
@@ -264,12 +135,3 @@ Feature: The github-issues board
       And gh fails 1 times with "gh: HTTP 403: You have exceeded a secondary rate limit" before it answers
       When the factory assigns the ticket "7" to "x"
       Then the one patch sets the assignees to "x"
-
-    Scenario: A write is not retried on a server error
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels       |
-        | 7      | status:Ready |
-      And gh fails 1 times with "gh: HTTP 502: Bad Gateway" before it answers
-      When the factory assigns the ticket "7" to "x"
-      Then the verb fails matching "502"

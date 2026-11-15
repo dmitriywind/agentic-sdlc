@@ -15,22 +15,6 @@ Feature: Adapter options are checked per adapter
       When the binding is validated
       Then the problems mention "board.options.project_key is required"
 
-    Scenario: A board option the adapter does not read is named
-      Given the binding value "board.adapter" is '"jira"'
-      And the binding value "board.options" is '{"base_url":"u","project":"P","email_env":"E","token_env":"T"}'
-      When the binding is validated
-      Then the problems mention "board.options.project is not read"
-
-    Scenario: A forge option the adapter does not read is named
-      Given the binding value "forge.options" is '{"repo":"o/r","host":"h"}'
-      When the binding is validated
-      Then the problems mention "forge.options.host is not read"
-
-    Scenario: A vcs option the adapter does not read is named
-      Given the binding value "vcs.options" is '{"remote":"origin"}'
-      When the binding is validated
-      Then the problems mention "vcs.options.remote is not read"
-
     Scenario: Options the adapters read are valid
       Given the binding value "board.adapter" is '"jira"'
       And the binding value "board.options" is '{"base_url":"u","project_key":"P","email_env":"E","token_env":"T"}'

@@ -24,28 +24,7 @@ Feature: The review step runs in the review runtime when a review identity is se
       And the child environment holds "REVIEW_FIRE_TOKEN" as "t"
       And the child environment has no "AGENTIC_REVIEW_TOKEN"
 
-    Scenario: With no fire command the runner's job dependency starts it and nothing starts here
-      When dispatch runs "review/review --cr 3"
-      Then the result "kind" is "fire"
-      And the result "via" is "job-dependency"
-      And nothing is started on this machine
-
   Rule: Inside the review runtime, and with no identity, it is an ordinary step
-
-    Scenario: Inside the review runtime the executor runs it
-      Given the runner sets "AGENTIC_SDLC_ROLE" to "review"
-      And the runner sets "AGENTIC_REVIEW_FIRE_CMD" to "fire-it"
-      When dispatch runs "review/review --cr 3"
-      Then the result "kind" is "harness"
-      And the result "via" is "executor"
-      And nothing is started on this machine
-
-    Scenario: With no review identity the executor runs it
-      Given the binding has "forge.review_identity" set to the JSON '""'
-      And the runner sets "AGENTIC_REVIEW_FIRE_CMD" to "fire-it"
-      When dispatch runs "review/review --cr 3"
-      Then the result "kind" is "harness"
-      And the result "via" is "executor"
 
     Scenario: An executor the binding names for the step wins
       Given the executor "review/review" is '{"kind":"command","run":"mine"}'

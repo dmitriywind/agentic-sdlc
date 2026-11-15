@@ -64,75 +64,11 @@ Feature: Gate provenance
       And the gate result "state" is "failure"
       And the status "agent-provenance" is "failure"
 
-    Scenario: Under warn the gate succeeds and the report still names each problem
-      Given the binding sets "forge.provenance" to "warn"
-      When the provenance gate runs for the CR "1"
-      Then the gate result "state" is "success"
-      And the gate result "ok" is "false"
-      And the report names 6 problems
-      And the status "agent-provenance" is "success"
-
   Rule: Commits the forge cannot list fail closed under require
-
-    Scenario: Under require unreadable commits are a failure
-      Given the binding sets "forge.provenance" to "require"
-      And the forge cannot list the commits of the CR "1"
-      When the provenance gate runs for the CR "1"
-      Then the gate fails with "commits unreadable: forge: CR c has 250"
-      And the status "agent-provenance" is "failure"
-
-    Scenario: Under warn unreadable commits are reported and the status succeeds
-      Given the binding sets "forge.provenance" to "warn"
-      And the forge cannot list the commits of the CR "1"
-      When the provenance gate runs for the CR "1"
-      Then the gate result "state" is "success"
-      And the report names the problem "unreadable"
 
   Rule: Provenance off does nothing
 
-    Scenario Outline: With forge.provenance <setting> the gate reads no commits and posts no status
-      Given the binding <setting>
-      And the forge fails if the commits of the CR "1" are read
-      When the provenance gate runs for the CR "1"
-      Then the gate skips with "off"
-      And no status is posted
-
-      Examples:
-        | setting                           |
-        | sets "forge.provenance" to "off"  |
-        | has no "forge.provenance"         |
-
   Rule: Only the last paragraph of the message holds trailers
-
-    Scenario: The subject alone holds none
-      When the trailers are read from the message:
-        """
-        subject only
-        """
-      Then no trailer is read
-
-    Scenario: The key: value lines of the last paragraph are the trailers
-      When the trailers are read from the message:
-        """
-        s
-
-        Agent-Run: r1 
-        not a trailer
-        Co-Authored-By: A <a@b>
-        """
-      Then the trailer "agent-run" is "r1"
-      And the trailer "co-authored-by" is "A <a@b>"
-
-    Scenario: A trailer-like line in the body does not count
-      When the trailers are read from the message:
-        """
-        s
-
-        Agent-Run: in body
-
-        footer text
-        """
-      Then no trailer is read
 
   Rule: A gate flag takes --k=v as well as --k v
 

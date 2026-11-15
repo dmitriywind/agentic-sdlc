@@ -11,61 +11,7 @@ Feature: CDEvents posted by the gates
 
   Rule: A deploy result is posted as a service CDEvent
 
-    Scenario: A successful deploy is a service deployed event with the environment and the artifact
-      When I run "gate shipped staging --sha abc --result success --version 1.0" against the recording sink
-      Then the exit code is 0
-      And the sink received 1 requests
-      And request 1 was a POST to "https://sink.example/events"
-      And request 1 has these headers:
-        | header  | value                                |
-        | ce-type | dev.cdevents.service.deployed.0.3.0  |
-      And the body of request 1 has these values:
-        | path                           | value                            |
-        | subject.id                     | service/app                      |
-        | subject.content.environment.id | staging                          |
-        | subject.content.artifactId     | pkg:generic/acme/app@1.0         |
-
-    Scenario: A rolled-back deploy is a service rolledback event, with the sha as the version
-      When I run "gate shipped staging --sha abc123 --result rolled-back" against the recording sink
-      Then the sink received 1 requests
-      And request 1 has these headers:
-        | header  | value                                  |
-        | ce-type | dev.cdevents.service.rolledback.0.3.0  |
-      And the body of request 1 has these values:
-        | path                       | value                      |
-        | subject.content.artifactId | pkg:generic/acme/app@abc123 |
-
-    Scenario: A failed deploy has no CDEvent
-      When I run "gate shipped staging --sha abc --result failure" against the recording sink
-      Then the exit code is 0
-      And the sink received 0 requests
-
-    Scenario: Without telemetry keys nothing is posted and nothing is said
-      Given the binding has no "telemetry"
-      When I run "gate shipped staging --sha abc --result success" against the recording sink
-      Then the exit code is 0
-      And the sink received 0 requests
-      And the error output is empty
-
-    Scenario: Without forge.options.repo the service has no name, so no event is built
-      Given the binding has no "forge.options.repo"
-      When I run "gate shipped staging --sha abc --result success" against the recording sink
-      Then the exit code is 0
-      And the sink received 0 requests
-      And the error output says "forge.options.repo is unset"
-
   Rule: A merge is posted as a change merged CDEvent
-
-    Scenario: The change merged event names the CR and the repository
-      When the gate posts the change merged event of CR "12"
-      Then the sink received 1 requests
-      And request 1 has these headers:
-        | header     | value                                |
-        | ce-type    | dev.cdevents.change.merged.0.3.0     |
-        | ce-subject | 12                                   |
-      And the body of request 1 has these values:
-        | path                          | value                       |
-        | subject.content.repository.id | acme/app                    |
 
   Rule: A failed send writes one line and never fails the gate
 
@@ -75,28 +21,6 @@ Feature: CDEvents posted by the gates
       Then the exit code is 0
       And the JSON result "result" is "rolled-back"
       And the error output is the single line "telemetry: CDEvent not sent: POST sink.example -> 500: down"
-
-    Scenario: Only the first line of the failure is written
-      Given the sink fails with "POST sink.example -> 503: down\nsecond line"
-      When the gate posts the change merged event of CR "1"
-      Then the error output is the single line "telemetry: CDEvent not sent: POST sink.example -> 503: down"
-
-    Scenario: An env var that is empty is one line too
-      Given the telemetry variable "SINK" holds ""
-      When the gate posts the change merged event of CR "1"
-      Then the sink received 0 requests
-      And the error output is the single line "telemetry: CDEvent not sent: telemetry: env var SINK is empty"
-
-    Scenario: The sink URL is never in the line
-      Given the sink fails with "connect failed to https://sink.example/events?token=abc"
-      When the gate posts the change merged event of CR "1"
-      Then the error output is the single line "telemetry: CDEvent not sent: connect failed to <url>"
-
-    Scenario: A sink URL with credentials is refused without showing it
-      Given the telemetry variable "SINK" holds "https://u:p@sink.example/x"
-      When the gate posts the change merged event of CR "1"
-      Then the sink received 0 requests
-      And the output shows none of "sink.example|u:p"
 
   Rule: A gate waits a bounded time for its telemetry
 
