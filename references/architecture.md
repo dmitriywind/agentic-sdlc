@@ -539,7 +539,7 @@ it reads the pin and installs that ref once with
 (into a temporary folder, then renamed; npm's output goes to stderr), then execs
 `node .agents/.cli/<ref>/node_modules/agentic-sdlc/dist/bin.js "$@"`. It refuses a ref or package that could read as
 an option or leave the folder, and ends with one line when node or npm is missing or the ref cannot be fetched.
-`init` adds `.agents/.cli/` to `.gitignore` once. Everything that runs the CLI goes through the launcher: every workflow
+`init` adds `.agents/.cli/` (the launcher cache) and `.agents/work/` (the `vcs start` workdirs) to `.gitignore` once. Everything that runs the CLI goes through the launcher: every workflow
 job, the pre-push hook, `runner-setup.sh` (which also puts `.agents/bin` on `PATH` in GitHub Actions) and the MCP entry
 (`command: ".agents/bin/agentic-sdlc", args: ["mcp"]`). A job that holds a secret checks out the base ref only, so its
 launcher and pin are the trunk's, never the CR's. `init` writes no dependency and no `.npmrc` into the product; when
