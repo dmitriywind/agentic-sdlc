@@ -120,7 +120,7 @@ for (const seg of scan(scanned)) {
   }
   const cli = t.findIndex((x) => CLI.test(x));
   if (cli >= 0) {
-    const rest = tt.slice(cli + 1).filter((x, i, a) => !(x.s === '--root' || a[i - 1]?.s === '--root'));
+    const rest = tt.slice(cli + 1).filter((x, i, a) => !(x.s === '--root' || x.s.startsWith('--root=') || a[i - 1]?.s === '--root'));
     if (rest[0]?.s === 'forge') {
       const verb = rest[1]?.s ?? '', unknown = seg.subst || /[$`]/.test(verb);
       if ((verb === 'approve' || unknown) && !review) block(APPROVE);
