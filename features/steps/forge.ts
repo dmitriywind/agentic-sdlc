@@ -287,10 +287,10 @@ const deep = (a: Any, b: Any): Any => {
   return out;
 };
 type Flow = {
-  crs: CR[]; comments: Record<string, Comment[]>; open: Set<string>; klass: { class: string; who: string[] } | Error; signalsOpen: boolean;
+  held: Set<string>; crs: CR[]; comments: Record<string, Comment[]>; open: Set<string>; klass: { class: string; who: string[] } | Error; signalsOpen: boolean;
   log: string[]; merges: boolean; greenAt?: { n: string; look: number; views: number }; next?: ReturnType<typeof nextAction>; rows?: Any[]; land?: Any; report?: Any; error?: Error; signal?: string;
 };
-const flow = (w: World): Flow => (w.state.ff ??= { crs: [], comments: {}, open: new Set(), klass: { class: 'product-full', who: [] }, signalsOpen: false, log: [], merges: false } as Flow);
+const flow = (w: World): Flow => (w.state.ff ??= { held: new Set(), crs: [], comments: {}, open: new Set(), klass: { class: 'product-full', who: [] }, signalsOpen: false, log: [], merges: false } as Flow);
 
 /** The binding the flow verbs read: owners, the required checks, the stall time, then the scenario's own keys. */
 const flowBinding = (w: World): Binding => deep({
@@ -319,19 +319,20 @@ const crOf = (n: string, traits: string): CR => {
 const checksOf = (list: string): CR['checks'] => csv(list).map((e) => { const [name, state] = e.split('='); return { name, state: state as 'success' }; });
 
 let serial = 0;
-/** `<author>: <pass|fail|conflict|note|comment> [for <head>], <n>m ago [saying <text>]`, entries separated by `;`. */
+/** `<author>: <pass|fail|conflict|note|comment> [for <head>] [signal <id>], <n>m ago [saying <text>]`, entries separated by `;`. A note with a signal carries it as the second word of its ref. */
 const commentsOf = (list: string): Comment[] => list.split(';').map((s) => s.trim()).filter(Boolean).map((e) => {
-  const m = /^(\S+): (pass|fail|conflict|note|comment)(?: for (\S+))?, (\d+)m ago(?: saying (.+))?$/.exec(e);
+  const m = /^(\S+): (pass|fail|conflict|note|comment)(?: for (\S+))?(?: signal (\S+))?, (\d+)m ago(?: saying (.+))?$/.exec(e);
   if (!m) throw new Error(`cannot read the comment: ${e}`);
-  const [, author, kind, head = 'h1', ago, said] = m;
+  const [, author, kind, head = 'h1', signal, ago, said] = m;
   const mark = `<!-- review-pr ${head} -->`;
   const body = kind === 'pass' ? `${mark}\nVerdict: PASS` : kind === 'fail' ? `${mark}\nVerdict: REMEDIATION REQUIRED`
     : kind === 'conflict' ? `${mark}\nVerdict: PASS\nVerdict: REMEDIATION REQUIRED`
-      : kind === 'note' ? `<!-- note${m[3] ? ` ${head}` : ''} -->${said ? `\n${said}` : ''}` : said ?? '';
+      : kind === 'note' ? `<!-- note${m[3] || signal ? ` ${head}` : ''}${signal ? ` ${signal}` : ''} -->${said ? `\n${said}` : ''}` : said ?? '';
   return { id: String(++serial), author, createdAt: iso(Number(ago)), body };
 });
 
 Given('every Signal a note names is open', (w) => { flow(w).signalsOpen = true; });
+Given('the ticket {string} is held', (w, id: string) => { flow(w).held.add(id); });
 Given('the Signal {string} is open', (w, id: string) => { flow(w).open.add(id); });
 Given('the cycle sets {string} to {int}', (w, key: string, n: number) => { w.binding({ cycle: { [key]: n } }); });
 Given('the approval class of every CR is {string}', (w, klass: string) => { flow(w).klass = { class: klass, who: [] }; });
@@ -377,7 +378,7 @@ When('the Signal of the head is read from the comments {string}', (w, comments: 
   const cr = crOf('5', '');
   flow(w).signal = signalOfHead(cr, commentsOf(comments), flowBinding(w));
 });
-When('the queue is read', async (w) => { const f = flow(w); f.rows = await queue(portOf(w), flowBinding(w), classOf(w), T0, async (id) => f.open.has(id)); });
+When('the queue is read', async (w) => { const f = flow(w); f.rows = await queue(portOf(w), flowBinding(w), classOf(w), T0, async (id) => f.open.has(id), async (id) => f.held.has(id)); });
 When('the CR {string} is landed', async (w, n: string) => { w.useFakeSleep(); flow(w).land = await land(portOf(w), flowBinding(w), n, undefined, classOf(w)); });
 When('the CR {string} is landed waiting at most {int} minutes', async (w, n: string, minutes: number) => { w.useFakeSleep(); flow(w).land = await land(portOf(w), flowBinding(w), n, minutes, classOf(w)); });
 When('the report for the head {string} is built as {word} from:', (w, head: string, flag: string, body: string) => {
@@ -396,6 +397,10 @@ Then('the Signal named for the head is {string}', (w, id: string) => assert.equa
 Then('the queue rows are:', (w, t: DataTable) => {
   const got = flow(w).rows!.map((r) => ({ n: r.n, ticket: r.ticket ?? '', class: r.class, action: r.action, reworks: String(r.reworks), since: `${(T0 - Date.parse(r.since)) / 60_000} minutes ago` }));
   assert.deepEqual(got, t.hashes().map((r) => ({ n: r.n, ticket: r.ticket, class: r.class, action: r.action, reworks: r.reworks, since: r.since })));
+});
+Then('the queue row of the CR {string} is held {string} and released {string}', (w, n: string, held: string, release: string) => {
+  const r = flow(w).rows!.find((x) => x.n === n)!;
+  assert.deepEqual([String(r.held), String(r.release === true)], [held, release]);
 });
 Then('the class of the first queue row is {string}', (w, klass: string) => assert.equal(flow(w).rows![0].class, klass));
 

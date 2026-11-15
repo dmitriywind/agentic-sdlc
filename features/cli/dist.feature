@@ -1,5 +1,5 @@
 # Owner: dist/bin.js. Runs the bundled CLI, so a module the bundler dropped (a computed dynamic import) fails here.
-# The scenario runs only when dist/bin.js exists: build first.
+# The scenario fails when dist/bin.js is missing: run npm run build.
 @dist
 Feature: The built CLI works
   The plugin and github: installs run dist/bin.js, not the sources.

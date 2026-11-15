@@ -87,7 +87,6 @@ Then('exactly {int} of the cycles printed a skip and {int} printed a start with 
   assert.equal(outs.filter((o) => o.skipped).length, skipped, w.last.stdout);
   assert.equal(outs.filter((o) => o.kind === kind).length, started, w.last.stdout);
 });
-Then('the start record has the done line {string}', (w, line: string) => assert.equal(w.last.json().done, line));
 Then('the instruction matches {string}', (w, re: string) => assert.match(w.last.json().instruction, new RegExp(re)));
 
 // ---- the command executor ----
@@ -95,7 +94,6 @@ Then('the command line is the template {string} filled with the quoted words {st
   const list = words.split('|');
   assert.equal(w.state.spawn.line, template.replace(/\{\}/g, () => quote(list.shift()!)));
 });
-Then('the command line is {string}', (w, line: string) => assert.equal(w.state.spawn.line, line));
 Then('the command line mentions {string}', (w, text: string) => assert.ok(String(w.state.spawn.line).includes(text), String(w.state.spawn.line)));
 Then('nothing is started on this machine', (w) => assert.equal(w.state.spawn.started, false));
 Then('the command runs detached with its input ignored', (w) => { assert.equal(w.state.spawn.opts.detached, true); assert.equal(w.state.spawn.opts.stdio[0], 'ignore'); });

@@ -52,6 +52,7 @@ Feature: forge queue gives every open CR its one next action
       Examples:
         | rule                                | comments                                                                                       |
         | the newest note for the head        | bot: note for h1, 1m ago saying flake, Signal 31                                               |
+        | the ref of the note                 | bot: note for h1 signal 31, 1m ago                                                             |
         | even at the rework cap              | bot: note for h1, 1m ago saying Signal #7; bot: fail for h0, 30m ago; bot: fail for h1, 20m ago |
 
   Rule: review when no trusted verdict covers the head
@@ -118,12 +119,50 @@ Feature: forge queue gives every open CR its one next action
 
       Examples:
         | comments                                                                           | signal  | why                           |
-        | bot: note for h1, 1m ago saying flaky, Signal #31 filed                            | 31      | Signal #<id>                  |
+        | bot: note for h1 signal 31, 1m ago                                                 | 31      | the second word of the ref    |
+        | bot: note for h1 signal PROJ-4, 1m ago saying see below                            | PROJ-4  | the ref wins over the text    |
+        | bot: note for h0 signal 31, 1m ago                                                 | none    | a ref for another head        |
+        | bot: note for h1, 1m ago saying flaky, Signal #31 filed                            | 31      | Signal #<id> in the text      |
         | bot: note for h1, 1m ago saying Signal: PROJ-4                                     | PROJ-4  | Signal: <id>                  |
         | bot: note for h1, 9m ago saying Signal 5; bot: note for h1, 1m ago saying fixed in the diff | none | the newest note decides  |
         | bot: note for h0, 1m ago saying Signal 5                                           | none    | a note for another head       |
         | mallory: note for h1, 1m ago saying Signal 5                                       | none    | a stranger                    |
         | bot: note for h1, 1m ago saying the signal is red                                  | none    | no Signal id                  |
+
+  Rule: A held ticket is released by an approval alone
+
+    Scenario Outline: A held ticket whose CR waits only to land, with its human approval given, is released
+      Given the approval class of every CR is "product-full", owned by "po"
+      And the ticket "<held>" is held
+      And these CRs are open:
+        | n | cr    | checks                                | comments                 |
+        | 5 | ready | ci=success, human-approval=<approval> | bot: pass for h1, 1m ago |
+      When the queue is read
+      Then the queue row of the CR "5" is held "<is held>" and released "<released>"
+
+      Examples:
+        | held | approval | is held | released | why                                |
+        | 12   | success  | true    | true     | the approval is given              |
+        | 12   | pending  | true    | false    | the approval is still due          |
+        | 99   | success  | false   | false    | the ticket of the CR is not held   |
+
+    Scenario: A held ticket is not released while its CR needs rework
+      Given the approval class of every CR is "product-full", owned by "po"
+      And the ticket "12" is held
+      And these CRs are open:
+        | n | cr    | checks                             | comments                 |
+        | 5 | ready | ci=failure, human-approval=success | bot: pass for h1, 1m ago |
+      When the queue is read
+      Then the queue row of the CR "5" is held "true" and released "false"
+
+    Scenario: A class that needs no human is never released by an approval
+      Given the approval class of every CR is "product-fast"
+      And the ticket "12" is held
+      And these CRs are open:
+        | n | cr    | checks                 | comments                 |
+        | 5 | ready | human-approval=success | bot: pass for h1, 1m ago |
+      When the queue is read
+      Then the queue row of the CR "5" is held "true" and released "false"
 
   Rule: A row counts the reworks and says since when its state holds
 

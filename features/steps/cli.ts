@@ -67,22 +67,18 @@ Then('the wait for the Retry-After {string} on attempt {int} at {string} is {int
 
 // ---- the built CLI ----
 const bin = join(REPO, 'dist', 'bin.js');
-const built = (w: World) => w.state.dist === true;
 const runBuilt = (w: World, args: string[], input?: string) => execFileSync('node', [bin, '--root', w.root, ...args], { encoding: 'utf8', input });
 
-Given('the built CLI dist/bin.js and an empty project', (w) => {
-  w.state.dist = existsSync(bin);
-  if (!built(w)) console.warn('features/cli/dist.feature: dist/bin.js is not built, the scenario does nothing (npm run build first)');
+Given('the built CLI dist/bin.js and an empty project', () => {
+  assert.ok(existsSync(bin), 'dist/bin.js is missing: run npm run build');
 });
-When('the built CLI runs {string}', (w, line: string) => { if (built(w)) w.state.distOut = runBuilt(w, splitArgs(line)); });
-Then('the built CLI output says {string}', (w, text: string) => { if (built(w)) assert.match(w.state.distOut, new RegExp(text)); });
+When('the built CLI runs {string}', (w, line: string) => { w.state.distOut = runBuilt(w, splitArgs(line)); });
+Then('the built CLI output says {string}', (w, text: string) => { assert.match(w.state.distOut, new RegExp(text)); });
 When('an MCP client calls the tool {string} with the title {string}, the body {string} and the status {string}', (w, name: string, title: string, body: string, status: string) => {
-  if (!built(w)) return;
   const req = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: { title, body, status } } };
   w.state.mcp = JSON.parse(runBuilt(w, ['mcp'], JSON.stringify(req) + '\n').trim());
 });
 Then('the MCP call succeeds and the ticket is created at status {string}', (w, status: string) => {
-  if (!built(w)) return;
   assert.equal(w.state.mcp.result?.isError, undefined, JSON.stringify(w.state.mcp));
   assert.match(w.state.mcp.result.content[0].text, new RegExp(`"status": "${status}"`));
 });

@@ -171,6 +171,8 @@ Feature: Push guard
       Examples:
         | command                                                     |
         | agentic-sdlc forge approve 3                                |
+        | .agents/bin/agentic-sdlc forge approve 3                    |
+        | ./.agents/bin/agentic-sdlc forge approve 3                  |
         | node dist/bin.js forge approve 3                            |
         | agentic-sdlc.cmd forge approve 3                            |
         | npx agentic-sdlc@latest forge approve 1                     |
@@ -189,6 +191,7 @@ Feature: Push guard
         | command                                  |
         | agentic-sdlc forge approve 3             |
         | npx agentic-sdlc@latest forge approve 1  |
+        | .agents/bin/agentic-sdlc forge approve 3 |
 
     Scenario: The MCP tool forge_approve is blocked without the review role
       When the agent calls the MCP tool "mcp__agentic-sdlc__forge_approve"
@@ -216,6 +219,7 @@ Feature: Push guard
         | agentic-sdlc forge status abc --context review --state success       |
         | npx --no agentic-sdlc forge status abc --context review --state success |
         | echo $(agentic-sdlc forge status abc)                                |
+        | .agents/bin/agentic-sdlc forge status abc --context review --state success |
 
     Scenario Outline: The review role or the runner's opt-in allows forge status
       Given the environment sets "<variable>" to "<value>"
@@ -262,6 +266,8 @@ Feature: Push guard
         | agentic-sdlc forge view 3 > /dev/null 2>&1       |
         | npx --no agentic-sdlc forge diff 1               |
         | npx --no-install agentic-sdlc forge diff 3       |
+        | .agents/bin/agentic-sdlc forge diff 1            |
+        | ./.agents/bin/agentic-sdlc forge diff 1          |
 
     Scenario Outline: The reviewer may run nothing else
       When the agent runs "<command>"
@@ -278,6 +284,9 @@ Feature: Push guard
         | x=agentic-sdlc; $x forge view 3                    |
         | cd sub                                             |
         | node ./evil.js agentic-sdlc                        |
+        | /tmp/agentic-sdlc forge view 3                     |
+        | ../.agents/bin/agentic-sdlc forge view 3           |
+        | bin/agentic-sdlc forge view 3                      |
         | npx evil-pkg agentic-sdlc                          |
         | ./agentic-sdlc board list                          |
         | /tmp/x/agentic-sdlc                                |

@@ -1,5 +1,5 @@
 {
   "mcpServers": {
-    "agentic-sdlc": { "command": "npx", "args": ["--no", "agentic-sdlc", "mcp"] }
+    "agentic-sdlc": { "command": ".agents/bin/agentic-sdlc", "args": ["mcp"] }
   }
 }

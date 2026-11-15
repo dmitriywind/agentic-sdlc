@@ -36,7 +36,6 @@ Then('the pack has no error and no warning', (w) => { assert.deepEqual(found(w).
 Then('the pack has an error mentioning {string}', (w, text: string) => assert.ok(found(w).errors.some((e) => e.includes(text)), `no error mentions "${text}":\n${joined(found(w).errors)}`));
 Then('the pack has a warning mentioning {string}', (w, text: string) => assert.ok(found(w).warnings.some((e) => e.includes(text)), `no warning mentions "${text}":\n${joined(found(w).warnings)}`));
 Then('the pack has no error', (w) => assert.deepEqual(found(w).errors, [], `\n${joined(found(w).errors)}`));
-Then('the pack has no warning', (w) => assert.deepEqual(found(w).warnings, []));
 Then('the skills are {string}', (w, names: string) => assert.deepEqual(w.state.pack.skills.map((s: { skill: string }) => s.skill), list(names)));
 Then('the steps are {string}', (w, ids: string) => assert.deepEqual(w.state.pack.steps.map((s: { id: string }) => s.id), list(ids)));
 Then('the steps and their tiers are:', (w, t: DataTable) => assert.deepEqual(w.state.pack.steps.map((s: { id: string; tier: string }) => ({ id: s.id, tier: s.tier })), t.hashes().map((r) => ({ id: r.id, tier: r.tier }))));

@@ -13,6 +13,31 @@ import { parse, GherkinError, type Feature, type Scenario, type Step } from './g
 import { defs, match, snippet, type StepDef } from './steps.ts';
 import { World } from './world.ts';
 
+// COVERMAP=<file>: record which src/ blocks each scenario runs (V8 block coverage, in-process only), one JSON line
+// per scenario. scripts/prune-features.mjs reads it to name scenarios that cover nothing another one does not.
+const covermap = process.env.COVERMAP;
+let coverage: undefined | (() => Promise<string[]>);
+if (covermap) {
+  const { Session } = await import('node:inspector/promises');
+  const { writeFileSync } = await import('node:fs');
+  const session = new Session();
+  session.connect();
+  await session.post('Profiler.enable');
+  await session.post('Profiler.startPreciseCoverage', { callCount: true, detailed: true });
+  writeFileSync(covermap, '');
+  coverage = async () => {
+    const { result } = await session.post('Profiler.takePreciseCoverage');
+    const out: string[] = [];
+    for (const script of result) {
+      const at = script.url.indexOf('/src/');
+      if (at < 0 || script.url.includes('/node_modules/')) continue;
+      const file = script.url.slice(at + 1);
+      for (const fn of script.functions) for (const r of fn.ranges) if (r.count > 0) out.push(`${file}:${r.startOffset}-${r.endOffset}`);
+    }
+    return out;
+  };
+}
+
 const root = fileURLToPath(new URL('../', import.meta.url)); // features/
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const rel = (f: string) => relative(repo, f);
@@ -84,6 +109,7 @@ function registerScenario(f: Feature, s: Scenario, inherited: string[], backgrou
   if (hasOnly && !s.tags.includes('@only')) return;
   const skip = tags.includes('@skip') ? (s.comment.trim() || 'tagged @skip') : false;
   it(s.name, { skip }, async () => {
+    if (coverage) await coverage(); // drop what ran between scenarios
     const world = new World();
     const state = { keyword: 'Given' };
     try {
@@ -91,6 +117,10 @@ function registerScenario(f: Feature, s: Scenario, inherited: string[], backgrou
       await runSteps(world, s.steps, f.file, state);
     } finally {
       world.cleanup();
+      if (coverage) {
+        const { appendFileSync } = await import('node:fs');
+        appendFileSync(covermap!, JSON.stringify({ file: f.file, line: s.line, name: s.name, example: s.example, blocks: await coverage() }) + '\n');
+      }
     }
   });
 }

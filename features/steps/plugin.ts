@@ -72,5 +72,6 @@ Then('the skills path of the manifest in {word} is a directory', (w, dir: string
 Then('the MCP path of the manifest in {word} starts the server with {string}', (w, dir: string, args: string) => {
   const p = manifest(dir).mcpServers as string;
   assert.match(p, /^\.\//);
-  assert.deepEqual(JSON.parse(read(p)).mcpServers['agentic-sdlc'].args, args.split(' '));
+  const server = JSON.parse(read(p)).mcpServers['agentic-sdlc'];
+  assert.deepEqual([server.command, ...server.args], args.split(' '));
 });
