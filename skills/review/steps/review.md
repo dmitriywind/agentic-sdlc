@@ -11,7 +11,8 @@ step 1 skips the ticket, and step 2 grades the CR's stated target, cause and pro
    - `computer-use`: `dispatch review/verify --ticket <id> --cr <n>` once per head, then grade the
      newest `verify` comment for this head by a bot (`forge comments <n> --kind verify --author
      <each owners.bots entry>`). Until it appears the criterion is PENDING.
-   - `manual`: DONE only when the owner it names confirms it for this head on the ticket. Otherwise,
+   - `manual`: DONE only when the owner it names confirms it for this head on the ticket (`board
+     comments <id> --author <each entry of that role>`). Otherwise,
      unless `board comments <id> --kind manual-check --last 1 --trusted` already asks for this
      head, post one `board comment <id> --kind manual-check --ref <head sha>` naming each such
      criterion and its owner; the criterion is PENDING.
@@ -23,9 +24,10 @@ step 1 skips the ticket, and step 2 grades the CR's stated target, cause and pro
    read from the raw facts. Done when each rule has a line: clear, or breached with `path:line`.
 4. **CI.** From the checks on the head (`forge view <n>`): the verify check
    (`forge.verify_check_name`) and the check that runs the new proofs on the merge base are green,
-   and no other `forge.required_checks` entry but the review status (`forge.review_check_name`) and
-   the human-approval status is red. A pending check: stop with no verdict; the queue tracks its
-   stall. A red check: stop with no verdict; the queue sends it to rework. Each
+   and no other `forge.required_checks` entry is red, except the review status
+   (`forge.review_check_name`) and the status that waits for a person's approval. A pending check:
+   stop with no verdict; the queue tracks its stall. A red check: stop with no verdict; the queue
+   sends it to rework. Each
    `forge.planned_checks` entry the repo does not supply is named absent in the report. Done when
    every check is green, or the run stopped.
 5. **Hunt.** One line per over-engineering finding: `path:line`, a tag, what to cut, what replaces

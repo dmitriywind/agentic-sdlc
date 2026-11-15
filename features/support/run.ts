@@ -1,8 +1,9 @@
 // Runs every features/**/*.feature on node:test: a Feature is a describe, a Rule a nested describe, a Scenario
 // (or one Examples row) an it. Run: `node --test features/support/run.ts` (npm test does, after the build).
 //   FEATURE=<text>   only feature files whose path contains <text>      e.g. FEATURE=gates/approval
+//   SCENARIO=<regex> only scenarios whose title matches                  e.g. SCENARIO='Fast-lane'
 //   TAGS=@a,@b       only scenarios carrying one of the tags (own, Rule or Feature tags)
-//   --test-name-pattern "<regex>"   node's own filter on the scenario title
+//   node's own `--test-name-pattern` also works, placed before the file: node --test --test-name-pattern X features/support/run.ts
 // A scenario tagged @only runs alone (all others are left out); @skip skips it, the comment above the tags is the reason.
 import { describe, it } from 'node:test';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -25,7 +26,8 @@ for (const f of stepFiles) await import(pathToFileURL(join(root, 'steps', f)).hr
 
 const only = process.env.FEATURE;
 const wantTags = (process.env.TAGS ?? '').split(',').map((t) => t.trim()).filter(Boolean);
-const filtered = !!only || wantTags.length > 0;
+const nameRe = process.env.SCENARIO ? new RegExp(process.env.SCENARIO, 'i') : undefined;
+const filtered = !!only || wantTags.length > 0 || !!nameRe;
 
 type Parsed = { file: string; feature?: Feature; error?: Error };
 const parsed: Parsed[] = walk(root)
@@ -78,6 +80,7 @@ async function runSteps(world: World, steps: Step[], file: string, state: { keyw
 function registerScenario(f: Feature, s: Scenario, inherited: string[], backgrounds: { steps: Step[] }[]) {
   const tags = [...inherited, ...s.tags];
   if (wantTags.length && !wantTags.some((t) => tags.includes(t))) return;
+  if (nameRe && !nameRe.test(s.name)) return;
   if (hasOnly && !s.tags.includes('@only')) return;
   const skip = tags.includes('@skip') ? (s.comment.trim() || 'tagged @skip') : false;
   it(s.name, { skip }, async () => {

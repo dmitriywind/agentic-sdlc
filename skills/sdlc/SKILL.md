@@ -62,9 +62,8 @@ shows `learning.due`: `learn/improve`.
 
 One unattended run by a scheduler. On a fresh runner run `commands.setup` first. Each dispatch
 prints how its run goes: run the task it hands you in a fresh context with its own scratch folder,
-at most `parallel_agents` at once, or leave a run it started elsewhere. A review never runs in the
-context that built the CR. `{ skipped: true }` means the run is a double fire or still going: leave
-it.
+at most `parallel_agents` at once, or leave a run it started elsewhere. `{ skipped: true }` means
+the run is a double fire or still going: leave it.
 
 1. **Lock and read.** `dispatch sdlc --ticket <heartbeat.ticket>`; on `{ skipped: true }` stop and
    write nothing. Then, once each: `board list`, `board holds`, `forge queue`, `ledger summary`, the

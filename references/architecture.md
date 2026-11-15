@@ -37,20 +37,17 @@ agents/                      plugin subagents: sdlc-fast, sdlc-balanced, sdlc-de
 bin/agentic-sdlc             plugin shim: the CLI on the Bash PATH (the project's pinned build, else dist/bin.js)
 evals/                       plugin evals for skill triggering (`claude plugin eval`)
 hooks/                       plugin hooks (hooks.json, guard.mjs) and the plugin's MCP launcher (mcp.mjs)
-skills/                      the portable skill pack (Agent Skills format: <name>/SKILL.md)
-  sdlc/                      navigator: contract, routing, cycle, the hold, branches
-    SKILL.md
-    references/contract.md   words, roles and the rules every step skill follows
+skills/                      the skill pack: seven skills, one per phase (section 5)
+  sdlc/                      navigator: routing table and one cycle
+    references/contract.md   words, roles, trust, waits and the rules every step follows
     references/statuses.md   statuses and Shipped
     references/board.md      board fields, lanes, sub-issues
-    references/gates.md      gates, required checks, approval, In review hand-offs
-    references/heartbeat.md  the heartbeat incl. the run ledger
-    references/ports.md      how a skill calls the board, forge and VCS
-  triage-signal/  backlog-grooming/  shape/  implement-spec/  review-pr/  release/
-  escalate-to-human/
-  verify-ux/                 drive a preview of the CR head for `computer-use` criteria
-  judge-run/                 grade one finished run with the planned scorers
-  improve-factory/           the self-improvement loop: one factory change with bench proof
+  plan/      steps/triage.md steps/groom.md steps/shape.md   Signals, Ideas, Backlog to Ready
+  build/                     Ready to In review: a draft CR
+  review/    steps/review.md steps/verify.md                 In review to landed or sent back
+  ship/                      the release line (release-line delivery only)
+  learn/     steps/judge.md steps/improve.md                 the learning loop (learning.enabled)
+  escalate/                  classify, ask, hold; run inside any step
 scorers/                     the shipped scorer rubrics, copied to .agents/scorers/
 templates/
   binding.yml                the binding template with every key documented
@@ -68,7 +65,8 @@ src/
   forge/   github.ts index.ts
   vcs/     git.ts index.ts
   gates.ts                   repo gates shared by every CI template
-  dispatch.ts                start a stage on its executor
+  comments.ts                the comment-kind registry: kind to first-line marker (section 11.1)
+  dispatch.ts                start a step on its executor
   ledger.ts                  read heartbeats and scores, aggregate runs, measures and learning
   bench.ts                   build and run bench cases
   mcp.ts                     the port verbs as MCP tools
@@ -107,10 +105,13 @@ Every verb takes only the flags it lists: an unknown flag, a value flag with no 
 | `label <id> add\|remove <label>` | Add or remove a label | `Item` |
 | `assign <id> <user\|--none>` | Set or clear the assignee | `Item` |
 | `milestone <id> <name>` / `milestone <id> --clear` | Set or clear the milestone of an existing ticket, where `create --milestone` puts it (`github`: the issue's milestone; `github-issues`: the issue's milestone, which must exist; `jira`: `fixVersions`; `linear`: the `milestone:<name>` label; `local`: the item's `milestone`) | `Item` |
-| `comment <id> --body-file <f>` | Add a comment | `{ id, url }` |
-| `comments <id> [--last <n>] [--marker <text>] [--author <a>]… [--trusted]` | Comments, newest first; first-line and author filters (`--last` counts after them). `--trusted` is `--author` for every entry of `owners.bots`, `owners.product`, `owners.factory` and the optional `owners.operator`, `owners.security`, `owners.compliance` | `Comment[]` |
+| `comment <id> --body-file <f> [--kind <kind> [--ref <value>]]` | Add a comment; `--kind` stamps the kind's marker as its first line, filled with `--ref` (section 11.1) | `{ id, url }` |
+| `comments <id> [--last <n>] [--kind <kind>] [--marker <text>] [--author <a>]… [--trusted]` | Comments, newest first; kind, first-line and author filters (`--last` counts after them). `--trusted` is `--author` for every entry of `owners.bots`, `owners.product`, `owners.factory` and the optional `owners.operator`, `owners.security`, `owners.compliance` | `Comment[]` |
 | `close <id> --reason completed\|not_planned` | Close (and move to Done or Cancelled) | `Item` |
 | `child <parent> <child>` | Link a sub-issue | `Item` |
+| `hold <id> --kind <trigger> --body-file <f>` | Adds `board.labels.human` and posts the ask with its `ask` marker for `<trigger>` (the `escalate` trigger, lower case) | `Item` |
+| `holds` | The held tickets. A reply is a comment by any owner role, never `owners.bots`, after the last ask | `[{ id, kind, askedAt, replied: boolean, reply? }]` |
+| `release <id>` | Removes `board.labels.human`; the ticket keeps its Status | `Item` |
 
 `Item = { id, title, url, status, kind?, labels[], fields: Record<logicalField,string>, milestone?, parent?, children[], assignees[], createdAt, updatedAt, statusChangedAt? }`. `statusChangedAt` is when the ticket entered its status; `ledger measures` reads it for tickets at Done. `github-issues` sets it to the issue's `closed_at` for a closed issue at Done and leaves it unset otherwise; `github` (Projects) never sets it.
 Logical fields: `size`, `priority`, `lane`, `shipped`, `release_version`. The binding maps each to
@@ -135,15 +136,29 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `list [--state open\|merged\|all] [--limit <n>] [--since <iso date>] [--checks]` | CRs (default open), newest update first; merged ones carry `mergeSha`. `--limit` keeps the newest n; `--since` keeps CRs merged (state merged) or updated since the date. Without `--checks` each CR comes from the list payload with `checks: []`, `behind` false and no `pushedAt`: a caller that reads checks, `behind` or `pushedAt` passes `--checks`, which reads each CR as `view` does | `CR[]` |
 | `ready <n>` / `draft <n>` | Leave or return to draft | `CR` |
 | `sync <n>` | Bring the CR's source up to the trunk tip | `CR` |
-| `automerge <n>` | Merge when every required check is green | `CR` |
-| `comment <n> --body-file <f>` | CR comment | `{ id, url }` |
-| `comments <n> [--last <k>] [--marker <text>] [--author <a>]… [--trusted]` | CR comments (review report, owner reply on a factory CR), newest first, system notes dropped; same filters as `board comments` (`--last` counts after them) | `Comment[]` |
+| `automerge <n>` | Merge when every required check is green (low level; steps use `land`) | `CR` |
+| `verdict <n> --pass\|--fail --body-file <f>` | Stamps the `verdict` marker for the CR head and the single `Verdict:` line, and posts the report. With `forge.review_identity` set it also posts the review status (`forge.review_check_name`) and, on pass, the approving review, with `options.review_token_env`; without one, CI's `review` gate turns the report into the status. A missing review token exits 1 naming an Access problem | `{ verdict, comment, status: 'posted'\|'ci' }` |
+| `land <n> [--wait <minutes>]` | Waits, bounded (default `cycle.land_wait_minutes`, 5 when unset), until every `forge.required_checks` entry is green on the head, then arms auto-merge, or merges where the forge cannot arm it. A wait on a human approval is `blocked` with `needsHuman` (the approval class and the owner who must approve). Never merges a draft | `{ state: 'merged'\|'armed'\|'waiting'\|'blocked', blocking: [{ check, state }], needsHuman?: { class, who } }` |
+| `queue` | Every open CR with the one next action the process must take (below) | `[{ n, ticket?, class, action: 'review'\|'rework'\|'land'\|'sync'\|'wait'\|'escalate', reason, reworks, since }]` |
+| `comment <n> --body-file <f> [--kind <kind> [--ref <value>]]` | CR comment; `--kind` as in `board comment` | `{ id, url }` |
+| `comments <n> [--last <k>] [--kind <kind>] [--marker <text>] [--author <a>]… [--trusted]` | CR comments (review report, owner reply on a factory CR), newest first, system notes dropped; same filters as `board comments` (`--last` counts after them) | `Comment[]` |
 | `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted with `options.review_token_env`; with one identity (`review_identity` empty), with the implementer's token. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`, `agent-provenance`). The `proofs-on-base` and `linkage` gates post with `options.token_env` (the CI job's token); with two identities the CLI verb never does. | `{}` |
 | `approve <n>` | Approving review as `review_identity`, with `options.review_token_env`. Refused with one identity: GitHub refuses an approval from the CR's author | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
 | `runs [--ref <r>] [--failed]` | CI runs (the newest 30) | `Run[]` |
 | `run <id>` | One CI run by id; a run that does not exist fails (exit 1) | `Run` |
 | `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
+
+`queue` owns the CR decisions the skills only obey. `ticket` is the one id the CR closes (absent for a factory or dependency CR), `class` the approval gate's class, `since` when the row's state began, `reason` one line for the action. `reworks` counts the CR's trusted fail verdicts and red-check `note`s. The first match wins:
+
+| Action | When |
+|---|---|
+| `escalate` | `reworks` has reached `cycle.max_rework` (3 when unset), or a required check other than the review and human-approval statuses is pending or missing longer than `stall_minutes` after `pushedAt` |
+| `rework` | the head has a trusted fail verdict, or a required check is red (`wait` instead while the newest `note` for the head names a Signal that is still open) |
+| `review` | no trusted verdict for the head (a draft, or a ready CR whose head changed) |
+| `sync` | a ready CR behind the trunk |
+| `land` | a pass verdict on the head, the CR ready and open |
+| `wait` | anything else |
 
 The port also has `commits(n)`, used by gate `provenance` and not a CLI verb: every commit of the CR, oldest first, as `{ sha, message, author, committer, authorName, committerName, committerEmail, parents }` (logins empty when the forge links no account). It throws when the list may be cut off (GitHub lists at most 250 commits), so the gate fails closed.
 
@@ -268,15 +283,39 @@ Keys this contract relies on by name:
 
 ## 5. Skills
 
-Each skill has frontmatter `name`, `description` and `metadata: { tier }`, plus
-`disable-model-invocation: true` for skills only a person or the cycle starts (`release`,
-`improve-factory`) and `user-invocable: false` for skills only another skill starts
-(`triage-signal`, `shape`, `judge-run`, `verify-ux`, `escalate-to-human`). The body is a pointer to
-the common contract (`sdlc/references/contract.md`; a step skill never loads the whole `sdlc`
-navigator), numbered steps each ending on a checkable **Done when**, then Rules. `tier` is
-`fast`, `balanced` or `deep`; the binding's `models` maps it to a model. Board, forge and VCS steps
-name the port verb, never a vendor CLI. Every process rule has one home in the skills; this
-contract defines mechanism only.
+Seven skills, one per phase: `sdlc` (the navigator), `plan`, `build`, `review`, `ship`, `learn` and
+`escalate`. A **step** is the unit that runs, named `<skill>/<step>`; a one-step skill is named by
+the skill (`build`, `ship`, `escalate`, `sdlc`). `dispatch`, the ledger's `skill` field, the bench,
+a scorer's `applies_to`, the `executors` keys and the `Agent-Skill` trailer all name a run this way.
+
+| Step | Was |
+|---|---|
+| `plan/triage`, `plan/groom`, `plan/shape` | `triage-signal`, `backlog-grooming`, `shape` |
+| `build` | `implement-spec` |
+| `review/review`, `review/verify` | `review-pr`, `verify-ux` |
+| `ship` | `release` |
+| `learn/judge`, `learn/improve` | `judge-run`, `improve-factory` |
+| `escalate`, `sdlc` | `escalate-to-human`, `sdlc` |
+
+- **Frontmatter**: `name`, `description` (a trigger sentence), and `metadata.steps: { <step>: { tier
+  } }` for a multi-step skill (each step in `steps/<step>.md`) or `metadata.tier` for a one-step
+  skill (the step is the SKILL.md body). `tier` is `fast`, `balanced` or `deep`; `models` maps it to
+  a model. `disable-model-invocation: true` marks skills only a person or the cycle starts (`ship`,
+  `learn`); `user-invocable: false` marks a skill only another step runs (`escalate`).
+- **Body**: the SKILL.md of a multi-step skill is a table of its steps (what each runs on, its
+  tier, what it ends with) and the rules common to them. A step points to
+  `sdlc/references/contract.md`, lists numbered steps each ending on a checkable **Done when** (a
+  status, a comment kind, a field or a CLI output a later run can verify), then Rules.
+- **One home**: every process rule lives once in the skills; the words, roles, trust table and waits
+  table live in the contract. This file defines mechanism only.
+- **Forbidden content**: a skill names only `agentic-sdlc <group> <verb>` calls and binding keys.
+  It never names a vendor, a harness, a runtime, a forge identity setup, a review token, a vendor
+  CLI, an HTTP status, a hard-coded check name, a law or standard, or a marker string (a comment
+  role is `--kind <kind>`). The `skills/` lint feature enforces the word list.
+- **Names in installs**: under the plugin a skill is `agentic-sdlc:<name>`. A copied install
+  (`.agents/skills`, `.claude/skills`) has no namespace, so `init` writes each skill as
+  `sdlc-<name>` (directory and frontmatter `name`); `sdlc` stays `sdlc`. Skills refer to each other
+  by name, never by path, so a copy keeps every link; links into `sdlc/references/` resolve in both.
 
 ## 6. The self-improvement loop
 
@@ -292,7 +331,7 @@ needs `agent_command`.
    `learning.enabled`), computed from heartbeats and run rows, so no skill keeps a counter. `ledger stale --max-hours <h>` exits 1 when the newest
    heartbeat is older. The heartbeat's `learning` object carries `lastProposal` and
    `benchBaseline`; only `improve-factory` changes them and, when `learning.enabled`, every heartbeat copies them forward
-   (fields in `skills/sdlc/references/heartbeat.md`).
+   (fields in section 11.2).
 2. **Scorers.** A scorer is a file `.agents/scorers/<name>.md`: frontmatter `name`, `applies_to`
    (skills, or `*`) and `scale` (`pass-fail` or `0-4`), and a body that is the rubric question.
    The package ships `done-conditions` (the 0–4 `score`), `redundant-tests`, `scope-creep`,
@@ -370,9 +409,72 @@ needs `agent_command`.
    with `forge.options.repo` unset the deploy has no service name, so no event is built. A failed send writes
    one line to stderr and never changes a gate's result.
 
-## 7. Executors: who runs each stage
+## 7. Executors: who runs each step
 
-The executor kinds, their fields, and what `dispatch` prints are defined in `skills/sdlc/references/executors.md` (installed by init with the skill pack), which is part of this contract.
+The binding's `executors` says who runs each step, keyed `<skill>/<step>` (or the skill name for
+every step of it); the default is the harness's own fresh-context worker.
+
+```yaml
+executors:
+  default: { kind: harness }
+  build: { kind: assign, user: coding-bot }
+  review/review: { kind: webhook, url_env: REVIEW_BOT_URL, token_env: REVIEW_BOT_TOKEN }
+  ship: { kind: command, run: "my-release-bot --ticket {ticket} --skill {skill}" }
+  plan/triage: { kind: managed, api: claude, agent_env: TRIAGE_AGENT_ID, environment_env: TRIAGE_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }
+```
+
+| Kind | Start | Result comes back by |
+|---|---|---|
+| `harness` | `dispatch` prints the task; the navigator runs it in a fresh context on the step's tier (Claude Code: `sdlc-<tier>` from `.claude/agents/`, else the plugin's `agentic-sdlc:sdlc-<tier>`; every `review/review` goes to `agentic-sdlc:sdlc-reviewer`). | The worker's own board and forge writes. |
+| `command` | The CLI runs `run` with `{skill} {ticket} {cr} {workdir} {prompt_file} {mcps_file} {model} {max_turns} {max_tokens} {max_minutes}` filled in (`{skill}` is `<skill>/<step>`). | Exit code plus the bot's board and forge writes. |
+| `webhook` | The CLI POSTs the task (`skill`, `ticket`, `cr`) as JSON to the URL. | The bot's board and forge writes; the next cycle reads them. |
+| `managed` | The CLI starts a run on a managed-agent API, shaped by `api`: `claude` (Managed Agents `POST /v1/sessions`), `cursor` (Cloud Agents `POST /v1/agents`), `antigravity` (Gemini Interactions) or `generic` (`POST <endpoint>/sessions`). | Same. The run id goes in the ledger row. |
+| `assign` | The CLI assigns the ticket (or CR) to the bot user and adds the step name as a comment. | Same. |
+
+**Where `review/review` runs.** With `forge.review_identity` empty, it runs like any step. With it
+set, a `dispatch review/review` outside the review runtime (`AGENTIC_SDLC_ROLE` not `review`) starts
+nothing locally: it runs `AGENTIC_REVIEW_FIRE_CMD` once (or relies on the runner's job dependency)
+and prints `{ kind: 'fire' }`; the cycle writes no run row for it. Inside the review runtime the
+same dispatch runs on its executor, and the review runtime's own `review` heartbeat holds the row.
+The navigator never branches on this.
+
+Every executor entry may also declare `mcps` (names from the binding's `mcps` map; the step gets
+only these), `secrets` (env var names the step may receive; nothing else is passed), `sandbox`
+(`cloud`, `container` or `local`) and `model` (`{ tier }` or `{ id }`). Secrets reach an executor
+only when listed, and never through a board or CR comment. `review/verify` is the step that drives a
+preview with test credentials: give it a browser in `mcps`, those credentials in `secrets` and a
+`container` sandbox; it never holds the review token.
+
+A step may cap a run: `max_turns`, `max_tokens` and `max_minutes`, positive integers inherited from
+`executors.default`. `dispatch` hands them to the executor and prints them as `limits`; it enforces
+none, because it detaches from the run.
+
+| Kind | How the caps arrive | Who enforces |
+|---|---|---|
+| `harness` | `limits` in the printed task, and a sentence in the instruction. | The harness's turn limit, or the worker stopping at the cap. |
+| `command` | `{max_turns}`, `{max_tokens}`, `{max_minutes}` in `run` (an unset cap fills as an empty quoted word), and `AGENTIC_SDLC_MAX_TURNS`, `AGENTIC_SDLC_MAX_TOKENS`, `AGENTIC_SDLC_MAX_MINUTES` in the child's environment (set only for a set cap). | The command's own flags, e.g. `claude -p --max-turns {max_turns}`. |
+| `webhook` | `limits` in the JSON body. | The bot. |
+| `managed` | A sentence in the task text; `limits` in the `generic` body. | The managed agent. |
+| `assign` | A sentence in the dispatch comment. | The bot. |
+
+A run that ends on a cap records outcome `capped`.
+
+`agentic-sdlc dispatch <skill>[/<step>] [--ticket <id>] [--cr <n>] (at least one; none for
+learn/improve) [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]` posts its `dispatch`
+comment, starts the executor and prints `{ kind, ref, startedAt }` plus the run's done-line `key`;
+for `harness` it prints the task for the navigator and starts nothing. The idempotency key is
+`<ticket, cr or factory>-<skill>/<step>[-<run>][-<CR head sha>]`. A second dispatch with the same
+key, while the `dispatch` comment is younger than `cycle.dedupe_minutes` or `stall_minutes`
+(whichever is longer) and its run has not finished, prints `{ skipped: true }`. A run has finished
+when its own `done` comment (`--kind done --ref <key>`) appears after the `dispatch` comment, posted
+by a bot or by the `assign` executor's user; other runs' comments never count. So a double fire is
+skipped for `dedupe_minutes`, and a run with no done line blocks a second dispatch until
+`stall_minutes`: keep `stall_minutes` above the longest step run. With `dedupe_minutes` unset or 0
+the check is off. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses a step whose sandbox is
+`local` or unset, except one that names `sandbox: local` when the runner sets `AGENTIC_SDLC_LOCAL=1`
+(`templates/runner/local.md`). The ledger row records `executor` and `ref`, so the bench and
+`learn/improve` compare executors as they compare models. `dispatch learn/judge` prints `{ skip:
+true }` when no model independent of the run exists (section 6.3).
 
 ## 8. Any product type
 
@@ -537,3 +639,88 @@ ticket and pinned version.
   `home: true` and lists every label in `repos`: it also lists the tickets with no `repo:` label, and
   `triage-signal` gives each one the label of the repo whose code it is about. Grooming, shaping and
   delivery stay inside each repo's scope.
+
+## 11. Mechanism reference for the skills
+
+What the skills rely on but never describe. Section 3 is the verb reference; this section holds the
+rest.
+
+### 11.1 Comment kinds
+
+`board comment` and `forge comment` take `--kind <kind> [--ref <value>]` and stamp the kind's
+marker as the first line; `comments --kind <kind>` filters by it. The exact first-line format of
+each kind is defined once, in `src/comments.ts`; no skill spells one. The `spec` marker is the
+binding's `spec_marker`.
+
+| Kind | Written by | Where | `--ref` |
+|---|---|---|---|
+| `spec` | `plan/shape` (a later pass posts a new one; the newest trusted is the spec) | ticket | none |
+| `verdict` | `forge verdict` only (`review/review`) | CR | the head (stamped by the verb) |
+| `note` | `build` (the cause of a red check, a request to a person's CR author); the navigator (asking a person to update a CR behind the trunk) | CR | the head sha |
+| `verify` | `review/verify` | CR | the head sha |
+| `manual-check` | `review/review` | ticket | the head sha |
+| `ask` | `board hold` (from `escalate`); `escalate` for a CR with no ticket (on the CR and on `heartbeat.ticket`); the navigator for a step with no ticket past `cycle.failure_limit` | ticket, CR, heartbeat ticket | the trigger, via `board hold --kind` |
+| `heartbeat` | the navigator (`kind: cycle`), the review runtime (`kind: review`), `learn/improve` (`kind: learn`) | heartbeat ticket | none |
+| `scores` | `ledger record` (`learn/judge`) | heartbeat ticket | the run id |
+| `release-proposal` | `ship` | release request | the revision |
+| `release-cut` | `ship` | release request | the version |
+| `dispatch` | `dispatch` | the subject's ticket, else heartbeat ticket | the key |
+| `done` | every run, last | the run's ticket; heartbeat ticket for a CR with no ticket | the key `dispatch` gave |
+
+An owner's grade is a comment `agentic-sdlc:grade <run-id> <scorer> <value>` (section 6.3).
+
+### 11.2 Heartbeat
+
+One `heartbeat` comment on `heartbeat.ticket` per cycle; it is also the run ledger. The body is the
+marker line, then the JSON in a `json` code fence. `ledger runs` and `ledger summary` read only
+heartbeats by `owners.bots`; `ledger summary` also prints `learning: { due, judge, cyclesSince }`,
+so no skill keeps a counter. Scores are not written here: `ledger` joins `scores` comments and
+grades to the run rows, and a human grade wins.
+
+```json
+{
+  "kind": "cycle",
+  "at": "ISO-8601 UTC time the cycle ended",
+  "factory": "vcs head sha of the trunk the skills were read from",
+  "runs": [{ "id": "", "skill": "build", "skillHash": "", "ticket": "", "cr": "", "tier": "", "model": "", "executor": "harness", "ref": "", "tokens": 0, "minutes": 0, "outcome": "done", "error": "", "trace": "" }],
+  "errors": [{ "step": "", "id": "", "msg": "" }]
+}
+```
+
+`at`, `factory`, `runs` and `errors` are required. Optional: `kind` (`cycle` by default, `review`,
+`learn`; only `cycle` counts cycles), `did` (one line per result), `learning` (`lastProposal`,
+`benchBaseline`; copied forward only when `learning.enabled`, changed only by `learn/improve`),
+`measures` (off unless the runner prompt asks) and `budget` (`exhausted`, only when `ledger
+measures` reported `errorBudget.exhausted` this cycle). A field the runner could not read is left
+out and named in `errors`.
+
+| Run key | Value |
+|---|---|
+| `id` | The `run` `dispatch` printed (with `forge.provenance` on; the `Agent-Run` trailer), else `<at>-<skill>-<ticket>`, or the executor's unique `ref`. |
+| `skill`, `skillHash` | `<skill>/<step>`, and the `hash` string `ledger hash <skill dir>` printed at the run's start. |
+| `ticket`, `cr` | The subject; empty when none. |
+| `tier`, `model` | The step's tier and the model the binding mapped it to; for another executor what it reported, or empty. |
+| `executor`, `ref` | The executor kind and the `ref` `dispatch` printed. |
+| `tokens`, `minutes` | What the run reported, never guessed. `ledger summary` adds them per ticket. |
+| `outcome` | `done`, `sent_back`, `failed`, `escalated`, `timeout` or `capped`; anything but `done` is a failure, and `capped` caps the score like `failed`. |
+| `trace` | The run id that fills `traces.uri`, when the executor stored a transcript. |
+| `error` | The first line of the cause, as the run or the gate stated it; the ledger clusters on it. |
+
+`lastProposal`: when, its CR, the class the gate gave it, the targeted cluster, its evidence run
+ids, and `open`, `merged`, `rejected` or `closed`. `benchBaseline`: the results file, factory
+revision, model, executor, case count, pass rate and minutes of the trunk's last bench.
+
+### 11.3 Checks and approval
+
+- No merge until every `forge.required_checks` entry is green on the head; the forge's branch
+  protection enforces it, `doctor` reports it, and `forge land` waits for it. The `review` status
+  comes from `forge verdict` (with a review identity) or CI's `review` gate (without one).
+- `forge.planned_checks` are wanted checks not yet supplied; `review/review` names each absent one.
+- The `approval` gate's classes, which `forge land` reports as `needsHuman.class`:
+
+| Class | Covers | `human-approval` passes when |
+|---|---|---|
+| `product-fast` | a Fast-lane product CR | always; with `forge.human_approval: always`, as `product-full` |
+| `product-full` | a Full-lane product CR, or one touching `paths.lane_areas` | `forge.human_approval` is `never`, or a human (not `owners.bots`, not `forge.review_identity`) approved the head |
+| `tuning` | only the `models` map, and a skill's tiers when it has a bench suite | `tuning` is in `learning.auto_merge_classes`; else as `guardrail` |
+| `guardrail` | everything else under `paths.factory`, a mixed CR, anything unclassifiable | an `owners.factory` entry approved the head |

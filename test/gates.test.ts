@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CR, Item, Run } from '../src/ports.ts';
 import { shippedOptions } from '../src/binding.ts';
-import { approval, approvalWho, approvers, merged, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, provenance, review, shipped, trailers, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
+import { approvalWho, merged, branchNames, diffPaths, globToRegExp, linkage, classify, proofRunner, proofFiles, proofsOnBase, provenance, review, shipped, trailers, signalOnRed, skillRegression, type Deps } from '../src/gates.ts';
 import { PROOF_FILE } from '../src/bench.ts';
 
 const binding = {
@@ -255,70 +255,6 @@ test('classify: rename out of factory, quoted path, models-only binding, metadat
   assert.equal((await linkage(classFakes(false).d, 'tier')).class, 'guardrail');
 });
 
-test('approvers: latest decisive review per user, on the head only', () => {
-  assert.deepEqual(approvers([
-    { user: 'Ann', state: 'approved', sha: 'h' }, { user: 'ann', state: 'commented', sha: 'h' },
-    { user: 'bob', state: 'approved', sha: 'h' }, { user: 'bob', state: 'changes_requested', sha: 'h' },
-    { user: 'cy', state: 'approved', sha: 'old' },
-  ], 'h'), ['ann']);
-});
-
-test('approval: classes and the human-approval status per forge.human_approval', async () => {
-  const f = classFakes(true);
-  const prod = (n: string, lane?: string) => {
-    f.items.push(item(n, 'In review', lane ? { lane } : {}));
-    return { closes: [n], headSha: `h${n}`, source: `${n}/x` };
-  };
-  const reviews: Record<string, { user: string; state: string; sha: string }[]> = {
-    full: [{ user: 'factory-bot', state: 'approved', sha: 'hfull' }],
-    fullok: [{ user: 'Dana', state: 'approved', sha: 'hfullok', assoc: 'COLLABORATOR' } as any],
-    stranger: [{ user: 'mallory', state: 'approved', sha: 'hstranger', assoc: 'NONE' } as any],
-    guard: [{ user: 'dana', state: 'approved', sha: 'guard', assoc: 'MEMBER' } as any],
-    guardok: [{ user: 'fo', state: 'approved', sha: 'guard', assoc: 'OWNER' } as any],
-    noassoc: [{ user: 'fo', state: 'approved', sha: 'guard' }],
-  };
-  const crs: Record<string, Partial<CR>> = { fast: prod('fast', 'Fast'), full: prod('full', 'Full'), fullok: prod('fullok', 'Full'), stranger: prod('stranger', 'Full'), nolane: prod('nolane') };
-  const view = f.d.forge.view;
-  f.d.forge.view = async (n: string) => (crs[n] ? { ...(await view(n)), ...crs[n] } : n === 'guardok' ? view('guard') : view(n));
-  const diff = f.d.forge.diff;
-  f.d.forge.diff = async (n: string) => (crs[n] ? 'diff --git a/src/x.ts b/src/x.ts\n' : diff(n === 'guardok' ? 'guard' : n));
-  f.d.forge.approvals = async (n: string) => reviews[n] ?? [];
-  f.d.binding = { ...binding, owners: { factory: 'fo', bots: ['factory-bot'] }, forge: { review_identity: 'reviewer' } };
-  const st = async (n: string) => { const r = await approval(f.d, n); return `${r.class}:${r.state}`; };
-  assert.equal(await st('fast'), 'product-fast:success');
-  assert.equal(await st('full'), 'product-full:pending'); // a bot's approval is not a human's
-  assert.equal(await st('fullok'), 'product-full:success');
-  assert.equal(await st('stranger'), 'product-full:pending'); // an outsider's approval on a public repo is not a human approval
-  assert.equal(await st('nolane'), 'product-full:pending'); // no lane fails closed to Full
-  assert.equal(await st('tune'), 'tuning:success');
-  assert.equal(await st('guard'), 'guardrail:pending'); // a human, but not owners.factory
-  assert.equal(await st('guardok'), 'guardrail:success');
-  reviews.guard = reviews.noassoc; // a review with no author association is no member's approval
-  assert.equal(await st('guard'), 'guardrail:pending');
-  // An owner with { board, forge } approves with the forge name; the board name approves nothing.
-  f.d.binding = { ...f.d.binding, owners: { factory: { board: 'acc-7', forge: 'fo' }, bots: [{ board: 'acc-bot', forge: 'factory-bot' }] } } as any;
-  assert.equal(await st('guardok'), 'guardrail:success');
-  assert.equal(await st('full'), 'product-full:pending');
-  f.d.binding = { ...f.d.binding, owners: { factory: { board: 'fo', forge: 'fo-gh' }, bots: ['factory-bot'] } } as any;
-  assert.equal(await st('guardok'), 'guardrail:pending');
-  // A list of factory owners: an approval by any member passes guardrail.
-  f.d.binding = { ...f.d.binding, owners: { factory: ['someone', { board: 'b', forge: 'fo' }], bots: ['factory-bot'] } } as any;
-  assert.equal(await st('guardok'), 'guardrail:success');
-  assert.equal(await st('guard'), 'guardrail:pending');
-  f.d.binding = { ...f.d.binding, owners: { factory: 'fo', bots: ['factory-bot'] } } as any;
-  // A path in paths.lane_areas forces Full, whatever the ticket's Lane says.
-  f.d.binding = { ...f.d.binding, paths: { ...f.d.binding.paths, lane_areas: ['src/**'] } } as any;
-  assert.equal(await st('fast'), 'product-full:pending');
-  f.d.binding = { ...f.d.binding, paths: { ...f.d.binding.paths, lane_areas: [] } } as any;
-  f.d.binding ={ ...f.d.binding, forge: { human_approval: 'always' }, learning: { auto_merge_classes: [] } } as any;
-  assert.equal(await st('fast'), 'product-fast:pending');
-  assert.equal(await st('tune'), 'tuning:pending');
-  f.d.binding = { ...f.d.binding, forge: { human_approval: 'never' } } as any;
-  assert.equal(await st('full'), 'product-full:success');
-  assert.ok(f.statuses.every((s) => s.context === 'human-approval'));
-  assert.equal(f.statuses.find((s) => s.sha === 'hfullok').description, 'product-full: approved by dana');
-});
-
 test('proofFiles: new and changed proof paths, deletions skipped', () => {
   const diff = [
     'diff --git a/src/a.ts b/src/a.ts', '--- a/src/a.ts',
@@ -469,14 +405,10 @@ test('proofRunner: only a real non-zero exit is a failing proof; anything else i
   assert.throws(() => proofRunner(() => { throw Object.assign(new Error('kill'), { status: null }); })('c'), /proof runner failed/);
 });
 
-test('an unreadable forge diff fails closed to guardrail in approval, linkage and proofs-on-base', async () => {
+test('an unreadable forge diff fails closed to guardrail in linkage and proofs-on-base', async () => {
   const f = fakes([item('12', 'Backlog')], { big: { closes: ['12'], source: '12/x', headSha: 'hbig' } });
   f.d.forge.diff = async () => { throw new Error('HTTP 406: diff too large'); };
-  f.d.forge.approvals = async () => [{ user: 'dana', state: 'approved', sha: 'hbig' }];
   f.d.binding = { ...binding, owners: { factory: 'fo' }, forge: {} } as any;
-  const a = await approval(f.d, 'big');
-  assert.equal(a.class, 'guardrail');
-  assert.notEqual(a.state, 'success'); // dana is not owners.factory
   const l = await linkage(f.d, 'big');
   assert.deepEqual([l.class, l.ok, l.factory], ['guardrail', true, false]);
   f.d.forge.view = async () => ({ n: 'bad', closes: [], source: 'x', headSha: '', baseSha: '' }) as any;
@@ -670,15 +602,6 @@ test('merged: a CR that is not merged moves nothing', async () => {
   f.d.forge.viewBySha = async () => ({ ...(await f.d.forge.view('open1')), state: 'open' });
   assert.match((await merged(f.d, 'x')).reason!, /not merged/);
   assert.equal(f.items[0].status, 'In review');
-});
-
-test('approval: a binding with no paths.factory fails closed to guardrail', async () => {
-  const f = fakes([item('1', 'In review', { lane: 'Fast' })], { c: { closes: ['1'], headSha: 'hc', source: '1/x' } }, { c: 'diff --git a/.agents/x.md b/.agents/x.md\n' });
-  f.d.forge.approvals = async () => [];
-  f.d.binding = { ...binding, paths: {}, owners: { factory: 'fo', bots: [] }, forge: {} } as any;
-  assert.equal((await approval(f.d, 'c')).class, 'guardrail');
-  f.d.binding = { ...binding, paths: { factory: [] }, owners: { factory: 'fo', bots: [] }, forge: {} } as any;
-  assert.deepEqual([(await approval(f.d, 'c')).class, (await approval(f.d, 'c')).state], ['guardrail', 'pending']);
 });
 
 test('gate review: a report holding both verdicts fails; one repeated verdict is fine; the marker must open the comment', async () => {

@@ -31,10 +31,9 @@ Follow the [contract](contract.md).
 ## Lanes
 
 - **Fast**: Size at or below `fast_lane_max_size`, no `escalate` trigger fires, and no path in
-  `paths.lane_areas` is touched. The spec is the criteria and a proof list. It merges on the agent
-  review.
-- **Full**: everything else. The spec holds the full design; `forge land` reports when a person must
-  approve.
+  `paths.lane_areas` is touched. It merges on the agent review.
+- **Full**: everything else, with the full design in the spec; `forge land` reports when a person
+  must approve.
 - `plan/shape` writes the Lane. `build` or `review/review` promotes Fast to Full with `board set <id>
   lane Full` when a deviation, a trigger, a second failed fix or an unlisted risk shows up, and says
   why in its done line. Nothing demotes.
@@ -42,9 +41,7 @@ Follow the [contract](contract.md).
 
 ## Sub-issues
 
-- An initiative stays at Backlog until `plan/groom` closes it, once every child is closed: as
-  Cancelled when every child was, else as Done with Shipped the lowest value among its Done
-  children.
+- An initiative stays at Backlog until every child is closed; then `plan/groom` closes it.
 - A deliverable is a child or a standalone ticket within the size limit. Depth is at most
   `max_subissue_depth`; a child that grows too large splits into siblings.
 - Items that change the same behaviour merge into one deliverable; deliverables toward one outcome
