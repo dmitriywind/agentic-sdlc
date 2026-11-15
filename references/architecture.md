@@ -63,15 +63,18 @@ src/
   binding.ts                 load and validate the binding
   install.ts                 init / validate / doctor
   board/   github.ts jira.ts linear.ts local.ts index.ts
-  forge/   github.ts index.ts
+  forge/   github.ts flow.ts util.ts index.ts
   vcs/     git.ts index.ts
   gates.ts                   repo gates shared by every CI template
   comments.ts                the comment-kind registry: kind to first-line marker (section 11.1)
+  skills.ts                  the skill pack reader: steps, tiers, hashes
+  pristine.ts                which installed files are unedited package files (init --upgrade)
   dispatch.ts                start a step on its executor
   ledger.ts                  read heartbeats and scores, aggregate runs, measures and learning
   bench.ts                   build and run bench cases
   mcp.ts                     the port verbs as MCP tools
   telemetry.ts               run and deploy records as OTLP traces and CDEvents (ledger export, the merged and shipped gates)
+scripts/                     the guide build (guide.mjs), the release hash step (known-hashes.mjs) and the feature pruner
 references/architecture.md   this contract
 docs/                        guides and diagrams; never normative
 features/                    the behaviour as executable Gherkin features (`<area>/*.feature`), their steps (`steps/`) and the runner (`support/`), on node:test; fake exec only (no network)
