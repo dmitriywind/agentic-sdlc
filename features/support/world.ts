@@ -28,7 +28,7 @@ export class Outcome {
   get output() { return this.stdout + this.stderr; }
 }
 
-const merge = (a: any, b: any): any => { // eslint-disable-line @typescript-eslint/no-explicit-any
+export const merge = (a: any, b: any): any => { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (b === null || typeof b !== 'object' || Array.isArray(b)) return b;
   const out = { ...(a && typeof a === 'object' && !Array.isArray(a) ? a : {}) };
   for (const [k, v] of Object.entries(b)) out[k] = merge(out[k], v);

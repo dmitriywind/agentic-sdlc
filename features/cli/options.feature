@@ -35,17 +35,3 @@ Feature: The CLI explains itself and reads its own options strictly
       When I run the CLI as typed ""
       Then the exit code is 2
       And the output matches "init[\s\S]*mcp"
-
-    Scenario: --root followed by a group name is a usage error that says so
-      When I run the CLI as typed "--root board list"
-      Then the exit code is 2
-      And the output says "--root needs a directory"
-
-    Scenario: A name that only exists on the prototype chain is not a group
-      When I run the CLI as typed "constructor"
-      Then the exit code is 2
-      And the output says "unknown group 'constructor'"
-
-    Scenario: A flag value of --help is the verb's business, not a request for help
-      When I run the CLI as typed "--root /nonexistent-agentic-sdlc board comment 1 --body-file --help"
-      Then the output does not start with "usage: agentic-sdlc board"

@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { HEARTBEAT_MARKER, SCORES_MARKER, measures } from '../../src/ledger.ts';
+import { HEARTBEAT_MARKER, SCORES_MARKER, measures, hardFacts, type LedgerRun } from '../../src/ledger.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import { Outcome, REPO, type World } from '../support/world.ts';
 
@@ -168,3 +168,10 @@ When('I measure the last {int} days', async (w, days: number) => {
 });
 
 // ---- the hard-fact cap and the scores comment, as functions ----
+Given('a run {string} that ended {string} on CR {string} whose checks are:', (w, id: string, outcome: string, cr: string, t: DataTable) => {
+  w.state.cap = { run: { id, outcome, cr, skill: 'build' } as unknown as LedgerRun, checks: t.hashes().map((r) => ({ name: r.name, state: r.state })) };
+});
+When('the hard facts are read with the required checks {string}', (w, required: string) => {
+  const { run, checks } = w.state.cap;
+  w.last = new Outcome(0, JSON.stringify(hardFacts(run, { checks } as never, required.split(',').map((s) => s.trim()).filter(Boolean))), '');
+});

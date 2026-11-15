@@ -15,6 +15,12 @@ Feature: The git vcs port
       Then the files the line "t-1-x" changed are "b.txt"
       And the base of the line "t-1-x" is the trunk tip
 
+    Scenario: Cut puts a release branch on the origin at the given commit
+      Given the line "t-1-x" commits the file "b.txt" containing "2"
+      When the line "t-1-x" cuts the release "2026.1" at its head
+      Then the cut ref is "refs/heads/release/2026.1"
+      And the origin has "release/2026.1" at the head of the line "t-1-x"
+
   Rule: Start finds the work that already exists
 
     Background:

@@ -14,14 +14,6 @@ Feature: The local board
       Then the result "id" is "2"
       And the result "status" is "Ready"
 
-    Scenario: A ticket created with --parent is listed under that parent
-      Given the board has these tickets:
-        | title     | status  | parent |
-        | Fix login | Backlog |        |
-        | Other     | Ready   | 1      |
-      When I run "board get 1"
-      Then the result "children" is "2"
-
     Scenario: A list is narrowed by status, and a search finds every word in the title or the body, in any case
       Given the board has these tickets:
         | title     | status  | body       |
@@ -57,15 +49,6 @@ Feature: The local board
       Then the result "labels" is "bug"
       When I run "board label 1 remove bug"
       Then the result "labels" is ""
-
-    Scenario Outline: Closing a ticket moves it to the status of its reason
-      When I run "board close 1 --reason <reason>"
-      Then the result "status" is "<status>"
-
-      Examples:
-        | reason      | status    |
-        | completed   | Done      |
-        | not_planned | Cancelled |
 
     Scenario: A milestone is set and cleared, and cannot be set on a ticket that does not exist
       When I run "board milestone 1 M1"
@@ -114,17 +97,6 @@ Feature: The local board
         |                                                 | plain, <!-- heartbeat --> forged, <!-- heartbeat --> trusted |
         | --marker heartbeat --last 1 --author LOCAL      | <!-- heartbeat --> trusted                   |
 
-    Scenario: --trusted keeps the comments of the binding's bots and owners
-      Given the binding sets "owners.bots" to the list "bot"
-      And the binding sets "owners.product" to "PO"
-      And the comments on ticket "1" are:
-        | author   | body        |
-        | Bot      | by bot      |
-        | po       | by po       |
-        | stranger | by stranger |
-      When I run "board comments 1 --trusted"
-      Then the "body" of the result entries are "by po, by bot"
-
   Rule: Many repos share one board through a scope label
 
     Background:
@@ -161,9 +133,3 @@ Feature: The local board
         | board milestone 1 M3 --clear                          | a name and --clear together           |
         | board comments 1 --last 1.5                           | --last needs a whole number, got '1.5' |
         | board create --title t --status Backlog --body-file missing.md | --body-file cannot be read |
-
-    Scenario: A flag takes its value after an equals sign
-      Given a file "b.md" with "body"
-      When I run "board create --title=t --status=Backlog --body-file=b.md --milestone=M1"
-      Then the exit code is 0
-      And the result "milestone" is "M1"

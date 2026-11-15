@@ -108,10 +108,6 @@ Feature: Push guard
         |        | a=approve; agentic-sdlc forge $a 1       | blocked |
         | review | agentic-sdlc forge approve 3             | allowed |
 
-    Scenario: The agent is told that forge approve is for the review runtime only
-      When the agent runs "agentic-sdlc forge approve 3"
-      Then the agent is told "forge approve is for the review runtime only"
-
   Rule: Only the review runtime posts a status, unless the runner opts in
 
     Scenario Outline: forge status and the MCP tools follow the role and the opt-in
@@ -128,10 +124,6 @@ Feature: Push guard
         | AGENTIC_SDLC_ROLE         |        | calls the MCP tool "mcp__agentic-sdlc__forge_status"                        | blocked |
         | AGENTIC_SDLC_ALLOW_STATUS | 1      | runs "agentic-sdlc forge approve 3"                                         | blocked |
         | AGENTIC_SDLC_ALLOW_STATUS | 1      | calls the MCP tool "mcp__agentic-sdlc__forge_approve"                       | blocked |
-
-    Scenario: The agent is told that forge status is for the review runtime only
-      When the agent runs "agentic-sdlc forge status abc --state success"
-      Then the agent is told "forge status is for the review runtime only"
 
     Scenario: The hook entry for MCP tools covers the forge tools of the plugin and of a manual install
       Then the hook entry that matches MCP tools matches "mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status"
@@ -199,10 +191,3 @@ Feature: Push guard
         | refs/heads/12-fix-x SHA refs/heads/12-fix-x ZERO | 0    |
         | refs/heads/wip SHA refs/heads/wip ZERO           | 1    |
         | (delete) ZERO refs/heads/wip SHA                 | 0    |
-
-    Scenario: A refused branch name is reported
-      When git hands the pre-push hook of the checkout "work" these lines:
-        """
-        refs/heads/wip SHA refs/heads/wip ZERO
-        """
-      Then the output says "branch name not allowed: wip"

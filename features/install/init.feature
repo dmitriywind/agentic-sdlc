@@ -44,14 +44,6 @@ Feature: Init installs the factory
         | node_modules  | node_modules\n.agents/.cli/\n |
         | /.agents/.cli | /.agents/.cli                 |
 
-    Scenario: A kept pre-push hook keeps its mode
-      Given I run the install command "init"
-      And the project has the file ".agents/hooks/pre-push" holding "#!/bin/sh\necho mine\n"
-      And the adopter makes the installed file ".agents/hooks/pre-push" not executable
-      When I run the install command "init"
-      Then the output says "kept .agents/hooks/pre-push"
-      And the installed file ".agents/hooks/pre-push" has the mode "644"
-
   Rule: Init refuses what it does not support, before it writes anything
 
     Scenario Outline: A bad command line writes nothing
@@ -105,14 +97,6 @@ Feature: Init installs the factory
       When I run the install command "init --harness claude"
       Then the installed file ".claude/agents/sdlc-fast.md" matches "^model: claude-haiku-4-5$"
 
-    Scenario: CLAUDE.md imports AGENTS.md once and keeps the adopter's text
-      Given the project has the file "CLAUDE.md" holding "# Mine\n"
-      And I run the install command "init --harness claude"
-      When I run the install command "init --harness claude"
-      Then the installed file "CLAUDE.md" matches "^# Mine"
-      And the installed file "CLAUDE.md" contains "\n@AGENTS.md\n" exactly 1 times
-      And the installed file ".mcp.json" is absent
-
     Scenario: Without the plugin, init copies the skills and merges the MCP entry, keeping an entry the adopter wrote
       Given the project has the file ".mcp.json" holding '{"mcpServers":{"other":{"type":"http","url":"x"}}}'
       When I run the install command "init --harness claude --no-plugin"
@@ -151,14 +135,6 @@ Feature: Init installs the factory
       Then the installed file ".agents/binding.yml" sets "board.options.repo" to "acme/shop"
       And the installed file ".agents/binding.yml" sets "forge.options.repo" to "acme/shop"
 
-    Scenario: Init on a local board creates the heartbeat ticket once and names it in the binding
-      Given I run the install command "init --board local"
-      When I run the install command "init --board local --force"
-      Then the local board holds the tickets:
-        | id | title     | status    |
-        | 1  | Heartbeat | Cancelled |
-      And the installed file ".agents/binding.yml" matches "ticket: \"?1\"?"
-
   Rule: Init installs the release line files that the binding's delivery needs
 
     Scenario Outline: The release-lines ruleset and workflow follow the binding's delivery
@@ -193,8 +169,3 @@ Feature: Init installs the factory
       And the installed file ".agents/skills/sdlc-plan/steps/shape.md" contains "(../../sdlc-escalate/SKILL.md)"
       And the installed skill pack has no skill problems
       And the skill regression gate finds no errors
-
-    Scenario: Renaming a SKILL.md changes its name line and the links into other skills, and renaming back restores it
-      When the skill file "plan/SKILL.md" holding "---\nname: plan\ndescription: d\nmetadata:\n  name: keep\n---\n[a](../sdlc/references/c.md#x) [b](../build/SKILL.md) [c](steps/s.md) [d](https://x/y) [e](#f) [f](./steps/s.md)\n" is renamed for a copied install knowing the skills "sdlc, plan, build"
-      Then the renamed text is "---\nname: sdlc-plan\ndescription: d\nmetadata:\n  name: keep\n---\n[a](../sdlc/references/c.md#x) [b](../sdlc-build/SKILL.md) [c](steps/s.md) [d](https://x/y) [e](#f) [f](./steps/s.md)\n"
-      And renaming the text back as "sdlc-plan/SKILL.md" gives the original

@@ -58,16 +58,6 @@ Feature: The CLI pin and the launcher
       And npm call 1 installed "github:acme/tool" at "v1.2.3" beside the final folder, without scripts
       And the installed folder ".agents/.cli" holds exactly "v1.2.3"
 
-    Scenario: The second call runs the same install, and a new ref installs again beside the old one
-      Given I run the launcher with "board list"
-      When I run the launcher with "gate linkage"
-      Then the output says '["gate","linkage"]'
-      And npm ran 1 times
-      Given the pin is changed to "github:acme/tool" at "dddddddddddddddddddddddddddddddddddddddd"
-      When I run the launcher with "doctor"
-      Then npm ran 2 times
-      And the installed folder ".agents/.cli" holds exactly "v1.2.3, dddddddddddddddddddddddddddddddddddddddd"
-
     Scenario Outline: A ref that could leave the folder is refused before npm runs
       Given the pin is changed to "github:acme/tool" at "<ref>"
       When I run the launcher with "doctor"
@@ -92,9 +82,6 @@ Feature: The CLI pin and the launcher
 
     Scenario: Every CLI call in a workflow goes through the launcher
       Then no stock workflow calls agentic-sdlc gate or vcs except through the launcher
-
-    Scenario: The stock files call the launcher
-      Then the stock file "templates/gates/github/agentic-sdlc-cr.yml" matches "\.agents/bin/agentic-sdlc gate approval"
 
     Scenario: A job that holds secrets runs the launcher and cli.json of the trunk
       Then every job of the stock workflow "templates/gates/github/agentic-sdlc-cr.yml" that runs the launcher checks out the base

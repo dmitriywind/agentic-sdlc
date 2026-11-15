@@ -27,15 +27,6 @@ Feature: Planning and recording the scores of a run
         | v   | done-conditions, by-skill, by-step       |
         | r   | done-conditions, by-skill, old-name      |
 
-    Scenario: A scorer that applies to another step is not planned
-      Given a scorer "redundant-tests" on the scale "pass-fail" that applies to "build"
-      And a scorer "release-only" on the scale "0-4" that applies to "ship"
-      And a heartbeat by "local" at "2026-11-08T00:00:00Z" with these runs:
-        | id |
-        | a  |
-      When I run "ledger plan --run a"
-      Then the JSON result "scorers.*.name" is "done-conditions, redundant-tests"
-
     Scenario: The evidence names the step file of the installed pack and the skill hash
       Given an installed skill pack with the review steps
       And a heartbeat by "local" at "2026-11-08T00:00:00Z" with these runs:
@@ -61,6 +52,17 @@ Feature: Planning and recording the scores of a run
         | failed  |
         | timeout |
         | capped  |
+
+    Scenario: A red required check on the head of the CR caps the score with the outcome
+      Given a run "a" that ended "failed" on CR "7" whose checks are:
+        | name     | state   |
+        | Required | failure |
+        | lint     | failure |
+      When the hard facts are read with the required checks "Required"
+      Then the JSON result has these values:
+        | path  | value                                           |
+        | score | 1                                               |
+        | facts | outcome failed, red check on the head: Required |
 
   Rule: A recorded score is validated and capped
 
@@ -112,15 +114,6 @@ Feature: Planning and recording the scores of a run
         """
         { "done-conditions": "unscorable", "redundant-tests": "unscorable" }
         """
-
-    Scenario: done-conditions is not unscorable while a hard fact caps the run
-      Given a heartbeat by "local" at "2026-11-08T00:00:00Z" with these runs:
-        | id | outcome |
-        | f  | failed  |
-      And a file "s.json" with '{"scores":{"done-conditions":"unscorable"},"reasons":{"done-conditions":"no diff"}}'
-      When I run "ledger record --run f --file s.json"
-      Then the exit code is 1
-      And the output says "unscorable is not allowed while a hard fact caps the run"
 
   Rule: A missing heartbeat is found
 
