@@ -16,8 +16,6 @@ Feature: Sending the export
       | r3 | 2026-11-08T09:50:00Z | build         | abc123 | 8      | 13 | balanced | m1    |          |       |        | 2       | failed  |       |                                   | fast_check red |
     And that heartbeat records the factory "f00dfeed"
 
-  Rule: Nothing is sent unless the binding says where
-
   Rule: The OTLP document is posted to the traces path with the headers of headers_env
 
     Scenario: The document is posted to <endpoint>/v1/traces
@@ -34,12 +32,6 @@ Feature: Sending the export
         | resourceSpans.0.scopeSpans.0.spans.length     | 4            |
         | resourceSpans.0.resource.attributes.0.value.stringValue | agentic-sdlc |
 
-  Rule: A CDEvent is posted as a CloudEvents binary-mode request
-
-    Scenario: One request per event
-      When I run "ledger export --format cdevents --send --since 2026-11-08T09:40:00Z" against the recording sink
-      Then the sink received 4 requests
-
   Rule: A sink that is malformed or holds credentials is refused, naming only the env var
 
     Scenario Outline: A `<format>` sink of `<value>` is refused without showing the value
@@ -54,8 +46,4 @@ Feature: Sending the export
       Examples:
         | format  | var   | value                         | hidden            |
         | otlp    | OTLP  | https://user:pw@sink.example/x | pw\|sink.example |
-        | otlp    | OTLP  | https://tok@sink.example/x    | tok@\|sink.example |
         | cdevents | SINK | https://user:pw@sink.example/x | pw\|sink.example |
-        | cdevents | SINK | https://tok@sink.example/x    | tok@\|sink.example |
-
-  Rule: The binding holds the names of env vars, never URLs

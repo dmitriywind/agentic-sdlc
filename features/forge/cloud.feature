@@ -22,5 +22,3 @@ Feature: In a Claude cloud session the forge is REST only
         | verb      | route                                                                   |
         | ready     | -X POST repos/{owner}/{repo}/pulls/5/ccr/ready_for_review              |
         | sync      | -X PUT repos/{owner}/{repo}/pulls/5/update-branch                      |
-
-  Rule: An unset token_env falls back to the proxy

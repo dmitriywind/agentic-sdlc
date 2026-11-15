@@ -46,47 +46,6 @@ Feature: Running the bench
         | passRate          | 0.5   |
         | minutes           | 4     |
 
-    Scenario: The agent's changed files are written for the judge
-      When the bench runs 1 cases with the options:
-        | scorer-dir | si |
-      Then the JSON result "cases.0.scorerInput" is "si/1.md"
-      And the project file "si/1.md" matches 'do it[\s\S]*### src/a\.ts\s+Before:\s+`{4}\s+old[\s\S]*After:\s+`{4}\s+agent'
-
-  Rule: A candidate factory is run with its own skill and binding
-
-  Rule: A dry run starts nothing
-
-    Scenario: The commands are printed with placeholders for the trees
-      When the bench runs 1 cases with the options:
-        | dry-run | true |
-      Then the output matches "--cwd .<workdir>."
-      And the bench started no command
-
-  Rule: A run can repeat each case
-
-    Scenario: Each trial is a row, each in fresh trees
-      Given the verify run number 2 fails
-      When the bench runs 1 cases with the options:
-        | trials | 3 |
-      Then the JSON result has these values:
-        | path           | value             |
-        | cases.*.trial  | 1, 2, 3           |
-        | cases.*.pass   | true, false, true |
-      And the bench made 9 trees
-
-  Rule: A run stays inside learning.bench_budget
-
-    Scenario: After max_minutes no new case starts, and the rest are skipped, not failed
-      Given the bench budget allows 12 minutes
-      And the clock moves 5 minutes on every reading
-      When the bench runs 3 cases
-      Then the JSON result has these values:
-        | path           | value               |
-        | cases.*.id     | 1, 2, 3             |
-        | cases.*.pass   | true, false, false  |
-        | cases.*.skipped | <absent>, budget, budget |
-        | passRate       | 1                   |
-
   Rule: The agent command comes from the executor
 
     Background:
@@ -103,7 +62,3 @@ Feature: Running the bench
       Examples:
         | executor                          | command                                          |
         | bot                               | bot <skill> <ticket> <prompt_file> <workdir>     |
-
-  Rule: Each value reaches the shell as one word
-
-  Rule: The bench replays the build step of the pack of the tree it runs

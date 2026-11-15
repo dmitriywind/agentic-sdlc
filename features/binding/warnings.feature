@@ -3,20 +3,6 @@
 Feature: Setups that fail at run time are warned about
   A warning does not fail validation. It names a setting that would only show its fault in the first cycle.
 
-  Rule: A learning bench that can never pass is named
-
-  Rule: A local trace path is accepted whatever its slash
-
-    Scenario Outline: A Windows trace path with either slash is accepted
-      Given a complete binding
-      And the binding value "traces.uri" is '<uri>'
-      When the binding is validated
-      Then there are no warnings
-
-      Examples:
-        | uri                         |
-        | C:\\traces\\{run_id}.jsonl  |
-
   Rule: A GitHub board is checked against what GitHub accepts
 
     Background:

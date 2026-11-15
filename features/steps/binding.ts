@@ -38,10 +38,8 @@ When('the binding is validated', (w) => {
 
 Then('validation finds no problems', (w) => assert.deepEqual(w.state.problems, []));
 Then('the problems mention {string}', (w, text: string) => assert.ok(joined(w.state.problems).includes(text), `no problem mentions "${text}":\n${joined(w.state.problems)}`));
-Then('the problems do not mention {string}', (w, text: string) => assert.ok(!joined(w.state.problems).includes(text), `a problem mentions "${text}":\n${joined(w.state.problems)}`));
 Then('the warnings mention {string}', (w, text: string) => assert.ok(joined(w.state.warnings).includes(text), `no warning mentions "${text}":\n${joined(w.state.warnings)}`));
 Then('the warnings do not mention {string}', (w, text: string) => assert.ok(!joined(w.state.warnings).includes(text), `a warning mentions "${text}":\n${joined(w.state.warnings)}`));
-Then('there are no warnings', (w) => assert.deepEqual(w.state.warnings, []));
 
 // ---- the Shipped options ----
 

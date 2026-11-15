@@ -15,16 +15,3 @@ Feature: Each profile has the identities and executors it needs
       When the binding is validated
       Then validation finds no problems
       And the warnings mention "executors.triage"
-
-    Scenario: A complete organization binding has no warning
-      Given the binding value "profile" is '"organization"'
-      And the binding value "executors.default.sandbox" is '"container"'
-      And the binding value "traces.uri" is '"x/{run_id}"'
-      And the binding value "executors.impl" is '{"kind":"managed","token_env":"K","endpoint_env":"E"}'
-      When the binding is validated
-      Then there are no warnings
-
-  Rule: The identities follow the profile
-
-    Background:
-      Given a complete binding

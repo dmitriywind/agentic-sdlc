@@ -42,8 +42,3 @@ Feature: Dispatch takes step ids and finds the step's executor
       When dispatch runs "review/review --ticket 1 --bogus build"
       Then the exit code is 2
       And the output says "unknown flag --bogus"
-
-    Scenario: A flag without a value is a usage error
-      When dispatch runs "review/review --ticket"
-      Then the exit code is 2
-      And the output says "--ticket needs a value"

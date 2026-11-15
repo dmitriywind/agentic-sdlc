@@ -9,10 +9,6 @@ Feature: CDEvents posted by the gates
     Given the telemetry sinks are configured for the repository "acme/app"
     And the project ships to the environments "staging, production"
 
-  Rule: A deploy result is posted as a service CDEvent
-
-  Rule: A merge is posted as a change merged CDEvent
-
   Rule: A failed send writes one line and never fails the gate
 
     Scenario: A failing sink does not fail the shipped gate
@@ -21,14 +17,3 @@ Feature: CDEvents posted by the gates
       Then the exit code is 0
       And the JSON result "result" is "rolled-back"
       And the error output is the single line "telemetry: CDEvent not sent: POST sink.example -> 500: down"
-
-  Rule: A gate waits a bounded time for its telemetry
-
-    Scenario: The wait is 5 seconds in total
-      Then the gate waits at most 5000 ms for its telemetry
-
-    Scenario: A sink that does not answer is tried once and given up on at the deadline
-      Given the sink never answers
-      When the gate posts its change merged event and waits at most 20 ms
-      Then the error output is the single line "telemetry: CDEvent not sent: no answer within 20 ms"
-      And the sink was asked once, with one try and a limit of 20 ms

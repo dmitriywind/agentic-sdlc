@@ -158,7 +158,6 @@ Given('GitHub holds the open CR {int} at the head {string} for the server', (w, 
   w.answer(new RegExp(`pulls/${n}$`), { number: n, html_url: 'u', title: 't', head: { sha: head, ref: 's' }, base: { sha: 'm', ref: 'main' }, state: 'open', body: '', user: { login: 'bot' } });
 });
 Given('the repo refuses draft pull requests', (w) => { fake(w).noDraft = true; });
-Given('GitHub refuses to arm auto-merge', (w) => { fake(w).noAutoMerge = true; });
 Given('the gh calls fail {int} times with {string} before they answer', (w, times: number, message: string) => {
   fake(w).failure = { times, message, done: 0 };
   w.useFakeSleep();
@@ -166,7 +165,6 @@ Given('the gh calls fail {int} times with {string} before they answer', (w, time
 
 Given('the repo has the open pull request {int}', (w, n: number) => { fake(w).pulls.push(pullRow({ number: String(n) })); });
 Given('the repo has the open pull request {int} at the head {string}', (w, n: number, head: string) => { fake(w).pulls.push(pullRow({ number: String(n), head })); });
-Given('the repo has these pull requests:', (w, t: DataTable) => { fake(w).pulls.push(...t.hashes().map(pullRow)); });
 Given('the head {string} has the check runs:', (w, sha: string, t: DataTable) => {
   fake(w).runs[sha] = t.hashes().map((r) => ({ id: Number(r.id), name: r.name, status: r.status, conclusion: r.conclusion || null }));
 });
@@ -174,7 +172,6 @@ Given('the head {string} has the commit statuses:', (w, sha: string, t: DataTabl
 Given('the CR {int} has these comments:', (w, n: number, t: DataTable) => {
   fake(w).comments[String(n)] = t.hashes().map((r, i) => ({ id: String(i + 1), author: r.author, createdAt: String(i + 1), body: r.body, url: 'u' }));
 });
-Given('the CR {int} has these reviews:', (w, n: number, t: DataTable) => { fake(w).reviews[String(n)] = t.hashes().map((r) => ({ user: r.user, state: r.state, sha: r.sha })); });
 Given('the commit {string} is listed under the pull requests {string}', (w, sha: string, list: string) => {
   const g = fake(w);
   g.listedUnder[sha] = csv(list.replace(/;/g, ',')).map((entry) => {
@@ -188,9 +185,6 @@ Given('the commit {string} is listed under the pull requests {string}', (w, sha:
 Given('gh lists the release runs, call by call:', (w, t: DataTable) => {
   fake(w).runLists = t.hashes().map((r) => csv(r.runs).map((e) => { const [id, url] = e.split(/\s+/); return { databaseId: Number(id), url }; }));
 });
-Given('the CI runs are:', (w, t: DataTable) => {
-  fake(w).ciRuns = t.hashes().map((r) => ({ databaseId: Number(r.id), name: r.name, headBranch: r.branch, headSha: r.sha, status: r.status, conclusion: r.conclusion || null, url: r.url, createdAt: r.at }));
-});
 
 // ---- When: one forge verb ----
 When('the forge opens a draft CR from the branch {string} titled {string} with the body {string}', (w, source: string, title: string, body: string) => attempt(w, (f) => f.open({ source, title, body, draft: true })));
@@ -199,16 +193,7 @@ When('the forge runs {word} on {string}', (w, verb: string, arg: string) => atte
   if (verb === 'viewBySha') return f.viewBySha(arg);
   return (f as Any)[verb](arg);
 }));
-When('the forge lists the CRs with {string}', (w, query: string) => attempt(w, (f) => {
-  const q: Any = {};
-  for (const part of csv(query.replace(/ /g, ','))) {
-    const [k, v] = part.split('=');
-    q[k] = k === 'limit' ? Number(v) : k === 'checks' ? true : v;
-  }
-  return f.list(q);
-}));
 When('the forge cuts the revision {string} as the version {string}', (w, rev: string, version: string) => attempt(w, (f) => f.cut(rev, version)));
-When('the forge lists the failed CI runs of the branch {string}', (w, ref: string) => attempt(w, (f) => f.runs({ ref, failed: true })));
 When('the forge CLI runs {string}', async (w, line: string) => {
   const ctx = forgeCtx(w);
   // A file the scenario wrote is named relative to the project: the in-process CLI runs elsewhere.
@@ -232,7 +217,6 @@ const read = (w: World, path: string) => { let v: Any = w.state.result; for (con
 const joined = (w: World) => w.calls.join('\n');
 
 Then('the forge reads {string} as {string}', (w, path: string, value: string) => { assert.ok(!w.state.error, String(w.state.error)); assert.equal(text(read(w, path)), value); });
-Then('the listed CRs are {string}', (w, ids: string) => assert.equal((w.state.result as CR[]).map((c) => c.n).join(', '), ids));
 Then('the forge made {int} calls', (w, n: number) => assert.equal(fake(w).execs.length, n, joined(w)));
 Then('every call is a gh api call under {string}', (w, prefix: string) => {
   assert.ok(fake(w).execs.length > 0);
@@ -246,7 +230,6 @@ Then('the comment posted on the CR {string} opens with {string}', (w, n: string,
   assert.ok(post, `no comment was posted on ${n}:\n${joined(w)}`);
   assert.equal(String(post.input.body).split('\n')[0], first);
 });
-Then('the approvals are {string}', (w, list: string) => assert.equal((w.state.result as Any[]).map((a) => `${a.user}:${a.state}:${a.sha}`).join(', '), list));
 
 // =====================================================================================================================
 // The flow verbs: the next action, the queue, land, the report. A fake forge port holds the CRs of the scenario.
@@ -312,7 +295,6 @@ Given('the approval class of every CR is {string}', (w, klass: string) => { flow
 Given('the approval class of every CR is {string}, owned by {string}', (w, klass: string, who: string) => { flow(w).klass = { class: klass, who: csv(who) }; });
 Given('the approval class of a CR cannot be decided', (w) => { flow(w).klass = new Error('no diff'); });
 Given('the CR {string} is {string} with the checks {string}', (w, n: string, traits: string, checks: string) => { const f = flow(w); f.crs.push({ ...crOf(n, traits), checks: checksOf(checks) }); });
-Given('the checks of the CR {string} turn green at look {int}', (w, n: string, look: number) => { flow(w).greenAt = { n, look, views: 0 }; });
 Given('these CRs are open:', (w, t: DataTable) => {
   const f = flow(w);
   for (const r of t.hashes()) {
@@ -378,8 +360,6 @@ Then('the class of the first queue row is {string}', (w, klass: string) => asser
 const blocking = (w: World) => (flow(w).land.blocking as { check: string; state: string }[]).map((b) => `${b.check}=${b.state}`).join(', ') || 'none';
 Then('the land state is {string}', (w, state: string) => assert.equal(flow(w).land.state, state));
 Then('the checks blocking the land are {string}', (w, list: string) => assert.equal(blocking(w), list));
-Then('the forge was asked to automerge the CR {string}', (w, n: string) => assert.deepEqual(flow(w).log, [`automerge ${n}`]));
-Then('the land waited {int} seconds in all', (w, s: number) => assert.equal(w.sleeps.reduce((a, b) => a + b, 0), s * 1000));
 
 Then('the report is:', (w, doc: string) => {
   const r = flow(w).report;

@@ -36,5 +36,3 @@ Feature: Gate ticket-linkage
       Then the gate passes
       And the gate result "factory" is "true"
       And the gate result "class" is "guardrail"
-
-  Rule: A CR by a dependency bot needs no ticket

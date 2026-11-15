@@ -34,8 +34,6 @@ Feature: The delivery measures and the error budget
         | deployFrequency.versions | 1     |
         | deployFrequency.value    | 3     |
 
-  Rule: A measure the data cannot give is null with a reason
-
   Rule: The error budget needs a maximum in product.slo
 
     Background:

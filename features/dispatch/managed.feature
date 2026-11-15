@@ -30,7 +30,3 @@ Feature: A webhook or managed request carries the stage and no secret
       Examples:
         | stage                                                                                                                                                      |
         | {"kind":"managed","agent_env":"A","token_env":"T","endpoint_env":"E","mcps":["docs","db"],"secrets":["NPM_TOKEN"],"sandbox":"cloud","model":{"tier":"fast"}} |
-
-  Rule: Each managed vendor gets its own start-a-run call
-
-  Rule: A vendor whose agent runs its own model refuses a pinned one

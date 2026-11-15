@@ -34,8 +34,6 @@ Feature: Gate proofs-on-base
       When the proofs-on-base gate runs for the CR "1"
       Then the gate result "files" lists "test/a.test.ts, src/b.spec.ts"
 
-  Rule: The gate fails closed when it cannot run the proofs
-
   Rule: A CR with no product proof to make passes
 
     Scenario: A product CR that also changes code still needs a proof file
@@ -46,8 +44,6 @@ Feature: Gate proofs-on-base
         | 1  | docs/a.md, src/a.ts |
       When the proofs-on-base gate runs for the CR "1"
       Then the gate fails with "no new or changed proof"
-
-  Rule: The job holds no secrets, so its exit code carries the result
 
   Rule: Only a real non-zero exit is a failing proof
 

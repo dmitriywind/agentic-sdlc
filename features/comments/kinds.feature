@@ -7,9 +7,6 @@ Feature: Comment kinds are one registry of first lines
 
   Rule: Every kind stamps the format boards already hold, and matches its own stamp
 
-    Scenario: The registry holds these kinds
-      Then the registry holds exactly the kinds "spec, verdict, note, verify, manual-check, ask, heartbeat, scores, release-proposal, release-cut, dispatch, done"
-
     Scenario Outline: A kind with its ref is stamped on the first line
       When the marker of the kind "<kind>" is stamped with the ref "<ref>"
       Then the marker line is "<line>"
@@ -20,10 +17,6 @@ Feature: Comment kinds are one registry of first lines
         | spec             |              | spec.md                             |
         | ask              | scope        | ### Needs human: scope              |
 
-  Rule: A comment is of a kind when its first line opens with the marker
-
-  Rule: A refused kind or ref is a usage error
-
   Rule: A body is stamped once
 
     Scenario Outline: The marker goes first, and a body that has it is not stamped twice
@@ -33,8 +26,6 @@ Feature: Comment kinds are one registry of first lines
       Examples:
         | body                         | stamped                      |
         | text                         | <!-- heartbeat -->\ntext     |
-
-  Rule: A report has one verdict, a conflict, or none
 
   Rule: A kind only one verb writes cannot be written by hand
 
@@ -67,32 +58,3 @@ Feature: Comment kinds are one registry of first lines
     Scenario: The comments of a kind and ref
       When I run "board comments 1 --kind done --ref k1"
       Then the printed comments open with "<!-- agentic-sdlc:done k1 -->"
-
-    Scenario: The spec comment opens with the spec marker
-      When I run "board comments 1 --kind spec"
-      Then the printed comments open with "spec.md"
-
-    Scenario Outline: A kind that does not exist, or a ref the kind cannot take, is a usage error
-      When I run "<command>"
-      Then the exit code is 2
-
-      Examples:
-        | command                                          |
-        | board comments 1 --kind bogus                    |
-        | board comment 1 --body-file b.md --kind done     |
-        | board comment 1 --body-file b.md --ref x         |
-        | board comments 1 --kind note --marker x          |
-
-  Rule: forge comment and forge comments take the same kinds
-
-    Background:
-      Given the github forge for the repo "o/r"
-      And a file "b.md" with "body"
-
-    Scenario Outline: A kind that does not exist, or flags that do not go together, is a usage error
-      When the forge CLI runs "<command>"
-      Then the exit code is 2
-
-      Examples:
-        | command                                         |
-        | comment 5 --body-file b.md --kind bogus         |

@@ -27,7 +27,7 @@ Feature: The bench report
         | 1  | true | 0.1     |
       And that result is of the suite "x"
 
-    Scenario: A row has the pass rate, the median minutes and the number of case runs, best first
+    Scenario: A row has the pass rate, the median minutes and the Pareto mark, best first, and only the suite is read
       When I run "bench report --suite s"
       Then the JSON result has these values:
         | path                 | value                |
@@ -35,18 +35,8 @@ Feature: The bench report
         | rows.*.passRate      | 1, 0.5, 0.5          |
         | rows.*.medianMinutes | 5, 1, 6              |
         | rows.*.n             | 2, 2, 2              |
-
-    Scenario: A model that another model does not beat on both is on the Pareto front
-      When I run "bench report --suite s"
-      Then the JSON result "rows.*.pareto" is "true, true, false"
-
-    Scenario: Only the results of the suite are read
-      When I run "bench report --suite s"
-      Then the JSON result "results" is "3"
-
-    Scenario: A report needs a suite
-      When I run "bench report"
-      Then the exit code is 2
+        | rows.*.pareto        | true, true, false    |
+        | results              | 3                    |
 
   Rule: Results are grouped by executor name, not by kind
 

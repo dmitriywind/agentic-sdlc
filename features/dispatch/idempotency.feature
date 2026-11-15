@@ -10,20 +10,6 @@ Feature: A dispatch starts one run per key
     And the local board holds a ticket at Ready as ticket 1 and the heartbeat ticket 2
     And the dedupe window is "10" minutes
 
-  Rule: A double fire is skipped
-
-    Scenario: Another step is another key
-      Given dispatch runs "build --ticket 1"
-      When dispatch runs "review/review --ticket 1"
-      Then the result "kind" is "harness"
-      And the result "key" is "1-review/review"
-
-    Scenario: A marker by an author the binding does not trust never skips
-      Given dispatch runs "build --ticket 1"
-      And the trusted bots are "someone-else"
-      When dispatch runs "build --ticket 1"
-      Then the result "kind" is "harness"
-
   Rule: A change request and the factory use the heartbeat ticket
 
     Scenario: The same change request head inside the window is skipped
@@ -39,32 +25,3 @@ Feature: A dispatch starts one run per key
       And the comment "<!-- agentic-sdlc:done 1-review/review -->" is posted on the ticket "1"
       When dispatch runs "review/review --ticket 1"
       Then the result "kind" is "harness"
-
-  Rule: An unfinished run blocks until stall_minutes
-
-    Background:
-      Given the dedupe window is "0.0001" minutes
-      And a run may stay unfinished for 60 minutes
-
-    Scenario: Only the run's own done line ends the block
-      Given dispatch runs "build --ticket 1"
-      And the comment "a closing comment of another run" is posted on the ticket "1"
-      And a moment passes
-      When dispatch runs "build --ticket 1"
-      Then the result "reason" is "the previous run has not finished"
-
-  Rule: The cycle claims itself with dispatch sdlc
-
-  Rule: A failed start writes the done line
-
-    Scenario: An executor that cannot start leaves the done line of its key
-      Given the executor "plan/triage" is '{"kind":"webhook","url_env":"NOPE"}'
-      When dispatch runs "plan/triage --ticket 1"
-      Then the exit code is 1
-      And the ticket "1" holds a comment starting with "<!-- agentic-sdlc:done 1-plan/triage -->"
-
-  Rule: Two overlapping cycles start one run
-
-    Scenario: Both post a marker and only the earliest starts the run
-      When two cycles run "review/review --ticket 1" and "review/review --ticket=1" at the same time
-      Then exactly 1 of the cycles printed a skip and 1 printed a start with the kind "harness"

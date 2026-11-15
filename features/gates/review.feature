@@ -23,7 +23,3 @@ Feature: Gate review (one identity)
       And the status "review" is "success"
       And the status is posted on the commit "h2"
       And the status is posted as "ci"
-
-  Rule: With two identities the gate does nothing
-
-  Rule: A report has one verdict and opens with its marker

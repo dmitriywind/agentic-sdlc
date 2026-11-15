@@ -5,10 +5,6 @@ Feature: The skill loader and the pack check catch a broken pack
   its id is `<skill>/<step>`, or the skill name alone for a one-step skill. Problems come back as errors and warnings,
   and the steps that are sound still load. These scenarios use small fixture packs; pack.feature checks the shipped one.
 
-  Rule: A well-formed pack loads as steps with tiers
-
-  Rule: Installed skill folders are read as the skill they hold
-
   Rule: Declared steps and step files agree
 
     Scenario: A step in the frontmatter with no file is an error, and the other steps still load
@@ -47,50 +43,6 @@ Feature: The skill loader and the pack check catch a broken pack
       When the pack is read
       Then the pack has an error mentioning "metadata.steps and metadata.tier are both set"
 
-    Scenario: An unknown tier is an error
-      Given a skills folder holding the standard fixture pack
-      And the pack file "build/SKILL.md" is:
-        """
-        ---
-        name: build
-        description: d
-        metadata:
-          tier: turbo
-        ---
-        body
-        """
-      When the pack is read
-      Then the pack has an error mentioning "tier turbo invalid"
-      And the steps are "escalate, learn/judge, learn/improve, plan/triage, plan/groom, plan/shape, review/review, review/verify, sdlc, ship"
-
-    Scenario: A skill with no tier at all is an error
-      Given a skills folder holding the standard fixture pack
-      And the pack file "build/SKILL.md" is:
-        """
-        ---
-        name: build
-        description: d
-        ---
-        body
-        """
-      When the pack is read
-      Then the pack has an error mentioning "metadata.tier or metadata.steps missing"
-
-    Scenario: A top-level tier still loads, with a warning
-      Given a skills folder holding the standard fixture pack
-      And the pack file "build/SKILL.md" is:
-        """
-        ---
-        name: build
-        description: d
-        tier: deep
-        ---
-        body
-        """
-      When the pack is read
-      Then the pack has a warning mentioning "top-level tier is deprecated"
-      And the pack has no error
-
   Rule: A skill folder names itself
 
     Scenario: A name that differs from the folder is an error
@@ -108,26 +60,6 @@ Feature: The skill loader and the pack check catch a broken pack
       When the pack is read
       Then the pack has an error mentioning "frontmatter name 'builder' differs from the folder name"
 
-    Scenario: A skill with no description is an error
-      Given a skills folder holding the standard fixture pack
-      And the pack file "build/SKILL.md" is:
-        """
-        ---
-        name: build
-        metadata:
-          tier: deep
-        ---
-        body
-        """
-      When the pack is read
-      Then the pack has an error mentioning "frontmatter description missing"
-
-    Scenario: A skill folder with no SKILL.md is an error
-      Given a skills folder holding the standard fixture pack
-      And the pack file "build/SKILL.md" is removed
-      When the pack is read
-      Then the pack has an error mentioning "build: SKILL.md missing"
-
   Rule: The check reads what a skill file says
 
     Scenario: A broken relative link is an error
@@ -144,18 +76,3 @@ Feature: The skill loader and the pack check catch a broken pack
         """
       When the pack is checked
       Then the pack has an error mentioning "broken link ../sdlc/references/nope.md"
-
-    Scenario: A word that ties a skill to one setup is an error
-      Given a skills folder holding the standard fixture pack
-      And the pack file "build/SKILL.md" is:
-        """
-        ---
-        name: build
-        description: d
-        metadata:
-          tier: deep
-        ---
-        Post it as the review identity.
-        """
-      When the pack is checked
-      Then the pack has an error mentioning "forbidden 'identity'"

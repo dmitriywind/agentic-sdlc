@@ -15,5 +15,3 @@ Feature: gh calls are retried on a rate limit or a server error
       When the forge runs diff on "5"
       Then the verb fails matching "503"
       And the forge made 3 calls
-
-  Rule: A write is retried only on a rate limit
