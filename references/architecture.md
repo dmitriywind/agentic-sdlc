@@ -248,7 +248,10 @@ Keys this contract relies on by name:
   puts it in the executor's task as the `Agent-Run` value; it is the run row's `id`.
 - `forge.human_approval: full-lane | always | never` (default `full-lane`), `forge.review_identity`
   (empty: one identity), `forge.options.review_token_env` (set exactly when `review_identity` is, and
-  never equal to `token_env`; `validate` fails otherwise), `forge.required_checks`.
+  never equal to `token_env`; `validate` fails otherwise), `forge.required_checks`. `validate` warns when
+  `human_approval` is not `never` and every `owners.product` account is also in `owners.bots`: no human outside the bots
+  can approve a Full-lane CR (add a second account, or merge as admin). An unset `token_env` variable falls back to
+  gh's own login only in a Claude cloud session (`CLAUDE_CODE_REMOTE`); elsewhere it fails.
 - `telemetry: { otlp_endpoint_env, cdevents_sink_env, headers_env }` (all optional, default unset: nothing is
   sent): each key names an env var, never a URL or a token, and `validate` rejects a value that is not a
   variable name. Section 6.9 says what is exported and sent.

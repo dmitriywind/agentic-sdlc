@@ -29,8 +29,7 @@ Executors: `executors` in the binding (`references/architecture.md` section 7 in
 ## Review after the cycle
 
 CI templates chain with a job dependency (`needs`). A scheduler without one chains through the cycle:
-put the command that starts the review run in the cycle environment as `AGENTIC_REVIEW_FIRE_CMD`; the
-cycle prompt runs it once, after the heartbeat, only when a CR needs a review. It is a trigger credential, not the review token.
+put the command that starts the review run in the cycle environment as `AGENTIC_REVIEW_FIRE_CMD`; `dispatch review/review --unattended` runs it once, only when a CR needs a review. It is a trigger credential, not the review token.
 
 - Routine: give the review routine an API trigger and set
   `AGENTIC_REVIEW_FIRE_CMD='curl -fsS -X POST "https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire" -H "Authorization: Bearer $REVIEW_FIRE_TOKEN" -H "anthropic-beta: experimental-cc-routine-2026-04-01"'`.

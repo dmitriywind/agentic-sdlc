@@ -60,7 +60,7 @@ A seventh check, `agent-provenance`, is off until you set `forge.provenance`. Wh
 | Class | Is | Needs |
 |---|---|---|
 | `product-fast` | A product change in the Fast lane. | Nothing more. |
-| `product-full` | A product change in the Full lane, or one that touches `paths.lane_areas`. | A human approval (`forge.human_approval`). |
+| `product-full` | A product change in the Full lane, or one that touches `paths.lane_areas`. | A human approval (`forge.human_approval`) from someone outside `owners.bots`; with one account as both owner and bot, `validate` warns, and you merge as admin. |
 | `tuning` | A factory change to the model map or a benched skill's tier. | Nothing, when `learning.auto_merge_classes` lists it; else the factory owner. |
 | `guardrail` | Any other factory change. | The factory owner. |
 

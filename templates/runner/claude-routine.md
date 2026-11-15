@@ -43,7 +43,7 @@ The committed `.mcp.json` starts the MCP server through `.agents/bin/agentic-sdl
 Save this as the environment's setup script, so that install is done before the session starts
 (Settings > Environment > Setup script). It runs as root, from the directory that holds the repo checkouts, before the
 session starts, and cannot read the environment's secrets, so it installs only; `.agents/runner-setup.sh` also runs
-`doctor`, which needs the tokens, so do not use it here. Replace `<repo>` with the checkout's directory name.
+`doctor`, which needs the tokens, so a cloud setup script never runs it (every other runtime does). Replace `<repo>` with the checkout's directory name.
 
 ```sh
 if [ -d <repo> ]; then
