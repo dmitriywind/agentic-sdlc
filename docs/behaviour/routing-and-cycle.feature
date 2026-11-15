@@ -190,30 +190,6 @@ Feature: Routing and the unattended cycle
     Then it dispatches release for the request
     And it dispatches implement-spec for the ticket at In progress
 
-  # Source: skills/sdlc/SKILL.md, "Run one cycle" (dispatch)
-  # Proof: test/dispatch.test.ts "idempotency: a trusted marker for the same key inside cycle.dedupe_minutes skips; --cr and improve-factory use the heartbeat ticket"
-  Scenario: A double fire of the same dispatch is skipped
-    Given the cycle dispatched "implement-spec" for ticket "1"
-    When "implement-spec" is dispatched for ticket "1" again inside "cycle.dedupe_minutes"
-    Then the dispatch prints "{ skipped: true }"
-    And the orchestrator leaves it
-
-  # Source: src/dispatch.ts, "cli" (re-read after the claim)
-  # Proof: test/dispatch.test.ts "dispatch: overlapping cycles on one key start one run; flags are checked; an unreadable time fails closed; the log dir is private"
-  Scenario: Two overlapping dispatches start one run
-    Given two cycles dispatch the same key at once and both post a marker
-    When each re-reads the markers
-    Then only the earliest unfinished marker starts the run and the other prints "{ skipped: true }"
-    And an unknown flag is a usage error with exit code 2
-    And the executor's log folder is private to the user
-
-  # Source: src/dispatch.ts, "cli" (idempotency)
-  # Proof: test/dispatch.test.ts "idempotency: a trusted marker for the same key inside cycle.dedupe_minutes skips; --cr and improve-factory use the heartbeat ticket"
-  Scenario: A finished run never blocks a re-run
-    Given the dispatch for ticket "1" posted its done line
-    When the same dispatch runs again inside "cycle.dedupe_minutes"
-    Then the dispatch is not skipped
-
   # Source: skills/sdlc/SKILL.md, "Run one cycle" (rules for every step)
   # Proof: skill text only
   Scenario: The time budget stops new work
@@ -275,91 +251,6 @@ Feature: Routing and the unattended cycle
       | a ready CR at In review with no review status on its head     | review-pr                              |
       | a Ready ticket whose open CR a person opened                  | implement-spec, a hand-off to review   |
       | an open dependency CR with no ticket                          | review-pr with --cr                    |
-
-  # Source: src/dispatch.ts, "idempotency"
-  # Proof: test/dispatch.test.ts "dispatch: an unfinished run blocks until stall_minutes; only its own done line ends it; sdlc only claims; a failed start writes the done line"
-  Scenario: A run that has not finished blocks a second start until stall_minutes
-    Given implement-spec was dispatched for a ticket more than cycle.dedupe_minutes ago
-    And no bot comment followed the dispatch marker
-    When implement-spec is dispatched again for the ticket inside stall_minutes
-    Then the dispatch prints "{ skipped: true }" with "the previous run has not finished"
-
-  # Source: src/dispatch.ts, "idempotency"; skills/sdlc/references/contract.md
-  # Proof: test/dispatch.test.ts "dispatch: an unfinished run blocks until stall_minutes; only its own done line ends it; sdlc only claims; a failed start writes the done line"
-  Scenario: A run ends with its done marker, and a failed start writes one
-    Given dispatch printed a done line for a run
-    When the run posts that line in its closing comment
-    Then the next dispatch of the same skill and subject starts
-    And a dispatch whose executor fails to start posts the done line itself
-
-  # Source: src/dispatch.ts (sandbox check); templates/runner/local.md
-  # Proof: test/dispatch.test.ts "local execution: unattended accepts sandbox local only with AGENTIC_SDLC_LOCAL=1; an unset sandbox stays refused"
-  Scenario: A cycle on your own machine runs local stages only when both opt-ins are set
-    Given an unattended run on the adopter's machine
-    When the cycle dispatches a stage
-    Then dispatch starts it when the stage names sandbox local and AGENTIC_SDLC_LOCAL is 1
-    And dispatch refuses it when the stage's sandbox is unset, or AGENTIC_SDLC_LOCAL is not 1
-    And a stage with no sandbox of its own takes the sandbox of the default stage
-    And a stage with sandbox container or cloud, and a webhook stage, never need the opt-ins
-
-  # Source: src/dispatch.ts, "command" (executor)
-  # Proof: test/dispatch.test.ts "command fills quoted placeholders and runs through the platform shell"
-  # Proof: test/dispatch.test.ts "command spawns detached with output to a run log and prints the pid"
-  Scenario: A command stage starts a detached bot with quoted values
-    Given a stage of kind command with a run template
-    When dispatch starts the stage
-    Then it puts each value into the template as one quoted word
-    And it refuses a value that holds a newline
-    And it starts the bot detached with its output in a run log
-    And it prints the process id as the run reference and the log path
-
-  # Source: src/dispatch.ts, "command" (secrets and mcps)
-  # Proof: test/dispatch.test.ts "command: minimal env plus listed secrets, {model} and {mcps_file}; no secret value on disk"
-  Scenario: A command stage gets only the secrets it lists
-    Given a stage lists secrets and mcps
-    When dispatch starts the stage
-    Then the bot environment holds the minimal variables and the listed secrets only
-    And the mcps file holds the listed servers without any token value
-    And dispatch fails when a listed secret is unset
-
-  # Source: src/dispatch.ts, "model"
-  # Proof: test/dispatch.test.ts "model: id wins over tier; judge-run keeps its judge tier"
-  # Proof: test/dispatch.test.ts "harness prints the resolved stage"
-  Scenario: A stage resolves its model, mcps, secrets and sandbox
-    Given a stage with a model id, a model tier, mcps, secrets and a sandbox
-    When dispatch starts the stage
-    Then the model id wins over the model tier
-    And for judge-run the judge tier wins over the stage model
-    And a harness stage prints the resolved model, mcps, secrets and sandbox
-
-  # Source: src/dispatch.ts, "webhook" and "managed" (executors)
-  # Proof: test/dispatch.test.ts "each executor kind starts a run; a bad kind, an unset env var, a board failure or a usage error stops it"
-  Scenario: Each executor kind starts a run, and a bad stage stops it
-    Given a stage of kind harness, command, webhook, managed or assign
-    When dispatch starts the stage
-    Then a webhook or managed stage posts one request and prints the run reference
-    And dispatch exits 1 for an unknown kind, an unset env var or a board failure
-    And dispatch exits 2 when the arguments are wrong
-
-  # Source: src/dispatch.ts, "webhook" and "managed" (request body)
-  # Proof: test/dispatch.test.ts "webhook and managed bodies carry model, mcps (names and urls) and sandbox, never secrets"
-  # Proof: test/dispatch.test.ts "managedRequest builds each vendor start-a-run call and never needs a model for claude"
-  Scenario: A managed or webhook request carries the stage but no secret
-    Given a webhook or managed stage with model, mcps, secrets and sandbox
-    When dispatch posts the request
-    Then the body holds the model, the mcp names and urls and the sandbox
-    And the body holds no secret value
-    And each managed vendor gets its own start-a-run call
-    And a managed claude or antigravity stage that pins a model is refused
-
-  # Source: src/dispatch.ts, "limitsOf"; skills/sdlc/references/executors.md
-  # Proof: test/dispatch.test.ts "limits: a stage inherits executors.default caps and each executor kind is handed them"
-  # Proof: test/dispatch.test.ts "validateBinding: executor caps and cycle.max_tokens_per_ticket are positive integers; bench_budget knows runs and minutes only"
-  Scenario: A stage's caps reach its executor
-    Given executors.release sets max_turns and executors.default sets max_minutes
-    When release is dispatched
-    Then the caps are filled into a command, set in its environment and printed as limits
-    And a stage that sets no cap inherits the default's
 
   # Source: skills/sdlc/SKILL.md, "Rules for every step"
   # Proof: skill text only

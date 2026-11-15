@@ -1,4 +1,4 @@
-/* ---------- One cycle: claim, read, triage, route, chain, heartbeat ---------- */
+/* ---------- One cycle: claim, read, triage, route, review, heartbeat ---------- */
 VIZ.cycle = function cycle(el) {
   addStyle('cycle', `
 .cy > *, .cy-cmds > * { min-width: 0; }
@@ -84,13 +84,13 @@ VIZ.cycle = function cycle(el) {
 }
 `);
 
-  const PHASES = [['Claim', 'one cycle at a time'], ['Read state', 'board, open CRs, heartbeats'], ['Triage Signals', 'each Signal, in order'],
-    ['Route', 'each ticket to its skill'], ['Chain', 'a finished step starts the next'], ['Heartbeat', 'one comment, always']];
-  const ORDER = ['Release requests, and P0 fixes ready to release', 'Change requests a person opened', 'Tickets In progress',
-    'Ready from the top, at most <code>cycle.max_implementations</code> new', 'Backlog: grooming for no Priority, then shape while fewer than <code>cycle.min_ready</code> are Ready',
-    'Change requests that need a review (one identity)'];
+  const PHASES = [['Claim', 'one cycle at a time'], ['Read state', 'board, holds, queue, heartbeats'], ['Triage Signals', 'each Signal, in order'],
+    ['Route', 'each ticket to its step; a finished step starts the next'], ['Review', 'every CR the queue lists for review'], ['Heartbeat', 'one comment, always']];
+  const ORDER = ['Release requests, and P0 fixes ready to release', 'Change requests a person opened',
+    'In review: each change request\'s queue action (rework, land, sync), except review', 'Tickets In progress',
+    'Ready from the top, at most <code>cycle.max_implementations</code> new', 'Backlog: grooming for no Priority, then shaping while fewer than <code>cycle.min_ready</code> are Ready'];
   const COLS = ['Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done'];
-  const TIER = { 'triage-signal': 'fast', release: 'balanced', 'implement-spec': 'balanced', 'backlog-grooming': 'balanced', shape: 'deep', 'review-pr': 'balanced' };
+  const TIER = { 'plan/triage': 'fast', ship: 'balanced', build: 'balanced', 'plan/groom': 'balanced', 'plan/shape': 'deep', 'review/review': 'balanced' };
   const BOARD = [
     ['24', 'Signals', 'User report: upload hangs', ['signal:bug']],
     ['20', 'Backlog', 'Release request: v1.4', ['release']],
@@ -101,8 +101,10 @@ VIZ.cycle = function cycle(el) {
     ['16', 'Ready', 'Search by tag', []],
     ['17', 'Ready', 'Paginate the feed', []],
     ['18', 'Ready', 'Show order history', ['CR #31 by a person']],
-    ['12', 'In progress', 'Password reset email', ['rework']],
-    ['11', 'In review', 'Rate limit the API', ['draft CR #29']],
+    ['13', 'In progress', 'Profile photo upload', ['claimed last cycle']],
+    ['12', 'In review', 'Password reset email', ['CR #27: review failed']],
+    ['10', 'In review', 'Cache the home page', ['CR #26: review passed']],
+    ['11', 'In review', 'Rate limit the API', ['draft CR #29: new head']],
     ['14', 'Done', 'Fix: sign-in fails on Safari', ['P0', 'On staging']],
   ];
   const IDLE_BOARD = [
@@ -114,7 +116,8 @@ VIZ.cycle = function cycle(el) {
   const SCEN = [['normal', 'A normal hour'], ['running', 'Another cycle is running'], ['idle', 'Nothing to do'], ['budget', 'Time budget runs out'], ['fail', 'A step fails']];
   const SHA = '4f9c2e1a7d3b5c8e0f6a9b2d4c7e1f3a5b8d0c2e';
 
-  // A scenario is a list of steps. A step: ph (phase index), rank (route order, 1..6), min (minute), say, picks [{ id, skill, to, wait, fail }].
+  // A scenario is a list of steps. A step: ph (phase index), rank (route order, 1..6), min (minute), say, picks [{ id, skill, to, wait, cmd, fail }].
+  // A pick with cmd is a CLI verb the navigator runs itself: no run row.
   function plan(sc) {
     const S = [];
     if (sc === 'running') {
@@ -123,26 +126,26 @@ VIZ.cycle = function cycle(el) {
     }
     S.push({ ph: 0, min: 0, say: 'The scheduler starts the cycle. <code>dispatch sdlc --ticket 1</code> claims it; no other cycle is running.' });
     if (sc === 'idle') {
-      S.push({ ph: 1, min: 1, say: 'It lists the board once and reads the open CRs, the last heartbeats and <code>ledger summary</code>. Nothing matches a routing row: #7 is held with no owner reply, #10 waits for a person, the rest is Done.' });
+      S.push({ ph: 1, min: 1, say: 'It reads the board, <code>board holds</code>, <code>forge queue</code>, the last heartbeats and <code>ledger summary</code> once. Nothing matches a routing row: #7 is held with no owner reply, the queue says <code>wait</code> for #10, the rest is Done.' });
       S.push({ ph: 5, min: 2, say: 'Nothing to do: it writes a short heartbeat with <code>runs: []</code> and stops. The heartbeat still proves the factory is alive.' });
       return S;
     }
-    S.push({ ph: 1, min: 1, say: 'It lists the board once and reads the open CRs, the last heartbeats and <code>ledger summary</code>. Every decision below comes from this one read.' });
-    S.push({ ph: 2, min: 2, say: 'Every Signal is triaged first. triage-signal finds #24 real and wanted, and moves it to Backlog.', picks: [{ id: '24', skill: 'triage-signal', to: 'triage-signal · to Backlog' }] });
-    S.push({ ph: 3, rank: 1, min: 3, say: 'Route, in order. First what is ready to release: the release request #20, and #14, a P0 fix that is Done and On staging.', picks: [{ id: '20', skill: 'release', to: 'release' }, { id: '14', skill: 'release', to: 'release · opens the request' }] });
-    S.push({ ph: 3, rank: 2, min: 3, say: 'Then hand-offs: #18 has CR #31 that a person opened. implement-spec hands it to review; this does not count against the cap.', picks: [{ id: '18', skill: 'implement-spec', to: 'implement-spec · hand-off' }] });
-    S.push({ ph: 3, rank: 3, min: 4, say: 'Then every ticket In progress: #12 was sent back by review, so implement-spec reworks it.', picks: [{ id: '12', skill: 'implement-spec', to: 'implement-spec · rework' }] });
-    S.push({ ph: 3, rank: 4, min: 4, say: 'Then Ready from the top. <code>cycle.max_implementations</code> is 1: #15 is claimed, #16 and #17 wait for the next cycle.', picks: [{ id: '15', skill: 'implement-spec', to: 'implement-spec' }, { id: '16', wait: true, to: 'wait: cap' }, { id: '17', wait: true, to: 'wait: cap' }] });
-    S.push({ ph: 3, rank: 5, min: 5, say: 'Then Backlog: grooming for #21 and #22, which have no Priority. Only two tickets are still Ready, fewer than <code>cycle.min_ready</code> (3), so shape takes #23.', picks: [{ id: '21', skill: 'backlog-grooming', to: 'backlog-grooming' }, { id: '22', skill: 'backlog-grooming', to: 'backlog-grooming' }, { id: '23', skill: 'shape', to: 'shape' }] });
-    S.push({ ph: 3, rank: 6, min: 5, say: 'Last, with one identity, every change request that needs a review: draft CR #29 for #11 goes to review-pr, in a fresh context.', picks: [{ id: '11', skill: 'review-pr', to: 'review-pr' }] });
+    S.push({ ph: 1, min: 1, say: 'It reads the board, <code>board holds</code>, <code>forge queue</code>, the last heartbeats and <code>ledger summary</code> once, and releases every hold an owner has replied to. Every decision below comes from this one read.' });
+    S.push({ ph: 2, min: 2, say: 'Every Signal is triaged first. plan/triage finds #24 real and wanted, and moves it to Backlog.', picks: [{ id: '24', skill: 'plan/triage', to: 'plan/triage · to Backlog' }] });
+    S.push({ ph: 3, rank: 1, min: 3, say: 'Route, in order. First what is ready to release: the release request #20, and #14, a P0 fix that is Done and On staging.', picks: [{ id: '20', skill: 'ship', to: 'ship' }, { id: '14', skill: 'ship', to: 'ship · opens the request' }] });
+    S.push({ ph: 3, rank: 2, min: 3, say: 'Then hand-offs: #18 has CR #31 that a person opened. build hands it to review; this does not count against the cap.', picks: [{ id: '18', skill: 'build', to: 'build · hand-off' }] });
+    S.push({ ph: 3, rank: 3, min: 4, say: 'Then In review, by each change request\'s queue action. CR #27 of #12 failed its review: <code>rework</code>, so build sends #12 back and fixes it. CR #26 of #10 passed: <code>land</code>, so <code>forge land</code> turns on auto-merge. CR #29 of #11 has a new head: <code>review</code>, which waits for phase 5.', picks: [{ id: '12', skill: 'build', to: 'build · rework' }, { id: '10', cmd: true, to: 'forge land · armed' }] });
+    S.push({ ph: 3, rank: 4, min: 4, say: 'Then every ticket In progress: #13 was claimed last cycle, so build goes on with it.', picks: [{ id: '13', skill: 'build', to: 'build' }] });
+    S.push({ ph: 3, rank: 5, min: 4, say: 'Then Ready from the top. <code>cycle.max_implementations</code> is 1: #15 is claimed, #16 and #17 wait for the next cycle.', picks: [{ id: '15', skill: 'build', to: 'build' }, { id: '16', wait: true, to: 'wait: cap' }, { id: '17', wait: true, to: 'wait: cap' }] });
+    S.push({ ph: 3, rank: 6, min: 5, say: 'Then Backlog: grooming for #21 and #22, which have no Priority. Only two tickets are still Ready, fewer than <code>cycle.min_ready</code> (3), so plan/shape takes #23.', picks: [{ id: '21', skill: 'plan/groom', to: 'plan/groom' }, { id: '22', skill: 'plan/groom', to: 'plan/groom' }, { id: '23', skill: 'plan/shape', to: 'plan/shape' }] });
     if (sc === 'fail') {
-      S.push({ ph: 4, min: 27, say: 'implement-spec on #12 fails: its tests do not pass. The failure goes into the heartbeat\'s errors and the cycle goes on; the other runs finish. Nothing that finished matches a further row.', fail: '12' });
+      S.push({ ph: 4, min: 27, say: 'build on #12 fails: its tests do not pass. The failure goes into the heartbeat\'s errors and the cycle goes on; the other runs finish. <code>forge queue</code> again: draft CR #29 of #11 needs a review, so review/review takes it in a fresh context.', fail: '12', picks: [{ id: '11', skill: 'review/review', to: 'review/review' }] });
       S.push({ ph: 5, min: 39, say: 'It writes the heartbeat with one row per run and the failed step in <code>errors</code>. A step that fails in the last <code>cycle.failure_limit</code> heartbeats on the same trunk commit is held for a person.' });
     } else if (sc === 'budget') {
-      S.push({ ph: 4, min: 47, over: true, say: 'The runs take longer today. #12 finishes rework at minute 47, after <code>cycle.time_budget_minutes</code> (45). Its review would be next, but nothing new starts now; the next cycle picks it up.', blocked: true });
+      S.push({ ph: 4, min: 47, over: true, say: 'The runs take longer today. #12 finishes rework at minute 47, after <code>cycle.time_budget_minutes</code> (45). The queue lists CR #29 and #12\'s new head for review, but nothing new starts now; the next cycle reviews them.', blocked: true });
       S.push({ ph: 5, min: 50, over: true, say: 'The heartbeat is still written, at minute 50, before the runner job times out at 60. Every run that started is in it.' });
     } else {
-      S.push({ ph: 4, min: 28, say: 'A step finished while time is left: #12 is reworked and In review. With one identity, review-pr starts on it in this cycle, under the same caps.', picks: [{ id: '12', skill: 'review-pr', to: 'then review-pr', chain: true }] });
+      S.push({ ph: 4, min: 28, say: 'Routing is done and time is left. <code>forge queue</code> again, since this cycle pushed new heads: CR #29 of #11 and the reworked CR #27 of #12 need a review. Each goes to review/review in a fresh context, under the same caps.', picks: [{ id: '11', skill: 'review/review', to: 'review/review' }, { id: '12', skill: 'review/review', to: 'then review/review', chain: true }] });
       S.push({ ph: 5, min: 41, say: 'It writes one heartbeat on the heartbeat ticket: when it ran, the trunk commit its skills came from, one row per run and its errors.' });
     }
     return S;
@@ -151,7 +154,7 @@ VIZ.cycle = function cycle(el) {
   el.className = 'panel cy';
   el.innerHTML = '<div class="cy-bar"><b id="cy-scen-label">Replay the cycle with</b><div class="seg" role="radiogroup" aria-labelledby="cy-scen-label">'
     + SCEN.map(([v, t], i) => '<label><input type="radio" name="cy-scen" id="cy-scen-' + v + '" value="' + v + '"' + (i ? '' : ' checked') + '><span>' + t + '</span></label>').join('') + '</div></div>'
-    + '<div class="cy-bind"><span>Example binding:</span><span class="tag">cycle.max_implementations: 1</span><span class="tag">cycle.min_ready: 3</span><span class="tag">cycle.time_budget_minutes: 45</span><span class="tag">one identity</span></div>'
+    + '<div class="cy-bind"><span>Example binding:</span><span class="tag">cycle.max_implementations: 1</span><span class="tag">cycle.min_ready: 3</span><span class="tag">cycle.time_budget_minutes: 45</span></div>'
     + '<ol class="cy-phases" id="cy-phases" aria-label="Phases of one cycle">' + PHASES.map(([n, h], i) => '<li><button type="button" data-ph="' + i + '"><b><i>' + (i + 1) + '</i>' + n + '</b><small>' + h + '</small></button></li>').join('') + '</ol>'
     + '<div class="cy-clock"><div class="cy-track" role="img" id="cy-track"><div class="cy-fill" id="cy-fill"></div><div class="cy-budget" title="time budget: 45 minutes"></div></div><div><span id="cy-min"></span><span>budget 45 · job timeout 60</span></div></div>'
     + '<div class="cy-now" id="cy-now" aria-live="polite"></div>'
@@ -160,7 +163,7 @@ VIZ.cycle = function cycle(el) {
     + '<div class="cy-order"><h4 id="cy-order-h">Route: the order</h4><ol id="cy-order" aria-labelledby="cy-order-h">' + ORDER.map((t) => '<li>' + t + '</li>').join('') + '</ol></div></div>'
     + '<div id="cy-hb" aria-live="polite"></div>'
     + '<div class="cy-cmds"><p>Read the heartbeats back as the run ledger:</p>'
-    + ['npx --no agentic-sdlc ledger summary', 'npx --no agentic-sdlc ledger stale --max-hours 3'].map((c) => '<div class="codeblock"><pre><code>' + esc(c) + '</code></pre><button class="btn copy" type="button">Copy</button></div>').join('')
+    + ['.agents/bin/agentic-sdlc ledger summary', '.agents/bin/agentic-sdlc ledger stale --max-hours 3'].map((c) => '<div class="codeblock"><pre><code>' + esc(c) + '</code></pre><button class="btn copy" type="button">Copy</button></div>').join('')
     + '<p><code>ledger stale</code> is the dead-man check: it fails when no heartbeat arrived in the last 3 hours.</p></div>';
 
   const board = $('#cy-board', el), now = $('#cy-now', el), hb = $('#cy-hb', el), playBtn = $('#cy-play', el);
@@ -172,7 +175,7 @@ VIZ.cycle = function cycle(el) {
       for (const p of s.picks || []) {
         const prev = out.get(p.id);
         out.set(p.id, { ...p, rank: s.rank ?? prev?.rank, to: prev && p.chain ? prev.to + ' · ' + p.to : p.to });
-        if (!p.wait) runs.push({ skill: p.skill, ticket: '#' + p.id, model: TIER[p.skill] + '-model', outcome: 'done' });
+        if (!p.wait && !p.cmd) runs.push({ skill: p.skill, ticket: '#' + p.id, model: TIER[p.skill] + '-model', outcome: 'done' });
       }
       if (s.fail) { out.get(s.fail).fail = true; runs.find((r) => r.ticket === '#' + s.fail).outcome = 'failed'; }
     }
@@ -218,7 +221,7 @@ VIZ.cycle = function cycle(el) {
       return;
     }
     const at = '2026-11-14T10:' + String(s.min).padStart(2, '0') + ':00Z';
-    const errors = steps.some((x) => x.fail) ? [{ step: 'implement-spec', id: '12', msg: 'npm test: 2 failing in reset-email.test.ts' }] : [];
+    const errors = steps.some((x) => x.fail) ? [{ step: 'build', id: '12', msg: 'npm test: 2 failing in reset-email.test.ts' }] : [];
     const json = { at, factory: SHA, runs: runs.map((r) => ({ id: at + '-' + r.skill + '-' + r.ticket.slice(1), skill: r.skill, ticket: r.ticket.slice(1), tier: TIER[r.skill], model: r.model, executor: 'harness', outcome: r.outcome, ...(r.outcome === 'failed' ? { error: errors[0].msg } : {}) })), errors };
     hb.innerHTML = '<article class="cy-hb" aria-label="Heartbeat comment"><header><span class="actor agent">factory-bot</span><span>commented on #1 Heartbeat · ' + at.slice(11, 16) + ' UTC</span><span class="tag">owners.bots</span></header><div>'
       + '<span class="cy-mark">' + esc('<!-- heartbeat -->') + '</span>'

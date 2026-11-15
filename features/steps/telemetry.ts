@@ -76,7 +76,6 @@ Then('request {int} has the same id in its header as in its event', (w, n: numbe
 Then('the body of request {int} has these values:', (w, n: number, t: DataTable) => {
   for (const r of t.hashes()) assert.equal(String(pick(requests(w)[n - 1][2].body, r.path)), r.value, r.path);
 });
-Then('the body of request {int} is the document that was exported', (w, n: number) => assert.deepEqual(requests(w)[n - 1][2].body, JSON.parse(w.state.exported)));
 Then('the sink was asked once, with one try and a limit of {int} ms', (w, ms: number) => {
   assert.equal(requests(w).length, 1);
   assert.deepEqual([requests(w)[0][2].tries, requests(w)[0][2].timeoutMs], [1, ms]);

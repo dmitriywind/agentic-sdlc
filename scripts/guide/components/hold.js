@@ -55,7 +55,7 @@ VIZ.hold = function hold(el) {
 
   const TRIGGERS = [['arch', 'Architecture or scope change'], ['undo', 'Cannot be undone'], ['sec', 'Security'], ['data', 'Personal data'],
     ['money', 'Money'], ['legal', 'Legal duty'], ['sign', 'Sign-off'], ['access', 'Missing access or credential'], ['ruling', 'Product ruling'],
-    ['regr', 'Regression'], ['twice', 'The same failure twice'], ['p0', 'P0']];
+    ['regr', 'Regression'], ['twice', 'The same failure past its limit'], ['p0', 'P0']];
   const TRACK = ['Unsure', 'Search', 'Ask', 'Cycle skips', 'Your reply'];
   const OWNER = '@ana', OTHER = '@sam';
 
@@ -76,7 +76,7 @@ VIZ.hold = function hold(el) {
     + '<div class="hd-ctl"><button class="btn" type="button" id="hd-back">Back</button><button class="btn primary" type="button" id="hd-next">Next step</button><button class="btn" type="button" id="hd-reset">Reset</button></div>'
     + '</div><aside class="hd-why" aria-label="What makes a skill ask"><h4>What makes a skill ask</h4><ul class="hd-chips" id="hd-chips">'
     + TRIGGERS.map(([k, t]) => '<li data-k="' + k + '">' + t + '</li>').join('') + '</ul>'
-    + '<p>Any skill, at any status, calls escalate-to-human when one of these may hold. A routine step is never escalated.</p></aside></div>'
+    + '<p>Any step, at any status, runs escalate when one of these may hold. A routine step is never escalated.</p></aside></div>'
     + '<div class="callout rule">A hold is a label, not a status. Only a reply from someone in <code>owners</code> counts. You need no label rights: the cycle removes <code>needs-human</code> after your reply.</div>';
 
   const card = $('#hd-card', el), now = $('#hd-now', el), thread = $('#hd-thread', el), reply = $('#hd-reply', el);
@@ -86,9 +86,9 @@ VIZ.hold = function hold(el) {
 
   const comment = (who, role, when, body, cls = '') => '<li class="hd-c ' + cls + '"><header><span class="actor ' + role + '">' + who + '</span><span>' + when + '</span></header><div>' + body + '</div></li>';
   const event = (body, cls = '') => '<li class="hd-ev ' + cls + '"><span class="actor agent">cycle</span>' + body + '</li>';
-  const ASK = comment('escalate-to-human', 'agent', 'commented · 09:04',
+  const ASK = comment('escalate', 'agent', 'commented · 09:04',
     '<h5>Needs human: which formats should data export offer?</h5><ul>'
-    + '<li><b>Asked by</b>: shape, 09:04</li>'
+    + '<li><b>Asked by</b>: plan/shape, 09:04</li>'
     + '<li><b>Overview</b>: #7 lets users download their data. The criteria cannot say what the file looks like until someone picks the formats. The importance doc and past answers do not say.</li>'
     + '<li><b>Options</b>:<ol><li><b>JSON and CSV</b> (proposed): JSON keeps every field, CSV opens in a spreadsheet. Two formats to test.</li><li><b>JSON only</b>: smallest change; hard to read without tools.</li><li><b>CSV only</b>: easy to read; nested data gets flattened.</li></ol></li>'
     + '<li><b>Ask</b>: Which formats should the export offer?</li>'
@@ -101,24 +101,24 @@ VIZ.hold = function hold(el) {
     card.innerHTML = '<div class="hd-top"><span class="hd-id">#7</span><span class="hd-t">Let users export their data</span></div>'
       + '<div class="hd-meta"><span>Status <span class="state">' + status + '</span></span><span>Priority <span class="tag">High</span></span>'
       + '<span>Labels ' + (held ? '<span class="tag hold">needs-human</span>' : '<span class="tag">feature</span>') + '</span>'
-      + '<span>Assignee ' + (held ? '<i>none</i>' : 'shape') + '</span></div>';
+      + '<span>Assignee ' + (held ? '<i>none</i>' : 'plan/shape') + '</span></div>';
     if (flash && !reduced) { card.classList.remove('hd-flash'); void card.offsetWidth; card.classList.add('hd-flash'); }
     el.querySelectorAll('.hd-track li').forEach((li, i) => { const at = [0, 1, 2, 2, 3, 4][step]; li.className = i < at ? 'done' : i === at ? 'now' : ''; if (i === at) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current'); });
     el.querySelectorAll('#hd-chips li').forEach((li) => li.classList.toggle('on', step >= 1 && (li.dataset.k === 'ruling' || li.dataset.k === 'data')));
 
     const say = (who, role, p) => '<div><span class="actor ' + role + '">' + who + '</span></div><p>' + p + '</p>';
-    if (step === 0) now.innerHTML = say('shape', 'agent', 'shape is writing the acceptance criteria for #7. One criterion needs a <b>product ruling</b>: which formats may a user export? shape may not pick that itself.')
+    if (step === 0) now.innerHTML = say('plan/shape', 'agent', 'plan/shape is writing the acceptance criteria for #7. One criterion needs a <b>product ruling</b>: which formats may a user export? plan/shape may not pick that itself.')
       + '<ul class="hd-work"><li><span class="dot pass"></span><span>A signed-in user can ask for an export of all their data.</span></li>'
       + '<li class="hd-q"><span class="dot pend"></span><span>The export arrives as a file in format <b>?</b> (CSV, JSON, both)</span></li></ul>';
-    if (step === 1) now.innerHTML = say('escalate-to-human', 'agent', 'Before it asks anyone, escalate-to-human searches. None of the sources settles it, and two triggers hold: a product ruling, and personal data.')
+    if (step === 1) now.innerHTML = say('escalate', 'agent', 'Before it asks anyone, escalate searches. None of the sources settles it, and two triggers hold: a product ruling, and personal data.')
       + '<ul class="hd-work"><li><span class="dot na"></span><span><code>paths.importance_doc</code>: marks data export as important; silent on formats.</span></li>'
       + '<li><span class="dot na"></span><span><code>paths.sources_before_question</code>: the product doc names no export format.</span></li>'
       + '<li><span class="dot na"></span><span>Past answers: no owner reply on #7 after a Needs human comment.</span></li>'
       + '<li class="hd-q"><span class="dot fail"></span><span>Result: <b>escalate</b> (Ruling, Data).</span></li></ul>';
-    if (step === 2) now.innerHTML = say('escalate-to-human', 'agent', 'It posts <b>one</b> comment headed "Needs human", adds the label <span class="tag hold">needs-human</span>, clears the assignee and stops. The status stays <b>Backlog</b>.');
-    if (step === 3) now.innerHTML = say('you', 'you', 'The ticket now waits on you. Every skill skips it until an owner replies. Run the next cycle to see.');
+    if (step === 2) now.innerHTML = say('escalate', 'agent', 'It runs <code>board hold</code>: <b>one</b> comment headed "Needs human" and the label <span class="tag hold">needs-human</span>. It clears the assignee and stops. The status stays <b>Backlog</b>.');
+    if (step === 3) now.innerHTML = say('you', 'you', 'The ticket now waits on you. Every step skips it until an owner replies. Run the next cycle to see.');
     if (step === 4) now.innerHTML = say('cycle', 'agent', 'The next cycle routes the board and skips #7: it is on hold, and no owner has replied. Now reply as an owner, or as someone else.');
-    if (step === 5 && owner) now.innerHTML = say('cycle', 'agent', 'Your reply is from <code>owners.product</code>, so it is trusted. The next cycle removes <span class="tag hold">needs-human</span>, and shape finishes the criteria with your answer. #7 moves on to <b>Ready</b>.');
+    if (step === 5 && owner) now.innerHTML = say('cycle', 'agent', 'Your reply is from <code>owners.product</code>, so it is trusted. The next cycle sees it in <code>board holds</code> and runs <code>board release</code>, which removes <span class="tag hold">needs-human</span>; plan/shape finishes the criteria with your answer. #7 moves on to <b>Ready</b>.');
     if (step === 5 && !owner) now.innerHTML = say('cycle', 'agent', OTHER + ' is not in <code>owners</code>, so the reply is untrusted and ignored. The hold stays and the next cycle skips #7 again. Reply as the owner to release it.');
 
     let t = '';
@@ -127,7 +127,7 @@ VIZ.hold = function hold(el) {
     sent.forEach((r, i) => {
       const own = r.who === 'owner';
       t += comment(own ? OWNER : OTHER, own ? 'you' : 'world', 'commented · ' + (10 + i) + ':20 ' + (own ? '<span class="tag">owners.product · trusted</span>' : '<span class="tag">not in owners · ignored</span>'), esc(r.text) || '<i>(empty)</i>', own ? '' : 'hd-ignored');
-      t += own ? event((11 + i) + ':00 <code>#7: needs-human removed; shape resumes</code>') + event((11 + i) + ':12 <code>shape: criteria done (JSON and CSV) · Backlog → Ready</code>', 'hd-ok')
+      t += own ? event((11 + i) + ':00 <code>board release #7: needs-human removed; plan/shape resumes</code>') + event((11 + i) + ':12 <code>plan/shape: criteria done (JSON and CSV) · Backlog → Ready</code>', 'hd-ok')
         : event((11 + i) + ':00 <code>skipped #7: on hold</code>');
     });
     thread.innerHTML = t;

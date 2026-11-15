@@ -6,15 +6,6 @@ Feature: Judge runs and improve the factory
   I want runs graded by an independent model and one proven change proposed at a time
   So that the factory improves from evidence and I approve every rule change
 
-  # Source: references/architecture.md, "6. The self-improvement loop", item 3 (Judge)
-  # Proof: test/dispatch.test.ts "judge-run: binding judge_tier, stepped off the judged model; one model everywhere skips"
-  Scenario: The judge model is independent of the run
-    Given a run used a model
-    When "dispatch judge-run --run-model <m>" runs
-    Then it picks models[learning.judge_tier]
-    And it picks the next tier when that model is the run's own model
-    And it prints { skip: true } when no independent model exists
-
   # Source: skills/improve-factory/SKILL.md, "Steps 2. Last proposal"
   # Proof: skill text only
   Scenario: An open proposal blocks a new one

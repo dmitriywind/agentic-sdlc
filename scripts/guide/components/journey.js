@@ -9,9 +9,9 @@ const C = {
   red: ['fail', 'fail · a test is red on the new head'],
   proof: ['pass', 'pass · the new test fails on the old code'],
   link: ['pass', 'pass · closes one open ticket, #2'],
-  revWait: ['pend', 'pending · waits for the review report'],
-  revNew: ['pend', 'pending · needs a report on the new head'],
-  revPass: ['pass', 'pass · built by CI from the report'],
+  revWait: ['pend', 'pending · waits for a verdict'],
+  revNew: ['pend', 'pending · needs a verdict on the new head'],
+  revPass: ['pass', 'pass · from the verdict on this head'],
   revFail: ['fail', 'fail · Verdict REMEDIATION REQUIRED'],
   fast: ['pass', 'pass · no human needed in the Fast lane'],
   humWait: ['pend', 'pending · waits for a human'],
@@ -31,22 +31,22 @@ const COMMITS = [['a41c9e2', 'test: goodbye on sign-out', 'fails on the old code
 // focus (column to light, when not the ticket's), add (tags, only ever added), ck (check patches), commit, set (other state), art, say.
 const signal = () => ({ t: 'Any time', who: [['world', 'A user']], label: 'Signal', col: 'Signals', add: ['signal:feedback'], art: 'signal',
   say: 'A user asks for a goodbye message when they sign out. The request lands on the board as a Signal labelled signal:feedback.' });
-const triage = (t) => ({ t, who: [['agent', 'triage-signal']], label: 'Triage', col: 'Backlog', add: ['feature', 'Default'], art: 'triage',
-  say: 'triage-signal reads the signal as data: it is real and wanted. It accepts it into Backlog as a feature with Priority Default.' });
-const shape = (t) => ({ t, who: [['agent', 'shape']], label: 'Shape', col: 'Ready', add: ['XS', 'Fast'], art: 'shape',
-  say: 'shape writes three acceptance criteria, each with the proof that will show it done, and sets Size XS and Lane Fast. The ticket is Ready.' });
-const build = (t) => ({ t, who: [['agent', 'implement-spec']], label: 'Build', col: 'In progress', commit: COMMITS, art: 'branch',
-  say: 'implement-spec claims the ticket and starts a change line named after it. It commits the failing test first, then the code.' });
-const draft = (t) => ({ t, who: [['agent', 'implement-spec']], label: 'Draft CR', col: 'In review', ck: allRun, set: { cr: 'draft' }, art: 'cr',
+const triage = (t) => ({ t, who: [['agent', 'plan/triage']], label: 'Triage', col: 'Backlog', add: ['feature', 'Default'], art: 'triage',
+  say: 'plan/triage reads the signal as data: it is real and wanted. It accepts it into Backlog as a feature with Priority Default.' });
+const shape = (t) => ({ t, who: [['agent', 'plan/shape']], label: 'Shape', col: 'Ready', add: ['XS', 'Fast'], art: 'shape',
+  say: 'plan/shape writes three acceptance criteria, each with the proof that will show it done, and sets Size XS and Lane Fast. The ticket is Ready.' });
+const build = (t) => ({ t, who: [['agent', 'build']], label: 'Build', col: 'In progress', commit: COMMITS, art: 'branch',
+  say: 'build claims the ticket and starts a change line named after it. It commits the failing test first, then the code.' });
+const draft = (t) => ({ t, who: [['agent', 'build']], label: 'Draft CR', col: 'In review', ck: allRun, set: { cr: 'draft' }, art: 'cr',
   say: 'It opens draft change request #3 and moves the ticket to In review. CI starts on the new head.' });
 const ci = (human = C.fast) => ({ t: 'CI', who: [['ci', 'CI gates']], label: 'CI', ck: green(human), art: 'cr',
-  say: 'Required runs the tests with no secrets: green. The new test fails on the old code, so it proves the change. The change closes one open ticket. review waits for a report.' });
-const review = (t) => ({ t, who: [['agent', 'review-pr']], label: 'Review', set: { verdict: 'PASS', finding: null }, art: 'review',
-  say: 'review-pr starts in a fresh context. It grades each criterion against the diff and the CI results, without running the code: Verdict PASS.' });
-const ready = (t) => ({ t, who: [['agent', 'review-pr']], label: 'Ready', set: { cr: 'ready' }, art: 'cr',
-  say: 'review-pr marks the change ready and asks the forge to merge it once all six checks are green.' });
+  say: 'Required runs the tests with no secrets: green. The new test fails on the old code, so it proves the change. The change closes one open ticket. review waits for a verdict.' });
+const review = (t) => ({ t, who: [['agent', 'review/review']], label: 'Review', set: { verdict: 'PASS', finding: null }, art: 'review',
+  say: 'review/review starts in a fresh context. It grades each criterion against the diff and the CI results, without running the code, and publishes Verdict PASS for this head with forge verdict.' });
+const ready = (t) => ({ t, who: [['agent', 'review/review']], label: 'Land', set: { cr: 'ready' }, art: 'cr',
+  say: 'review/review marks the change ready and calls forge land: it waits for the required checks, then turns on auto-merge.' });
 const merge = () => ({ t: 'CI', who: [['ci', 'CI gates']], label: 'Merge', ck: { review: C.revPass }, set: { cr: 'merged' }, art: 'cr',
-  say: 'With one identity nothing may approve its own change, so CI turns the report into the review status. All six checks are green: the change merges.' });
+  say: 'The review status turns green for this head, from the report. All six checks are green: the change merges.' });
 const done = () => ({ t: 'CI', who: [['ci', 'merged gate']], label: 'Done', col: 'Done', set: { shipped: 'Not shipped' }, art: 'ticket',
   say: 'The merged gate moves the ticket to Done and sets Shipped to Not shipped. Done is final.' });
 const staging = () => ({ t: 'Deploy', who: [['world', 'staging deploy'], ['ci', 'shipped gate']], label: 'Staging', set: { shipped: 'On staging' }, art: 'ticket',
@@ -60,51 +60,53 @@ const SCENARIOS = [
   ['happy', 'Happy path', [...upToCi(), review(c2), ready(c2), merge(), done(), staging(), prod()]],
   ['bug', 'Review finds a bug', [...upToCi(),
     { ...review(c2), set: { verdict: 'REMEDIATION REQUIRED', finding: 'Criterion 2 not met: with no name the message reads “Goodbye, undefined.”' }, ck: { review: C.revFail },
-      say: 'review-pr grades the criteria against the diff and CI: criterion 2 is not met. Verdict REMEDIATION REQUIRED, with one finding.' },
-    { t: c2, who: [['agent', 'review-pr']], label: 'Back', col: 'In progress', art: 'review',
-      say: 'review-pr sends the ticket back to In progress with the finding. The change request stays a draft; nothing merges.' },
-    { t: c2, who: [['agent', 'implement-spec']], label: 'Fix', col: 'In review', commit: [['c95e017', 'fix: no name, no comma', 'answers the finding']], art: 'branch',
-      say: 'implement-spec reads the finding, fixes it on the same branch and pushes. The ticket returns to In review.' },
+      say: 'review/review grades the criteria against the diff and CI: criterion 2 is not met. It publishes Verdict REMEDIATION REQUIRED, with one finding. The change request stays a draft; nothing merges.' },
+    { t: c3, who: [['agent', 'sdlc'], ['agent', 'build']], label: 'Rework', col: 'In progress', art: 'review',
+      say: 'The next cycle reads forge queue: change request #3 has action rework. build reads the finding and sends the ticket back to In progress.' },
+    { t: c3, who: [['agent', 'build']], label: 'Fix', col: 'In review', commit: [['c95e017', 'fix: no name, no comma', 'answers the finding']], art: 'branch',
+      say: 'build fixes the finding on the same branch, test first, and pushes. The ticket returns to In review.' },
     { ...ci(), ck: { ...green(C.fast), review: C.revNew }, label: 'CI again',
       say: 'CI runs again on the new head: Required, proofs-on-base and ticket-linkage are green again. The old verdict does not count for a new head.' },
-    { ...review(c3), set: { verdict: 'PASS', finding: null, cr: 'ready' }, say: 'review-pr grades the new head in a fresh context: every criterion is DONE, Verdict PASS. It marks the change ready.' },
+    { ...review(c4), set: { verdict: 'PASS', finding: null, cr: 'ready' }, say: 'The queue asks for a review of the new head. review/review grades it in a fresh context: every criterion is DONE, Verdict PASS. It marks the change ready and lands it.' },
     merge(), done()]],
   ['red', 'Red CI', [...upToCi(), review(c2), ready(c2),
     { t: 'CI', who: [['ci', 'CI gates']], label: 'Red', ck: { Required: C.red, review: C.revNew }, art: 'cr',
-      say: 'The trunk moved, so the change is synced and CI runs on the new head. The review status does not carry over to a new head. Required goes red: a test fails. A red required check blocks the merge.' },
-    { t: c3, who: [['agent', 'review-pr']], label: 'Back to draft', col: 'In progress', set: { cr: 'draft' }, art: 'cr',
-      say: 'review-pr moves the change request back to draft. The cause is in the code, so the ticket goes to In progress. A cause outside the code would become a new Signal instead.' },
-    { t: c3, who: [['agent', 'implement-spec']], label: 'Fix', col: 'In review', commit: [['e2b7f40', 'fix: goodbye after the trunk sync', 'makes Required green']], art: 'branch',
-      say: 'implement-spec fixes the test failure on the same branch and pushes. The ticket returns to In review.' },
-    { ...ci(), ck: { ...green(C.fast), review: C.revNew }, label: 'CI again', say: 'CI runs on the new head: every check is green again, and review needs a report on this head.' },
-    { ...review(c4), set: { verdict: 'PASS', finding: null, cr: 'ready' }, say: 'review-pr grades the new head in a fresh context: Verdict PASS. It marks the change ready again.' },
+      say: 'The trunk moved, so the queue says sync: the change is brought up to date and CI runs on the new head. The review status does not carry over to a new head. Required goes red: a test fails. A red required check blocks the merge.' },
+    { t: c3, who: [['agent', 'sdlc'], ['agent', 'build']], label: 'Rework', col: 'In progress', set: { cr: 'draft' }, art: 'cr',
+      say: 'forge queue says rework: a required check is red. build reads the failed run; the cause is in the change, so it posts a note naming it, returns the change request to draft and the ticket to In progress. A cause outside the change would become a new Signal instead.' },
+    { t: c3, who: [['agent', 'build']], label: 'Fix', col: 'In review', commit: [['e2b7f40', 'fix: goodbye after the trunk sync', 'makes Required green']], art: 'branch',
+      say: 'build fixes the test failure on the same branch and pushes. The ticket returns to In review.' },
+    { ...ci(), ck: { ...green(C.fast), review: C.revNew }, label: 'CI again', say: 'CI runs on the new head: every check is green again, and the queue asks for a verdict on this head.' },
+    { ...review(c4), set: { verdict: 'PASS', finding: null, cr: 'ready' }, say: 'review/review grades the new head in a fresh context: Verdict PASS. It marks the change ready again and lands it.' },
     merge(), done()]],
   ['hold', 'Needs a human', [signal(), triage(c1),
-    { t: c1, who: [['agent', 'shape'], ['agent', 'escalate-to-human']], label: 'Hold', set: { hold: true }, art: 'hold',
-      say: 'shape is not sure it may decide criterion 2: may the goodbye show the user’s name? escalate-to-human finds no source that settles it, adds needs-human and posts one comment. The status stays Backlog.' },
+    { t: c1, who: [['agent', 'plan/shape'], ['agent', 'escalate']], label: 'Hold', set: { hold: true }, art: 'hold',
+      say: 'plan/shape is not sure it may decide criterion 2: may the goodbye show the user’s name? escalate finds no source that settles it and holds the ticket: board hold adds needs-human and posts one ask. The status stays Backlog.' },
     { t: c2, who: [['agent', 'sdlc']], label: 'Skipped', skip: true, art: 'hold', cap: 'Cycle 2: the cycle reads the board and skips every ticket that carries needs-human.',
       say: 'The next cycle reads the board, sees needs-human and skips the ticket. Other work goes on.' },
     { t: 'Any time', who: [['you', 'You']], label: 'You reply', set: { reply: true }, art: 'hold',
       say: 'You reply in a comment: first name only. Your reply counts because you are in owners. You need no label rights.' },
     { t: c3, who: [['agent', 'sdlc']], label: 'Unhold', set: { hold: false }, art: 'hold',
-      say: 'The next cycle sees your trusted reply and removes needs-human. The hold is over.' },
-    { ...shape(c3), say: 'shape continues with your ruling in criterion 2 and sets Size XS and Lane Fast. The ticket is Ready; from here it runs as in the happy path.' }]],
+      say: 'The next cycle reads board holds: your trusted reply is there, so board release removes needs-human. The hold is over.' },
+    { ...shape(c3), say: 'plan/shape continues with your ruling in criterion 2 and sets Size XS and Lane Fast. The ticket is Ready; from here it runs as in the happy path.' }]],
   ['full', 'Full lane', [signal(), triage(c1),
     { ...shape(c1), add: ['XS', 'Full'], set: { lane: 'Full', spec: true },
-      say: 'Sign-out lives under auth/, a path listed in paths.lane_areas, so shape sets Lane Full and writes a spec next to the three criteria. Size XS.' },
+      say: 'Sign-out lives under auth/, a path listed in paths.lane_areas, so plan/shape sets Lane Full and writes a spec next to the three criteria. Size XS.' },
     build(c1), { ...draft(c1), set: { cr: 'draft', cls: 'product-full' } },
     { ...ci(C.humWait), say: 'Required, proofs-on-base and ticket-linkage pass. human-approval waits: a product-full change needs a person.' },
-    { ...review(c2), set: { verdict: 'PASS', finding: null, cr: 'ready' }, say: 'review-pr grades each criterion in a fresh context: Verdict PASS. It marks the change ready.' },
-    { t: 'CI', who: [['ci', 'CI gates']], label: 'Waits', ck: { review: C.revPass }, art: 'cr',
-      say: 'CI turns the report into the review status. Five checks are green; human-approval still waits, so nothing merges.' },
-    { t: 'Any time', who: [['you', 'A collaborator']], label: 'Approve', art: 'cr',
-      say: 'A collaborator approves the head (with one identity you cannot approve your own change; an admin merge is the fallback).' },
-    { t: 'CI', who: [['ci', 'CI gates']], label: 'Merge', ck: { 'human-approval': C.humPass }, set: { cr: 'merged' }, art: 'cr',
-      say: 'human-approval finds the collaborator’s approval on this head and passes. All six checks are green: the change merges.' },
+    { ...review(c2), set: { verdict: 'PASS', finding: null, cr: 'ready' }, ck: { review: C.revPass }, say: 'review/review grades each criterion in a fresh context: Verdict PASS. It marks the change ready. The review status turns green; five checks are green.' },
+    { t: c2, who: [['agent', 'review/review'], ['agent', 'escalate']], label: 'Ask', set: { hold: true }, art: 'cr',
+      say: 'forge land finds only human-approval missing and reports who must approve. escalate holds the ticket with one ask to that person. Nothing merges.' },
+    { t: 'Any time', who: [['you', 'A product owner']], label: 'Approve', art: 'cr',
+      say: 'A person who may approve approves the head of #3 and replies on the ticket.' },
+    { t: 'CI', who: [['ci', 'CI gates']], label: 'Green', ck: { 'human-approval': C.humPass }, art: 'cr',
+      say: 'human-approval finds the approval on this head and passes. All six checks are green.' },
+    { t: c3, who: [['agent', 'sdlc']], label: 'Merge', set: { hold: false, cr: 'merged' }, art: 'cr',
+      say: 'The next cycle releases the hold. forge queue says land; forge land sees every check green and the change merges.' },
     done()]],
   ['deploy', 'Deploy fails', [...upToCi(), review(c2), ready(c2), merge(), done(), staging(),
     { t: 'Deploy', who: [['world', 'production deploy'], ['ci', 'shipped gate']], label: 'Deploy fails', focus: 'Signals', set: { shipped: 'On staging', sig2: true }, art: 'signal2',
-      say: 'The production deploy fails. The shipped gate keeps Shipped at the last good environment, On staging, and opens Signal #4 with the evidence and needs-human. Ticket #2 stays Done: a later failure never reopens it. #4 waits on hold for you; after an owner replies, triage-signal turns it into a new ticket with a regression case.' }]],
+      say: 'The production deploy fails. The shipped gate keeps Shipped at the last good environment, On staging, and opens Signal #4 with the evidence and needs-human. Ticket #2 stays Done: a later failure never reopens it. #4 waits on hold for you; after an owner replies, plan/triage turns it into a new ticket with a regression case.' }]],
 ];
 
 function stateAt(steps, i) {
@@ -141,12 +143,12 @@ const head = (kind, title) => '<div class="jr-ah"><span class="jr-kind">' + kind
 const ART = {
   signal: (s) => head('Issue #2 · a Signal', 'Show a goodbye message')
     + comment('a user', 'When I sign out, the page just goes blank. Could it say goodbye?') + '<div class="jr-tags">' + tags(['signal:feedback']) + '</div>',
-  triage: () => head('Comment on #2', 'Triage decision') + comment('factory bot · triage-signal', '<b>Accepted:</b> real and wanted. Label <code>feature</code>, Priority <code>Default</code>.'),
-  shape: (s) => head('Comment on #2', 'Acceptance criteria') + comment('factory bot · shape', '<ol class="jr-crit">' + CRIT.map(([c, p]) =>
+  triage: () => head('Comment on #2', 'Triage decision') + comment('factory bot · plan/triage', '<b>Accepted:</b> real and wanted. Label <code>feature</code>, Priority <code>Default</code>.'),
+  shape: (s) => head('Comment on #2', 'Acceptance criteria') + comment('factory bot · plan/shape', '<ol class="jr-crit">' + CRIT.map(([c, p]) =>
     '<li><span>' + esc(c) + '</span><span class="tag jr-proof">proof: ' + p + '</span></li>').join('') + '</ol>')
     + '<div class="jr-kv"><span>Size <b>XS</b></span><span>Lane <b>' + s.lane + '</b></span>' + (s.spec ? '<span>Spec <b>written</b> · touches <code>auth/</code></span>' : '') + '</div>',
   hold: (s) => head('Comment on #2', 'Needs human')
-    + comment('factory bot · escalate-to-human', '<span class="tag hold">Needs human</span> Criterion 2 needs a product ruling: may the goodbye show the user’s first name on a shared screen? Reply here; every skill skips #2 until then.')
+    + comment('factory bot · escalate', '<span class="tag hold">Needs human</span> Criterion 2 needs a product ruling: may the goodbye show the user’s first name on a shared screen? Reply here; every skill skips #2 until then.')
     + (s.reply ? comment('you · owner', 'Yes, first name only.', true) : '<p class="muted jr-p">No reply yet. The ticket waits in Backlog.</p>')
     + (s.reply && !s.hold ? '<p class="muted jr-p">The cycle removed <code>needs-human</code>.</p>' : ''),
   branch: (s) => head('Change line', '<code>feature/2-show-goodbye-message</code>') + '<ol class="jr-commits">' + s.commits.map(([h, m, n]) =>
@@ -154,12 +156,12 @@ const ART = {
     + '<p class="muted jr-p">The proof comes first: the test is committed before the code that makes it pass.</p>',
   cr: (s) => head('Change request #3', 'Show a goodbye message') + '<div class="jr-kv"><span class="tag">' + s.cls + '</span><span class="jr-st ' + s.cr + '">' + s.cr + '</span><span class="muted">closes #2</span></div>'
     + '<ul class="jr-checks">' + CHECKS.map((c) => { const [st, txt] = s.ck[c] ?? ['na', 'not run']; return '<li><span class="dot ' + st + '"></span><code>' + c + '</code><small>' + esc(txt) + '</small></li>'; }).join('') + '</ul>',
-  review: (s) => head('Comment on CR #3', 'Review report') + comment('factory bot · review-pr', '<ul class="jr-rows">' + CRIT.map(([c], k) => {
+  review: (s) => head('Comment on CR #3', 'Review report') + comment('factory bot · review/review', '<ul class="jr-rows">' + CRIT.map(([c], k) => {
     const bad = s.finding && k === 1; return '<li><span>' + (k + 1) + '. ' + esc(c) + '</span><b class="' + (bad ? 'jr-bad' : 'jr-ok') + '">' + (bad ? 'NOT MET' : 'DONE') + '</b></li>'; }).join('') + '</ul>'
     + '<p class="jr-verdict ' + (s.finding ? 'jr-bad' : 'jr-ok') + '">Verdict: ' + s.verdict + '</p>' + (s.finding ? '<p class="jr-find">' + esc(s.finding) + '</p>' : '')),
   ticket: (s) => head('Ticket #2', 'Fields') + '<dl class="jr-fields"><dt>Status</dt><dd>' + s.col + '</dd><dt>Lane</dt><dd>' + s.lane + '</dd><dt>Change request</dt><dd>#3 · ' + s.cr + '</dd><dt>Shipped</dt><dd><b>' + esc(s.shipped ?? '—') + '</b></dd></dl>',
   signal2: (s) => head('Issue #4 · a new Signal', 'Production deploy failed') + comment('factory bot · shipped gate', 'The production deploy of the merge of #3 failed its health check on <code>/signout</code> (HTTP 500). Ticket #2 is back at its last good environment: On staging. Evidence: the deploy run log.')
-    + '<div class="jr-tags">' + tags(['signal:deploy', 'env:production', 'needs-human']) + '</div><p class="muted jr-p">Ticket #2 stays Done. It waits on hold for you; after an owner replies, triage-signal turns #4 into a new ticket with a regression case.</p>',
+    + '<div class="jr-tags">' + tags(['signal:deploy', 'env:production', 'needs-human']) + '</div><p class="muted jr-p">Ticket #2 stays Done. It waits on hold for you; after an owner replies, plan/triage turns #4 into a new ticket with a regression case.</p>',
 };
 
 addStyle('journey', `
