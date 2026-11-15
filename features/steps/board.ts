@@ -47,6 +47,7 @@ const at = (w: World, path: string): string | undefined => {
   return v === undefined ? undefined : Array.isArray(v) ? v.join(', ') : String(v);
 };
 Then('the result {string} is {string}', (w, path: string, value: string) => assert.equal(at(w, path), value));
+Then('the result {string} contains {string}', (w, path: string, text: string) => assert.ok(String(at(w, path)).includes(text), String(at(w, path))));
 Then('the result has no {string}', (w, path: string) => assert.equal(at(w, path), undefined));
 Then('the {string} of the result entries are {string}', (w, key: string, values: string) =>
   assert.equal(w.last.json().map((e: Record<string, unknown>) => e[key]).join(', '), values));

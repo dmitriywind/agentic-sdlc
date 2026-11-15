@@ -8,18 +8,18 @@ Feature: The git vcs port
 
     Background:
       Given a trunk with one commit, pushed to an origin
-      And the change line "t-1-x" is started
+      And the change line "claude/feature/t-1-x" is started
 
     Scenario: Changed lists the files the line changed from the trunk
-      When the line "t-1-x" commits the file "b.txt" containing "2"
-      Then the files the line "t-1-x" changed are "b.txt"
-      And the base of the line "t-1-x" is the trunk tip
+      When the line "claude/feature/t-1-x" commits the file "b.txt" containing "2"
+      Then the files the line "claude/feature/t-1-x" changed are "b.txt"
+      And the base of the line "claude/feature/t-1-x" is the trunk tip
 
     Scenario: Cut puts a release branch on the origin at the given commit
-      Given the line "t-1-x" commits the file "b.txt" containing "2"
-      When the line "t-1-x" cuts the release "2026.1" at its head
+      Given the line "claude/feature/t-1-x" commits the file "b.txt" containing "2"
+      When the line "claude/feature/t-1-x" cuts the release "2026.1" at its head
       Then the cut ref is "refs/heads/release/2026.1"
-      And the origin has "release/2026.1" at the head of the line "t-1-x"
+      And the origin has "release/2026.1" at the head of the line "claude/feature/t-1-x"
 
   Rule: Start finds the work that already exists
 
@@ -27,19 +27,20 @@ Feature: The git vcs port
       Given a trunk with one commit, pushed to an origin
 
     Scenario: A line deleted locally reopens from its branch on the origin
-      Given the change line "t-2-x" is started
-      And the line "t-2-x" commits the file "b.txt" containing "2"
-      And the line "t-2-x" is pushed
-      And the line "t-2-x" is deleted locally, worktree and branch
-      When the change line "t-2-x" is started again
-      Then the line "t-2-x" is at the commit that was pushed
+      Given the change line "claude/feature/t-2-x" is started
+      And the line "claude/feature/t-2-x" commits the file "b.txt" containing "2"
+      And the line "claude/feature/t-2-x" is pushed
+      And the line "claude/feature/t-2-x" is deleted locally, worktree and branch
+      When the change line "claude/feature/t-2-x" is started again
+      Then the line "claude/feature/t-2-x" is at the commit that was pushed
+      And the push reported the ref "claude/feature/t-2-x" at its head
 
     Scenario: A reused workdir fast-forwards to the work on the origin
-      Given the change line "t-2-x" is started
-      And the line "t-2-x" is pushed
-      And another clone pushes a commit to "t-2-x"
-      When the change line "t-2-x" is started again
-      Then the line "t-2-x" is at the commit the other clone pushed
+      Given the change line "claude/feature/t-2-x" is started
+      And the line "claude/feature/t-2-x" is pushed
+      And another clone pushes a commit to "claude/feature/t-2-x"
+      When the change line "claude/feature/t-2-x" is started again
+      Then the line "claude/feature/t-2-x" is at the commit the other clone pushed
 
   Rule: A snapshot is a detached tree that holds no later commit
 
@@ -63,3 +64,4 @@ Feature: The git vcs port
       Examples:
         | verb           | first          | second |
         | checkout-tests | HEAD           | -f     |
+        | start          | 7-x            |        |

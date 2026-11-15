@@ -12,7 +12,7 @@ import { exec } from '../../src/exec.ts';
 import { createVcs } from '../../src/vcs/index.ts';
 import type { Vcs } from '../../src/ports.ts';
 
-const binding = { vcs: { adapter: 'git', options: {}, trunk: 'main', release_prefix: 'release/', tag_prefix: 'v' } } as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+const binding = { vcs: { adapter: 'git', options: {}, trunk: 'main', release_prefix: 'release/', tag_prefix: 'v', change_pattern: 'claude/feature/<ticket>-<name>', factory_change_pattern: 'claude/factory/<name>' } } as any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const portAt = (root: string): Vcs => createVcs({ root, binding, options: {}, env: process.env, exec, http: async () => ({}) });
 const git = (cwd: string, ...a: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
 const put = (dir: string, name: string, text: string) => { mkdirSync(dirname(join(dir, name)), { recursive: true }); writeFileSync(join(dir, name), text); };
@@ -81,7 +81,7 @@ Given('the line {string} commits the file {string} containing {string}', (w, nam
 
 Given('the line {string} is pushed', async (w, name: string) => {
   const l = line(w, name);
-  await l.vcs.push();
+  w.state.reported = await l.vcs.push();
   w.state.pushed[name] = git(l.workdir, 'rev-parse', 'HEAD');
 });
 
@@ -110,6 +110,7 @@ const attempt = async (w: World, f: () => Promise<unknown>) => {
 When('I try the vcs verb {string} with {string} and {string}', (w, verb: string, a: string, b: string) => attempt(w, async () => {
   const v = port(w);
   if (verb === 'changed') await v.changed(a);
+  else if (verb === 'start') await v.start(a);
   else if (verb === 'tag') await v.tag(a, b);
   else if (verb === 'cut') await v.cut(a, b);
   else if (verb === 'snapshot') await v.snapshot!(a);
@@ -142,3 +143,4 @@ When('the line {string} cuts the release {string} at its head', async (w, name: 
 Then('the cut ref is {string}', (w, ref: string) => assert.deepEqual(w.state.cut, { ref }));
 Then('the origin has {string} at the head of the line {string}', (w, ref: string, name: string) =>
   assert.equal(git(origin(w), 'rev-parse', ref), git(line(w, name).workdir, 'rev-parse', 'HEAD')));
+Then('the push reported the ref {string} at its head', (w, ref: string) => assert.deepEqual(w.state.reported, { ref, sha: w.state.pushed[ref] }));

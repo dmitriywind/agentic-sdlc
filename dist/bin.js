@@ -7718,7 +7718,7 @@ function ownersFor(o, side) {
   const list = (w) => (w === void 0 || w === null ? [] : Array.isArray(w) ? w : [w]).map((x) => typeof x === "object" && x ? x[side] : x).filter((x) => !!x);
   return { product: list(o?.product), factory: list(o?.factory), operator: list(o?.operator), security: list(o?.security), compliance: list(o?.compliance), bots: list(o?.bots) };
 }
-var MovedError, parseCloses, LIMIT_KEYS;
+var MovedError, parseCloses, LIMIT_KEYS, esc, patternRe, isChangeLine;
 var init_ports = __esm({
   "src/ports.ts"() {
     "use strict";
@@ -7729,6 +7729,9 @@ var init_ports = __esm({
     };
     parseCloses = (body) => [...new Set([...body.matchAll(/^[ \t]*Closes[ \t]+#?([A-Za-z0-9_-]+)[ \t]*$/gim)].map((m) => m[1]))];
     LIMIT_KEYS = ["max_turns", "max_tokens", "max_minutes"];
+    esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    patternRe = (p) => new RegExp("^" + p.split(/(<ticket>|<name>)/).map((x) => x === "<ticket>" ? "[A-Za-z0-9_-]+" : x === "<name>" ? "[a-z0-9]+(?:-[a-z0-9]+)*" : esc(x)).join("") + "$");
+    isChangeLine = (b, n) => patternRe(b.vcs.change_pattern).test(n) || patternRe(b.vcs.factory_change_pattern).test(n);
   }
 });
 
@@ -10192,6 +10195,7 @@ function git(ctx) {
   return {
     async start(name) {
       safeName(name);
+      if (!isChangeLine(ctx.binding, name)) throw new Error(`vcs start: name not allowed: ${name} fits neither vcs.change_pattern (${ctx.binding.vcs.change_pattern}) nor vcs.factory_change_pattern (${ctx.binding.vcs.factory_change_pattern}): pass the full name`);
       g("fetch", "origin", trunk);
       const workdir = join5(ctx.root, ".agents", "work", name);
       const fetchBranch = () => {
@@ -10247,6 +10251,7 @@ function git(ctx) {
       const ref = g("rev-parse", "--abbrev-ref", "HEAD");
       if (ref === trunk || ref === "HEAD") throw new Error(`vcs push: refusing to push ${ref === "HEAD" ? "a detached HEAD" : `the trunk '${trunk}'`}: start a change line`);
       g("push", "-u", "origin", ref);
+      return { ref, sha: g("rev-parse", "HEAD") };
     },
     async cut(rev, release) {
       plain("revision", rev);
@@ -10311,6 +10316,7 @@ function git(ctx) {
 var init_git = __esm({
   "src/vcs/git.ts"() {
     "use strict";
+    init_ports();
   }
 });
 
@@ -10364,8 +10370,7 @@ var init_vcs = __esm({
         case "base":
           return v.base();
         case "push":
-          await v.push();
-          return {};
+          return v.push();
         case "cut":
           return v.cut(need3(0), need3(1));
         case "tag":
@@ -11093,7 +11098,7 @@ agentic-sdlc: run step ${skill} (${ex.kind})${limitsText(limits)}; close with ${
 agentic-sdlc: ${skill} did not start`);
         }
         if (ex.kind === "harness") {
-          return await done("harness", null, { instruction: `load ${file} in a subagent at tier ${judge?.tier ?? skillTier}${hasLimits ? `; ${limitsText(limits).trim()}` : ""}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ""}${run ? `; its run id is ${run}` : ""}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
+          return await done("harness", null, { instruction: `load ${file} in a subagent at tier ${judge?.tier ?? skillTier}${hasLimits ? `; ${limitsText(limits).trim()}` : ""}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ""}; its dispatch key is ${key}${run ? `; its run id is ${run}` : ""}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
         }
         if (ex.kind === "command") {
           const dir = mkdtempSync3(join7(tmpdir3(), "agentic-sdlc-"));
@@ -11267,7 +11272,7 @@ async function classify(d, cr, diff) {
 }
 function branchNames(b, names) {
   const v = b.vcs;
-  const ok = (n) => n === v.trunk || !!v.release_prefix && n.startsWith(v.release_prefix) || n.startsWith("dependabot/") || n.startsWith("renovate/") || patternRe(v.change_pattern).test(n) || patternRe(v.factory_change_pattern).test(n);
+  const ok = (n) => n === v.trunk || !!v.release_prefix && n.startsWith(v.release_prefix) || n.startsWith("dependabot/") || n.startsWith("renovate/") || isChangeLine(b, n);
   return names.filter((n) => !ok(n));
 }
 function proofRunner(run) {
@@ -11734,7 +11739,7 @@ function depsOf(base) {
   };
   return d;
 }
-var import_yaml4, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tiersOf, withoutTier, tiersValid, nameHas, esc, patternRe, readDiff, DEPENDENCY_LINES, DEPENDENCY_BOTS, TRAILER_LINE, TRAILER_VALUE, trailerValue, FORGE_WEB, redact, cleanUrl, mdFiles, cli6;
+var import_yaml4, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tiersOf, withoutTier, tiersValid, nameHas, readDiff, DEPENDENCY_LINES, DEPENDENCY_BOTS, TRAILER_LINE, TRAILER_VALUE, trailerValue, FORGE_WEB, redact, cleanUrl, mdFiles, cli6;
 var init_gates = __esm({
   "src/gates.ts"() {
     "use strict";
@@ -11768,8 +11773,6 @@ var init_gates = __esm({
       return [t.tier, ...Object.values(t.steps)].every((x) => x === void 0 || TIERS3.includes(x)) && (t.tier !== void 0 || Object.keys(t.steps).length > 0);
     };
     nameHas = (s, id) => new RegExp(`(^|[^A-Za-z0-9])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^A-Za-z0-9])`, "i").test(s);
-    esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    patternRe = (p) => new RegExp("^" + p.split(/(<ticket>|<name>)/).map((x) => x === "<ticket>" ? "[A-Za-z0-9_-]+" : x === "<name>" ? "[a-z0-9]+(?:-[a-z0-9]+)*" : esc(x)).join("") + "$");
     readDiff = (d, n) => d.forge.diff(n).catch(() => void 0);
     DEPENDENCY_LINES = /^(dependabot|renovate)\//;
     DEPENDENCY_BOTS = /^((app\/)?(dependabot|renovate)(\[bot\])?|renovate-bot)$/i;

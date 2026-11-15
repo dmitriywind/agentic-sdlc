@@ -129,7 +129,7 @@ export interface Vcs {
   head(): Promise<{ ref: string; sha: string }>;
   changed(since?: string): Promise<string[]>;
   base(): Promise<{ sha: string }>;
-  push(): Promise<void>;
+  push(): Promise<{ ref: string; sha: string }>;
   cut(rev: string, release: string): Promise<{ ref: string }>;
   tag(name: string, rev: string): Promise<void>;
   tags(prefix?: string): Promise<{ name: string; sha: string }[]>;
@@ -322,3 +322,10 @@ export interface Binding {
 
 /** Every CLI module (board/, forge/, vcs/ index, gates, ledger, bench, install) exports `cli` of this type. */
 export type PortCli = (argv: string[], ctx: Omit<AdapterContext, 'options'>) => Promise<number>;
+
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const patternRe = (p: string) =>
+  new RegExp('^' + p.split(/(<ticket>|<name>)/).map((x) => x === '<ticket>' ? '[A-Za-z0-9_-]+' : x === '<name>' ? '[a-z0-9]+(?:-[a-z0-9]+)*' : esc(x)).join('') + '$');
+
+/** A name that fits `vcs.change_pattern` or `vcs.factory_change_pattern`. */
+export const isChangeLine = (b: Binding, n: string): boolean => patternRe(b.vcs.change_pattern).test(n) || patternRe(b.vcs.factory_change_pattern).test(n);
