@@ -84,7 +84,7 @@ In order:
 1. **Read state.** First `dispatch sdlc --ticket <heartbeat.ticket>`: when it prints `{ skipped: true }`
    another cycle is running; stop and write nothing. List the board once (`board list`). Read open CRs (`forge list --checks`), the last
    `cycle.failure_limit` heartbeats (`board comments <heartbeat.ticket> --last <n> --marker
-   "<!-- heartbeat -->" --trusted`) and `ledger summary`. When `product.slo` is set, also
+   "<!-- heartbeat -->" --trusted`) and `ledger summary`. When `product.slo` is set (unset: no error budget), also
    `ledger measures`: while it prints `errorBudget.exhausted: true`, the cycle claims no new `feature`
    ticket (Ready to In progress in step 6) and works only bugs, Signals and the tickets and reviews
    already in flight, and the heartbeat records `budget: exhausted`. Done when the budget state is
@@ -141,7 +141,7 @@ Rules for every step:
 - A ticket the `ledger summary` `tickets` list marks `overBudget: true` (more tokens than
   `cycle.max_tokens_per_ticket`; unset: no limit) gets no further dispatch: call `escalate-to-human`
   (Money) with its tokens and runs.
-- A run that ends on its cap (`executors.<stage>.max_turns`, `max_tokens` or `max_minutes`) records
+- A run that ends on its cap (`executors.<stage>.max_turns`, `max_tokens` or `max_minutes`; a cap the binding leaves unset does not exist) records
   outcome `capped` with the cap in `error`; its ticket follows the same path as after a `timeout`
   (a failed step: the rule below).
 - After `cycle.time_budget_minutes`, start nothing new, judge and learn included: wait for the running

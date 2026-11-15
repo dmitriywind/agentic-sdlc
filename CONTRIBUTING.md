@@ -40,7 +40,9 @@ home; elsewhere a pointer.
 The package ships from Git only, never npm. `dist/` is committed: run `npm run build` and commit
 `dist/` with every `src/` change. The build also regenerates `docs/guide.html` from `docs/guide/*.md` and
 `scripts/guide/`: commit it too. CI fails when either is stale. A release bumps `package.json` and
-`.claude-plugin/plugin.json`, then tags `v<version>` on `master`.
+`.claude-plugin/plugin.json`, runs `npm run hashes` (it appends the hash of every installable file to
+`templates/known-hashes.json`, so `init --upgrade` can tell an old package file from a local edit; it reads the
+full git history, so it is not part of the build), commits the result, then tags `v<version>` on `master`.
 
 ## Changes
 

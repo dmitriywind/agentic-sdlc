@@ -317,3 +317,23 @@ test('the GitHub boards retry a milestone write on a rate limit but not on a 5xx
     await assert.rejects(board.assign('7', 'x'), /502/);
   } finally { setSleep(prev); }
 });
+
+test('github-issues: an issue at Done carries its closed time as statusChangedAt; an open or other-status one carries none', async () => {
+  const { board } = issuesRepo([
+    iss(1, ['status:Done'], { state: 'closed', closed_at: '2026-02-01T10:00:00Z' }),
+    iss(2, ['status:Done']),
+    iss(3, ['status:Cancelled'], { state: 'closed', closed_at: '2026-02-02T10:00:00Z' }),
+    iss(4, ['status:Ready']),
+  ]);
+  const got = Object.fromEntries((await board.list()).map((i) => [i.id, i.statusChangedAt]));
+  assert.deepEqual(got, { 1: '2026-02-01T10:00:00Z', 2: undefined, 3: undefined, 4: undefined });
+});
+
+test('github-issues: comments and comment work on an issue with no status label, which the board does not list', async () => {
+  const comments = [{ id: 1, user: { login: 'bot' }, created_at: '1', body: '<!-- heartbeat -->\nx', html_url: '' }];
+  const { board, calls } = issuesRepo([iss(9, [], { comments }), iss(10, ['status:Ready'])]);
+  assert.deepEqual((await board.list()).map((i) => i.id), ['10']);
+  assert.equal((await board.comments('9', { marker: '<!-- heartbeat -->' })).length, 1);
+  assert.equal((await board.comment('9', 'hb')).id, '5');
+  onlyRepoRest(calls);
+});

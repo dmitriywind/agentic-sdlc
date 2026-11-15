@@ -112,7 +112,7 @@ Every verb takes only the flags it lists: an unknown flag, a value flag with no 
 | `close <id> --reason completed\|not_planned` | Close (and move to Done or Cancelled) | `Item` |
 | `child <parent> <child>` | Link a sub-issue | `Item` |
 
-`Item = { id, title, url, status, kind?, labels[], fields: Record<logicalField,string>, milestone?, parent?, children[], assignees[], createdAt, updatedAt, statusChangedAt? }`.
+`Item = { id, title, url, status, kind?, labels[], fields: Record<logicalField,string>, milestone?, parent?, children[], assignees[], createdAt, updatedAt, statusChangedAt? }`. `statusChangedAt` is when the ticket entered its status; `ledger measures` reads it for tickets at Done. `github-issues` sets it to the issue's `closed_at` for a closed issue at Done and leaves it unset otherwise; `github` (Projects) never sets it.
 Logical fields: `size`, `priority`, `lane`, `shipped`, `release_version`. The binding maps each to
 the tracker's field name (Jira custom field, Linear label group or custom field, GitHub Projects
 field, local JSON key).
@@ -254,7 +254,7 @@ Keys this contract relies on by name:
 - `cycle.max_tokens_per_ticket` (optional): the tokens a ticket's runs may report in total; `ledger
   summary` marks a ticket over it `overBudget: true`, and the cycle dispatches it no further.
 - `cycle.max_rework`: the most `REMEDIATION REQUIRED` reports `review-pr` may post on one CR before it
-  escalates instead of sending the ticket back (the template sets 3).
+  escalates instead of sending the ticket back (default 3 when the binding does not set it; the template sets 3).
 - `paths.factory`: a change only there is a **factory change**: no ticket, its own change pattern
   (`vcs.factory_change_pattern`), classified by the `approval` gate and checked by
   `skill-regression`.
@@ -440,7 +440,10 @@ scorers, workflows, rulesets as patched, the pre-push hook, runner files, genera
 `.agents/install.lock.json`; it reads the older `.agents/skills.lock.json` once. A re-run (`init --upgrade`
 is the same run) updates a file still at its recorded hash, keeps an edited one and names the package file
 with the new version, writes files new in the package, and reports as `stale` any recorded file the package no
-longer ships, deleting none. A file with no lock entry counts as edited unless it equals the package's.
+longer ships, deleting none. A file with no lock entry, or a lock entry that does not match, counts as edited unless it equals the package's or its
+hash is one a released version had (`templates/known-hashes.json`, appended by `npm run hashes` before each tag;
+the delivery and verify workflows are compared with their binding values normalised, and `init` writes those values
+from `vcs.trunk`, `vcs.release_prefix`, `product.delivery`, `commands.install` and `commands.verify`).
 `--force` overwrites locally edited template files only. No flag rewrites `.agents/binding.yml` (to
 regenerate it, delete it) or adds a second heartbeat ticket; `init` and `validate` print an `info:` line
 listing the template's top- and second-level binding keys that the binding does not set.

@@ -4,6 +4,17 @@ import type { AdapterContext, CR } from '../ports.ts';
 
 export class UsageError extends Error {}
 
+/** One line for a node:util parseArgs failure, in the words of the other verbs' usage errors. */
+export function flagError(e: Error): string {
+  const m = e.message;
+  const missing = /^Option '--([\w-]+)[^']*' argument missing/.exec(m);
+  if (missing) return `--${missing[1]} needs a value`;
+  const extra = /^Option '--([\w-]+)' does not take an argument/.exec(m);
+  if (extra) return `--${extra[1]} takes no value`;
+  const unknown = /^Unknown option '(--[\w-]+)'/.exec(m);
+  return unknown ? `unknown flag ${unknown[1]}` : m.split('. ')[0];
+}
+
 /** The flags a verb accepts: `value` flags take an argument (repeatable), `bool` flags take none, `num` lists the value flags that take a whole number. */
 export type VerbSpec = { value?: string[]; bool?: string[]; num?: string[] };
 export type Flags = ReturnType<typeof parseStrict>;

@@ -284,3 +284,17 @@ test('measures: DORA from the board and forge, null with a why, and the error bu
   assert.match(spent.errorBudget?.why ?? '', /no change shipped/);
   assert.equal((await measures({ board: { list: async () => [] } as any, binding, now })).errorBudget?.exhausted, false);
 });
+
+test('cli: a flag without a value and an unknown export format are one-line usage errors with exit 2', async () => {
+  const errs: string[] = [];
+  const err = console.error;
+  console.error = (s: string) => errs.push(String(s));
+  try {
+    const ctx = { root: '.', binding: {} as any, env: {}, exec: () => '', http: async () => ({}) };
+    assert.equal(await cli(['runs', '--since'], ctx), 2);
+    assert.equal(await cli(['export', '--format', 'xml'], ctx), 2);
+    assert.equal(await cli(['export'], ctx), 2);
+    assert.equal(await cli(['runs', '--bogus', 'x'], ctx), 2);
+    assert.deepEqual(errs, ['--since needs a value', '--format must be otlp or cdevents', '--format must be otlp or cdevents', 'unknown flag --bogus']);
+  } finally { console.error = err; }
+});

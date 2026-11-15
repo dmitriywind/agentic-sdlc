@@ -42,6 +42,8 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
     return {
       id: String(i.number), title: i.title, url: i.html_url ?? '', status, labels, fields, milestone: i.milestone?.title ?? undefined,
       children: [], assignees: (i.assignees ?? []).map((a: any) => a.login), createdAt: i.created_at ?? '', updatedAt: i.updated_at ?? '', body: i.body ?? '',
+      // The list carries no status change time: a closed issue at Done reached Done when it closed.
+      ...(status === 'Done' && i.closed_at ? { statusChangedAt: i.closed_at as string } : {}),
     };
   };
   let known: Set<string> | undefined;

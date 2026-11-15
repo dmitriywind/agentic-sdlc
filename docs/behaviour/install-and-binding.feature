@@ -42,11 +42,13 @@ Feature: Install and validate the binding
     When the adopter runs "agentic-sdlc init --upgrade"
     Then a workflow still at its recorded hash is updated
     And a workflow the adopter edited is kept and the line names the package file with the new version
+    And init does not report AGENTS.md as updated when its pointer block is already current
     And "--force" overwrites the edited workflow
     And no flag rewrites .agents/binding.yml: to regenerate it the adopter deletes the file
     And the last lines say how many files are new, updated, kept and stale
     And when a file was new or updated or the CLI pin moved, the last line says what to run next
     And when nothing changed, the last line is "install: up to date"
+    And when nothing changed and files were kept, the last line is "install: nothing to update; N kept (differ from every released version)"
 
   # Source: src/install.ts, "init" (binding)
   # Proof: test/install.test.ts "init --force on a local board creates no second heartbeat ticket"
@@ -63,6 +65,51 @@ Feature: Install and validate the binding
     When the adopter runs "agentic-sdlc init"
     Then the identical file is recorded in the lock
     And the differing file is kept and not recorded
+
+  # Source: src/pristine.ts, "knownHashes"
+  # Proof: test/install.test.ts "init upgrades a pre-lock file that equals a released version and keeps one that differs from every version"
+  Scenario: A pre-lock file that equals a released version is updated
+    Given an install with no lock entry for two files
+    And one file's hash is in templates/known-hashes.json and the other's is not
+    When the adopter runs "agentic-sdlc init --upgrade"
+    Then the file with a known hash is updated and recorded in the lock
+    And the other is kept with the line "differs from every released version; --force overwrites, see <package path>"
+
+  # Source: src/pristine.ts, "knownHashes"
+  # Proof: test/install.test.ts "init upgrades a file whose lock entry is stale when its content is a released version"
+  Scenario: A stale lock entry does not hold back a released version
+    Given the lock records a hash the file no longer has
+    And the file's hash is in templates/known-hashes.json
+    When the adopter runs "agentic-sdlc init --upgrade"
+    Then the file is updated and the lock records the new hash
+
+  # Source: scripts/known-hashes.mjs
+  # Proof: test/install.test.ts "templates/known-hashes.json lists every installable file the package ships (run npm run hashes)"
+  Scenario: The package lists the hash of every installable file it ships
+    Given the skills, scorers, gate templates and runner files in the package
+    Then templates/known-hashes.json holds the hash of each, and of each earlier release, from "npm run hashes"
+
+  # Source: src/pristine.ts, "bindWorkflow"
+  # Proof: test/install.test.ts "init writes the delivery workflow values from the binding and upgrades a release that differs only in them"
+  Scenario: Init writes the delivery workflow's values from the binding
+    Given the binding names the trunk, the release prefix and the delivery
+    When the adopter runs "agentic-sdlc init --upgrade"
+    Then the delivery workflow's TRUNK, RELEASE_PREFIX, DELIVERY and push branch hold those values
+    And a delivery workflow that differs from a released version only in those values is updated
+
+  # Source: src/pristine.ts, "bindWorkflow"
+  # Proof: test/install.test.ts "init writes the verify workflow commands from the binding"
+  Scenario: Init writes the verify workflow's commands from the binding
+    Given the binding sets commands.install and commands.verify
+    When the adopter runs "agentic-sdlc init"
+    Then the verify workflow runs those commands
+
+  # Source: src/install.ts, "init" (hook)
+  # Proof: test/install.test.ts "init leaves the mode of a kept pre-push hook alone"
+  Scenario: A kept pre-push hook keeps its mode
+    Given the adopter edited .agents/hooks/pre-push
+    When the adopter runs "agentic-sdlc init"
+    Then the hook is kept and its mode is unchanged
 
   # Source: src/install.ts, "Installer"
   # Proof: test/install.test.ts "init honours the skills lock of an install from before the single lock"
@@ -215,6 +262,22 @@ Feature: Install and validate the binding
     When the adopter runs "agentic-sdlc doctor"
     Then doctor prints a "fail delivery workflow" line
     And the command exits with code 1
+
+  # Source: src/board/github-issues.ts, "toItem"
+  # Proof: test/board-adapters.test.ts "github-issues: an issue at Done carries its closed time as statusChangedAt; an open or other-status one carries none"
+  Scenario: A github-issues ticket at Done reached Done when its issue closed
+    Given a github-issues board with a closed issue at Done, an open issue at Done and a closed issue at Cancelled
+    When the board lists the tickets
+    Then only the closed issue at Done has a statusChangedAt, its closed time
+    And "ledger measures" can compute a lead time from it
+
+  # Source: src/board/github-issues.ts, "comments"
+  # Proof: test/board-adapters.test.ts "github-issues: comments and comment work on an issue with no status label, which the board does not list"
+  Scenario: The heartbeat ticket on github-issues is an issue with no status label
+    Given an issue with no status label
+    When the board lists the tickets
+    Then the issue is not listed
+    And "board comments" and "board comment" read and write its comments
 
   # Source: src/install.ts, "unpinnedActions"
   # Proof: test/install.test.ts "doctor: an installed workflow action not pinned to a commit SHA is a warning"

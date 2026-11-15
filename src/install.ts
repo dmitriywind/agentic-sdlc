@@ -1,6 +1,5 @@
 // init / validate / doctor.
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +10,7 @@ import { createForge } from './forge/index.ts';
 import { createVcs } from './vcs/index.ts';
 import { createLocalBoard } from './board/local.ts';
 import type { AdapterContext, PortCli } from './ports.ts';
+import { DEFAULTS, bindWorkflow, knownHashes, oneIdentityRuleset, releasedHash, sha, type Bound } from './pristine.ts';
 
 const START = '<!-- agentic-sdlc:start -->';
 const END = '<!-- agentic-sdlc:end -->';
@@ -63,41 +63,43 @@ const readJson = (p: string) => parseJson(readFileSync(p, 'utf8'), basename(p));
 const filesUnder = (dir: string): string[] =>
   readdirSync(dir).flatMap((n) => statSync(join(dir, n)).isDirectory() ? filesUnder(join(dir, n)).map((f) => join(n, f)) : [n]);
 
-const sha = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
 const posix = (p: string) => p.replaceAll('\\', '/');
 
 /**
  * Every file init installs from the package, tracked in one lock: the hash of each file as written.
  * A file still at its recorded hash follows the package; one edited since is kept unless --force.
- * A file that exists with no lock entry (an install from before the lock) counts as edited unless it equals the package's.
+ * A file with no matching lock entry (an install from before the lock, or a stale entry) is unedited when it equals
+ * the package's, or when its hash is one a released version had (templates/known-hashes.json).
  */
 class Installer {
   lock: Record<string, string> = {};
   offered = new Set<string>();
   counts = { wrote: 0, updated: 0, kept: 0, stale: 0 };
-  root: string; pkg: string; force: boolean; log: string[];
+  root: string; pkg: string; force: boolean; log: string[]; known: Set<string>;
+  /** The binding's values for the `# set:` lines of the stock workflows. */
+  bound: Bound = DEFAULTS;
   constructor(root: string, pkg: string, force: boolean, log: string[]) {
-    this.root = root; this.pkg = pkg; this.force = force; this.log = log;
+    this.root = root; this.pkg = pkg; this.force = force; this.log = log; this.known = knownHashes(pkg);
     for (const f of [LEGACY_LOCK, INSTALL_LOCK]) {
       const file = join(root, f);
       if (existsSync(file)) Object.assign(this.lock, readJson(file));
     }
   }
-  /** Install `data` at `rel`. `src` is the package file it comes from (named when a local edit is kept). `quiet` hides wrote/updated lines. */
-  put(rel: string, data: string | Buffer, src?: string, quiet = false) {
+  /** Install `data` at `rel`. `src` is the package file it comes from (named when a differing file is kept). `quiet` hides wrote/updated lines. Returns false when a differing file is kept. */
+  put(rel: string, data: string | Buffer, src?: string, quiet = false): boolean {
     rel = posix(rel);
     this.offered.add(rel);
     const to = join(this.root, rel), want = sha(data);
     let how = 'wrote';
     if (existsSync(to)) {
-      const have = sha(readFileSync(to));
-      if (have === want) { this.lock[rel] = want; return; }
-      if (have === this.lock[rel]) how = 'updated';
+      const bytes = readFileSync(to), have = sha(bytes);
+      if (have === want) { this.lock[rel] = want; return true; }
+      if (have === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes))) how = 'updated';
       else if (this.force) how = 'overwrote';
       else {
         this.counts.kept++;
-        this.log.push(`kept ${rel} (local edits; ${src ? `see ${join(this.pkg, src)} for the new version` : '--force regenerates it'})`);
-        return;
+        this.log.push(`kept ${rel} (differs from every released version; ${src ? `--force overwrites, see ${join(this.pkg, src)}` : '--force regenerates it'})`);
+        return false;
       }
     }
     mkdirSync(dirname(to), { recursive: true });
@@ -105,9 +107,13 @@ class Installer {
     this.lock[rel] = want;
     if (how === 'wrote') this.counts.wrote++; else this.counts.updated++;
     if (!quiet) this.log.push(`${how} ${rel}`);
+    return true;
   }
   /** Install the package file `src` (relative to the package) at `rel`. */
-  copy(src: string, rel: string, quiet = false) { this.put(rel, readFileSync(join(this.pkg, src)), src, quiet); }
+  copy(src: string, rel: string, quiet = false) {
+    const data = readFileSync(join(this.pkg, src));
+    return this.put(rel, rel.startsWith('.github/workflows/') ? bindWorkflow(basename(rel), data.toString('utf8'), this.bound) : data, src, quiet);
+  }
   /** Name a file this run does not install (by choice of binding or harness) so it is not reported as stale. */
   skip(rel: string) { this.offered.add(posix(rel)); }
   /** Copy the skill pack into `dest`. */
@@ -324,6 +330,10 @@ async function init(root: string, argv: string[], log: string[]) {
   const bound = parse(readFileSync(bindingFile, 'utf8'));
   const continuous = bound?.product?.delivery === 'continuous';
   const oneIdentity = !bound?.forge?.review_identity;
+  inst.bound = {
+    trunk: bound?.vcs?.trunk || DEFAULTS.trunk, releasePrefix: bound?.vcs?.release_prefix || DEFAULTS.releasePrefix,
+    delivery: bound?.product?.delivery || DEFAULTS.delivery, install: bound?.commands?.install || DEFAULTS.install, verify: bound?.commands?.verify || DEFAULTS.verify,
+  };
   {
     const tdir = `templates/gates/${forge}`;
     for (const n of readdirSync(dir).filter((n) => n.endsWith('.yml'))) {
@@ -335,12 +345,8 @@ async function init(root: string, argv: string[], log: string[]) {
       let text = readFileSync(join(dir, 'ruleset.trunk.json'), 'utf8');
       if (oneIdentity) {
         // One identity: GitHub refuses an approving review from the CR's author, so the ruleset asks for none.
-        const rs = parseJson(text, 'ruleset.trunk.json');
-        for (const r of rs.rules) if (r.type === 'pull_request') Object.assign(r.parameters, { required_approving_review_count: 0, require_last_push_approval: false });
-        // CI posts review (gate review) and human-approval with the Actions token: pin them to Actions too.
-        for (const r of rs.rules) if (r.type === 'required_status_checks')
-          for (const c of r.parameters.required_status_checks) if (['review', 'human-approval'].includes(c.context)) c.integration_id = 15368;
-        text = JSON.stringify(rs, null, 2) + '\n';
+        parseJson(text, 'ruleset.trunk.json');
+        text = oneIdentityRuleset(text);
       }
       inst.put('.github/rulesets/trunk.json', text, `${tdir}/ruleset.trunk.json`); // hashed as written, patch included
       log.push('import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk');
@@ -355,8 +361,8 @@ async function init(root: string, argv: string[], log: string[]) {
     }
   }
   if (existsSync(join(gates, 'hooks', 'pre-push'))) {
-    inst.copy('templates/gates/hooks/pre-push', '.agents/hooks/pre-push');
-    chmodSync(join(root, '.agents', 'hooks', 'pre-push'), 0o755);
+    // A kept hook keeps its mode too.
+    if (inst.copy('templates/gates/hooks/pre-push', '.agents/hooks/pre-push')) chmodSync(join(root, '.agents', 'hooks', 'pre-push'), 0o755);
     log.push('enable the hook with: git config core.hooksPath .agents/hooks');
   }
   const setup = join(pkg, 'templates', 'runner', 'setup.sh');
@@ -373,16 +379,16 @@ async function init(root: string, argv: string[], log: string[]) {
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, '\n\n') : '') + POINTER + '\n';
   if (next !== cur) writeFileSync(agents, next);
   const agentsChanged = next !== cur;
-  log.push('updated AGENTS.md');
+  if (agentsChanged) log.push('updated AGENTS.md');
   if (harness === 'claude') claudeSetup(root, inst, log, noPlugin);
   else for (const tier of TIERS) inst.skip(`.claude/agents/sdlc-${tier}.md`);
   inst.finish();
   const missing = missingKeysLine(missingBindingKeys(readFileSync(need(pkg, 'templates/binding.yml'), 'utf8'), readFileSync(bindingFile, 'utf8')));
   if (missing) log.push(missing);
   const c = inst.counts;
-  log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept with local edits, ${c.stale} stale`);
+  log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept (differ from every released version), ${c.stale} stale`);
   const changed = c.wrote + c.updated > 0 || pinMoved || agentsChanged;
-  if (hadBinding && !changed) log.push('install: up to date');
+  if (hadBinding && !changed) log.push(c.kept ? `install: nothing to update; ${c.kept} kept (differ from every released version)` : 'install: up to date');
   else if (hadBinding) log.push('upgrade: run npm install to fetch the pinned CLI, review the kept files, then run agentic-sdlc validate and agentic-sdlc doctor');
 }
 
