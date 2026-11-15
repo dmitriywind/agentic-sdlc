@@ -475,7 +475,7 @@ key, while the `dispatch` comment is younger than `cycle.dedupe_minutes` or `sta
 when its own `done` comment (`--kind done --ref <key>`) appears after the `dispatch` comment, posted
 by a bot or by the `assign` executor's user; other runs' comments never count. So a double fire is
 skipped for `dedupe_minutes`, and a run with no done line blocks a second dispatch until
-`stall_minutes`: keep `stall_minutes` above the longest step run. The cycle's own claim (`dispatch sdlc`) goes stale after `cycle.time_budget_minutes` instead, and every cycle exit after the claim posts its `done` line. With `dedupe_minutes` unset or 0
+`stall_minutes`: keep `stall_minutes` above the longest step run. The cycle's own claim (`dispatch sdlc`) goes stale after `cycle.time_budget_minutes` instead, and every cycle exit after the claim posts its `done` line; a `kind: cycle` heartbeat by a bot after the claim also ends it, so a forgotten done line cannot hold the lock. With `dedupe_minutes` unset or 0
 the check is off and no `dispatch` comment is posted. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses a step whose sandbox is
 `local` or unset, except one that names `sandbox: local` when the runner sets `AGENTIC_SDLC_LOCAL=1`
 (`templates/runner/local.md`). The ledger row records `executor` and `ref`, so the bench and

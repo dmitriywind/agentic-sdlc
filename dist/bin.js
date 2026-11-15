@@ -11045,7 +11045,8 @@ ${usage}`);
           const mine = all.filter((c) => c.body.trimStart().startsWith(matches("dispatch", key))).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
           const at = mine ? Date.parse(mine.createdAt) : NaN;
           const later = (c) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
-          const finished = mine && all.some((c) => later(c) && c.body.includes(stamp("done", key)));
+          const ends = (c) => c.body.includes(stamp("done", key)) || skill === "sdlc" && isMarked(c.body, "heartbeat") && /"kind"\s*:\s*"cycle"/.test(c.body);
+          const finished = mine && all.some((c) => later(c) && ends(c));
           const stall = skill === "sdlc" ? Number(b.cycle?.time_budget_minutes) || Number(b.stall_minutes) || 0 : Number(b.stall_minutes) || 0;
           const age = Number.isNaN(at) ? 0 : (Date.now() - at) / 6e4;
           if (mine && !finished && (age < window || age < stall)) {
