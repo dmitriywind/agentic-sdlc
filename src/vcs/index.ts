@@ -32,7 +32,7 @@ export const cli: PortCli = (argv, ctx) =>
       case 'head': return v.head();
       case 'changed': return v.changed(a.get('since'));
       case 'base': return v.base();
-      case 'push': await v.push(); return {};
+      case 'push': return v.push();
       case 'cut': return v.cut(need(0), need(1));
       case 'tag': await v.tag(need(0), need(1)); return {};
       case 'drop': await v.drop(need(0)); return {};

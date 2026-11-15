@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse } from 'yaml';
 import type { AdapterContext, Binding, Board, CR, CrCommit, Forge, PortCli, Review, Vcs } from './ports.ts';
-import { ownersFor } from './ports.ts';
+import { isChangeLine, ownersFor } from './ports.ts';
 import { BINDING_PATH, shippedOptions } from './binding.ts';
 import { PROOF_FILE, fill, rule, shell } from './bench.ts';
 import { UsageError, guard, parseArgs } from './forge/util.ts';
@@ -133,15 +133,11 @@ export async function classify(d: Deps, cr: CR, diff: string | undefined): Promi
   return 'tuning';
 }
 const nameHas = (s: string, id: string) => new RegExp(`(^|[^A-Za-z0-9])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Za-z0-9])`, 'i').test(s);
-const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const patternRe = (p: string) =>
-  new RegExp('^' + p.split(/(<ticket>|<name>)/).map((x) => x === '<ticket>' ? '[A-Za-z0-9_-]+' : x === '<name>' ? '[a-z0-9]+(?:-[a-z0-9]+)*' : esc(x)).join('') + '$');
-
 export function branchNames(b: Binding, names: string[]): string[] {
   const v = b.vcs;
   const ok = (n: string) =>
     n === v.trunk || (!!v.release_prefix && n.startsWith(v.release_prefix)) || n.startsWith('dependabot/') || n.startsWith('renovate/') ||
-    patternRe(v.change_pattern).test(n) || patternRe(v.factory_change_pattern).test(n);
+    isChangeLine(b, n);
   return names.filter((n) => !ok(n));
 }
 

@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AdapterContext, Vcs } from '../ports.ts';
+import { isChangeLine, type AdapterContext, type Vcs } from '../ports.ts';
 
 export function git(ctx: AdapterContext): Vcs {
   const { trunk, release_prefix } = ctx.binding.vcs;
@@ -23,6 +23,7 @@ export function git(ctx: AdapterContext): Vcs {
   return {
     async start(name) {
       safeName(name);
+      if (!isChangeLine(ctx.binding, name)) throw new Error(`vcs start: name not allowed: ${name} fits neither vcs.change_pattern (${ctx.binding.vcs.change_pattern}) nor vcs.factory_change_pattern (${ctx.binding.vcs.factory_change_pattern}): pass the full name`);
       g('fetch', 'origin', trunk);
       const workdir = join(ctx.root, '.agents', 'work', name);
       // Only a missing remote branch means 'start from trunk'; a network or auth error is not.
@@ -59,6 +60,7 @@ export function git(ctx: AdapterContext): Vcs {
       // Delivery to the trunk goes through a CR; the ruleset is not on every forge or profile.
       if (ref === trunk || ref === 'HEAD') throw new Error(`vcs push: refusing to push ${ref === 'HEAD' ? 'a detached HEAD' : `the trunk '${trunk}'`}: start a change line`);
       g('push', '-u', 'origin', ref);
+      return { ref, sha: g('rev-parse', 'HEAD') };
     },
     async cut(rev, release) {
       plain('revision', rev); plain('release', release);

@@ -32,3 +32,4 @@ Feature: A dispatch starts one run per key
       And the comment "<!-- agentic-sdlc:done 1-review/review -->" is posted on the ticket "1"
       When dispatch runs "review/review --ticket 1"
       Then the result "kind" is "harness"
+      And the result "instruction" contains "its dispatch key is 1-review/review"

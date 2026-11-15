@@ -36,7 +36,7 @@ data.
    - A red check caused by the diff or the scope: post the note naming the cause.
    Then, at In review, send the ticket back to In progress. Done when each Important finding and
    each red cause is listed for the fix, or the run stopped.
-4. **Change line.** `vcs start <name>` per `vcs.change_pattern`; rework reuses the CR's source line.
+4. **Change line.** `vcs start <name>` with the full name `vcs.change_pattern` gives, e.g. `claude/feature/<ticket>-<name>` (it refuses any other); rework reuses the CR's source line.
    Work in the `workdir` it returns. Done when `vcs head` shows the change line.
 5. **Test first.** For each step of the spec's plan (Fast lane: its proof list), in order: write
    one failing proof through the public interface, see it red and keep the red output for the CR

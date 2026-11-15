@@ -173,11 +173,11 @@ Adapter: `github` (`gh`), the one forge: on other forges a CR can change the pip
 
 | Verb | Effect |
 |---|---|
-| `start <name>` → `{ workdir, ref }` | fetch; reuse the change line `<name>` (its worktree, local branch or origin branch) when it exists, else a worktree and branch from the trunk tip |
+| `start <name>` → `{ workdir, ref }` | refuses a name that fits neither `vcs.change_pattern` nor `vcs.factory_change_pattern`; fetch; reuse the change line `<name>` (its worktree, local branch or origin branch) when it exists, else a worktree and branch from the trunk tip |
 | `head` → `{ ref, sha }` | `HEAD` |
 | `changed [--since <rev>]` → `string[]` | `diff --name-only` against the merge base |
 | `base` → `{ sha }` | merge base with the trunk |
-| `push` | push the current branch; refuses the trunk and a detached HEAD |
+| `push` → `{ ref, sha }` | push the current branch; refuses the trunk and a detached HEAD |
 | `cut <rev> <release>` | push `<rev>` to `refs/heads/<release_prefix><release>` |
 | `tag <name> <rev>` | annotated tag (gates only) |
 | `tags [--prefix <p>]` → `{ name, sha }[]`, newest first | `tag --sort=-creatordate` |
@@ -462,7 +462,7 @@ A run that ends on a cap records outcome `capped`.
 learn/improve) [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]` posts its `dispatch`
 comment, starts the executor and prints `{ kind, ref, startedAt, key, done }`: `key` is the run's
 done-line key (the `--ref` of its `done` comment) and `done` the stamped line; for `harness` it also
-prints the instruction for the navigator and starts nothing. The key is printed in every setup; the
+prints the instruction for the navigator (it names the done line, the key and, with provenance on, the run id) and starts nothing. The key is printed in every setup; the
 `dispatch` comment and the checks below run only with `cycle.dedupe_minutes` above 0 (or for an
 `assign` executor). The idempotency key is
 `<ticket, cr or factory>-<skill>/<step>[-<run>][-<CR head sha>]`. A second dispatch with the same

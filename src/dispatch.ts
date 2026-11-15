@@ -292,7 +292,7 @@ export const cli: PortCli = async (argv, ctx) => {
     }
 
     if (ex.kind === 'harness') {
-      return await done('harness', null, { instruction: `load ${file} in a subagent at tier ${judge?.tier ?? skillTier}${hasLimits ? `; ${limitsText(limits).trim()}` : ''}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ''}${run ? `; its run id is ${run}` : ''}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
+      return await done('harness', null, { instruction: `load ${file} in a subagent at tier ${judge?.tier ?? skillTier}${hasLimits ? `; ${limitsText(limits).trim()}` : ''}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ''}; its dispatch key is ${key}${run ? `; its run id is ${run}` : ''}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
     }
     if (ex.kind === 'command') {
       const dir = mkdtempSync(join(tmpdir(), 'agentic-sdlc-'));
