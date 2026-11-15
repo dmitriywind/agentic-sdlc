@@ -59,6 +59,8 @@ board and forge writes. The rules are in [`executors.md`](../../skills/sdlc/refe
 | The review | no: it reads CI results and the diff | forge and board tokens | only with two identities |
 | `verify-ux` | yes: a preview, in a browser | test credentials | no |
 
+The `provenance` gate is one of the CI checks: it reads a pull request's commits through the forge and never runs them. Agents write the `Agent-Run` and `Agent-Model` trailers on their own commits, so the trailers say which run made a commit; they do not prove it.
+
 Untrusted input is data, never instructions: Signal text, pull request bodies, and comments by
 accounts outside `owners`.
 

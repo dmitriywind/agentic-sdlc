@@ -92,3 +92,40 @@ test('create and move refuse a status the binding does not list', async () => {
   assert.equal((await b.get('1')).status, 'Backlog');
   assert.equal((await b.move('1', 'Ready')).status, 'Ready');
 });
+
+test('milestone sets and clears the milestone of an existing ticket', async () => {
+  const b = mk();
+  await b.create({ title: 't', body: '', status: 'Backlog' });
+  assert.equal((await b.milestone('1', 'M1')).milestone, 'M1');
+  assert.equal((await b.get('1')).milestone, 'M1');
+  assert.equal((await b.milestone('1', null)).milestone, undefined);
+  await assert.rejects(b.milestone('9', 'M1'), /no item 9/);
+});
+
+test('board cli: an unknown flag, a flag without a value and an unreadable --body-file are usage errors, --k=v works, milestone sets and clears', async () => {
+  const { cli } = await import('../src/board/index.ts');
+  const f = fakeCtx(mkdtempSync(join(tmpdir(), 'bl-')), {}, () => ({}));
+  const run = async (...argv: string[]) => {
+    const out: string[] = [], err: string[] = [];
+    const log = console.log, error = console.error;
+    console.log = (s: string) => out.push(s); console.error = (s: string) => err.push(s);
+    try { return { code: await cli(argv, f.ctx), out: out.join(''), err: err.join('') }; } finally { console.log = log; console.error = error; }
+  };
+  let r = await run('list', '--bogus');
+  assert.deepEqual([r.code, r.err], [2, 'unknown flag --bogus for board list']);
+  r = await run('list', '--label');
+  assert.deepEqual([r.code, r.err], [2, '--label needs a value']);
+  r = await run('create', '--title', 't', '--status', 'Backlog', '--body-file', join(f.ctx.root, 'missing.md'));
+  assert.equal(r.code, 2);
+  assert.match(r.err, /--body-file cannot be read: .*missing\.md/);
+  writeFileSync(join(f.ctx.root, 'b.md'), 'body');
+  r = await run('create', '--title=t', '--status=Backlog', `--body-file=${join(f.ctx.root, 'b.md')}`, '--milestone=M1');
+  assert.equal(r.code, 0);
+  assert.equal(JSON.parse(r.out).milestone, 'M1');
+  r = await run('milestone', '1', '--clear');
+  assert.equal(JSON.parse(r.out).milestone, undefined);
+  r = await run('milestone', '1', 'M2');
+  assert.equal(JSON.parse(r.out).milestone, 'M2');
+  r = await run('set', '1', 'size', '--clear', '--oops');
+  assert.equal(r.code, 2);
+});

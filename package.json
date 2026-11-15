@@ -15,6 +15,9 @@
     "references",
     "docs",
     ".claude-plugin",
+    "agents",
+    "bin",
+    "evals",
     "hooks",
     "LICENSE"
   ],

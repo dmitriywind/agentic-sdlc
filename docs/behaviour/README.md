@@ -45,6 +45,7 @@ Scenario: PASS with two identities marks the CR ready with auto-merge
 | [gate-proofs-on-base](gate-proofs-on-base.feature) | `gate proofs-on-base` |
 | [gate-shipped](gate-shipped.feature) | `gate shipped`, tags and rollback |
 | [gate-signal-on-red](gate-signal-on-red.feature) | `gate signal-on-red` |
+| [gate-provenance](gate-provenance.feature) | `gate provenance` |
 | [gate-skill-regression](gate-skill-regression.feature) | `gate skill-regression` |
 | [push-guard](push-guard.feature) | the plugin guard hook and the pre-push hook |
 | [install-and-binding](install-and-binding.feature) | `init`, `validate`, `doctor`, binding rules |

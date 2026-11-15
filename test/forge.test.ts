@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { parseCloses, type AdapterContext } from '../src/ports.ts';
 import { proofFiles } from '../src/gates.ts';
 import { createForge, cli } from '../src/forge/index.ts';
+import { setSleep } from '../src/exec.ts';
 
 type Call = { m: string; url: string; body?: any };
 const mk = (adapter: string, options: Record<string, unknown>, routes: (m: string, url: string, body?: any) => any, execOut: (a: string[]) => string = () => '') => {
@@ -259,4 +260,100 @@ test('github refuses a change request number or sha that is not an id before cal
   await assert.rejects(f.viewBySha('../x'), /not a commit sha/);
   await assert.rejects(f.status('xyz', { context: 'c', state: 'success', description: 'd' }), /not a commit sha/);
   assert.equal(gh.execs.length, 0);
+});
+
+const quiet = async <T>(fn: () => Promise<T>) => {
+  const w = process.stdout.write, e = process.stderr.write;
+  const out: string[] = [], err: string[] = [];
+  process.stdout.write = ((s: string) => (out.push(s), true)) as any;
+  process.stderr.write = ((s: string) => (err.push(s), true)) as any;
+  try { return { r: await fn(), out: out.join(''), err: err.join('') }; } finally { process.stdout.write = w; process.stderr.write = e; }
+};
+
+test('gh reads retry up to 3 tries on 429, a rate-limit 403 and 5xx, honouring a retry-after hint; writes retry only on a rate limit', async () => {
+  const waits: number[] = [];
+  const prev = setSleep(async (ms) => { waits.push(ms); });
+  try {
+    let n = 0;
+    const flaky = (msg: string, times: number) => (a: string[]) => {
+      if (++n <= times) throw new Error(msg);
+      return a.some((x) => x === 'POST') ? JSON.stringify({ id: 9, html_url: 'cu' }) : JSON.stringify(pull);
+    };
+    const run = async (msg: string, times: number, fn: (f: ReturnType<typeof createForge>) => Promise<unknown>) => {
+      n = 0; waits.length = 0;
+      const { ctx } = mk('github', { repo: 'o/r' }, () => ({}), flaky(msg, times));
+      return fn(createForge(ctx));
+    };
+    await run('gh: HTTP 502: Bad Gateway', 2, (f) => f.diff('5'));
+    assert.deepEqual(waits, [1000, 2000]);
+    await run('gh: HTTP 429: slow down\nRetry-After: 7', 1, (f) => f.diff('5'));
+    assert.deepEqual(waits, [7000]);
+    await run('gh: HTTP 403: You have exceeded a secondary rate limit. please retry after 3 seconds', 1, (f) => f.diff('5'));
+    assert.deepEqual(waits, [3000]);
+    await assert.rejects(run('gh: HTTP 503', 3, (f) => f.diff('5')), /503/);
+    assert.equal(n, 3);
+    await assert.rejects(run('gh: HTTP 403: Resource not accessible', 1, (f) => f.diff('5')), /403/);
+    assert.equal(n, 1);
+    // A write: a rate limit is retried, a 5xx is not (it may have happened).
+    assert.deepEqual(await run('gh: HTTP 429', 1, (f) => f.comment('5', 'hi')), { id: '9', url: 'cu' });
+    assert.equal(n, 2);
+    await assert.rejects(run('gh: HTTP 502', 1, (f) => f.comment('5', 'hi')), /502/);
+    assert.equal(n, 1);
+  } finally { setSleep(prev); }
+});
+
+test('forge list: --limit and --since bound the read, and without --checks no check data is fetched', async () => {
+  const row = (number: number, updated: string, merged?: string) => ({ ...pull, number, updated_at: updated, merged_at: merged ?? null, merge_commit_sha: `m${number}`, state: 'closed' });
+  const rows = [row(9, '2026-11-10T00:00:00Z', '2026-11-10T00:00:00Z'), row(8, '2026-11-05T00:00:00Z', '2026-11-05T00:00:00Z'), row(7, '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z')];
+  const { ctx, execs } = mk('github', { repo: 'o/r' }, () => ({}), () => JSON.stringify(rows));
+  const f = createForge(ctx);
+  const two = await f.list({ state: 'merged', limit: 2 });
+  assert.deepEqual(two.map((c) => c.n), ['9', '8']);
+  assert.deepEqual([two[0].checks, two[0].mergeSha, two[0].state], [[], 'm9', 'merged']);
+  assert.ok(execs[0].some((x) => x.includes('sort=updated&direction=desc')));
+  assert.deepEqual((await f.list({ state: 'merged', since: '2026-11-01' })).map((c) => c.n), ['9', '8']);
+  assert.ok(execs.every((a) => !a.join(' ').includes('check-runs')), 'no check data without checks');
+  const withChecks = mk('github', { repo: 'o/r' }, () => ({}), (a) => (a.join(' ').includes('/pulls?') ? JSON.stringify([[{ ...pull, number: 5, merged_at: 'x' }]]) : restExec(a)));
+  const crs = await createForge(withChecks.ctx).list({ state: 'merged', checks: true });
+  assert.equal(crs[0].checks.length, 3);
+});
+
+test('forge run reads one CI run by id; a missing run fails; cli list and run take their flags', async () => {
+  const run = { databaseId: 42, name: 'ci', headBranch: 'main', headSha: 's', status: 'completed', conclusion: 'failure', url: 'u', createdAt: 't' };
+  const { ctx, execs } = mk('github', { repo: 'o/r' }, () => ({}), (a) => {
+    if (a[0] === 'run' && a[1] === 'view' && a[2] === '42') return JSON.stringify(run);
+    if (a[0] === 'run') throw new Error('gh: HTTP 404: Not Found');
+    return JSON.stringify([]);
+  });
+  const f = createForge(ctx);
+  assert.deepEqual(await f.run('42'), { id: '42', name: 'ci', ref: 'main', sha: 's', url: 'u', at: 't', state: 'failure' });
+  assert.deepEqual(execs[0].slice(0, 3), ['run', 'view', '42']);
+  await assert.rejects(f.run('43'), /404/);
+  await assert.rejects(f.run('x; rm'), /not a run id/);
+  const base = { root: ctx.root, binding: ctx.binding, env: ctx.env, exec: ctx.exec, http: ctx.http };
+  assert.equal((await quiet(() => cli(['run', '42'], base))).r, 0);
+  assert.equal((await quiet(() => cli(['run', '43'], base))).r, 1);
+  assert.equal((await quiet(() => cli(['list', '--state', 'merged', '--limit', '5', '--since', '2026-01-01', '--checks'], base))).r, 0);
+  assert.equal((await quiet(() => cli(['list', '--limit', 'x'], base))).r, 2);
+  assert.equal((await quiet(() => cli(['list', '--since', 'never'], base))).r, 2);
+});
+
+test('forge and vcs cli: an unknown flag, a flag without a value and an unreadable --body-file are usage errors; --k=v works', async () => {
+  const { ctx } = mk('github', { repo: 'o/r' }, () => ({}), ghExec);
+  const base = { root: ctx.root, binding: ctx.binding, env: ctx.env, exec: ctx.exec, http: ctx.http };
+  const t = async (argv: string[]) => { const x = await quiet(() => cli(argv, base)); return [x.r, x.err.trim()]; };
+  assert.deepEqual(await t(['view', '7', '--bogus']), [2, 'unknown flag --bogus for forge view']);
+  assert.deepEqual(await t(['list', '--state']), [2, '--state needs a value']);
+  assert.deepEqual(await t(['list', '--checks=yes']), [2, '--checks takes no value']);
+  const open = await t(['open', '--source', 'b', '--title', 't', '--body-file', '/nonexistent/body.md']);
+  assert.equal(open[0], 2);
+  assert.match(String(open[1]), /--body-file cannot be read: \/nonexistent\/body\.md/);
+  const ok = await quiet(() => cli(['view', '--sha=abc1234'], { ...base, exec: (c, a, o) => (a.some((x) => x.includes('/commits/abc1234/pulls')) ? JSON.stringify([{ number: 7, head: { sha: 'abc1234' } }]) : ctx.exec(c, a, o)) }));
+  assert.equal(ok.r, 0);
+  const { cli: vcli } = await import('../src/vcs/index.ts');
+  const vbase = { ...base, binding: { ...ctx.binding, vcs: { adapter: 'git', trunk: 'main' } } as any };
+  const v = await quiet(() => vcli(['head', '--bogus'], vbase));
+  assert.deepEqual([v.r, v.err.trim()], [2, 'unknown flag --bogus for vcs head']);
+  const w = await quiet(() => vcli(['changed', '--since'], vbase));
+  assert.deepEqual([w.r, w.err.trim()], [2, '--since needs a value']);
 });

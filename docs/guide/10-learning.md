@@ -22,7 +22,7 @@ flowchart TB
    least `learning.min_evidence_runs` runs.
 3. It proposes exactly one change: a skill sentence, a setting, a check or an executor.
 4. The bench replays cases built from your merged work, with the change and without it. The change
-   must not lower the pass rate (`learning.bench_min_cases`, `bench_trials`, a Wilson lower bound).
+   must not lower the pass rate (`learning.bench_min_cases`, `bench_trials`, a Wilson lower bound). `learning.bench_budget` caps a bench run: a plan over `max_runs` is refused, and after `max_minutes` no new case starts. Skipped cases make the result incomplete, which never counts as a pass.
 5. The change goes through review and the checks like any other. A `guardrail` change needs the
    factory owner; a `tuning` change (the model map) may merge alone once a bench baseline exists.
 

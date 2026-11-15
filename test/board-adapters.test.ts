@@ -270,3 +270,50 @@ test('a board verb with a missing required option fails naming the binding key a
   assert.throws(() => createBoard(f.ctx), /board\.options\.project_number.*agentic-sdlc validate/);
   assert.equal(f.calls.length, 0);
 });
+
+test('board milestone sets or clears the milestone where create --milestone puts it, on github, github-issues, jira and linear', async () => {
+  const g = mk('github', gh, ghAnswer('Ready'));
+  await g.board.milestone('7', 'M1');
+  assert.ok(g.calls.some((c) => c.includes('issue edit 7') && c.includes('--milestone M1')));
+  await g.board.milestone('7', null);
+  assert.ok(g.calls.some((c) => c.includes('issue edit 7') && c.includes('--remove-milestone')));
+
+  const { board, calls, issues } = issuesRepo([iss(7, ['status:Ready'])]);
+  assert.equal((await board.milestone('7', 'M1')).status, 'Ready');
+  assert.equal(calls.find((c) => c.args[3] === 'PATCH')!.input.milestone, 3);
+  await board.milestone('7', null);
+  assert.equal(calls.filter((c) => c.args[3] === 'PATCH').at(-1)!.input.milestone, null);
+  assert.equal(issues.length, 1);
+  await assert.rejects(board.milestone('7', 'nope'), /no milestone 'nope'/);
+
+  const j = mk('jira', jira, jiraAnswer('Ready'), { JE: 'e', JT: 't' });
+  await j.board.milestone('PROJ-1', 'v2');
+  assert.ok(j.calls.some((c) => c.startsWith('PUT') && c.includes('/issue/PROJ-1') && c.includes('"fixVersions":[{"name":"v2"}]')));
+  await j.board.milestone('PROJ-1', null);
+  assert.ok(j.calls.some((c) => c.startsWith('PUT') && c.includes('"fixVersions":[]')));
+
+  const lin = (c: string) => (c.includes('issueLabelCreate') ? { data: { issueLabelCreate: { issueLabel: { id: 'L1', name: 'milestone:Q3' } } } } : linearAnswer('Ready')(c));
+  const l = mk('linear', { team_key: 'LIN', token_env: 'LT' }, lin, { LT: 'k' });
+  await l.board.milestone('LIN-9', 'Q3');
+  assert.ok(l.calls.some((c) => c.includes('issueUpdate') && c.includes('"labelIds":["L1"]')));
+  await l.board.milestone('LIN-9', null);
+  assert.ok(l.calls.some((c) => c.includes('issueUpdate') && c.includes('"labelIds":[]')));
+});
+
+test('the GitHub boards retry a milestone write on a rate limit but not on a 5xx; a read retries on both', async () => {
+  const { setSleep } = await import('../src/exec.ts');
+  const prev = setSleep(async () => {});
+  try {
+    let n = 0;
+    const f = fakeCtx('.', { repo: 'o/r' }, () => ({}));
+    f.ctx.binding = { ...binding, board: { ...binding.board, adapter: 'github-issues' } } as any;
+    const fail = (msg: string, times: number) => { n = 0; f.ctx.exec = (_c, args) => { n++; if (n <= times) throw new Error(msg); return args[2] === 'GET' ? JSON.stringify({ number: 7, labels: [{ name: 'status:Ready' }], title: 't' }) : '{}'; }; };
+    const board = createBoard(f.ctx);
+    fail('gh: HTTP 502: Bad Gateway', 2);
+    assert.equal((await board.get('7')).id, '7');
+    fail('gh: HTTP 403: You have exceeded a secondary rate limit', 1);
+    await board.assign('7', 'x');
+    fail('gh: HTTP 502: Bad Gateway', 1);
+    await assert.rejects(board.assign('7', 'x'), /502/);
+  } finally { setSleep(prev); }
+});
