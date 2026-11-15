@@ -48,7 +48,7 @@ It is the only skill that proposes a new rule.
    case. Stop with `learning: too few cases` when the suite has fewer than
    `learning.bench_min_cases` cases. Count the runs the proof needs (cases x `learning.bench_trials`
    for the baseline and again for the candidate): when one bench run is over
-   `learning.bench_budget.max_runs`, stop with `learning: over bench budget` and the numbers; never
+   `learning.bench_budget.max_runs` (unset: no cap), stop with `learning: over bench budget` and the numbers; never
    pass `--allow-over-budget`. A bench run that spent `max_minutes` records the rest as
    `skipped: budget`, and `bench compare` reports that as incomplete (`regressed`): write
    `learning: not proven` and stop.

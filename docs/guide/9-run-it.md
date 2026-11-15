@@ -53,10 +53,14 @@ If the delivery workflow fails on a merge, start it by hand with the commit's sh
 3. Run `init --upgrade`. `init` records the hash of every file it installs from the package in
    `.agents/install.lock.json`. A file still at its recorded hash is updated, a file you edited is kept
    (the line names the package file with the new version), a new file is written, and a file the
-   package dropped is reported as `stale` and left in place. A file with no lock entry counts as edited
-   unless it equals the package's. `--force` overwrites your edits to those files. No flag rewrites
+   package dropped is reported as `stale` and left in place. A file with no lock entry, or a lock entry
+   that does not match, counts as edited unless it equals the package's or has the hash of a released
+   version (`templates/known-hashes.json`, built by `npm run hashes`); a kept file's line says it
+   `differs from every released version`. `init` writes the delivery workflow's trunk, release prefix and
+   delivery, and the verify workflow's install and verify commands, from the binding; a workflow that differs from
+   a released version only in those values is updated. A kept pre-push hook keeps its mode. `--force` overwrites your edits to those files. No flag rewrites
    `.agents/binding.yml`: to regenerate it, delete it. `init` and `validate` list the binding keys the
-   template has and yours lacks. When nothing changed, `init` ends with `install: up to date`.
+   template has and yours lacks. When nothing changed, `init` ends with `install: up to date`, or `install: nothing to update; N kept (differ from every released version)` when it kept files.
 4. Run `npm install`, merge the kept files by hand, then run `validate` and `doctor` and one cycle by hand.
 
 With many repos, each repo pins its own version: upgrade one at a time.

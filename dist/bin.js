@@ -7747,6 +7747,15 @@ var init_comments = __esm({
 
 // src/forge/util.ts
 import { readFileSync as readFileSync2 } from "fs";
+function flagError(e) {
+  const m = e.message;
+  const missing = /^Option '--([\w-]+)[^']*' argument missing/.exec(m);
+  if (missing) return `--${missing[1]} needs a value`;
+  const extra = /^Option '--([\w-]+)' does not take an argument/.exec(m);
+  if (extra) return `--${extra[1]} takes no value`;
+  const unknown = /^Unknown option '(--[\w-]+)'/.exec(m);
+  return unknown ? `unknown flag ${unknown[1]}` : m.split(". ")[0];
+}
 function parseStrict(group, verb, argv, spec = {}) {
   const pos = [];
   const flags = {};
@@ -8059,7 +8068,9 @@ function createGithubIssuesBoard(ctx) {
       assignees: (i.assignees ?? []).map((a) => a.login),
       createdAt: i.created_at ?? "",
       updatedAt: i.updated_at ?? "",
-      body: i.body ?? ""
+      body: i.body ?? "",
+      // The list carries no status change time: a closed issue at Done reached Done when it closed.
+      ...status === "Done" && i.closed_at ? { statusChangedAt: i.closed_at } : {}
     };
   };
   let known;
@@ -9363,6 +9374,42 @@ var init_vcs = __esm({
   }
 });
 
+// src/pristine.ts
+import { createHash } from "crypto";
+import { existsSync as existsSync3, readFileSync as readFileSync4 } from "fs";
+import { join as join4 } from "path";
+function bindWorkflow(name, text, v) {
+  if (name === "agentic-sdlc-delivery.yml")
+    return text.replace(/^(\s+TRUNK: )\S+(?=\s+# set:)/m, `$1${v.trunk}`).replace(/^(\s+RELEASE_PREFIX: )\S+(?=\s+# set:)/m, `$1${v.releasePrefix}`).replace(/^(\s+DELIVERY: )\S+(?=\s+# set:)/m, `$1${v.delivery}`).replace(/(# set: your vcs\.trunk\n\s+branches: )\[[^\]]*\]/, `$1[${v.trunk}]`);
+  if (name === "agentic-sdlc-verify.yml")
+    return text.replace(/^(\s+run: ).*?(?=\s+# set: the binding's commands\.install)/gm, (_, a) => a + yamlScalar(v.install)).replace(/^(\s+run: ).*?(?=\s+# set: the binding's commands\.verify)/gm, (_, a) => a + yamlScalar(v.verify));
+  return text;
+}
+function releasedHash(name, data) {
+  return sha(name === "agentic-sdlc-delivery.yml" || name === "agentic-sdlc-verify.yml" ? bindWorkflow(name, data.toString("utf8"), DEFAULTS) : data);
+}
+function oneIdentityRuleset(text) {
+  const rs = JSON.parse(text);
+  for (const r of rs.rules) if (r.type === "pull_request") Object.assign(r.parameters, { required_approving_review_count: 0, require_last_push_approval: false });
+  for (const r of rs.rules) if (r.type === "required_status_checks") {
+    for (const c of r.parameters.required_status_checks) if (["review", "human-approval"].includes(c.context)) c.integration_id = 15368;
+  }
+  return JSON.stringify(rs, null, 2) + "\n";
+}
+function knownHashes(pkg) {
+  const f = join4(pkg, "templates", "known-hashes.json");
+  return new Set(existsSync3(f) ? JSON.parse(readFileSync4(f, "utf8")) : []);
+}
+var sha, DEFAULTS, yamlScalar;
+var init_pristine = __esm({
+  "src/pristine.ts"() {
+    "use strict";
+    sha = (data) => createHash("sha256").update(data).digest("hex");
+    DEFAULTS = { trunk: "main", releasePrefix: "release/", delivery: "release-line", install: "npm ci", verify: "npm test" };
+    yamlScalar = (v) => /^[\w./ -]+$/.test(v) ? v : JSON.stringify(v);
+  }
+});
+
 // src/install.ts
 var install_exports = {};
 __export(install_exports, {
@@ -9380,14 +9427,13 @@ __export(install_exports, {
   validate: () => validate
 });
 import { execFileSync as execFileSync2 } from "child_process";
-import { createHash } from "crypto";
-import { chmodSync, existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, statSync, writeFileSync as writeFileSync2 } from "fs";
-import { basename, dirname as dirname2, join as join4, resolve } from "path";
+import { chmodSync, existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync5, readdirSync, statSync, writeFileSync as writeFileSync2 } from "fs";
+import { basename, dirname as dirname2, join as join5, resolve } from "path";
 import { fileURLToPath } from "url";
 function packageRoot(env = process.env) {
   if (env.AGENTIC_SDLC_PACKAGE) return resolve(env.AGENTIC_SDLC_PACKAGE);
   let d = dirname2(fileURLToPath(import.meta.url));
-  while (!existsSync3(join4(d, "package.json"))) {
+  while (!existsSync4(join5(d, "package.json"))) {
     const up = dirname2(d);
     if (up === d) throw new Error("cannot find the agentic-sdlc package root");
     d = up;
@@ -9408,7 +9454,7 @@ function missingBindingKeys(template, binding) {
   return out;
 }
 function registerMcp(pkg, root, harness, args, force, log) {
-  let snippet = readFileSync4(need(pkg, `templates/mcp/${harness === "codex" ? "codex.toml" : harness + ".json"}`), "utf8");
+  let snippet = readFileSync5(need(pkg, `templates/mcp/${harness === "codex" ? "codex.toml" : harness + ".json"}`), "utf8");
   if (harness === "codex") snippet = snippet.replace(/^args = .*$/m, `args = ${JSON.stringify(args)}`);
   else {
     const j = JSON.parse(snippet);
@@ -9421,8 +9467,8 @@ function registerMcp(pkg, root, harness, args, force, log) {
 ${snippet.trim()}`);
     return;
   }
-  const file = join4(root, rel);
-  const cur = existsSync3(file) ? readFileSync4(file, "utf8") : "";
+  const file = join5(root, rel);
+  const cur = existsSync4(file) ? readFileSync5(file, "utf8") : "";
   let next;
   if (harness === "codex") {
     if (/^\[mcp_servers\.("?)agentic-sdlc\1\]/m.test(cur)) {
@@ -9445,19 +9491,19 @@ ${snippet.trim()}`);
   log.push(`wrote ${rel}`);
 }
 function allowGit(root, log) {
-  const file = join4(root, ".npmrc");
-  const text = existsSync3(file) ? readFileSync4(file, "utf8") : "";
+  const file = join5(root, ".npmrc");
+  const text = existsSync4(file) ? readFileSync5(file, "utf8") : "";
   if (/^\s*allow-git\s*=/m.test(text)) return;
   writeFileSync2(file, text + (text && !text.endsWith("\n") ? "\n" : "") + "allow-git=root\n");
   log.push("set allow-git=root in .npmrc (npm 12 refuses git dependencies by default)");
 }
 function pinCli(root, version3, force, log) {
-  const file = join4(root, "package.json");
-  if (!existsSync3(file)) {
+  const file = join5(root, "package.json");
+  if (!existsSync4(file)) {
     log.push(`pin the CLI so CI and MCP run one version: npm i -D ${ALLOW_GIT} ${gitSpec(version3)}`);
     return false;
   }
-  const text = readFileSync4(file, "utf8");
+  const text = readFileSync5(file, "utf8");
   const doc = parseJson(text, "package.json");
   allowGit(root, log);
   const have = doc.devDependencies?.["agentic-sdlc"];
@@ -9475,7 +9521,7 @@ function pinCli(root, version3, force, log) {
 function claudeSetup(root, inst, log, noPlugin) {
   let models = {};
   try {
-    models = (0, import_yaml2.parse)(readFileSync4(join4(root, BINDING_PATH), "utf8"))?.models ?? {};
+    models = (0, import_yaml2.parse)(readFileSync5(join5(root, BINDING_PATH), "utf8"))?.models ?? {};
   } catch {
   }
   for (const tier of TIERS2) {
@@ -9493,8 +9539,8 @@ its last Done when, and report the result and the evidence. Call the CLI as \`np
 Do not start subagents.
 `);
   }
-  const file = join4(root, "CLAUDE.md");
-  const cur = existsSync3(file) ? readFileSync4(file, "utf8") : "";
+  const file = join5(root, "CLAUDE.md");
+  const cur = existsSync4(file) ? readFileSync5(file, "utf8") : "";
   if (/^@AGENTS\.md\s*$/m.test(cur)) log.push("kept CLAUDE.md (imports @AGENTS.md)");
   else {
     writeFileSync2(file, (cur ? cur.replace(/\n*$/, "\n\n") : "") + "@AGENTS.md\n");
@@ -9524,28 +9570,28 @@ async function init(root, argv, log) {
   if (!FORGES.includes(forge)) throw new Error(`--forge must be one of ${FORGES.join("|")}, got '${forge}'`);
   if (!MCP_FILES.has(harness)) throw new Error(`--harness must be one of ${[...MCP_FILES.keys()].join("|")}, got '${harness}'`);
   const pkg = packageRoot();
-  const pkgJson = join4(pkg, "package.json");
-  const version3 = existsSync3(pkgJson) ? readJson(pkgJson).version : "next";
-  if (existsSync3(join4(root, "package.json"))) readJson(join4(root, "package.json"));
+  const pkgJson = join5(pkg, "package.json");
+  const version3 = existsSync4(pkgJson) ? readJson(pkgJson).version : "next";
+  if (existsSync4(join5(root, "package.json"))) readJson(join5(root, "package.json"));
   const skills = need(pkg, "skills");
   const inst = new Installer(root, pkg, force, log);
   inst.skills("skills", ".agents/skills");
   const noPlugin = harness === "claude" && f["no-plugin"] === "true";
   if (noPlugin) inst.skills("skills", ".claude/skills");
-  else for (const n of filesUnder(skills)) inst.skip(join4(".claude/skills", n));
+  else for (const n of filesUnder(skills)) inst.skip(join5(".claude/skills", n));
   const pinned = pinCli(root, version3, force, log);
   const pinMoved = log.some((l) => l.startsWith("set devDependencies.agentic-sdlc="));
   if (harness !== "claude" || noPlugin) registerMcp(pkg, root, harness, pinned ? ["--no-install", "agentic-sdlc", "mcp"] : ["-y", ALLOW_GIT, gitSpec(version3), "mcp"], force, log);
   else log.push("MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)");
-  const scorers = join4(pkg, "scorers");
-  if (existsSync3(scorers)) {
-    for (const n of filesUnder(scorers)) inst.copy(join4("scorers", n), join4(".agents", "scorers", n));
+  const scorers = join5(pkg, "scorers");
+  if (existsSync4(scorers)) {
+    for (const n of filesUnder(scorers)) inst.copy(join5("scorers", n), join5(".agents", "scorers", n));
   }
-  const bindingFile = join4(root, BINDING_PATH);
-  const hadBinding = existsSync3(bindingFile);
+  const bindingFile = join5(root, BINDING_PATH);
+  const hadBinding = existsSync4(bindingFile);
   if (hadBinding) log.push(`kept ${BINDING_PATH}`);
   else {
-    const doc = (0, import_yaml2.parseDocument)(readFileSync4(need(pkg, "templates/binding.yml"), "utf8"));
+    const doc = (0, import_yaml2.parseDocument)(readFileSync5(need(pkg, "templates/binding.yml"), "utf8"));
     doc.setIn(["board", "adapter"], board);
     doc.setIn(["forge", "adapter"], forge);
     doc.setIn(["vcs", "adapter"], vcs);
@@ -9572,65 +9618,67 @@ async function init(root, argv, log) {
     writeFileSync2(bindingFile, String(doc));
     log.push(`wrote ${BINDING_PATH}`);
   }
-  const gates = join4(pkg, "templates", "gates");
+  const gates = join5(pkg, "templates", "gates");
   const dir = need(pkg, `templates/gates/${forge}`);
-  const bound = (0, import_yaml2.parse)(readFileSync4(bindingFile, "utf8"));
+  const bound = (0, import_yaml2.parse)(readFileSync5(bindingFile, "utf8"));
   const continuous = bound?.product?.delivery === "continuous";
   const oneIdentity = !bound?.forge?.review_identity;
+  inst.bound = {
+    trunk: bound?.vcs?.trunk || DEFAULTS.trunk,
+    releasePrefix: bound?.vcs?.release_prefix || DEFAULTS.releasePrefix,
+    delivery: bound?.product?.delivery || DEFAULTS.delivery,
+    install: bound?.commands?.install || DEFAULTS.install,
+    verify: bound?.commands?.verify || DEFAULTS.verify
+  };
   {
     const tdir = `templates/gates/${forge}`;
     for (const n of readdirSync(dir).filter((n2) => n2.endsWith(".yml"))) {
-      if (continuous && n === "agentic-sdlc-release.yml") inst.skip(join4(".github", "workflows", n));
-      else inst.copy(`${tdir}/${n}`, join4(".github", "workflows", n));
+      if (continuous && n === "agentic-sdlc-release.yml") inst.skip(join5(".github", "workflows", n));
+      else inst.copy(`${tdir}/${n}`, join5(".github", "workflows", n));
     }
-    if (existsSync3(join4(dir, "pull_request_template.md"))) inst.copy(`${tdir}/pull_request_template.md`, ".github/pull_request_template.md");
-    if (existsSync3(join4(dir, "ruleset.trunk.json"))) {
-      let text = readFileSync4(join4(dir, "ruleset.trunk.json"), "utf8");
+    if (existsSync4(join5(dir, "pull_request_template.md"))) inst.copy(`${tdir}/pull_request_template.md`, ".github/pull_request_template.md");
+    if (existsSync4(join5(dir, "ruleset.trunk.json"))) {
+      let text = readFileSync5(join5(dir, "ruleset.trunk.json"), "utf8");
       if (oneIdentity) {
-        const rs = parseJson(text, "ruleset.trunk.json");
-        for (const r of rs.rules) if (r.type === "pull_request") Object.assign(r.parameters, { required_approving_review_count: 0, require_last_push_approval: false });
-        for (const r of rs.rules) if (r.type === "required_status_checks") {
-          for (const c2 of r.parameters.required_status_checks) if (["review", "human-approval"].includes(c2.context)) c2.integration_id = 15368;
-        }
-        text = JSON.stringify(rs, null, 2) + "\n";
+        parseJson(text, "ruleset.trunk.json");
+        text = oneIdentityRuleset(text);
       }
       inst.put(".github/rulesets/trunk.json", text, `${tdir}/ruleset.trunk.json`);
       log.push("import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk");
       log.push(oneIdentity ? "one identity: the ruleset needs no approving review and pins every required check to GitHub Actions (integration_id 15368); a Full-lane CR waits on human-approval until a collaborator approves it or you merge it as admin" : "its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
     }
-    if (continuous && existsSync3(join4(dir, "ruleset.release.json"))) inst.skip(".github/rulesets/release.json");
-    if (!continuous && existsSync3(join4(dir, "ruleset.release.json"))) {
+    if (continuous && existsSync4(join5(dir, "ruleset.release.json"))) inst.skip(".github/rulesets/release.json");
+    if (!continuous && existsSync4(join5(dir, "ruleset.release.json"))) {
       inst.copy(`${tdir}/ruleset.release.json`, ".github/rulesets/release.json");
       log.push("import .github/rulesets/release.json (Rules > Rulesets) and add the release bot (app or role) as a bypass actor; set its include to your vcs.release_prefix");
     }
   }
-  if (existsSync3(join4(gates, "hooks", "pre-push"))) {
-    inst.copy("templates/gates/hooks/pre-push", ".agents/hooks/pre-push");
-    chmodSync(join4(root, ".agents", "hooks", "pre-push"), 493);
+  if (existsSync4(join5(gates, "hooks", "pre-push"))) {
+    if (inst.copy("templates/gates/hooks/pre-push", ".agents/hooks/pre-push")) chmodSync(join5(root, ".agents", "hooks", "pre-push"), 493);
     log.push("enable the hook with: git config core.hooksPath .agents/hooks");
   }
-  const setup = join4(pkg, "templates", "runner", "setup.sh");
-  if (existsSync3(setup)) inst.copy("templates/runner/setup.sh", ".agents/runner-setup.sh");
+  const setup = join5(pkg, "templates", "runner", "setup.sh");
+  if (existsSync4(setup)) inst.copy("templates/runner/setup.sh", ".agents/runner-setup.sh");
   for (const n of ["cycle-prompt.md", "review-prompt.md"]) {
-    const prompt2 = join4(pkg, "templates", "runner", n);
-    if (existsSync3(prompt2)) inst.copy(`templates/runner/${n}`, join4(".agents", n));
+    const prompt2 = join5(pkg, "templates", "runner", n);
+    if (existsSync4(prompt2)) inst.copy(`templates/runner/${n}`, join5(".agents", n));
   }
-  const agents = join4(root, "AGENTS.md");
-  const cur = existsSync3(agents) ? readFileSync4(agents, "utf8") : "";
+  const agents = join5(root, "AGENTS.md");
+  const cur = existsSync4(agents) ? readFileSync5(agents, "utf8") : "";
   const s = cur.indexOf(START), e = cur.indexOf(END);
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, "\n\n") : "") + POINTER + "\n";
   if (next !== cur) writeFileSync2(agents, next);
   const agentsChanged = next !== cur;
-  log.push("updated AGENTS.md");
+  if (agentsChanged) log.push("updated AGENTS.md");
   if (harness === "claude") claudeSetup(root, inst, log, noPlugin);
   else for (const tier of TIERS2) inst.skip(`.claude/agents/sdlc-${tier}.md`);
   inst.finish();
-  const missing = missingKeysLine(missingBindingKeys(readFileSync4(need(pkg, "templates/binding.yml"), "utf8"), readFileSync4(bindingFile, "utf8")));
+  const missing = missingKeysLine(missingBindingKeys(readFileSync5(need(pkg, "templates/binding.yml"), "utf8"), readFileSync5(bindingFile, "utf8")));
   if (missing) log.push(missing);
   const c = inst.counts;
-  log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept with local edits, ${c.stale} stale`);
+  log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept (differ from every released version), ${c.stale} stale`);
   const changed = c.wrote + c.updated > 0 || pinMoved || agentsChanged;
-  if (hadBinding && !changed) log.push("install: up to date");
+  if (hadBinding && !changed) log.push(c.kept ? `install: nothing to update; ${c.kept} kept (differ from every released version)` : "install: up to date");
   else if (hadBinding) log.push("upgrade: run npm install to fetch the pinned CLI, review the kept files, then run agentic-sdlc validate and agentic-sdlc doctor");
 }
 function validate(root, warnings = []) {
@@ -9640,15 +9688,15 @@ function validate(root, warnings = []) {
   } catch (e) {
     problems.push(e.message);
   }
-  const dir = join4(root, ".agents", "skills");
-  if (!existsSync3(dir)) return [...problems, ".agents/skills is missing"];
-  for (const name of readdirSync(dir).filter((n) => statSync(join4(dir, n)).isDirectory())) {
-    const file = join4(dir, name, "SKILL.md");
-    if (!existsSync3(file)) {
+  const dir = join5(root, ".agents", "skills");
+  if (!existsSync4(dir)) return [...problems, ".agents/skills is missing"];
+  for (const name of readdirSync(dir).filter((n) => statSync(join5(dir, n)).isDirectory())) {
+    const file = join5(dir, name, "SKILL.md");
+    if (!existsSync4(file)) {
       problems.push(`skill ${name}: SKILL.md is missing`);
       continue;
     }
-    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync4(file, "utf8"));
+    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync5(file, "utf8"));
     let fm = {};
     try {
       fm = m ? (0, import_yaml2.parse)(m[1]) : {};
@@ -9723,9 +9771,9 @@ function cloudBoard(b, env = {}) {
   return "fail board: a Claude cloud session cannot reach GitHub Projects (board adapter github); use github-issues, jira or linear, or run the cycle from GitHub Actions (templates/runner/github-actions-claude.yml)";
 }
 function deliveryWorkflow(b, root) {
-  const f = join4(root, ".github", "workflows", "agentic-sdlc-delivery.yml");
-  if (!existsSync3(f)) return void 0;
-  const wf = (0, import_yaml2.parse)(readFileSync4(f, "utf8"));
+  const f = join5(root, ".github", "workflows", "agentic-sdlc-delivery.yml");
+  if (!existsSync4(f)) return void 0;
+  const wf = (0, import_yaml2.parse)(readFileSync5(f, "utf8"));
   const br = wf?.on?.push?.branches ?? [];
   if (!br.includes(b.vcs.trunk))
     return `fail delivery workflow: push branches ${br.join(", ")} do not name trunk ${b.vcs.trunk}; edit its 'set:' lines`;
@@ -9737,12 +9785,12 @@ function deliveryWorkflow(b, root) {
   return `ok   delivery workflow: names trunk ${b.vcs.trunk}`;
 }
 function unpinnedActions(root) {
-  const dir = join4(root, ".github", "workflows");
-  if (!existsSync3(dir)) return void 0;
-  const bad = readdirSync(dir).filter((n) => /^agentic-sdlc-.*\.ya?ml$/.test(n)).flatMap((n) => [...readFileSync4(join4(dir, n), "utf8").matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)/gm)].map((m) => m[1]).filter((u) => !u.startsWith("./") && !/@[0-9a-f]{40}$/.test(u)).map((u) => `${n}: ${u}`));
+  const dir = join5(root, ".github", "workflows");
+  if (!existsSync4(dir)) return void 0;
+  const bad = readdirSync(dir).filter((n) => /^agentic-sdlc-.*\.ya?ml$/.test(n)).flatMap((n) => [...readFileSync5(join5(dir, n), "utf8").matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)/gm)].map((m) => m[1]).filter((u) => !u.startsWith("./") && !/@[0-9a-f]{40}$/.test(u)).map((u) => `${n}: ${u}`));
   return bad.length ? `warn workflow actions: not pinned to a commit SHA (${[...new Set(bad)].join(", ")}); a tag can move, so let Dependabot's github-actions ecosystem pin them` : void 0;
 }
-var import_yaml2, START, END, POINTER, INSTALL_LOCK, LEGACY_LOCK, TIERS2, FORGES, INIT_FLAGS, flagsOf, need, parseJson, readJson, filesUnder, sha, posix, Installer, missingKeysLine, MCP_FILES, gitSpec, ALLOW_GIT, envNames, redact, firstLines, probeFailure, cli4;
+var import_yaml2, START, END, POINTER, INSTALL_LOCK, LEGACY_LOCK, TIERS2, FORGES, INIT_FLAGS, flagsOf, need, parseJson, readJson, filesUnder, posix, Installer, missingKeysLine, MCP_FILES, gitSpec, ALLOW_GIT, envNames, redact, firstLines, probeFailure, cli4;
 var init_install = __esm({
   "src/install.ts"() {
     "use strict";
@@ -9752,6 +9800,7 @@ var init_install = __esm({
     init_forge();
     init_vcs();
     init_local();
+    init_pristine();
     START = "<!-- agentic-sdlc:start -->";
     END = "<!-- agentic-sdlc:end -->";
     POINTER = `${START}
@@ -9776,8 +9825,8 @@ ${END}`;
       return f;
     };
     need = (pkg, rel) => {
-      const p = join4(pkg, rel);
-      if (!existsSync3(p)) throw new Error(`package is missing ${rel} (looked in ${pkg})`);
+      const p = join5(pkg, rel);
+      if (!existsSync4(p)) throw new Error(`package is missing ${rel} (looked in ${pkg})`);
       return p;
     };
     parseJson = (text, p) => {
@@ -9787,9 +9836,8 @@ ${END}`;
         throw new Error(`${p} is not valid JSON (${e.message}); fix it and run init again`);
       }
     };
-    readJson = (p) => parseJson(readFileSync4(p, "utf8"), basename(p));
-    filesUnder = (dir) => readdirSync(dir).flatMap((n) => statSync(join4(dir, n)).isDirectory() ? filesUnder(join4(dir, n)).map((f) => join4(n, f)) : [n]);
-    sha = (data) => createHash("sha256").update(data).digest("hex");
+    readJson = (p) => parseJson(readFileSync5(p, "utf8"), basename(p));
+    filesUnder = (dir) => readdirSync(dir).flatMap((n) => statSync(join5(dir, n)).isDirectory() ? filesUnder(join5(dir, n)).map((f) => join5(n, f)) : [n]);
     posix = (p) => p.replaceAll("\\", "/");
     Installer = class {
       lock = {};
@@ -9799,34 +9847,38 @@ ${END}`;
       pkg;
       force;
       log;
+      known;
+      /** The binding's values for the `# set:` lines of the stock workflows. */
+      bound = DEFAULTS;
       constructor(root, pkg, force, log) {
         this.root = root;
         this.pkg = pkg;
         this.force = force;
         this.log = log;
+        this.known = knownHashes(pkg);
         for (const f of [LEGACY_LOCK, INSTALL_LOCK]) {
-          const file = join4(root, f);
-          if (existsSync3(file)) Object.assign(this.lock, readJson(file));
+          const file = join5(root, f);
+          if (existsSync4(file)) Object.assign(this.lock, readJson(file));
         }
       }
-      /** Install `data` at `rel`. `src` is the package file it comes from (named when a local edit is kept). `quiet` hides wrote/updated lines. */
+      /** Install `data` at `rel`. `src` is the package file it comes from (named when a differing file is kept). `quiet` hides wrote/updated lines. Returns false when a differing file is kept. */
       put(rel, data, src, quiet = false) {
         rel = posix(rel);
         this.offered.add(rel);
-        const to = join4(this.root, rel), want = sha(data);
+        const to = join5(this.root, rel), want = sha(data);
         let how = "wrote";
-        if (existsSync3(to)) {
-          const have = sha(readFileSync4(to));
+        if (existsSync4(to)) {
+          const bytes = readFileSync5(to), have = sha(bytes);
           if (have === want) {
             this.lock[rel] = want;
-            return;
+            return true;
           }
-          if (have === this.lock[rel]) how = "updated";
+          if (have === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes))) how = "updated";
           else if (this.force) how = "overwrote";
           else {
             this.counts.kept++;
-            this.log.push(`kept ${rel} (local edits; ${src ? `see ${join4(this.pkg, src)} for the new version` : "--force regenerates it"})`);
-            return;
+            this.log.push(`kept ${rel} (differs from every released version; ${src ? `--force overwrites, see ${join5(this.pkg, src)}` : "--force regenerates it"})`);
+            return false;
           }
         }
         mkdirSync2(dirname2(to), { recursive: true });
@@ -9835,10 +9887,12 @@ ${END}`;
         if (how === "wrote") this.counts.wrote++;
         else this.counts.updated++;
         if (!quiet) this.log.push(`${how} ${rel}`);
+        return true;
       }
       /** Install the package file `src` (relative to the package) at `rel`. */
       copy(src, rel, quiet = false) {
-        this.put(rel, readFileSync4(join4(this.pkg, src)), src, quiet);
+        const data = readFileSync5(join5(this.pkg, src));
+        return this.put(rel, rel.startsWith(".github/workflows/") ? bindWorkflow(basename(rel), data.toString("utf8"), this.bound) : data, src, quiet);
       }
       /** Name a file this run does not install (by choice of binding or harness) so it is not reported as stale. */
       skip(rel) {
@@ -9847,7 +9901,7 @@ ${END}`;
       /** Copy the skill pack into `dest`. */
       skills(src, dest) {
         const before = this.counts.wrote + this.counts.updated;
-        for (const f of filesUnder(join4(this.pkg, src))) this.copy(join4(src, f), join4(dest, f), true);
+        for (const f of filesUnder(join5(this.pkg, src))) this.copy(join5(src, f), join5(dest, f), true);
         const n = this.counts.wrote + this.counts.updated - before;
         this.log.push(`wrote ${dest} (${n} file${n === 1 ? "" : "s"} updated)`);
       }
@@ -9855,14 +9909,14 @@ ${END}`;
       finish() {
         for (const rel of Object.keys(this.lock).sort()) {
           if (this.offered.has(rel)) continue;
-          if (!existsSync3(join4(this.root, rel))) {
+          if (!existsSync4(join5(this.root, rel))) {
             delete this.lock[rel];
             continue;
           }
           this.counts.stale++;
           this.log.push(`stale ${rel}: no longer part of the package`);
         }
-        const file = join4(this.root, INSTALL_LOCK);
+        const file = join5(this.root, INSTALL_LOCK);
         mkdirSync2(dirname2(file), { recursive: true });
         writeFileSync2(file, JSON.stringify(Object.fromEntries(Object.entries(this.lock).sort(([a], [b]) => a < b ? -1 : 1)), null, 2) + "\n");
       }
@@ -9913,7 +9967,7 @@ ${END}`;
           }
           warnings.forEach((m) => console.error(`warn: ${m}`));
           try {
-            const info = missingKeysLine(missingBindingKeys(readFileSync4(join4(packageRoot(), "templates/binding.yml"), "utf8"), readFileSync4(join4(ctx.root, BINDING_PATH), "utf8")));
+            const info = missingKeysLine(missingBindingKeys(readFileSync5(join5(packageRoot(), "templates/binding.yml"), "utf8"), readFileSync5(join5(ctx.root, BINDING_PATH), "utf8")));
             if (info) out(info);
           } catch {
           }
@@ -10225,8 +10279,8 @@ __export(gates_exports, {
   skillRegression: () => skillRegression,
   trailers: () => trailers
 });
-import { existsSync as existsSync4, readFileSync as readFileSync5, readdirSync as readdirSync2 } from "fs";
-import { dirname as dirname3, join as join5, resolve as resolve2 } from "path";
+import { existsSync as existsSync5, readFileSync as readFileSync6, readdirSync as readdirSync2 } from "fs";
+import { dirname as dirname3, join as join6, resolve as resolve2 } from "path";
 import { isDeepStrictEqual } from "util";
 function globToRegExp(glob) {
   let re = "";
@@ -10269,12 +10323,12 @@ function frontmatter(text) {
   }
 }
 function benchedSkills(root) {
-  const dir = join5(root, ".agents", "bench", "suites");
+  const dir = join6(root, ".agents", "bench", "suites");
   const out = /* @__PURE__ */ new Set();
-  if (!existsSync4(dir)) return out;
+  if (!existsSync5(dir)) return out;
   for (const f of readdirSync2(dir).filter((n) => n.endsWith(".json"))) {
     try {
-      const suite = JSON.parse(readFileSync5(join5(dir, f), "utf8"));
+      const suite = JSON.parse(readFileSync6(join6(dir, f), "utf8"));
       if (Array.isArray(suite?.cases) && suite.cases.length) out.add(typeof suite.skill === "string" ? suite.skill : "implement-spec");
     } catch {
     }
@@ -10668,17 +10722,17 @@ url: ${cleanUrl(run.url)}`,
   return { created: true, id: item.id };
 }
 function skillRegression(root) {
-  const dir = join5(root, ".agents", "skills");
-  if (!existsSync4(dir)) return { errors: [`${dir} does not exist`], warnings: [] };
+  const dir = join6(root, ".agents", "skills");
+  if (!existsSync5(dir)) return { errors: [`${dir} does not exist`], warnings: [] };
   const errors = [], warnings = [];
   for (const e of readdirSync2(dir, { withFileTypes: true })) {
     if (!e.isDirectory()) continue;
-    const file = join5(dir, e.name, "SKILL.md");
-    if (!existsSync4(file)) {
+    const file = join6(dir, e.name, "SKILL.md");
+    if (!existsSync5(file)) {
       errors.push(`${e.name}: SKILL.md missing`);
       continue;
     }
-    const text = readFileSync5(file, "utf8");
+    const text = readFileSync6(file, "utf8");
     const fm = frontmatter(text)?.fm;
     if (!fm) {
       errors.push(`${e.name}: no frontmatter`);
@@ -10695,11 +10749,11 @@ function skillRegression(root) {
     for (const m of text.matchAll(/\]\(([^)\s]+)\)/g)) {
       const link = m[1].split("#")[0];
       if (!link || /^[a-z][a-z0-9+.-]*:/i.test(link)) continue;
-      if (!existsSync4(resolve2(dirname3(file), link))) errors.push(`${e.name}: broken link ${m[1]}`);
+      if (!existsSync5(resolve2(dirname3(file), link))) errors.push(`${e.name}: broken link ${m[1]}`);
     }
   }
-  const sdir = join5(root, ".agents", "scorers");
-  if (existsSync4(sdir)) for (const f of readdirSync2(sdir).filter((n) => n.endsWith(".md"))) errors.push(...scorerErrors(f, readFileSync5(join5(sdir, f), "utf8")));
+  const sdir = join6(root, ".agents", "scorers");
+  if (existsSync5(sdir)) for (const f of readdirSync2(sdir).filter((n) => n.endsWith(".md"))) errors.push(...scorerErrors(f, readFileSync6(join6(sdir, f), "utf8")));
   return { errors, warnings };
 }
 function scorerErrors(f, text) {
@@ -10793,7 +10847,7 @@ var init_gates = __esm({
         case "branch-names": {
           let names;
           if (a.has("stdin-prepush")) {
-            names = readFileSync5(0, "utf8").split("\n").map((l) => l.trim().split(/\s+/)).filter((p) => p.length >= 4 && !/^0+$/.test(p[1]) && p[2].startsWith("refs/heads/")).map((p) => p[2].slice("refs/heads/".length));
+            names = readFileSync6(0, "utf8").split("\n").map((l) => l.trim().split(/\s+/)).filter((p) => p.length >= 4 && !/^0+$/.test(p[1]) && p[2].startsWith("refs/heads/")).map((p) => p[2].slice("refs/heads/".length));
           } else names = [a.get("ref") ?? (await deps().vcs.head()).ref];
           const bad = branchNames(base.binding, names);
           if (bad.length) throw new Error(`branch name not allowed: ${bad.join(", ")}`);
@@ -10888,8 +10942,8 @@ __export(ledger_exports, {
   ticketUse: () => ticketUse
 });
 import { createHash as createHash3 } from "crypto";
-import { existsSync as existsSync5, readdirSync as readdirSync3, readFileSync as readFileSync6, writeFileSync as writeFileSync3 } from "fs";
-import { join as join6, relative as relative2, resolve as resolve3 } from "path";
+import { existsSync as existsSync6, readdirSync as readdirSync3, readFileSync as readFileSync7, writeFileSync as writeFileSync3 } from "fs";
+import { join as join7, relative as relative2, resolve as resolve3 } from "path";
 import { parseArgs as parseArgs2 } from "util";
 function parseHeartbeat(body) {
   const lines = body.trimStart().split(/\r?\n/);
@@ -11009,8 +11063,8 @@ function ticketUse(rows, maxTokens, top = 20) {
 }
 function hashSkill(dir) {
   const h = createHash3("sha256");
-  const files = readdirSync3(dir, { recursive: true, withFileTypes: true }).filter((d) => d.isFile()).map((d) => join6(d.parentPath, d.name)).map((p) => [relative2(dir, p).replaceAll("\\", "/"), p]).sort(([a], [b]) => a < b ? -1 : 1);
-  for (const [rel, p] of files) h.update(`${rel}\0${readFileSync6(p, "utf8").replace(/\r\n/g, "\n")}\0`);
+  const files = readdirSync3(dir, { recursive: true, withFileTypes: true }).filter((d) => d.isFile()).map((d) => join7(d.parentPath, d.name)).map((p) => [relative2(dir, p).replaceAll("\\", "/"), p]).sort(([a], [b]) => a < b ? -1 : 1);
+  for (const [rel, p] of files) h.update(`${rel}\0${readFileSync7(p, "utf8").replace(/\r\n/g, "\n")}\0`);
   return h.digest("hex").slice(0, 12);
 }
 async function readLedger(board, ticket, authors, graders = []) {
@@ -11034,12 +11088,12 @@ function learningState(comments, everyCycles, enabled = false) {
   return { due: enabled && Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles), judge: enabled, cyclesSince };
 }
 function scorersFor(root, skill) {
-  const dir = join6(root, ".agents", "scorers");
+  const dir = join7(root, ".agents", "scorers");
   const out = [];
-  for (const f of existsSync5(dir) ? readdirSync3(dir).filter((n) => n.endsWith(".md")) : []) {
+  for (const f of existsSync6(dir) ? readdirSync3(dir).filter((n) => n.endsWith(".md")) : []) {
     let fm;
     try {
-      fm = (0, import_yaml4.parse)(/^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync6(join6(dir, f), "utf8"))?.[1] ?? "");
+      fm = (0, import_yaml4.parse)(/^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync7(join7(dir, f), "utf8"))?.[1] ?? "");
     } catch {
       continue;
     }
@@ -11186,6 +11240,7 @@ var import_yaml4, HEARTBEAT_MARKER, SCORE_SCORER, isFail, SCORES_MARKER, GRADE_M
 var init_ledger = __esm({
   "src/ledger.ts"() {
     "use strict";
+    init_util();
     import_yaml4 = __toESM(require_dist(), 1);
     init_ports();
     init_telemetry();
@@ -11211,7 +11266,7 @@ var init_ledger = __esm({
     isScores = (c) => c.body.trimStart().startsWith(SCORES_MARKER);
     packageVersion = () => {
       try {
-        return JSON.parse(readFileSync6(new URL("../package.json", import.meta.url), "utf8")).version;
+        return JSON.parse(readFileSync7(new URL("../package.json", import.meta.url), "utf8")).version;
       } catch {
         return "unknown";
       }
@@ -11231,7 +11286,7 @@ var init_ledger = __esm({
           allowPositionals: true
         });
       } catch (e) {
-        console.error(e.message);
+        console.error(flagError(e));
         return 2;
       }
       const days = a.values.days === void 0 ? 30 : Number(a.values.days);
@@ -11242,7 +11297,8 @@ var init_ledger = __esm({
       if (verb === "stale" && !(maxHours > 0)) return console.error(USAGE2), 2;
       if ((verb === "plan" || verb === "record") && !a.values.run) return console.error(USAGE2), 2;
       if (verb === "record" && !a.values.file) return console.error(USAGE2), 2;
-      if (verb === "export" && (!["otlp", "cdevents"].includes(a.values.format ?? "") || a.values.since !== void 0 && !(sinceMs(a.values.since) >= 0) || a.values.send && a.values.out)) return console.error(USAGE2), 2;
+      if (verb === "export" && !["otlp", "cdevents"].includes(a.values.format ?? "")) return console.error("--format must be otlp or cdevents"), 2;
+      if (verb === "export" && (a.values.since !== void 0 && !(sinceMs(a.values.since) >= 0) || a.values.send && a.values.out)) return console.error(USAGE2), 2;
       try {
         if (verb === "hash") {
           if (!a.positionals[0]) return console.error(USAGE2), 2;
@@ -11284,7 +11340,7 @@ var init_ledger = __esm({
           if (!run) throw new Error(`run ${a.values.run} is not in the ledger`);
           const p = await plan(run, { root: ctx.root, binding: b, forge: await forge() });
           if (verb === "plan") return console.log(JSON.stringify(p, null, 2)), 0;
-          const body = scoresComment(p, JSON.parse(readFileSync6(resolve3(ctx.root, a.values.file), "utf8")));
+          const body = scoresComment(p, JSON.parse(readFileSync7(resolve3(ctx.root, a.values.file), "utf8")));
           const c = await board.comment(b.heartbeat.ticket, body);
           console.log(JSON.stringify({ run: run.id, comment: c.id, ...JSON.parse(body.split("\n")[2]) }));
           return 0;
@@ -11352,9 +11408,9 @@ __export(bench_exports, {
   suiteFile: () => suiteFile,
   wilsonLower: () => wilsonLower
 });
-import { cpSync as cpSync2, existsSync as existsSync6, mkdirSync as mkdirSync3, mkdtempSync as mkdtempSync2, readdirSync as readdirSync4, readFileSync as readFileSync7, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "fs";
+import { cpSync as cpSync2, existsSync as existsSync7, mkdirSync as mkdirSync3, mkdtempSync as mkdtempSync2, readdirSync as readdirSync4, readFileSync as readFileSync8, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "fs";
 import { tmpdir as tmpdir2 } from "os";
-import { dirname as dirname4, join as join7, relative as relative3, resolve as resolve4 } from "path";
+import { dirname as dirname4, join as join8, relative as relative3, resolve as resolve4 } from "path";
 import { parseArgs as parseArgs3 } from "util";
 function resolveExecutor(arg, binding) {
   if (arg.trim().startsWith("{")) return JSON.parse(arg);
@@ -11447,15 +11503,15 @@ function prompt(c, skillPath, workdir, fastCheck) {
   ].join("\n");
 }
 function carry(from, to, p) {
-  const src = join7(from, p), dst = join7(to, p);
-  if (!existsSync6(src)) return rmSync2(dst, { recursive: true, force: true });
+  const src = join8(from, p), dst = join8(to, p);
+  if (!existsSync7(src)) return rmSync2(dst, { recursive: true, force: true });
   mkdirSync3(dirname4(dst), { recursive: true });
   cpSync2(src, dst, { recursive: true });
 }
 async function runBench(cases, o, deps) {
   const executor = o.executor ?? { kind: "harness" };
   const now = deps.now ?? Date.now;
-  const promptFile = (scratch, c) => join7(scratch, `${c.id}.md`);
+  const promptFile = (scratch, c) => join8(scratch, `${c.id}.md`);
   const command = (b, c, scratch, workdir) => agentCommand(executor, b, { model: o.model, ticket: c.ticket, prompt_file: promptFile(scratch, c), workdir });
   if (o.dryRun) return { dryRun: cases.map((c) => ({ id: c.id, command: command(o.binding, c, "<scratch>", "<workdir>") })) };
   const budget = o.binding.learning?.bench_budget ?? {};
@@ -11470,10 +11526,10 @@ async function runBench(cases, o, deps) {
   try {
     const binding = factory ? loadBinding(factory.workdir) : o.binding;
     if (cases[0]) command(binding, cases[0], "<scratch>", "<workdir>");
-    const skillPath = join7(factory?.workdir ?? o.root, ".agents/skills/implement-spec/SKILL.md");
+    const skillPath = join8(factory?.workdir ?? o.root, ".agents/skills/implement-spec/SKILL.md");
     const isProof = rule(binding, "proof_pattern", PROOF_FILE);
     const isConfig = rule(binding, "verify_config_pattern", VERIFY_CONFIG);
-    const scratch = mkdtempSync2(join7(tmpdir2(), "agentic-bench-prompts-"));
+    const scratch = mkdtempSync2(join8(tmpdir2(), "agentic-bench-prompts-"));
     const began = now();
     const spent = () => !!budget.max_minutes && (now() - began) / 6e4 >= budget.max_minutes;
     for (const c of cases) for (let trial = 1; trial <= trials; trial++) {
@@ -11497,7 +11553,7 @@ async function runBench(cases, o, deps) {
         const touched = await agent.changed();
         const verify = await snap(c.baseSha);
         trees.push(verify);
-        const scorerInput = o.scorerDir ? writeScorerInput(o.scorerDir, o.root, c, trials > 1 ? trial : 0, readFileSync7(promptFile(scratch, c), "utf8"), touched, verify.workdir, agent.workdir) : void 0;
+        const scorerInput = o.scorerDir ? writeScorerInput(o.scorerDir, o.root, c, trials > 1 ? trial : 0, readFileSync8(promptFile(scratch, c), "utf8"), touched, verify.workdir, agent.workdir) : void 0;
         const oracle = await snap(c.headSha);
         trees.push(oracle);
         for (const p of touched) {
@@ -11536,14 +11592,14 @@ async function runBench(cases, o, deps) {
 }
 function writeScorerInput(dir, root, c, trial, promptText, touched, base, after) {
   const read = (d, p) => {
-    if (!existsSync6(join7(d, p))) return "(absent)";
-    const t = readFileSync7(join7(d, p), "utf8");
+    if (!existsSync7(join8(d, p))) return "(absent)";
+    const t = readFileSync8(join8(d, p), "utf8");
     return t.length > MAX_FILE_CHARS ? `${t.slice(0, MAX_FILE_CHARS)}
 \u2026 cut` : t;
   };
   const fence = "````";
   const parts = [promptText, "## Changed files", ...touched.flatMap((p) => [`### ${p}`, "Before:", fence, read(base, p), fence, "After:", fence, read(after, p), fence])];
-  const file = join7(dir, `${c.id.replace(/[^\w.-]/g, "_")}${trial ? `-t${trial}` : ""}.md`);
+  const file = join8(dir, `${c.id.replace(/[^\w.-]/g, "_")}${trial ? `-t${trial}` : ""}.md`);
   mkdirSync3(dir, { recursive: true });
   writeFileSync4(file, parts.join("\n\n") + "\n");
   return relative3(root, file).replaceAll("\\", "/");
@@ -11612,6 +11668,7 @@ var CASES_FILE, SUITES_DIR, RESULTS_DIR, suiteFile, PROOF_FILE, addedFiles, VERI
 var init_bench = __esm({
   "src/bench.ts"() {
     "use strict";
+    init_util();
     init_binding();
     init_gates();
     init_ledger();
@@ -11647,7 +11704,7 @@ var init_bench = __esm({
       "       bench report --suite <s> [results.json\u2026]",
       "       bench compare <a.json> <b.json>"
     ].join("\n");
-    readJson2 = (p) => JSON.parse(readFileSync7(p, "utf8"));
+    readJson2 = (p) => JSON.parse(readFileSync8(p, "utf8"));
     cli7 = async (argv, ctx) => {
       const [verb, ...rest] = argv;
       let a;
@@ -11673,7 +11730,7 @@ var init_bench = __esm({
           allowPositionals: true
         });
       } catch (e) {
-        console.error(e.message);
+        console.error(flagError(e));
         return 2;
       }
       const { binding, root } = ctx;
@@ -11689,7 +11746,7 @@ var init_bench = __esm({
         const suite = a.values.suite;
         const mergedLimit = a.values["merged-limit"] ? Number(a.values["merged-limit"]) : void 0;
         if (mergedLimit !== void 0 && !(mergedLimit > 0) || a.values.since !== void 0 && Number.isNaN(Date.parse(a.values.since))) return console.error(USAGE3), 2;
-        const suiteCases = (s) => readJson2(join7(root, suiteFile(s))).cases;
+        const suiteCases = (s) => readJson2(join8(root, suiteFile(s))).cases;
         const allCases = async (limit, o) => {
           const { createBoard: createBoard2 } = await Promise.resolve().then(() => (init_board(), board_exports));
           const { createForge: createForge2 } = await Promise.resolve().then(() => (init_forge(), forge_exports));
@@ -11697,8 +11754,8 @@ var init_bench = __esm({
         };
         if (verb === "report") {
           if (!suite) return console.error(USAGE3), 2;
-          const dir = join7(root, RESULTS_DIR);
-          const files = a.positionals.length ? a.positionals.map((p) => resolve4(root, p)) : existsSync6(dir) ? readdirSync4(dir).filter((f) => f.endsWith(".json")).map((f) => join7(dir, f)) : [];
+          const dir = join8(root, RESULTS_DIR);
+          const files = a.positionals.length ? a.positionals.map((p) => resolve4(root, p)) : existsSync7(dir) ? readdirSync4(dir).filter((f) => f.endsWith(".json")).map((f) => join8(dir, f)) : [];
           const results = files.map((f) => readJson2(f)).filter((r) => r.suite === suite);
           console.log(JSON.stringify({ suite, results: results.length, rows: report(results) }, null, 2));
           return 0;
@@ -11707,8 +11764,8 @@ var init_bench = __esm({
           if (!suite) return console.error(USAGE3), 2;
           const n = a.values.n ? Number(a.values.n) : binding.learning.bench_size;
           if (!(n > 0)) return console.error(USAGE3), 2;
-          const sdir = join7(root, SUITES_DIR);
-          const used = new Set((existsSync6(sdir) ? readdirSync4(sdir).filter((f) => f.endsWith(".json")) : []).flatMap((f) => readJson2(join7(sdir, f)).cases.map((c) => c.id)));
+          const sdir = join8(root, SUITES_DIR);
+          const used = new Set((existsSync7(sdir) ? readdirSync4(sdir).filter((f) => f.endsWith(".json")) : []).flatMap((f) => readJson2(join8(sdir, f)).cases.map((c) => c.id)));
           const fresh = (await allCases(Infinity, { perSize: Infinity })).filter((c) => !used.has(c.id));
           console.log(JSON.stringify({ suite, cases: diverse(fresh, n) }, null, 2));
           return 0;
@@ -11719,7 +11776,7 @@ var init_bench = __esm({
           if (!(limit > 0) || perSize !== void 0 && !(perSize > 0)) return console.error(USAGE3), 2;
           const cases = await allCases(limit, { paths: a.values.paths, perSize });
           const rel = suite ? suiteFile(suite) : CASES_FILE;
-          const file = join7(root, rel);
+          const file = join8(root, rel);
           mkdirSync3(dirname4(file), { recursive: true });
           writeFileSync4(file, JSON.stringify(suite ? { name: suite, cases } : cases, null, 2) + "\n");
           console.log(JSON.stringify({ file: rel, cases: cases.length }));
@@ -11733,18 +11790,18 @@ var init_bench = __esm({
           const executorName = a.values.executor ? a.values.executor.trim().startsWith("{") ? "inline" : a.values.executor : void 0;
           const label = a.values.model ?? executorName;
           const want = a.values.cases?.split(",").map((s) => s.trim());
-          const cases = (suite ? suiteCases(suite) : readJson2(join7(root, CASES_FILE))).filter((c) => !want || want.includes(c.id));
+          const cases = (suite ? suiteCases(suite) : readJson2(join8(root, CASES_FILE))).filter((c) => !want || want.includes(c.id));
           const stem = `${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}-${label.replace(/[^\w.-]/g, "_")}`;
           const { createVcs: createVcs2 } = await Promise.resolve().then(() => (init_vcs(), vcs_exports));
           const r = await runBench(
             cases,
-            { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values["dry-run"], scorerDir: join7(root, RESULTS_DIR, stem), trials, allowOverBudget: a.values["allow-over-budget"] },
+            { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values["dry-run"], scorerDir: join8(root, RESULTS_DIR, stem), trials, allowOverBudget: a.values["allow-over-budget"] },
             { exec: ctx.exec, vcs: await createVcs2(with_(binding.vcs.options)) }
           );
           if ("cases" in r) {
             const file = `${RESULTS_DIR}/${stem}.json`;
-            mkdirSync3(join7(root, RESULTS_DIR), { recursive: true });
-            writeFileSync4(join7(root, file), JSON.stringify(r, null, 2) + "\n");
+            mkdirSync3(join8(root, RESULTS_DIR), { recursive: true });
+            writeFileSync4(join8(root, file), JSON.stringify(r, null, 2) + "\n");
             const skipped = r.cases.filter((c) => c.skipped).length;
             console.log(JSON.stringify({ file, passRate: r.passRate, minutes: r.minutes, ...skipped ? { skipped, incomplete: true } : {} }));
           } else console.log(JSON.stringify(r, null, 2));
@@ -11775,9 +11832,9 @@ __export(dispatch_exports, {
   skillTierOf: () => skillTierOf
 });
 import { spawn } from "child_process";
-import { chmodSync as chmodSync2, closeSync, lstatSync, mkdirSync as mkdirSync4, mkdtempSync as mkdtempSync3, openSync, readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "fs";
+import { chmodSync as chmodSync2, closeSync, lstatSync, mkdirSync as mkdirSync4, mkdtempSync as mkdtempSync3, openSync, readFileSync as readFileSync9, writeFileSync as writeFileSync5 } from "fs";
 import { tmpdir as tmpdir3 } from "os";
-import { join as join8 } from "path";
+import { join as join9 } from "path";
 function judgeTier(b, runModel) {
   if (!runModel) return { skip: true, reason: "the judged run reported no model, so independence cannot be shown" };
   const want = b.learning?.judge_tier ?? "fast";
@@ -11971,7 +12028,7 @@ agentic-sdlc: cycle claimed`);
         }
         let skillTier;
         try {
-          skillTier = skillTierOf(readFileSync8(join8(ctx.root, ".agents", "skills", skill, "SKILL.md"), "utf8"));
+          skillTier = skillTierOf(readFileSync9(join9(ctx.root, ".agents", "skills", skill, "SKILL.md"), "utf8"));
         } catch {
         }
         const stage = resolveStage(b, ex, judge?.tier ?? skillTier, judge?.model);
@@ -12009,21 +12066,21 @@ agentic-sdlc: ${skill} did not start`);
           return await done("harness", null, { instruction: `load .agents/skills/${skill}/SKILL.md in a subagent at tier ${judge?.tier ?? skillTier}${hasLimits ? `; ${limitsText(limits).trim()}` : ""}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ""}${run ? `; its run id is ${run}` : ""}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
         }
         if (ex.kind === "command") {
-          const dir = mkdtempSync3(join8(tmpdir3(), "agentic-sdlc-"));
-          const promptFile = join8(dir, "prompt.md");
+          const dir = mkdtempSync3(join9(tmpdir3(), "agentic-sdlc-"));
+          const promptFile = join9(dir, "prompt.md");
           writeFileSync5(promptFile, `${taskText({ skill, ticket, cr, done: doneLine, run, limits })}
 `);
-          const mcpsFile = join8(dir, "mcps.json");
+          const mcpsFile = join9(dir, "mcps.json");
           writeFileSync5(mcpsFile, JSON.stringify(stage.mcps, null, 2));
           const vars = { skill, ticket, cr, workdir, prompt_file: promptFile, mcps_file: mcpsFile, max_turns: String(limits.max_turns ?? ""), max_tokens: String(limits.max_tokens ?? ""), max_minutes: String(limits.max_minutes ?? ""), ...stage.model ? { model: stage.model } : {} };
           const line = fill(ex.run, vars);
           const env = { ...childEnv(ctx.env, stage.secrets), ...limits.max_turns ? { AGENTIC_SDLC_MAX_TURNS: String(limits.max_turns) } : {}, ...limits.max_tokens ? { AGENTIC_SDLC_MAX_TOKENS: String(limits.max_tokens) } : {}, ...limits.max_minutes ? { AGENTIC_SDLC_MAX_MINUTES: String(limits.max_minutes) } : {} };
-          const logDir = join8(tmpdir3(), "agentic-sdlc-runs");
+          const logDir = join9(tmpdir3(), "agentic-sdlc-runs");
           mkdirSync4(logDir, { recursive: true, mode: 448 });
           const st = lstatSync(logDir);
           if (!st.isDirectory() || st.isSymbolicLink() || process.getuid && st.uid !== process.getuid()) throw new Error(`${logDir} is not a folder of yours; remove it and retry`);
           if (process.platform !== "win32") chmodSync2(logDir, 448);
-          const log = join8(logDir, `${startedAt}-${skill}-${ticket || `cr${cr}`}`.replace(/[^\w.-]/g, "_") + ".log");
+          const log = join9(logDir, `${startedAt}-${skill}-${ticket || `cr${cr}`}`.replace(/[^\w.-]/g, "_") + ".log");
           const fd = openSync(log, "a", 384);
           try {
             const [cmd, args, childVars] = process.platform === "win32" ? ["cmd", ["/d", "/v:off", "/c", "%AGENTIC_SDLC_CMD%"], { ...env, AGENTIC_SDLC_CMD: line }] : ["sh", ["-c", line], env];
@@ -12076,9 +12133,9 @@ __export(mcp_exports, {
   cli: () => cli9,
   handle: () => handle
 });
-import { mkdtempSync as mkdtempSync4, readFileSync as readFileSync9, rmSync as rmSync3, writeFileSync as writeFileSync6 } from "fs";
+import { mkdtempSync as mkdtempSync4, readFileSync as readFileSync10, rmSync as rmSync3, writeFileSync as writeFileSync6 } from "fs";
 import { tmpdir as tmpdir4 } from "os";
-import { join as join9 } from "path";
+import { join as join10 } from "path";
 import { createInterface } from "readline";
 function allowList(arg) {
   const out = /* @__PURE__ */ new Set();
@@ -12142,9 +12199,9 @@ async function callTool(name, args, ctx, allow) {
   }
   let dir;
   if (s.body) {
-    dir = mkdtempSync4(join9(tmpdir4(), "agentic-sdlc-mcp-"));
-    writeFileSync6(join9(dir, "body.md"), String(args.body));
-    argv.push("--body-file", join9(dir, "body.md"));
+    dir = mkdtempSync4(join10(tmpdir4(), "agentic-sdlc-mcp-"));
+    writeFileSync6(join10(dir, "body.md"), String(args.body));
+    argv.push("--body-file", join10(dir, "body.md"));
   }
   try {
     const { cli: cli10 } = await MODULES[s.group]();
@@ -12336,7 +12393,7 @@ var init_mcp = __esm({
     wire = (k) => "--" + k.replace(/_/g, "-");
     queue = Promise.resolve();
     realWrite = process.stdout.write.bind(process.stdout);
-    version = () => JSON.parse(readFileSync9(new URL("../package.json", import.meta.url), "utf8")).version;
+    version = () => JSON.parse(readFileSync10(new URL("../package.json", import.meta.url), "utf8")).version;
     isModern = (msg) => {
       const m = msg.params?._meta;
       return m !== null && typeof m === "object" && (`${META}protocolVersion` in m || `${META}clientCapabilities` in m);
@@ -12383,7 +12440,7 @@ var init_mcp = __esm({
 // src/cli.ts
 init_binding();
 init_exec();
-import { readFileSync as readFileSync10 } from "fs";
+import { readFileSync as readFileSync11 } from "fs";
 var GROUPS = {
   init: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "copy skills, write the binding and CI gates"],
   validate: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "check the binding and skills"],
@@ -12400,7 +12457,7 @@ var GROUPS = {
 var INIT_FLAGS2 = "[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github|github-issues|jira|linear|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]";
 var version2 = () => {
   try {
-    return JSON.parse(readFileSync10(new URL("../package.json", import.meta.url), "utf8")).version;
+    return JSON.parse(readFileSync11(new URL("../package.json", import.meta.url), "utf8")).version;
   } catch {
     return "unknown";
   }

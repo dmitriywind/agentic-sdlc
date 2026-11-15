@@ -101,9 +101,9 @@ Steps 1 to 8 review a draft CR. Steps 9 to 11 handle a ready CR. A check missing
 8. **Send back.**
    - Findings (any Important) on a product CR opened by the factory: first count the trusted reports
      with `Verdict: REMEDIATION REQUIRED` on the CR (`forge comments <n> --marker "<!-- review-pr"
-     --trusted`, this report included) and write the count in the ticket comment. Below
-     `cycle.max_rework`: move the ticket to In progress for
-     [`implement-spec`](../implement-spec/SKILL.md). At `cycle.max_rework` or more: `forge draft <n>`
+     --trusted`, this report included) and write the count in the ticket comment. The cap is
+     `cycle.max_rework`, 3 when the binding does not set it. Below the cap: move the ticket to In progress for
+     [`implement-spec`](../implement-spec/SKILL.md). At the cap or more: `forge draft <n>`
      and call [`escalate-to-human`](../escalate-to-human/SKILL.md) (Repeat) with the count and the
      findings that came back; no further rework starts.
    - Findings on a CR a person opened (author outside `owners.bots`): `forge draft <n>`; the ticket

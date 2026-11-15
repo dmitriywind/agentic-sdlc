@@ -167,13 +167,15 @@ cycle:                          # Run one cycle (sdlc skill)
   time_budget_minutes: 45       # start nothing new after this; keep it below the runner job timeout (templates: 60)
   failure_limit: 2              # a step failing in this many heartbeats in a row is escalated
   dedupe_minutes: 10            # a second dispatch of the same skill and subject this soon is a double fire: skipped (0: no dispatch lock at all)
-  max_rework: 3                 # review-pr sends a CR back this many times at most; the next REMEDIATION REQUIRED goes to escalate-to-human
+  max_rework: 3                 # unset: 3. review-pr sends a CR back this many times at most; the next REMEDIATION REQUIRED goes to escalate-to-human
   # max_tokens_per_ticket: 2000000 # unset: no limit. A ticket whose runs reported more tokens in total gets no further dispatch and goes to escalate-to-human; ledger summary marks it overBudget
 
 heartbeat:
-  ticket: ""                    # id of the ticket that holds heartbeat comments, kept off the board. init sets it on a local
-                                # board; elsewhere create the ticket (`agentic-sdlc board create`, then remove it from the
-                                # project view) and put its id here
+  ticket: ""                    # id of the ticket that holds heartbeat comments; keep it off every route. init sets it on a local
+                                # board (status Cancelled). github-issues: create an issue with no `status:` label (the board
+                                # lists only labelled issues; comments still work). github (Projects): create the issue and
+                                # remove it from the project, or set its status to Cancelled. jira, linear: create the ticket
+                                # in a Cancelled status. Put its id here
 
 learning:                       # the self-improvement loop
   enabled: false                # judge-run and improve-factory run only when true; set it with agent_command

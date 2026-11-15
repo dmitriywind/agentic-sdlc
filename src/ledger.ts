@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { flagError } from './forge/util.ts';
 import { parse } from 'yaml';
 import type { Binding, Board, Comment, CR, Forge, Item, PortCli } from './ports.ts';
 import { ownersFor } from './ports.ts';
@@ -443,7 +444,7 @@ export const cli: PortCli = async (argv, ctx) => {
       allowPositionals: true,
     });
   } catch (e) {
-    console.error((e as Error).message);
+    console.error(flagError(e as Error));
     return 2;
   }
   const days = a.values.days === undefined ? 30 : Number(a.values.days);
@@ -454,7 +455,8 @@ export const cli: PortCli = async (argv, ctx) => {
   if (verb === 'stale' && !(maxHours > 0)) return (console.error(USAGE), 2);
   if ((verb === 'plan' || verb === 'record') && !a.values.run) return (console.error(USAGE), 2);
   if (verb === 'record' && !a.values.file) return (console.error(USAGE), 2);
-  if (verb === 'export' && (!['otlp', 'cdevents'].includes(a.values.format ?? '') || (a.values.since !== undefined && !(sinceMs(a.values.since) >= 0)) || (a.values.send && a.values.out))) return (console.error(USAGE), 2);
+  if (verb === 'export' && !['otlp', 'cdevents'].includes(a.values.format ?? '')) return (console.error('--format must be otlp or cdevents'), 2);
+  if (verb === 'export' && ( (a.values.since !== undefined && !(sinceMs(a.values.since) >= 0)) || (a.values.send && a.values.out))) return (console.error(USAGE), 2);
   try {
     if (verb === 'hash') {
       if (!a.positionals[0]) return (console.error(USAGE), 2);

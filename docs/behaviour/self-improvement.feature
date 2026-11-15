@@ -189,6 +189,14 @@ Feature: Judge runs and improve the factory
     And "ledger hash <dir>" prints the same hash for the same skill text with any line ending
     And an unknown verb is a usage error
 
+  # Source: src/forge/util.ts, "flagError"; src/ledger.ts, "cli"
+  # Proof: test/ledger.test.ts "cli: a flag without a value and an unknown export format are one-line usage errors with exit 2"
+  Scenario: A ledger flag without a value, an unknown flag or an unknown export format is a one-line usage error
+    When "ledger runs --since" runs with no value
+    Then it prints "--since needs a value" and exits 2
+    And "ledger export --format xml" prints "--format must be otlp or cdevents" and exits 2
+    And the bench verbs report a flag error the same way
+
   # Source: src/bench.ts, "buildCases"
   # Proof: test/bench.test.ts "buildCases takes merged CRs that added tests, spec comment first"
   # Proof: test/bench.test.ts "buildCases --paths keeps CRs touching the glob; --per-size stratifies oldest to newest"

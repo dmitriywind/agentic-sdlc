@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { flagError } from './forge/util.ts';
 import { loadBinding } from './binding.ts';
 import { diffPaths, matchesAny } from './gates.ts';
 import { median } from './ledger.ts';
@@ -386,7 +387,7 @@ export const cli: PortCli = async (argv, ctx) => {
       allowPositionals: true,
     });
   } catch (e) {
-    console.error((e as Error).message);
+    console.error(flagError(e as Error));
     return 2;
   }
   const { binding, root } = ctx;

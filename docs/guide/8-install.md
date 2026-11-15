@@ -43,7 +43,9 @@ install it.
    become holds.
 5. **Run `npx --no agentic-sdlc doctor`** until every port is ok. Import `.github/rulesets/trunk.json`
    in the repo settings. A private repo on GitHub Free cannot enforce a ruleset; `doctor` warns.
-6. **Create the heartbeat ticket** on the board and put its id in `heartbeat.ticket`.
+6. **Create the heartbeat ticket** and put its id in `heartbeat.ticket`. Keep it off every route: on
+   `github-issues`, an issue with no `status:` label is off the board, and comments still work; on the
+   local board, status Cancelled (`init` does this); on other boards, a Cancelled status.
 7. **Run one cycle by hand** with two or three real tickets in Backlog. Read every comment it writes.
    Repeat until three cycles in a row need no correction.
 8. **Schedule the cycle** from [`templates/runner/`](../../templates/runner/routine.md), and the

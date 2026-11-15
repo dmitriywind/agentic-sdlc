@@ -27,7 +27,8 @@
   "scripts": {
     "build": "tsup && node scripts/guide.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test test/*.test.ts"
+    "test": "npm run build && node --test test/*.test.ts",
+    "hashes": "node scripts/known-hashes.mjs"
   },
   "keywords": [
     "software-factory",

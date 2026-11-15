@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { cli, probeFailure, cloudBoard, deliveryWorkflow, implementerToken, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../src/install.ts';
 import { parse } from 'yaml';
 import { fakeCtx } from './helpers.ts';
+import { DEFAULTS, bindWorkflow, isInstallable, releasedHash, sha, shippedHashes } from '../src/pristine.ts';
 
 const w = (p: string, s: string) => { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, s); };
 
@@ -487,8 +488,9 @@ test('init --upgrade updates an unedited workflow, keeps an edited one, and --fo
   writeFileSync(binding, readFileSync(binding, 'utf8') + '# mine\n');
   const kept = await capture(() => cli(['init', '--upgrade'], ctx));
   assert.equal(readFileSync(gate, 'utf8'), 'mine\n');
-  assert.ok(kept.includes(`kept .github/workflows/gate.yml (local edits; see ${join(pkg, 'templates/gates/github/gate.yml')} for the new version)`), kept.join('|'));
-  assert.ok(kept.includes('install: up to date'), kept.join('|'));
+  assert.ok(kept.includes(`kept .github/workflows/gate.yml (differs from every released version; --force overwrites, see ${join(pkg, 'templates/gates/github/gate.yml')})`), kept.join('|'));
+  assert.ok(kept.includes('install: nothing to update; 1 kept (differ from every released version)'), kept.join('|'));
+  assert.ok(!kept.includes('updated AGENTS.md'), 'AGENTS.md did not change');
   assert.ok(!kept.some((m) => m.startsWith('upgrade:')), kept.join('|'));
   await quiet(() => cli(['init', '--force'], ctx));
   assert.equal(readFileSync(gate, 'utf8'), 'on: schedule\n');
@@ -512,7 +514,7 @@ test('init on an install from before the lock adopts an identical file and keeps
   writeFileSync(join(root, '.agents/cycle-prompt.md'), 'mine');
   const lines = await capture(() => cli(['init'], ctx));
   assert.equal(readFileSync(join(root, '.agents/cycle-prompt.md'), 'utf8'), 'mine');
-  assert.ok(lines.some((m) => m.startsWith('kept .agents/cycle-prompt.md (local edits')), lines.join('|'));
+  assert.ok(lines.some((m) => m.startsWith('kept .agents/cycle-prompt.md (differs from every released version')), lines.join('|'));
   const l = JSON.parse(readFileSync(lock, 'utf8'));
   assert.ok(l['.github/workflows/gate.yml'], 'the identical file is adopted into the lock');
   assert.equal(l['.agents/cycle-prompt.md'], undefined, 'the differing file is not');
@@ -556,4 +558,95 @@ test('init and validate list template binding keys that the binding does not set
   assert.ok((await capture(() => cli(['init'], ctx))).includes(want));
   assert.ok((await capture(() => cli(['validate'], ctx))).includes(want));
   assert.doesNotMatch(readFileSync(join(root, '.agents/binding.yml'), 'utf8'), /slo|trunk: main/, 'the binding is not touched');
+});
+
+const known = (pkg: string, ...hashes: string[]) => w(join(pkg, 'templates/known-hashes.json'), JSON.stringify(hashes));
+
+test('init upgrades a pre-lock file that equals a released version and keeps one that differs from every version', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  rmSync(join(root, '.agents/install.lock.json'));
+  const gate = join(root, '.github/workflows/gate.yml'), cycle = join(root, '.agents/cycle-prompt.md');
+  writeFileSync(gate, 'on: release\n');
+  writeFileSync(cycle, 'mine');
+  known(pkg, sha('on: release\n'));
+  const lines = await capture(() => cli(['init', '--upgrade'], ctx));
+  assert.equal(readFileSync(gate, 'utf8'), 'on: push\n');
+  assert.ok(lines.includes('updated .github/workflows/gate.yml'), lines.join('|'));
+  assert.equal(readFileSync(cycle, 'utf8'), 'mine');
+  assert.ok(lines.includes(`kept .agents/cycle-prompt.md (differs from every released version; --force overwrites, see ${join(pkg, 'templates/runner/cycle-prompt.md')})`), lines.join('|'));
+  const l = JSON.parse(readFileSync(join(root, '.agents/install.lock.json'), 'utf8'));
+  assert.equal(l['.github/workflows/gate.yml'], sha('on: push\n'), 'the updated file is recorded');
+});
+
+test('init upgrades a file whose lock entry is stale when its content is a released version', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  const lock = join(root, '.agents/install.lock.json'), gate = join(root, '.github/workflows/gate.yml');
+  writeFileSync(lock, JSON.stringify({ ...JSON.parse(readFileSync(lock, 'utf8')), '.github/workflows/gate.yml': sha('older') }));
+  writeFileSync(gate, 'on: release\n');
+  known(pkg, sha('on: release\n'));
+  await quiet(() => cli(['init', '--upgrade'], ctx));
+  assert.equal(readFileSync(gate, 'utf8'), 'on: push\n');
+  assert.equal(JSON.parse(readFileSync(lock, 'utf8'))['.github/workflows/gate.yml'], sha('on: push\n'));
+});
+
+test('init writes the delivery workflow values from the binding and upgrades a release that differs only in them', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  const real = readFileSync(join(import.meta.dirname, '../templates/gates/github/agentic-sdlc-delivery.yml'), 'utf8');
+  const template = join(pkg, 'templates/gates/github/agentic-sdlc-delivery.yml');
+  const older = real + '# older release\n';
+  w(template, real);
+  w(join(root, '.agents/binding.yml'), 'version: 2\nboard: { adapter: github }\nforge: { adapter: github }\nvcs: { adapter: git, trunk: master, release_prefix: rel/ }\nproduct: { delivery: continuous }\n');
+  const wf = join(root, '.github/workflows/agentic-sdlc-delivery.yml');
+  w(wf, bindWorkflow('agentic-sdlc-delivery.yml', older, { ...DEFAULTS, trunk: 'trunk', delivery: 'hand-edited' }));
+  known(pkg, releasedHash('agentic-sdlc-delivery.yml', Buffer.from(older)));
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  const lines = await capture(() => cli(['init', '--upgrade'], ctx));
+  assert.ok(lines.includes('updated .github/workflows/agentic-sdlc-delivery.yml'), lines.join('|'));
+  const wfs = parse(readFileSync(wf, 'utf8'));
+  assert.deepEqual([wfs.env.TRUNK, wfs.env.RELEASE_PREFIX, wfs.env.DELIVERY, wfs.on.push.branches], ['master', 'rel/', 'continuous', ['master']]);
+  assert.ok(!readFileSync(wf, 'utf8').includes('# older release'), 'the file follows the package');
+  assert.match(deliveryWorkflow({ forge: { adapter: 'github' }, vcs: { trunk: 'master', release_prefix: 'rel/' }, product: { delivery: 'continuous' } }, root)!, /^ok   delivery workflow/);
+});
+
+test('init writes the verify workflow commands from the binding', async () => {
+  const root = fixture();
+  const pkg = process.env.AGENTIC_SDLC_PACKAGE!;
+  w(join(pkg, 'templates/gates/github/agentic-sdlc-verify.yml'), readFileSync(join(import.meta.dirname, '../templates/gates/github/agentic-sdlc-verify.yml'), 'utf8'));
+  w(join(root, '.agents/binding.yml'), 'version: 2\nboard: { adapter: github }\nforge: { adapter: github }\nvcs: { adapter: git, trunk: main }\ncommands: { install: pnpm i --frozen-lockfile, verify: "pnpm test: all" }\n');
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  const text = readFileSync(join(root, '.github/workflows/agentic-sdlc-verify.yml'), 'utf8');
+  assert.match(text, /run: pnpm i --frozen-lockfile +# set: the binding's commands\.install\n/);
+  assert.match(text, /run: "pnpm test: all" +# set: the binding's commands\.verify\n/);
+  assert.doesNotMatch(text, /run: npm (ci|test) /);
+  assert.equal(releasedHash('agentic-sdlc-verify.yml', Buffer.from(text)), releasedHash('agentic-sdlc-verify.yml', readFileSync(join(import.meta.dirname, '../templates/gates/github/agentic-sdlc-verify.yml'))));
+});
+
+test('init leaves the mode of a kept pre-push hook alone', { skip: process.platform === 'win32' }, async () => {
+  const root = fixture();
+  const { ctx } = fakeCtx(root, {}, () => ({}));
+  await quiet(() => cli(['init'], ctx));
+  const hook = join(root, '.agents/hooks/pre-push');
+  writeFileSync(hook, '#!/bin/sh\necho mine\n');
+  execFileSync('chmod', ['644', hook]);
+  const lines = await capture(() => cli(['init'], ctx));
+  assert.ok(lines.some((m) => m.startsWith('kept .agents/hooks/pre-push')), lines.join('|'));
+  assert.equal(statSync(hook).mode & 0o777, 0o644);
+});
+
+test('templates/known-hashes.json lists every installable file the package ships (run npm run hashes)', () => {
+  const have = new Set(JSON.parse(readFileSync(join(import.meta.dirname, '../templates/known-hashes.json'), 'utf8')) as string[]);
+  const root = join(import.meta.dirname, '..');
+  const walk = (rel: string): string[] => readdirSync(join(root, rel)).flatMap((n) =>
+    statSync(join(root, rel, n)).isDirectory() ? walk(`${rel}/${n}`) : [`${rel}/${n}`]);
+  const missing = ['skills', 'scorers', 'templates'].flatMap(walk).filter(isInstallable)
+    .filter((p) => shippedHashes(p, readFileSync(join(root, p))).some((h) => !have.has(h)));
+  assert.deepEqual(missing, [], 'run npm run hashes before committing a change to these files');
 });
