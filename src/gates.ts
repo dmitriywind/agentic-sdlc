@@ -11,7 +11,7 @@ import { UsageError, guard, parseArgs } from './forge/util.ts';
 import { createBoard } from './board/index.ts';
 import { createForge } from './forge/index.ts';
 import { createVcs } from './vcs/index.ts';
-import { selectComments } from './comments.ts';
+import { matches, selectComments, verdictOf } from './comments.ts';
 import { changeMergedEvent, deployEvent, emitGateEvent } from './telemetry.ts';
 
 export interface Deps {
@@ -195,6 +195,35 @@ export function approvers(reviews: Review[], sha: string): string[] {
   return [...last].filter(([, r]) => r.state === 'approved' && r.sha === sha).map(([u]) => u);
 }
 
+/** The approval class of a CR: the one classification the approval gate, `forge land` and `forge queue` share. */
+export async function approvalClass(d: Deps, cr: CR, diff: string | undefined): Promise<ApprovalClass> {
+  const b = d.binding;
+  const cls = await classify(d, cr, diff);
+  if (!factoryGlobs(b).length) return 'guardrail'; // no paths.factory: every CR waits for the owner
+  if (cls !== 'product') return cls;
+  const item = cr.closes.length === 1 ? await d.board.get(cr.closes[0]).catch(() => undefined) : undefined;
+  // The Lane field is agent-written: a path in paths.lane_areas forces Full whatever it says.
+  const areas = [b.paths.lane_areas ?? []].flat();
+  const inArea = areas.length > 0 && (diff === undefined ? [] : diffPaths(diff) ?? []).some((p) => matchesAny(p, areas));
+  return !inArea && String(item?.fields?.lane ?? '').toLowerCase() === 'fast' ? 'product-fast' : 'product-full';
+}
+
+/** Who must approve a class: none, any human outside the bots, or an owners.factory entry. */
+export function approvalNeed(b: Binding, klass: ApprovalClass): 'none' | 'human' | 'owner' {
+  const mode = b.forge.human_approval ?? 'full-lane';
+  if (klass === 'guardrail') return 'owner';
+  if (klass === 'tuning') return (b.learning?.auto_merge_classes ?? []).includes('tuning') ? 'none' : 'owner';
+  return mode === 'always' || (mode === 'full-lane' && klass === 'product-full') ? 'human' : 'none';
+}
+
+/** The class of a CR and the forge accounts that may approve it (owners.factory for an owner wait, owners.product for a human wait). */
+export async function approvalWho(d: Deps, cr: CR): Promise<{ class: ApprovalClass; who: string[] }> {
+  const klass = await approvalClass(d, cr, await readDiff(d, cr.n));
+  const need = approvalNeed(d.binding, klass);
+  const o = ownersFor(d.binding.owners, 'forge');
+  return { class: klass, who: need === 'owner' ? o.factory : need === 'human' ? o.product : [] };
+}
+
 /**
  * Status `human-approval`. product-fast passes; product-full needs a human approval on the head
  * (forge.human_approval full-lane or always; always holds product-fast too; never passes both);
@@ -205,26 +234,11 @@ export function approvers(reviews: Review[], sha: string): string[] {
 export async function approval(d: Deps, n: string) {
   const b = d.binding;
   const cr = await d.forge.view(n);
-  const diff = await readDiff(d, n);
-  const cls = await classify(d, cr, diff);
-  let klass: ApprovalClass;
-  if (!factoryGlobs(b).length) klass = 'guardrail'; // no paths.factory: every CR waits for the owner
-  else if (cls !== 'product') klass = cls;
-  else {
-    const item = cr.closes.length === 1 ? await d.board.get(cr.closes[0]).catch(() => undefined) : undefined;
-    // The Lane field is agent-written: a path in paths.lane_areas forces Full whatever it says.
-    const areas = [b.paths.lane_areas ?? []].flat();
-    const inArea = areas.length > 0 && (diff === undefined ? [] : diffPaths(diff) ?? []).some((p) => matchesAny(p, areas));
-    klass = !inArea && String(item?.fields?.lane ?? '').toLowerCase() === 'fast' ? 'product-fast' : 'product-full';
-  }
-  const mode = b.forge.human_approval ?? 'full-lane';
+  const klass = await approvalClass(d, cr, await readDiff(d, n));
   const o = ownersFor(b.owners, 'forge');
   const bots = [...o.bots, b.forge.review_identity].filter(Boolean).map((u) => u!.toLowerCase());
   const owner = o.factory.map((u) => u.toLowerCase());
-  let need: 'none' | 'human' | 'owner';
-  if (klass === 'guardrail') need = 'owner';
-  else if (klass === 'tuning') need = (b.learning?.auto_merge_classes ?? []).includes('tuning') ? 'none' : 'owner';
-  else need = mode === 'always' || (mode === 'full-lane' && klass === 'product-full') ? 'human' : 'none';
+  const need = approvalNeed(b, klass);
   let by: string | undefined;
   if (need !== 'none') {
     const reviews = await d.forge.approvals(n);
@@ -250,10 +264,9 @@ export async function review(d: Deps, n: string) {
   const b = d.binding;
   if (b.forge.review_identity) return { cr: n, skipped: 'two identities: review-pr posts the review status' };
   const cr = await d.forge.view(n);
-  const [report] = selectComments((await d.forge.comments(n)).reverse(), { owners: ownersFor(b.owners, 'forge'), trusted: true, marker: `<!-- review-pr ${cr.headSha}` });
+  const [report] = selectComments((await d.forge.comments(n)).reverse(), { owners: ownersFor(b.owners, 'forge'), trusted: true, marker: matches('verdict', cr.headSha) });
   // The report's one verdict line; quoted CR text may carry another, so disagreeing verdicts fail.
-  const verdicts = new Set([...(report?.body ?? '').matchAll(/^Verdict:\s*(PASS|REMEDIATION REQUIRED)\s*$/gm)].map((m) => m[1]));
-  const verdict = verdicts.size > 1 ? 'CONFLICT' : [...verdicts][0];
+  const verdict = verdictOf(report?.body ?? '');
   const state = verdict === 'PASS' ? 'success' : verdict ? 'failure' : 'pending';
   const description = verdict === 'CONFLICT' ? 'review-pr: the report holds conflicting verdicts' : verdict ? `review-pr: ${verdict}` : 'waits for a trusted review-pr report on this head';
   await d.forge.status(cr.headSha, { context: b.forge.review_check_name ?? 'review', state, description, ...(report?.url ? { url: report.url } : {}) }, { as: 'ci' });
@@ -589,25 +602,28 @@ function scorerErrors(f: string, text: string): string[] {
   return errors;
 }
 
+/** The gates' dependencies from the binding: the ports, a command runner and git reads. */
+export function depsOf(base: Omit<AdapterContext, 'options'>): Deps {
+  const ctxOf = (options: Record<string, unknown>): AdapterContext => ({ ...base, options });
+  const b = base.binding;
+  const d: Deps = {
+    binding: b, root: base.root,
+    board: createBoard(ctxOf(b.board.options)), forge: createForge(ctxOf(b.forge.options)), vcs: createVcs(ctxOf(b.vcs.options ?? {})),
+  };
+  const git = (args: string[]) => base.exec('git', args, { cwd: base.root });
+  d.run = proofRunner((cmd) => shell(base.exec, cmd, base.root));
+  d.fileAt = (path, sha) => { try { return git(['show', `${sha}:${path}`]); } catch { return undefined; } };
+  d.isAncestor = (x, y) => {
+    try { git(['merge-base', '--is-ancestor', x, y]); return true; } catch (e) { return (e as { status?: number }).status === 1 ? false : undefined; }
+  };
+  return d;
+}
+
 export const cli: PortCli = (argv, base) =>
   guard(async () => {
     const [gate, ...rest] = argv;
     const a = parseArgs(rest, ['stdin-prepush']);
-    const ctxOf = (options: Record<string, unknown>): AdapterContext => ({ ...base, options });
-    const deps = (): Deps => {
-      const b = base.binding;
-      const d: Deps = {
-        binding: b, root: base.root,
-        board: createBoard(ctxOf(b.board.options)), forge: createForge(ctxOf(b.forge.options)), vcs: createVcs(ctxOf(b.vcs.options ?? {})),
-      };
-      const git = (args: string[]) => base.exec('git', args, { cwd: base.root });
-      d.run = proofRunner((cmd) => shell(base.exec, cmd, base.root));
-      d.fileAt = (path, sha) => { try { return git(['show', `${sha}:${path}`]); } catch { return undefined; } };
-      d.isAncestor = (x, y) => {
-        try { git(['merge-base', '--is-ancestor', x, y]); return true; } catch (e) { return (e as { status?: number }).status === 1 ? false : undefined; }
-      };
-      return d;
-    };
+    const deps = () => depsOf(base);
     const fail = (r: { ok?: boolean; errors?: string[] }) => {
       if (r.errors?.length) throw new Error(r.errors.join('\n'));
       return r;

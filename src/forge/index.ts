@@ -1,5 +1,6 @@
 import { ownersFor, type AdapterContext, type Forge, type PortCli } from '../ports.ts';
-import { selectComments } from '../comments.ts';
+import { matches, parseKind, selectComments, stampBody } from '../comments.ts';
+import { land, queue, verdict } from './flow.ts';
 import { UsageError, bodyFile, guard, parseStrict, type VerbSpec } from './util.ts';
 import { github } from './github.ts';
 
@@ -21,8 +22,11 @@ const VERBS: Record<string, VerbSpec> = {
   diff: {},
   list: { value: ['state', 'limit', 'since'], bool: ['checks'], num: ['limit'] },
   ready: {}, draft: {}, sync: {}, automerge: {}, cut: {},
-  comment: { value: ['body-file'] },
-  comments: { value: ['last', 'marker', 'author'], bool: ['trusted'], num: ['last'] },
+  comment: { value: ['body-file', 'kind', 'ref'] },
+  comments: { value: ['last', 'marker', 'author', 'kind', 'ref'], bool: ['trusted'], num: ['last'] },
+  verdict: { value: ['body-file'], bool: ['pass', 'fail'] },
+  land: { value: ['wait'], num: ['wait'] },
+  queue: {},
   status: { value: ['state', 'context', 'description', 'url'] },
   approve: {}, approvals: {},
   runs: { value: ['ref'], bool: ['failed'] },
@@ -58,13 +62,35 @@ export const cli: PortCli = (argv, ctx) =>
         if (!a.pos[1]) throw new UsageError('forge cut <revision> <version>');
         return f.cut(a.pos[0] ?? '', a.pos[1]);
       }
-      case 'comment': return f.comment(n(), body());
-      case 'comments':
+      case 'comment': {
+        if (a.has('ref') && !a.has('kind')) throw new UsageError('forge comment: --ref needs --kind');
+        const text = a.has('kind') ? stampBody(body(), parseKind(a.get('kind')!), a.get('ref'), { specMarker: ctx.binding.spec_marker }) : body();
+        return f.comment(n(), text);
+      }
+      case 'verdict': {
+        if (a.has('pass') === a.has('fail')) throw new UsageError('forge verdict: exactly one of --pass or --fail');
+        return verdict(f, { ...ctx, options: ctx.binding.forge.options }, n(), a.has('pass'), body());
+      }
+      case 'land': {
+        const { depsOf, approvalWho } = await import('../gates.ts');
+        const d = depsOf(ctx);
+        return land(f, ctx.binding, n(), a.get('wait') === undefined ? undefined : Number(a.get('wait')), (cr) => approvalWho(d, cr));
+      }
+      case 'queue': {
+        const { depsOf, approvalWho } = await import('../gates.ts');
+        const d = depsOf(ctx);
+        return queue(f, ctx.binding, (cr) => approvalWho(d, cr));
+      }
+      case 'comments': {
+        if (a.has('kind') && a.has('marker')) throw new UsageError('forge comments: --kind and --marker together');
+        if (a.has('ref') && !a.has('kind')) throw new UsageError('forge comments: --ref needs --kind');
+        const marker = a.has('kind') ? matches(parseKind(a.get('kind')!), a.get('ref'), { specMarker: ctx.binding.spec_marker }) : a.get('marker');
         // Adapters return oldest first; the CLI answers newest first, as `board comments` does.
         return selectComments((await f.comments(n())).reverse(), {
           owners: ownersFor(ctx.binding.owners, 'forge'), authors: a.all('author'), trusted: a.has('trusted'),
-          last: a.get('last') ? Number(a.get('last')) : undefined, marker: a.get('marker'),
+          last: a.get('last') ? Number(a.get('last')) : undefined, marker,
         });
+      }
       case 'status': {
         const state = a.need('state');
         // Gates post these from CI through the port, never through this verb: an agent posting one would forge a gate.

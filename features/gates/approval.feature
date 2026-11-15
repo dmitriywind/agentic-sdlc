@@ -1,0 +1,234 @@
+# Source: src/gates.ts "approval"; docs/forges.md "Review identity and approval"
+@gate:approval
+Feature: Gate human-approval
+  Each CR gets the approvals its class needs, so that no CR merges without the right human decision.
+  The gate classes the CR from its diff, decides who must approve, and posts the status "human-approval" on the head.
+
+  Rule: A product CR needs a human only when its Lane or forge.human_approval says so
+
+    Scenario Outline: The Lane and forge.human_approval decide whether a product CR waits for a human
+      Given the binding sets "forge.human_approval" to "<mode>"
+      And a product CR whose ticket has the Lane "<lane>"
+      When the approval gate runs
+      Then the CR class is "<class>"
+      And the status "human-approval" is "<state>"
+
+      Examples:
+        | mode      | lane | class        | state   |
+        | full-lane | Fast | product-fast | success |
+        | full-lane | Full | product-full | pending |
+        | always    | Fast | product-fast | pending |
+        | always    | Full | product-full | pending |
+        | never     | Fast | product-fast | success |
+        | never     | Full | product-full | success |
+
+    Scenario: A missing Lane counts as Full
+      Given a product CR whose ticket has no Lane
+      When the approval gate runs
+      Then the CR class is "product-full"
+      And the status "human-approval" is "pending"
+
+    Scenario: A path in paths.lane_areas forces the Full lane whatever the ticket says
+      Given the binding sets "paths.lane_areas" to the list "src/**"
+      And a product CR whose ticket has the Lane "Fast"
+      When the approval gate runs
+      Then the CR class is "product-full"
+      And the status "human-approval" is "pending"
+
+    Scenario: A Fast-lane CR needs no approval and says so
+      Given a product CR whose ticket has the Lane "Fast"
+      When the approval gate runs
+      Then the status description is "product-fast: no human approval needed"
+
+  Rule: Only a human of the repo approves a Full-lane CR
+
+    Scenario: An approval by an account in owners.bots is not a human approval
+      Given a product CR whose ticket has the Lane "Full"
+      And "factory-bot" with the association "MEMBER" approved the head
+      When the approval gate runs
+      Then the status "human-approval" is "pending"
+
+    Scenario: An approval by the review identity is not a human approval
+      Given the binding sets "forge.review_identity" to "reviewer"
+      And a product CR whose ticket has the Lane "Full"
+      And "reviewer" with the association "MEMBER" approved the head
+      When the approval gate runs
+      Then the status "human-approval" is "pending"
+
+    Scenario: An approval by a bot named differently on the board and on the forge is not a human approval
+      Given the binding sets "owners.bots" to the account "acc-bot" on the board and "factory-bot" on the forge
+      And a product CR whose ticket has the Lane "Full"
+      And "factory-bot" with the association "MEMBER" approved the head
+      When the approval gate runs
+      Then the status "human-approval" is "pending"
+
+    Scenario Outline: Only an owner, member or collaborator of the repo counts as a human
+      Given a product CR whose ticket has the Lane "Full"
+      And "dana" with the association "<association>" approved the head
+      When the approval gate runs
+      Then the status "human-approval" is "<state>"
+
+      Examples:
+        | association  | state   |
+        | OWNER        | success |
+        | MEMBER       | success |
+        | COLLABORATOR | success |
+        | CONTRIBUTOR  | pending |
+        | NONE         | pending |
+
+    Scenario: A review with no author association is not a human approval
+      Given a product CR whose ticket has the Lane "Full"
+      And "dana" approved the head without an author association
+      When the approval gate runs
+      Then the status "human-approval" is "pending"
+
+    Scenario: The status names the human who approved, in lower case
+      Given a product CR whose ticket has the Lane "Full"
+      And "Dana" with the association "COLLABORATOR" approved the head
+      When the approval gate runs
+      Then the status description is "product-full: approved by dana"
+      And the status is posted on the head of the CR
+      And only the status "human-approval" is posted
+
+  Rule: Only the latest decisive review of the current head counts
+
+    Scenario: An approval of an earlier head does not count
+      Given a product CR whose ticket has the Lane "Full"
+      And these reviews are on the CR:
+        | user | state    | commit | association |
+        | dana | approved | old    | MEMBER      |
+      When the approval gate runs
+      Then the status "human-approval" is "pending"
+
+    Scenario: A later request for changes withdraws an approval
+      Given a product CR whose ticket has the Lane "Full"
+      And these reviews are on the CR:
+        | user | state             | commit | association |
+        | bob  | approved          | head   | MEMBER      |
+        | bob  | changes_requested | head   | MEMBER      |
+      When the approval gate runs
+      Then the status "human-approval" is "pending"
+
+    Scenario: A later plain comment does not withdraw an approval
+      Given a product CR whose ticket has the Lane "Full"
+      And these reviews are on the CR:
+        | user | state     | commit | association |
+        | Ann  | approved  | head   | MEMBER      |
+        | ann  | commented | head   | MEMBER      |
+      When the approval gate runs
+      Then the status "human-approval" is "success"
+
+  Rule: A guardrail CR needs owners.factory
+
+    Scenario: A human who is not owners.factory leaves a guardrail CR pending
+      Given a CR that changes "skills/a/SKILL.md"
+      And "dana" with the association "MEMBER" approved the head
+      When the approval gate runs
+      Then the CR class is "guardrail"
+      And the status "human-approval" is "pending"
+
+    Scenario: The owner approves a guardrail CR
+      Given a CR that changes "skills/a/SKILL.md"
+      And "fo" with the association "OWNER" approved the head
+      When the approval gate runs
+      Then the status "human-approval" is "success"
+
+    Scenario: A review with no author association does not approve a guardrail CR
+      Given a CR that changes "skills/a/SKILL.md"
+      And "fo" approved the head without an author association
+      When the approval gate runs
+      Then the status "human-approval" is "pending"
+
+    Scenario: An owner known by two names approves with the forge name
+      Given the binding sets "owners.factory" to the account "acc-7" on the board and "fo" on the forge
+      And a CR that changes "skills/a/SKILL.md"
+      And "fo" with the association "OWNER" approved the head
+      When the approval gate runs
+      Then the status "human-approval" is "success"
+
+    Scenario: The board name of an owner approves nothing
+      Given the binding sets "owners.factory" to the account "acc-7" on the board and "fo" on the forge
+      And a CR that changes "skills/a/SKILL.md"
+      And "acc-7" with the association "OWNER" approved the head
+      When the approval gate runs
+      Then the status "human-approval" is "pending"
+
+    Scenario: A forge name that differs from the owner's board name does not match
+      Given the binding sets "owners.factory" to the account "fo" on the board and "fo-gh" on the forge
+      And a CR that changes "skills/a/SKILL.md"
+      And "fo" with the association "OWNER" approved the head
+      When the approval gate runs
+      Then the status "human-approval" is "pending"
+
+    Scenario: An approval by any one of several factory owners passes
+      Given the binding sets "owners.factory" to the list "someone, fo"
+      And a CR that changes "skills/a/SKILL.md"
+      And "fo" with the association "OWNER" approved the head
+      When the approval gate runs
+      Then the status "human-approval" is "success"
+
+    Scenario: An account outside the list of factory owners does not pass
+      Given the binding sets "owners.factory" to the list "someone, fo"
+      And a CR that changes "skills/a/SKILL.md"
+      And "dana" with the association "MEMBER" approved the head
+      When the approval gate runs
+      Then the status "human-approval" is "pending"
+
+  Rule: A tuning CR needs the owner unless learning.auto_merge_classes lists tuning
+
+    Scenario: A change of the models map alone is tuning and needs no approval
+      Given a CR that changes only the models in the binding
+      When the approval gate runs
+      Then the CR class is "tuning"
+      And the status "human-approval" is "success"
+
+    Scenario: A tuning CR waits for the owner when tuning is not auto-merged
+      Given the binding sets "learning.auto_merge_classes" to the list ""
+      And a CR that changes only the models in the binding
+      When the approval gate runs
+      Then the CR class is "tuning"
+      And the status "human-approval" is "pending"
+
+  Rule: Whatever cannot be classed fails closed to guardrail
+
+    Scenario: An unreadable diff is a guardrail CR
+      Given the binding sets "forge.human_approval" to "never"
+      And a CR whose diff the forge cannot return
+      And "dana" with the association "MEMBER" approved the head
+      When the approval gate runs
+      Then the CR class is "guardrail"
+      And the status "human-approval" is "pending"
+
+    Scenario: A diff header that cannot be parsed is a guardrail CR
+      Given a CR whose diff has a header with a quoted path
+      When the approval gate runs
+      Then the CR class is "guardrail"
+
+    Scenario Outline: A binding with no paths.factory classes every CR as guardrail
+      Given the binding <paths.factory>
+      And a product CR whose ticket has the Lane "Fast"
+      When the approval gate runs
+      Then the CR class is "guardrail"
+      And the status "human-approval" is "pending"
+
+      Examples:
+        | paths.factory                        |
+        | has no "paths.factory"               |
+        | sets "paths.factory" to the list ""  |
+
+  Rule: A CR is classed by the paths it changes
+
+    Scenario Outline: A path under paths.factory makes a CR a guardrail CR, the glob decides what matches
+      Given the binding sets "paths.factory" to the list "<glob>"
+      And a CR that changes "<path>"
+      When the approval gate runs
+      Then the CR class is "<class>"
+
+      Examples:
+        | glob         | path                         | class     |
+        | .agents/**   | .agents/skills/a/SKILL.md    | guardrail |
+        | **/x.md      | x.md                         | guardrail |
+        | a/*.md       | a/b.md                       | guardrail |
+        | a/*.md       | a/b/c.md                     | product-full |
+        | a?.md        | ab.md                        | guardrail |
+        | a.md         | axmd                         | product-full |

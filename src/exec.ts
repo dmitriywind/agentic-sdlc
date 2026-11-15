@@ -11,6 +11,8 @@ export type Http = (method: string, url: string, opts?: { headers?: Record<strin
 
 /** The wait between HTTP retries. Tests swap it with setSleep. */
 let sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+/** Waits `ms` through the swappable sleep: a poller calls this so tests need no clock. */
+export const pause = (ms: number) => sleep(ms);
 export const setSleep = (f: (ms: number) => Promise<void>) => { const prev = sleep; sleep = f; return prev; };
 
 let HTTP_TIMEOUT_MS = 30_000;

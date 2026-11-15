@@ -1,5 +1,4 @@
 // The run ledger: runs read back from heartbeats (references/architecture.md 6.1). Mechanism only.
-import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -7,11 +6,14 @@ import { flagError } from './forge/util.ts';
 import { parse } from 'yaml';
 import type { Binding, Board, Comment, CR, Forge, Item, PortCli } from './ports.ts';
 import { ownersFor } from './ports.ts';
+import { isMarked, stamp } from './comments.ts';
+import { findStep, hashSkill, readSkills, skillOf, stepIdOf } from './skills.ts';
+export { hashSkill };
 import { cdEventsFromRuns, otlpTraces, repoOf, sendCdEvent, sendOtlp, sinkOf, type CycleMeta } from './telemetry.ts';
 
-export const HEARTBEAT_MARKER = '<!-- heartbeat -->';
+export const HEARTBEAT_MARKER = stamp('heartbeat');
 
-/** One subagent run: a row of the heartbeat's `runs` (skills/sdlc/references/heartbeat.md). */
+/** One step run: a row of the heartbeat's `runs`. `skill` holds the step id (`build`, `review/review`); an old skill name in a stored row reads as its step id (OLD_STEP_IDS in skills.ts). */
 export interface LedgerRun {
   id: string;
   at: string;
@@ -26,7 +28,7 @@ export interface LedgerRun {
   tokens?: number;
   minutes?: number;
   outcome: string; // done | sent_back | failed | escalated | timeout | capped (ended on a turn, token or minute cap)
-  score?: number; // 0-4: the done-conditions scorer from judge-run
+  score?: number; // 0-4: the done-conditions scorer from learn/judge
   scores?: Record<string, ScoreValue>; // v6: one per scorer in .agents/scorers/
   trace?: string; // v6: run id for traces.uri
   error?: string;
@@ -77,7 +79,7 @@ function applyRescores(r: LedgerRun, m: Map<string, ScoreValue> | undefined): Le
   return { ...(s === 'unscorable' ? rest : r), scores: { ...r.scores, ...Object.fromEntries(m) }, ...(typeof s === 'number' ? { score: s } : {}) };
 }
 
-export const SCORES_MARKER = '<!-- scores -->';
+export const SCORES_MARKER = stamp('scores');
 export const GRADE_MARKER = 'agentic-sdlc:grade';
 
 /** A `<!-- scores -->` comment (ledger record): one run's judge values as rescores. */
@@ -103,6 +105,8 @@ export const parseGrades = (body: string): Rescore[] =>
  * a heartbeat's `rescores`, `<!-- scores -->` comments and grade comments. Callers filter trust first.
  */
 export function flattenRuns(comments: Comment[], q: { sinceDays?: number; skill?: string; now?: number } = {}): LedgerRun[] {
+  // `skill` filters by step id, or by skill name for all of its steps.
+  const want = q.skill === undefined ? undefined : stepIdOf(q.skill);
   const cutoff = q.sinceDays === undefined ? -Infinity : (q.now ?? Date.now()) - q.sinceDays * 864e5;
   const beats = comments.map((c) => ({ c, hb: parseHeartbeat(c.body) })).filter((x) => x.hb);
   const rescore = pickRescores(comments.flatMap((c) => {
@@ -111,8 +115,8 @@ export function flattenRuns(comments: Comment[], q: { sinceDays?: number; skill?
   }));
   return beats
     .flatMap(({ c, hb }) => (hb.runs ?? []).map((r: LedgerRun) => ({ ...r, at: r.at ?? hb.at ?? c.createdAt })))
-    .map((r) => applyRescores(r, rescore.get(r.id)))
-    .filter((r) => Date.parse(r.at) >= cutoff && (!q.skill || r.skill === q.skill));
+    .map((r) => applyRescores({ ...r, skill: stepIdOf(String(r.skill)) }, rescore.get(r.id)))
+    .filter((r) => Date.parse(r.at) >= cutoff && (!want || r.skill === want || skillOf(r.skill) === want));
 }
 
 /** Strips the parts of an error that differ between runs of the same mistake. */
@@ -182,7 +186,7 @@ export function byScorer(rows: LedgerRun[]): Record<string, ScorerStats> {
   }));
 }
 
-/** One ticket's spend: its runs' reported tokens and minutes; reworks = implement-spec runs after the first. */
+/** One ticket's spend: its runs' reported tokens and minutes; reworks = build runs after the first. */
 export interface TicketUse { ticket: string; runs: number; tokens: number; minutes: number; reworks?: number; overBudget?: true }
 
 /**
@@ -194,7 +198,7 @@ export function ticketUse(rows: LedgerRun[], maxTokens?: number, top = 20) {
   for (const r of rows) if (r.ticket) g.set(r.ticket, [...(g.get(r.ticket) ?? []), r]);
   const all: TicketUse[] = [...g].map(([ticket, rs]) => {
     const tokens = rs.reduce((t, r) => t + (r.tokens ?? 0), 0);
-    const reworks = Math.max(0, rs.filter((r) => r.skill === 'implement-spec').length - 1);
+    const reworks = Math.max(0, rs.filter((r) => stepIdOf(r.skill) === 'build').length - 1);
     return { ticket, runs: rs.length, tokens, minutes: Math.round(rs.reduce((t, r) => t + (r.minutes ?? 0), 0) * 100) / 100, ...(reworks ? { reworks } : {}), ...(maxTokens && tokens > maxTokens ? { overBudget: true as const } : {}) };
   }).sort((a, b) => b.tokens - a.tokens || b.minutes - a.minutes);
   return {
@@ -205,25 +209,14 @@ export function ticketUse(rows: LedgerRun[], maxTokens?: number, top = 20) {
 
 export const summarise = (rows: LedgerRun[], o: { maxTokensPerTicket?: number } = {}) => ({
   total: stats(rows),
-  bySkill: groupStats(rows, (r) => r.skill),
+  byStep: groupStats(rows, (r) => r.skill),
+  bySkill: groupStats(rows, (r) => skillOf(r.skill)),
   byModel: groupStats(rows, (r) => r.model),
   byExecutor: groupStats(rows, (r) => r.executor ?? 'harness'),
   byScorer: byScorer(rows),
   failureClusters: clusters(rows),
   ...ticketUse(rows, o.maxTokensPerTicket),
 });
-
-/** Content hash of a skill folder: sorted relative paths and LF-normalised contents. 12 hex chars. */
-export function hashSkill(dir: string): string {
-  const h = createHash('sha256');
-  const files = (readdirSync(dir, { recursive: true, withFileTypes: true }) as import('node:fs').Dirent[])
-    .filter((d) => d.isFile())
-    .map((d) => join(d.parentPath, d.name))
-    .map((p) => [relative(dir, p).replaceAll('\\', '/'), p])
-    .sort(([a], [b]) => (a < b ? -1 : 1));
-  for (const [rel, p] of files) h.update(`${rel}\0${readFileSync(p, 'utf8').replace(/\r\n/g, '\n')}\0`);
-  return h.digest('hex').slice(0, 12);
-}
 
 const isScores = (c: Comment) => c.body.trimStart().startsWith(SCORES_MARKER);
 
@@ -249,14 +242,14 @@ export async function readRuns(board: Board, ticket: string, authors: string[], 
 
 /**
  * The learning trigger, from the ledger alone: cyclesSince counts heartbeats newer than the one
- * holding the last improve-factory run (all of them when there is none); due at
+ * holding the last learn/improve run (all of them when there is none); due at
  * learning.every_cycles. Off unless learning.enabled: then neither due nor judge.
  */
 export function learningState(comments: Comment[], everyCycles: number, enabled = false) {
   // newest first; review and learn runtimes write their own heartbeats (kind), which count no cycle
   const beats = comments.map((c) => parseHeartbeat(c.body)).filter((hb) => hb && (hb.kind ?? 'cycle') === 'cycle');
-  const learnAt = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean).findIndex((hb) => (hb.runs ?? []).some((r: LedgerRun) => r.skill === 'improve-factory'));
-  // Cycles since the newest heartbeat (of any kind) that carries an improve-factory run.
+  const learnAt = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean).findIndex((hb) => (hb.runs ?? []).some((r: LedgerRun) => stepIdOf(String(r.skill)) === 'learn/improve'));
+  // Cycles since the newest heartbeat (of any kind) that carries a learn/improve run.
   const all = comments.map((c) => parseHeartbeat(c.body)).filter(Boolean);
   const cyclesSince = learnAt < 0 ? beats.length : all.slice(0, learnAt).filter((hb) => (hb.kind ?? 'cycle') === 'cycle').length;
   return { due: enabled && Number(everyCycles) > 0 && cyclesSince >= Number(everyCycles), judge: enabled, cyclesSince };
@@ -264,21 +257,22 @@ export function learningState(comments: Comment[], everyCycles: number, enabled 
 
 export interface Scorer { name: string; scale: 'pass-fail' | '0-4'; applies_to: '*' | string[] }
 
-/** `.agents/scorers/*.md` that apply to `skill`; done-conditions always (0-4) even without its file. */
-export function scorersFor(root: string, skill: string): Scorer[] {
+/** `.agents/scorers/*.md` that apply to a step (by its id, its skill's name, or `*`); done-conditions always (0-4) even without its file. */
+export function scorersFor(root: string, id: string): Scorer[] {
+  const ids = [stepIdOf(id), skillOf(stepIdOf(id))];
   const dir = join(root, '.agents', 'scorers');
   const out: Scorer[] = [];
   for (const f of existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith('.md')) : []) {
     let fm: any;
     try { fm = parse(/^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(join(dir, f), 'utf8'))?.[1] ?? ''); } catch { continue; }
     if (!fm?.name || !['pass-fail', '0-4'].includes(fm.scale)) continue;
-    if (fm.applies_to === '*' || (Array.isArray(fm.applies_to) && fm.applies_to.includes(skill))) out.push({ name: fm.name, scale: fm.scale, applies_to: fm.applies_to });
+    if (fm.applies_to === '*' || (Array.isArray(fm.applies_to) && fm.applies_to.some((a: unknown) => ids.includes(stepIdOf(String(a)))))) out.push({ name: fm.name, scale: fm.scale, applies_to: fm.applies_to });
   }
   if (!out.some((s) => s.name === SCORE_SCORER)) out.unshift({ name: SCORE_SCORER, scale: '0-4', applies_to: '*' });
   return out;
 }
 
-/** Hard facts code can read, each capping done-conditions (skills/judge-run Hard facts); the lowest wins. */
+/** Hard facts code can read, each capping done-conditions (skills/learn Hard facts); the lowest wins. */
 export function hardFacts(run: LedgerRun, cr?: CR, required: string[] = []): { score: number; facts: string[] } | null {
   const facts: [number, string][] = [];
   if (run.outcome === 'failed' || run.outcome === 'timeout' || run.outcome === 'capped') facts.push([1, `outcome ${run.outcome}`]);
@@ -289,7 +283,13 @@ export function hardFacts(run: LedgerRun, cr?: CR, required: string[] = []): { s
   return { score: Math.min(...facts.map(([s]) => s)), facts: facts.map(([, f]) => f) };
 }
 
-/** What judge-run needs for one run: the scorers that apply, evidence refs, and the cap. */
+/** The installed file a step id names, relative to the root; the conventional path when the pack cannot say. */
+function stepFile(root: string, id: string): string {
+  const step = findStep(readSkills(join(root, '.agents', 'skills')), stepIdOf(id));
+  return step ? relative(root, step.file).replaceAll('\\', '/') : `.agents/skills/${stepIdOf(id)}`;
+}
+
+/** What learn/judge needs for one run: the scorers that apply, evidence refs, and the cap. */
 export async function plan(run: LedgerRun, o: { root: string; binding: Binding; forge?: Forge }) {
   let cr: CR | undefined;
   if (run.cr && o.forge) try { cr = await o.forge.view(run.cr); } catch { /* the cap then misses check facts */ }
@@ -301,7 +301,7 @@ export async function plan(run: LedgerRun, o: { root: string; binding: Binding; 
       ...(run.ticket ? { ticket: run.ticket } : {}),
       ...(run.cr ? { cr: cr?.url ?? run.cr, diff: `agentic-sdlc forge diff ${run.cr}` } : {}),
       ...(run.trace && uri ? { trace: uri.replaceAll('{run_id}', run.trace) } : {}),
-      skill: `.agents/skills/${run.skill} at skillHash ${run.skillHash}`,
+      skill: `${stepFile(o.root, run.skill)} at skillHash ${run.skillHash}`,
     },
     cap: hardFacts(run, cr, o.binding.forge?.required_checks ?? []),
   };
@@ -373,7 +373,7 @@ export async function measures(o: { board: Board; forge?: Forge; binding: Bindin
       let reworked = 0;
       for (const c of crs) {
         const cs = await o.forge.comments(c.n);
-        if (cs.some((x) => bots.includes(x.author?.toLowerCase()) && x.body.includes('<!-- review-pr') && x.body.includes('REMEDIATION REQUIRED'))) reworked++;
+        if (cs.some((x) => bots.includes(x.author?.toLowerCase()) && isMarked(x.body, 'verdict') && x.body.includes('REMEDIATION REQUIRED'))) reworked++;
       }
       reworkRate = crs.length ? { value: round(reworked / crs.length), crs: crs.length, reworked } : none('no merged CR closed a ticket that reached Done in the window');
     } catch (e) { reworkRate = none(`the forge could not be read: ${(e as Error).message}`); }

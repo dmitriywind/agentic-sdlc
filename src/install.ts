@@ -1,6 +1,6 @@
 // init / validate / doctor.
 import { execFileSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, parseDocument } from 'yaml';
@@ -10,7 +10,8 @@ import { createForge } from './forge/index.ts';
 import { createVcs } from './vcs/index.ts';
 import { createLocalBoard } from './board/local.ts';
 import type { AdapterContext, PortCli } from './ports.ts';
-import { DEFAULTS, bindWorkflow, knownHashes, oneIdentityRuleset, releasedHash, sha, type Bound } from './pristine.ts';
+import { DEFAULTS, COPY_PREFIX, bindWorkflow, knownHashes, oneIdentityRuleset, releasedHash, renameSkill, sha, skillNames, type Bound } from './pristine.ts';
+import { OLD_STEP_IDS, readSkills, scorerTargets, stepIdOf } from './skills.ts';
 
 const START = '<!-- agentic-sdlc:start -->';
 const END = '<!-- agentic-sdlc:end -->';
@@ -74,7 +75,7 @@ const posix = (p: string) => p.replaceAll('\\', '/');
 class Installer {
   lock: Record<string, string> = {};
   offered = new Set<string>();
-  counts = { wrote: 0, updated: 0, kept: 0, stale: 0 };
+  counts = { wrote: 0, updated: 0, kept: 0, stale: 0, removed: 0 };
   root: string; pkg: string; force: boolean; log: string[]; known: Set<string>;
   /** The binding's values for the `# set:` lines of the stock workflows. */
   bound: Bound = DEFAULTS;
@@ -94,7 +95,7 @@ class Installer {
     if (existsSync(to)) {
       const bytes = readFileSync(to), have = sha(bytes);
       if (have === want) { this.lock[rel] = want; return true; }
-      if (have === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes))) how = 'updated';
+      if (have === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel))) how = 'updated';
       else if (this.force) how = 'overwrote';
       else {
         this.counts.kept++;
@@ -116,20 +117,60 @@ class Installer {
   }
   /** Name a file this run does not install (by choice of binding or harness) so it is not reported as stale. */
   skip(rel: string) { this.offered.add(posix(rel)); }
-  /** Copy the skill pack into `dest`. */
-  skills(src: string, dest: string) {
+  /**
+   * Copy the skill pack into `dest`. `copied` writes the copied-install names: every skill folder but `sdlc` becomes
+   * `sdlc-<name>` (folder, frontmatter name, links between skills; see renameSkill). The lock holds what was written;
+   * pristine detection reads an installed file back to the package's source form.
+   */
+  skills(src: string, dest: string, copied = false) {
     const before = this.counts.wrote + this.counts.updated;
-    for (const f of filesUnder(join(this.pkg, src))) this.copy(join(src, f), join(dest, f), true);
+    const names = skillNames(join(this.pkg, src));
+    for (const f of filesUnder(join(this.pkg, src))) {
+      const from = join(src, f);
+      if (!copied) { this.copy(from, join(dest, f), true); continue; }
+      const seg = posix(f).split('/');
+      const folder = names.has(seg[0]) && seg[0] !== 'sdlc' ? COPY_PREFIX + seg[0] : seg[0];
+      const rel = join(dest, folder, ...seg.slice(1));
+      const data = readFileSync(join(this.pkg, from));
+      this.put(rel, f.endsWith('.md') ? renameSkill(posix(f), data.toString('utf8'), 'to', names) : data, from, true);
+    }
     const n = this.counts.wrote + this.counts.updated - before;
     this.log.push(`wrote ${dest} (${n} file${n === 1 ? '' : 's'} updated)`);
   }
-  /** Report files the package no longer ships, then save the lock. Nothing is deleted. */
+  /** A package skill file's path inside a copied install's skills folder. */
+  installedName(f: string): string {
+    const seg = posix(f).split('/');
+    return join(seg[0] !== 'sdlc' ? COPY_PREFIX + seg[0] : seg[0], ...seg.slice(1));
+  }
+  /** Is the installed file `rel` an unedited copy of some released version (its lock hash, or a known hash)? */
+  pristine(rel: string): boolean {
+    const bytes = readFileSync(join(this.root, rel));
+    return sha(bytes) === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel));
+  }
+  /**
+   * Files the package no longer ships: an unedited one (its lock hash, or a hash a released version had) is removed, so an
+   * old skill folder does not linger and trigger; an edited one is reported stale and kept. Untracked files in the skill
+   * folders are looked at too (an install from before the lock); one that is not an unedited copy is the project's own.
+   * Then save the lock.
+   */
   finish() {
-    for (const rel of Object.keys(this.lock).sort()) {
+    const skillFiles = ['.agents/skills', '.claude/skills'].flatMap((d) => (existsSync(join(this.root, d)) ? filesUnder(join(this.root, d)).map((f) => posix(join(d, f))) : []));
+    for (const rel of [...new Set([...Object.keys(this.lock), ...skillFiles])].sort()) {
       if (this.offered.has(rel)) continue;
       if (!existsSync(join(this.root, rel))) { delete this.lock[rel]; continue; }
-      this.counts.stale++;
-      this.log.push(`stale ${rel}: no longer part of the package`);
+      if (this.pristine(rel)) {
+        rmSync(join(this.root, rel));
+        delete this.lock[rel];
+        for (let d = dirname(join(this.root, rel)); /[\\/]\.(?:agents|claude)[\\/]skills[\\/]./.test(d.slice(this.root.length)); d = dirname(d)) {
+          if (readdirSync(d).length) break;
+          rmdirSync(d);
+        }
+        this.counts.removed++;
+        this.log.push(`removed ${rel}: no longer part of the package`);
+      } else if (rel in this.lock) {
+        this.counts.stale++;
+        this.log.push(`stale ${rel}: no longer part of the package`);
+      }
     }
     const file = join(this.root, INSTALL_LOCK);
     mkdirSync(dirname(file), { recursive: true });
@@ -225,12 +266,12 @@ function claudeSetup(root: string, inst: Installer, log: string[], noPlugin: boo
     const model = !models[tier] || /^your-/.test(models[tier]) ? 'inherit' : models[tier]; // template placeholder: the session's model
     inst.put(rel, `---
 name: sdlc-${tier}
-description: Runs one agentic-sdlc skill step whose metadata.tier is ${tier}. The sdlc skill hands a step to this agent when the step's skill is at the ${tier} tier.
+description: Runs one agentic-sdlc step whose tier is ${tier}. The sdlc skill hands a step to this agent when the step is at the ${tier} tier.
 model: ${model}
 ---
 
-You run one step of the agentic-sdlc process at the ${tier} tier. Invoke the skill your task names
-(\`/agentic-sdlc:<skill>\`; without the plugin, read \`.agents/skills/<skill>/SKILL.md\`), follow it to
+You run one step of the agentic-sdlc process at the ${tier} tier. Your task names the step file to follow
+(\`.agents/skills/sdlc-<skill>/steps/<step>.md\`, or the skill's \`SKILL.md\` for a one-step skill). Read it, follow it to
 its last Done when, and report the result and the evidence. Call the CLI as \`npx --no agentic-sdlc ...\`.
 Do not start subagents.
 `);
@@ -273,12 +314,12 @@ async function init(root: string, argv: string[], log: string[]) {
   if (existsSync(join(root, 'package.json'))) readJson(join(root, 'package.json')); // fail before anything is written
   const skills = need(pkg, 'skills');
   const inst = new Installer(root, pkg, force, log);
-  inst.skills('skills', '.agents/skills');
+  inst.skills('skills', '.agents/skills', true);
   // Claude Code gets skills and the MCP server from the plugin, unless --no-plugin
   // (a Claude cloud session loads no repo plugin, only .claude/skills).
   const noPlugin = harness === 'claude' && f['no-plugin'] === 'true';
-  if (noPlugin) inst.skills('skills', '.claude/skills');
-  else for (const n of filesUnder(skills)) inst.skip(join('.claude/skills', n));
+  if (noPlugin) inst.skills('skills', '.claude/skills', true);
+  else for (const n of filesUnder(skills)) inst.skip(join('.claude/skills', inst.installedName(n)));
   const pinned = pinCli(root, version, force, log);
   const pinMoved = log.some((l) => l.startsWith('set devDependencies.agentic-sdlc='));
   if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, pinned ? ['--no-install', 'agentic-sdlc', 'mcp'] : ['-y', ALLOW_GIT, gitSpec(version), 'mcp'], force, log);
@@ -386,27 +427,28 @@ async function init(root: string, argv: string[], log: string[]) {
   const missing = missingKeysLine(missingBindingKeys(readFileSync(need(pkg, 'templates/binding.yml'), 'utf8'), readFileSync(bindingFile, 'utf8')));
   if (missing) log.push(missing);
   const c = inst.counts;
-  log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept (differ from every released version), ${c.stale} stale`);
-  const changed = c.wrote + c.updated > 0 || pinMoved || agentsChanged;
+  log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept (differ from every released version), ${c.stale} stale${c.removed ? `, ${c.removed} removed` : ''}`);
+  const changed = c.wrote + c.updated + c.removed > 0 || pinMoved || agentsChanged;
   if (hadBinding && !changed) log.push(c.kept ? `install: nothing to update; ${c.kept} kept (differ from every released version)` : 'install: up to date');
   else if (hadBinding) log.push('upgrade: run npm install to fetch the pinned CLI, review the kept files, then run agentic-sdlc validate and agentic-sdlc doctor');
 }
 
-/** Binding problems plus skill frontmatter problems; skill warnings go into `warnings`. */
+/** Binding problems plus skill problems (the loader's); skill warnings go into `warnings`. */
 export function validate(root: string, warnings: string[] = []): string[] {
   const problems: string[] = [];
-  try { problems.push(...validateBinding(loadBinding(root))); } catch (e) { problems.push((e as Error).message); }
+  let binding: any;
+  try { binding = loadBinding(root); problems.push(...validateBinding(binding)); } catch (e) { problems.push((e as Error).message); }
   const dir = join(root, '.agents', 'skills');
   if (!existsSync(dir)) return [...problems, '.agents/skills is missing'];
-  for (const name of readdirSync(dir).filter((n) => statSync(join(dir, n)).isDirectory())) {
-    const file = join(dir, name, 'SKILL.md');
-    if (!existsSync(file)) { problems.push(`skill ${name}: SKILL.md is missing`); continue; }
-    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(file, 'utf8'));
-    let fm: any = {};
-    try { fm = m ? parse(m[1]) : {}; } catch { /* reported below */ }
-    for (const k of ['name', 'description']) if (!fm?.[k]) problems.push(`skill ${name}: frontmatter lacks '${k}'`);
-    if (!fm?.metadata?.tier && !fm?.tier) problems.push(`skill ${name}: frontmatter lacks 'metadata.tier'`);
-    if (fm?.tier !== undefined) warnings.push(`skill ${name}: top-level 'tier' breaks claude.ai upload and the Skills API; move it to metadata: { tier: ${fm.tier} }`);
+  const pack = readSkills(dir);
+  problems.push(...pack.errors.map((m) => `skill ${m}`));
+  warnings.push(...pack.warnings.map((m) => `skill ${m}`));
+  // An executors key names a step or a skill (or default). An old skill name still resolves; a name that is none of them never runs.
+  const targets = scorerTargets(pack);
+  for (const k of Object.keys(binding?.executors ?? {})) {
+    if (k === 'default' || targets.has(k)) continue;
+    if (Object.hasOwn(OLD_STEP_IDS, k)) warnings.push(`executors.${k}: '${k}' is an old skill name; it runs as ${stepIdOf(k)}, so name it that`);
+    else problems.push(`executors.${k} names no step or skill (steps: ${pack.steps.map((s) => s.id).join(', ')})`);
   }
   return problems;
 }

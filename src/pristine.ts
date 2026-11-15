@@ -1,6 +1,7 @@
 // What init treats as an unedited file: one whose hash is a hash of some released version of it.
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { posix } from 'node:path';
 import { join } from 'node:path';
 
 export const sha = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
@@ -30,9 +31,51 @@ export function bindWorkflow(name: string, text: string, v: Bound): string {
   return text;
 }
 
-/** The hash a file has when its binding values are the template's own: what a released version is compared by. */
-export function releasedHash(name: string, data: Buffer): string {
-  return sha(name === 'agentic-sdlc-delivery.yml' || name === 'agentic-sdlc-verify.yml' ? bindWorkflow(name, data.toString('utf8'), DEFAULTS) : data);
+/** The prefix a copied install gives every skill folder but `sdlc` (the package source has short names, the plugin namespaces them). */
+export const COPY_PREFIX = 'sdlc-';
+
+/**
+ * A skill file as a copied install writes it (`to`), or back as the package ships it (`from`). `rel` is the file's
+ * path inside the skills folder (`build/SKILL.md`, package side; `sdlc-build/SKILL.md`, installed side).
+ * Three things change: the folder's first path segment is named by the caller, a SKILL.md `name:` line takes the
+ * folder's name, and a relative markdown link that reaches into another skill's folder follows that rename.
+ * `names` are the package's skill folders; `from` strips the prefix from any folder, so a skill the package dropped
+ * still reads back as the source it had.
+ */
+export function renameSkill(rel: string, text: string, dir: 'to' | 'from', names: ReadonlySet<string>): string {
+  const swap = (seg: string) => dir === 'to'
+    ? (names.has(seg) && seg !== 'sdlc' ? COPY_PREFIX + seg : seg)
+    : (seg.startsWith(COPY_PREFIX) && seg.length > COPY_PREFIX.length ? seg.slice(COPY_PREFIX.length) : seg);
+  const parts = posix.normalize(rel.replaceAll('\\', '/')).split('/');
+  const here = parts[0], moved = swap(here);
+  // the file's own folder, in the target naming, decides the relative form of every link
+  let out = text.replace(/\]\(([^)\s#]+)((?:#[^)\s]*)?)\)/g, (m, target: string, anchor: string) => {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('/')) return m;
+    const abs = posix.normalize(posix.join(posix.dirname(parts.join('/')), target));
+    const seg = abs.split('/');
+    if (seg[0] === '..' || seg[0] === '.') return m;
+    const to = [swap(seg[0]), ...seg.slice(1)].join('/');
+    const relTo = posix.relative(posix.dirname([moved, ...parts.slice(1)].join('/')), to);
+    const keepDot = target.startsWith('./') && !relTo.startsWith('.');
+    return `](${keepDot ? './' : ''}${relTo}${anchor})`;
+  });
+  if (parts.length === 2 && parts[1] === 'SKILL.md')
+    out = out.replace(/^(---\r?\n(?:[^\n]*\r?\n)*?name:[ \t]*)\S+/, `$1${moved}`);
+  return out;
+}
+
+/** The skill folders of a package: the names `renameSkill` renames. */
+export const skillNames = (skillsDir: string): Set<string> =>
+  new Set(existsSync(skillsDir) ? readdirSync(skillsDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name) : []);
+
+/** The package path an installed skill file comes from, undone: `.agents/skills/sdlc-build/SKILL.md` reads as `build/SKILL.md` source. */
+const SKILL_ROOT = /^(\.agents\/skills|\.claude\/skills)\/(.+)$/;
+
+/** The hash a file has when its binding values are the template's own: what a released version is compared by. `rel` is its installed path. */
+export function releasedHash(name: string, data: Buffer, rel?: string): string {
+  if (name === 'agentic-sdlc-delivery.yml' || name === 'agentic-sdlc-verify.yml') return sha(bindWorkflow(name, data.toString('utf8'), DEFAULTS));
+  const m = rel && name.endsWith('.md') ? SKILL_ROOT.exec(rel.replaceAll('\\', '/')) : null;
+  return sha(m ? renameSkill(m[2], data.toString('utf8'), 'from', new Set()) : data);
 }
 
 /** One-identity trunk ruleset: GitHub refuses an approving review from the CR's author, so none is asked for. */
