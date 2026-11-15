@@ -12,11 +12,10 @@ Each item needs a real run, not more code. Cloud runtime facts live in
 | Item | Why | Done when |
 |---|---|---|
 | Two identities from the cloud | `organization` needs a review app; a cloud session acts as one account through the proxy. | A review routine posts `review` and approves as a second identity from a cloud session. |
-| The MCP server in a cloud session | The routine template has the environment setup script that installs the CLI; it has not run in a cloud session. | One cloud run lists the MCP tools. |
 | Jira and Linear from the cloud | The routine template names the hosts and the secret header for each board; neither has run from a cloud session. | One cloud run lists a Jira board and one a Linear board. |
 | Pilot on a real product repo | Review and merge are not proved on a real repo yet. | Three scheduled cloud runs in a row write a heartbeat with no `errors`, and one ticket goes from Ready to Done with no hand fix. |
 | The release workflow on a sandbox repo | The cut step passes the release token to `git push` through `GIT_CONFIG_*`; the workflow shell has only been read. | One `forge cut` pushes a release line on a sandbox repo. |
-| Real clients against the MCP server and the plugin | The 2026-07-28 shape, the plugin agents, the `bin/` shim and the reviewer's Bash limit are built from the specs and the docs. | One session each on Claude Code, Codex and Cursor lists the tools and runs one cycle; `claude plugin eval` passes once. |
+| Real clients against the MCP server and the plugin | The server answers a scripted stdio session in a cloud session on both shapes; no real client has connected. The plugin agents, the `bin/` shim and the reviewer's Bash limit are built from the docs. | One session each on Claude Code, Codex and Cursor lists the tools and runs one cycle; `claude plugin eval` passes once. |
 | Telemetry against real collectors | `ledger export` is checked against the OTLP and CDEvents specs only. | One export is accepted by an OTLP collector and one CDEvent by a sink. |
 
 ## Next
