@@ -8,7 +8,7 @@ How the factory is built. For the exact rules, read the contract,
 
 | Layer | Where | Holds |
 |---|---|---|
-| Skills | the plugin (Claude) or `.agents/skills/` | The process: every rule. The same for every project. |
+| Skills | the plugin (Claude, Codex, Cursor) or `.agents/skills/` | The process: every rule. The same for every project. |
 | Binding | `.agents/binding.yml` | Your project's values: board, owners, commands, environments, models. |
 | CLI | `agentic-sdlc` (and its MCP server) | The mechanism: board, forge and Git verbs, the checks, dispatch, the run ledger. |
 

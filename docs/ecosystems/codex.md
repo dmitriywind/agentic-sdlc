@@ -17,6 +17,8 @@ Files it writes:
 
 The init log is the exact list; the `--harness` flag decides.
 
+The repo also has a Codex plugin manifest, `.codex-plugin/plugin.json`, with `skills` (`./skills`) and `mcpServers` (`./mcp.json`, which runs `npx --no agentic-sdlc mcp`). It has no hooks and no agents. The schema is read from the Codex source (`codex-rs/core-plugins/src/manifest.rs` in github.com/openai/codex); the published plugin pages could not be fetched here, so check them before relying on a field.
+
 ## Run one cycle by hand
 ```bash
 codex exec --sandbox workspace-write "Load the sdlc skill and run one cycle."

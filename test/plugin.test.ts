@@ -25,6 +25,8 @@ test('plugin agents: one per tier plus a reviewer that reads files and runs only
   assert.ok(tools.includes('Read') && tools.includes('Bash') && tools.includes('mcp__plugin_agentic-sdlc_agentic-sdlc__*'));
   assert.match(r.disallowedTools, /Edit, Write/);
   assert.match(r.maxTurns, /^\d+$/);
+  const files: string[] = JSON.parse(read('package.json')).files;
+  for (const d of ['agents', 'bin', 'evals', 'hooks', '.claude-plugin']) assert.ok(files.includes(d), d);
   for (const f of readdirSync(join(root, 'agents'))) {
     const keys = Object.keys(front(read(`agents/${f}`)));
     for (const k of ['hooks', 'mcpServers', 'permissionMode']) assert.ok(!keys.includes(k), `${f} sets ${k}, which plugin agents ignore`);
@@ -38,11 +40,6 @@ test('bin/agentic-sdlc is executable and runs the plugin build when the project 
   assert.equal(r.stdout.trim(), JSON.parse(read('package.json')).version);
 });
 
-test('the package ships the plugin agents, bin and evals', () => {
-  const files: string[] = JSON.parse(read('package.json')).files;
-  for (const d of ['agents', 'bin', 'evals', 'hooks', '.claude-plugin']) assert.ok(files.includes(d), d);
-});
-
 test('plugin evals: each case has a real prompt and graders with a type', () => {
   const dir = join(root, 'evals');
   const cases = readdirSync(dir).filter((d) => existsSync(join(dir, d, 'prompt.md')));
@@ -53,4 +50,25 @@ test('plugin evals: each case has a real prompt and graders with a type', () => 
     assert.ok(graders.length);
     for (const g of graders) assert.match(front(read(`evals/${c}/graders/${g}`)).type, /^(regex|tool_order|tool_used|file_exists|llm|baseline)$/);
   }
+});
+
+test('Codex and Cursor manifests parse, carry the package version and point at real paths', () => {
+  const version = JSON.parse(read('package.json')).version;
+  const KEYS = ['name', 'displayName', 'description', 'version', 'minClientVersions', 'author', 'publisher', 'homepage', 'repository', 'license', 'logo', 'keywords', 'category', 'tags', 'commands', 'agents', 'skills', 'rules', 'hooks', 'variables', 'mcpServers'];
+  for (const dir of ['.claude-plugin', '.codex-plugin', '.cursor-plugin']) {
+    const m = JSON.parse(read(`${dir}/plugin.json`));
+    assert.equal(m.name, 'agentic-sdlc', dir);
+    assert.equal(m.version, version, dir);
+  }
+  const cursor = JSON.parse(read('.cursor-plugin/plugin.json'));
+  assert.deepEqual(Object.keys(cursor).filter((k) => !KEYS.includes(k)), [], 'the Cursor schema has additionalProperties: false');
+  assert.match(cursor.name, /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/);
+  const codex = JSON.parse(read('.codex-plugin/plugin.json'));
+  for (const p of [codex.skills, cursor.skills]) assert.ok(statSync(join(root, p)).isDirectory(), p);
+  for (const p of [codex.mcpServers, cursor.mcpServers]) {
+    assert.match(p, /^\.\//);
+    assert.deepEqual(JSON.parse(read(p)).mcpServers['agentic-sdlc'].args, ['--no', 'agentic-sdlc', 'mcp']);
+  }
+  const files: string[] = JSON.parse(read('package.json')).files;
+  for (const f of ['.codex-plugin', '.cursor-plugin', 'mcp.json']) assert.ok(files.includes(f), f);
 });

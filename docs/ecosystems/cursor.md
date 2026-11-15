@@ -14,7 +14,9 @@ Files it writes:
 - `.agents/binding.yml`, the skills in `.agents/skills/` (Cursor reads project `.agents/skills/` and `.cursor/skills/`: [docs](https://cursor.com/docs/skills)), gate templates, and an `AGENTS.md` pointer (Cursor supports root and nested `AGENTS.md`: [docs](https://cursor.com/docs/context/rules)).
 - An `agentic-sdlc mcp` entry in `.cursor/mcp.json` ([docs](https://cursor.com/docs/context/mcp)).
 
-The init log is the exact list; the `--harness` flag decides. Only `~/.cursor/skills/` syncs to Cloud Agents per the skills page; whether repo skills load in Cloud Agents beyond that is not documented at the time of writing.
+The init log is the exact list; the `--harness` flag decides.
+
+The repo also has a Cursor plugin manifest, `.cursor-plugin/plugin.json`, with `skills` (`./skills/`) and `mcpServers` (`./mcp.json`, which runs `npx --no agentic-sdlc mcp`). It has no hooks and no agents. The schema is Cursor's own `schemas/plugin.schema.json` in github.com/cursor/plugins; the cursor.com plugin pages could not be fetched here. Only `~/.cursor/skills/` syncs to Cloud Agents per the skills page; whether repo skills load in Cloud Agents beyond that is not documented at the time of writing.
 
 ## Run one cycle by hand
 ```bash
