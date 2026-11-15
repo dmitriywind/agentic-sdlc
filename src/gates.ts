@@ -12,6 +12,7 @@ import { createBoard } from './board/index.ts';
 import { createForge } from './forge/index.ts';
 import { createVcs } from './vcs/index.ts';
 import { selectComments } from './comments.ts';
+import { changeMergedEvent, deployEvent, emitGateEvent } from './telemetry.ts';
 
 export interface Deps {
   binding: Binding;
@@ -618,10 +619,18 @@ export const cli: PortCli = (argv, base) =>
         return { ok: true, names };
       }
       case 'linkage': return fail(await linkage(deps(), a.need('cr')));
-      case 'merged': return merged(deps(), a.need('sha'));
+      case 'merged': {
+        const sha = a.need('sha');
+        const r = await merged(deps(), sha);
+        if (r.cr && !r.reason) await emitGateEvent(base, changeMergedEvent(base.binding, { cr: r.cr, sha }));
+        return r;
+      }
       case 'shipped': {
         if (!a.pos[0]) throw new UsageError('shipped <env> is required');
-        return shipped(deps(), a.pos[0], a.need('sha'), a.need('result'), a.get('version'));
+        const sha = a.need('sha'), result = a.need('result'), version = a.get('version');
+        const r = await shipped(deps(), a.pos[0], sha, result, version);
+        await emitGateEvent(base, deployEvent(base.binding, { env: a.pos[0], sha, result, version }));
+        return r;
       }
       case 'approval': {
         const r = await approval(deps(), a.need('cr'));

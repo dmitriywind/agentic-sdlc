@@ -113,6 +113,11 @@ mcps:                           # tool servers executors may use; name -> { url 
 # traces:
 #   uri: "s3://my-bucket/agentic/{run_id}.jsonl" # where executors write run traces; must contain {run_id}
 
+# telemetry:                    # opt-in export of runs (OpenTelemetry GenAI spans) and deploys (CDEvents); default: unset, nothing is sent
+#   otlp_endpoint_env: OTEL_EXPORTER_OTLP_ENDPOINT # NAME of the env var holding the OTLP/HTTP base URL; `ledger export --format otlp --send` POSTs <url>/v1/traces
+#   cdevents_sink_env: CDEVENTS_SINK_URL           # NAME of the env var holding the CDEvents sink URL; the merged and shipped gates POST one event each, best effort (a failed send never fails a gate)
+#   headers_env: TELEMETRY_HEADERS                 # NAME of the env var holding request headers as name=value,name2=value2 (an auth token); URLs and headers are never written in this file
+
 models:                         # skills name a tier (frontmatter metadata.tier), never a model; init --harness claude writes .claude/agents/sdlc-<tier>.md from this map
   fast: your-fast-model-id      # the cycle routine runs on this tier
   balanced: your-balanced-model-id

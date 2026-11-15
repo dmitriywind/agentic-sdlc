@@ -5,39 +5,33 @@ is its backlog. A finished item leaves this file; the git log holds it.
 
 ## Now
 
-Cloud runtime facts live in [contract section 10](../references/architecture.md) and
+Each item needs a real run, not more code. Cloud runtime facts live in
+[contract section 10](../references/architecture.md) and
 [claude-routine.md](../templates/runner/claude-routine.md).
 
 | Item | Why | Done when |
 |---|---|---|
-| A board verb to set a milestone on an existing ticket | `backlog-grooming` sets milestones, but only `board create --milestone` can. | `board milestone <id> <name>` works on every adapter. |
 | Two identities from the cloud | `organization` needs a review app; a cloud session acts as one account through the proxy. | A review routine posts `review` and approves as a second identity from a cloud session. |
-| The MCP server in a cloud session | `.mcp.json` does not connect when the environment has no setup script: `node_modules` is not installed at session start. | The routine template's setup script installs it, and one cloud run lists the MCP tools. |
-| Jira and Linear from the cloud | Both hosts are refused at the default network level. | The routine template adds the host to the environment's allowed domains and the token as a network secret; one cloud run lists the board. |
+| The MCP server in a cloud session | The routine template has the environment setup script that installs the CLI; it has not run in a cloud session. | One cloud run lists the MCP tools. |
+| Jira and Linear from the cloud | The routine template names the hosts and the secret header for each board; neither has run from a cloud session. | One cloud run lists a Jira board and one a Linear board. |
 | Pilot on a real product repo | Review and merge are not proved on a real repo yet. | Three scheduled cloud runs in a row write a heartbeat with no `errors`, and one ticket goes from Ready to Done with no hand fix. |
+| The release workflow on a sandbox repo | The cut step passes the release token to `git push` through `GIT_CONFIG_*`; the workflow shell has only been read. | One `forge cut` pushes a release line on a sandbox repo. |
+| Real clients against the MCP server and the plugin | The 2026-07-28 shape, the plugin agents, the `bin/` shim and the reviewer's Bash limit are built from the specs and the docs. | One session each on Claude Code, Codex and Cursor lists the tools and runs one cycle; `claude plugin eval` passes once. |
+| Telemetry against real collectors | `ledger export` is checked against the OTLP and CDEvents specs only. | One export is accepted by an OTLP collector and one CDEvent by a sink. |
 
 ## Next
 
 | Item | Why |
 |---|---|
-| Owners as lists; optional operator, security and compliance owners | Teams have more than one owner per role. |
-| `product.slo` and DORA measures | Error budget pauses feature work; P0 counted as change failure; rework rate. |
-| Pin CI actions by SHA, on their current majors | Mutable `uses:` tags in the gate and runner templates; Dependabot can then keep the SHAs fresh. |
-| MCP server on spec revision 2026-07-28 | The server negotiates up to 2025-11-25. The newer revision is reported to drop the initialize handshake and add a `resultType` on results: read the spec, then serve both shapes and add a conformance test. |
-| Budgets per run | Only `cycle.time_budget_minutes` limits a cycle. A stage has no turn or token cap and `bench run` has no cost cap: add `executors.<stage>.max_turns`, a bench budget, and tokens per ticket in `ledger summary`. |
-| Plugin agents for the tiers and the reviewer | A plugin `agents/` entry sets `tools`, `disallowedTools`, `maxTurns` and `model`, so "review-pr never runs CR code" becomes a tool list, not prose. Also a `bin/` shim (bare `agentic-sdlc`), `userConfig` for token env names, and plugin evals for skill triggering. |
-| `init --upgrade` | `init` after a package upgrade keeps old workflows, hooks and runner prompts; `--force` also overwrites the binding and rulesets. Track installed template hashes like the skills lock, and never overwrite the binding. |
-| Retry and bounded reads for the `gh` adapters | A GitHub secondary rate limit fails a cycle; `forge list --state merged` reads four calls per CR for every CR ever merged (`bench build`). Retry reads on 429 and rate-limit 403; add `--limit` and `--since`. |
-| One strict flag parser for board, forge and vcs | `dispatch` and `init` refuse an unknown flag; `board list --bogus` still says "needs a value", and a missing `--body-file` path prints a bare ENOENT. |
-| Guard `forge status` like `forge approve` in the hook | The MCP server hides both; the hook blocks only approve. |
+| An approval class for security paths | `owners.security` is asked by `escalate-to-human` only. A `paths.security` list would let the `approval` gate require a security owner's approval. |
+| A token split in run rows | A run row holds one `tokens` total, so the OTLP export cannot fill `gen_ai.usage.input_tokens` and `output_tokens`, and names no provider. |
+| Status history on the board port | `ledger measures` reads lead time from `createdAt` and `statusChangedAt`: no adapter gives the time a ticket first reached In progress. |
+| Hooks and agents in the Codex and Cursor plugins | Their manifests carry the skills and the MCP server only; the guard hook and the tier agents ship for Claude Code alone. |
 
 ## Later
 
 | Item | Why |
 |---|---|
-| Scorers for shape quality and triage accuracy | `improve-factory` has no evidence for those two skills. |
-| An `unscorable` scorer value | A judge with too little evidence has to guess a grade. |
-| Agent provenance on commits and CRs | Trailers for agent, model and run id (Agent Trace is the emerging record), a gate that requires them, and a map of the gates to the SLSA Source track. |
-| Plugin manifests for Codex and Cursor | Both now install plugins that bundle skills, hooks and MCP; today they get the pack through `init` only. |
-| OpenTelemetry GenAI attributes and CDEvents on factory and deploy records | Standard telemetry for agent runs and deploys. |
-| `signal-on-red` through a `forge run <id>` verb | Today it searches a window of 30 runs. |
+| An Agent Trace record from the `provenance` gate | The gate reports agent and human commits as JSON; the Agent Trace spec could not be read when it was built. |
+| Source provenance attestations | The SLSA Source track map in [forges.md](forges.md) lists this as the largest gap: the gates decide, but nothing signs what they decided. |
+| A bench token budget | `learning.bench_budget` caps runs and minutes; bench results carry no token count. |

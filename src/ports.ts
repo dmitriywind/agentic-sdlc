@@ -254,6 +254,8 @@ export interface Binding {
   mcps?: Record<string, McpServer>;
   /** Where executors write run traces; must contain {run_id}. */
   traces?: { uri: string };
+  /** Opt-in telemetry export. Each key names an env var (never a value); unset = nothing is sent. headers_env: `name=value,name2=value2`. */
+  telemetry?: { otlp_endpoint_env?: string; cdevents_sink_env?: string; headers_env?: string };
   models: { fast: string; balanced: string; deep: string };
   agent_command?: string;
   commands: {

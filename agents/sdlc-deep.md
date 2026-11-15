@@ -1,7 +1,7 @@
 ---
 name: sdlc-deep
 description: Runs one agentic-sdlc skill step whose metadata.tier is deep (a step that needs the most reasoning). The sdlc skill hands a step to this agent when the step's skill is at the deep tier and the project has no .claude/agents/sdlc-deep.md.
-model: opus
+model: inherit
 disallowedTools: Agent
 ---
 

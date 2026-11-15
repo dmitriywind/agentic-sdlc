@@ -1,7 +1,7 @@
 ---
 name: sdlc-fast
 description: Runs one agentic-sdlc skill step whose metadata.tier is fast (a narrow, checkable step). The sdlc skill hands a step to this agent when the step's skill is at the fast tier and the project has no .claude/agents/sdlc-fast.md.
-model: haiku
+model: inherit
 disallowedTools: Agent
 ---
 

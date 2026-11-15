@@ -1,11 +1,12 @@
 // The run ledger: runs read back from heartbeats (references/architecture.md 6.1). Mechanism only.
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { parse } from 'yaml';
 import type { Binding, Board, Comment, CR, Forge, Item, PortCli } from './ports.ts';
 import { ownersFor } from './ports.ts';
+import { cdEventsFromRuns, otlpTraces, repoOf, sendCdEvent, sendOtlp, type CycleMeta } from './telemetry.ts';
 
 export const HEARTBEAT_MARKER = '<!-- heartbeat -->';
 
@@ -394,9 +395,37 @@ export async function measures(o: { board: Board; forge?: Forge; binding: Bindin
   };
 }
 
+/** The package version: package.json sits one folder above src/ and dist/. */
+const packageVersion = (): string => {
+  try { return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version as string; } catch { return 'unknown'; }
+};
+
+/** The heartbeat each run row came from, by run id (the telemetry export groups rows into one trace per cycle). */
+export function cycleMeta(comments: Comment[]): Map<string, CycleMeta> {
+  const m = new Map<string, CycleMeta>();
+  for (const c of comments) {
+    const hb = parseHeartbeat(c.body);
+    for (const r of hb?.runs ?? []) m.set(r.id, { key: String(c.id), at: hb.at ?? c.createdAt, kind: hb.kind ?? 'cycle', ...(hb.factory ? { factory: String(hb.factory) } : {}) });
+  }
+  return m;
+}
+
+/** `--since` of `ledger export`: a number of days, or an ISO time. */
+export function sinceMs(v: string, now = Date.now()): number {
+  return /^\d+(\.\d+)?$/.test(v) ? now - Number(v) * 864e5 : Date.parse(v);
+}
+
+/** The rows an export covers: the window and the one run when named, oldest first. */
+export function exportRows(comments: Comment[], q: { since?: number; run?: string } = {}): LedgerRun[] {
+  return flattenRuns(comments)
+    .filter((r) => (q.since === undefined || Date.parse(r.at) >= q.since) && (!q.run || r.id === q.run))
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : 1));
+}
+
 const USAGE = [
   'usage: ledger runs [--since <days>] [--skill <s>] | ledger summary [--since <days>] | ledger measures [--days <n>] | ledger hash <skill-dir>',
   '       ledger plan --run <id> | ledger record --run <id> --file <scores.json> | ledger stale --max-hours <h>',
+  '       ledger export --format otlp|cdevents [--since <days|iso>] [--run <id>] [--out <file>] [--send]',
 ].join('\n');
 
 export const cli: PortCli = async (argv, ctx) => {
@@ -405,7 +434,7 @@ export const cli: PortCli = async (argv, ctx) => {
   try {
     a = parseArgs({
       args: rest,
-      options: { since: { type: 'string' }, skill: { type: 'string' }, run: { type: 'string' }, file: { type: 'string' }, days: { type: 'string' }, 'max-hours': { type: 'string' } },
+      options: { since: { type: 'string' }, skill: { type: 'string' }, run: { type: 'string' }, file: { type: 'string' }, days: { type: 'string' }, 'max-hours': { type: 'string' }, format: { type: 'string' }, out: { type: 'string' }, send: { type: 'boolean' } },
       allowPositionals: true,
     });
   } catch (e) {
@@ -414,19 +443,20 @@ export const cli: PortCli = async (argv, ctx) => {
   }
   const days = a.values.days === undefined ? 30 : Number(a.values.days);
   if (verb === 'measures' && !(days > 0)) return (console.error(USAGE), 2);
-  const sinceDays = a.values.since === undefined ? undefined : Number(a.values.since);
+  const sinceDays = a.values.since === undefined || verb === 'export' ? undefined : Number(a.values.since);
   if (sinceDays !== undefined && !(sinceDays >= 0)) return (console.error(USAGE), 2);
   const maxHours = Number(a.values['max-hours']);
   if (verb === 'stale' && !(maxHours > 0)) return (console.error(USAGE), 2);
   if ((verb === 'plan' || verb === 'record') && !a.values.run) return (console.error(USAGE), 2);
   if (verb === 'record' && !a.values.file) return (console.error(USAGE), 2);
+  if (verb === 'export' && (!['otlp', 'cdevents'].includes(a.values.format ?? '') || (a.values.since !== undefined && !(sinceMs(a.values.since) >= 0)) || (a.values.send && a.values.out))) return (console.error(USAGE), 2);
   try {
     if (verb === 'hash') {
       if (!a.positionals[0]) return (console.error(USAGE), 2);
       console.log(JSON.stringify({ skill: a.positionals[0], hash: hashSkill(resolve(ctx.root, a.positionals[0])) }));
       return 0;
     }
-    if (!['runs', 'summary', 'plan', 'record', 'stale', 'measures'].includes(verb)) return (console.error(USAGE), 2);
+    if (!['runs', 'summary', 'plan', 'record', 'stale', 'measures', 'export'].includes(verb)) return (console.error(USAGE), 2);
     const b = ctx.binding;
     const { createBoard } = await import('./board/index.ts');
     const board: Board = await createBoard({ ...ctx, options: b.board.options });
@@ -456,6 +486,22 @@ export const cli: PortCli = async (argv, ctx) => {
       const body = scoresComment(p, JSON.parse(readFileSync(resolve(ctx.root, a.values.file!), 'utf8')));
       const c = await board.comment(b.heartbeat.ticket, body);
       console.log(JSON.stringify({ run: run.id, comment: c.id, ...JSON.parse(body.split('\n')[2]) }));
+      return 0;
+    }
+    if (verb === 'export') {
+      const rows = exportRows(comments, { since: a.values.since === undefined ? undefined : sinceMs(a.values.since), run: a.values.run });
+      const meta = cycleMeta(comments);
+      if (a.values.format === 'otlp') {
+        const doc = otlpTraces(rows, meta, { version: packageVersion(), repo: repoOf(b) });
+        if (a.values.send) { await sendOtlp(ctx, doc); console.log(JSON.stringify({ sent: 'otlp', runs: rows.length })); }
+        else if (a.values.out) writeFileSync(resolve(ctx.root, a.values.out), `${JSON.stringify(doc)}\n`);
+        else console.log(JSON.stringify(doc));
+      } else {
+        const events = cdEventsFromRuns(rows, meta, b);
+        if (a.values.send) { for (const ev of events) await sendCdEvent(ctx, ev); console.log(JSON.stringify({ sent: 'cdevents', events: events.length })); }
+        else if (a.values.out) writeFileSync(resolve(ctx.root, a.values.out), events.map((e) => `${JSON.stringify(e)}\n`).join(''));
+        else for (const ev of events) console.log(JSON.stringify(ev));
+      }
       return 0;
     }
     const rows = flattenRuns(comments, { sinceDays, skill: a.values.skill });

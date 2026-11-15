@@ -229,6 +229,9 @@ Keys this contract relies on by name:
 - `forge.human_approval: full-lane | always | never` (default `full-lane`), `forge.review_identity`
   (empty: one identity), `forge.options.review_token_env` (set exactly when `review_identity` is, and
   never equal to `token_env`; `validate` fails otherwise), `forge.required_checks`.
+- `telemetry: { otlp_endpoint_env, cdevents_sink_env, headers_env }` (all optional, default unset: nothing is
+  sent): each key names an env var, never a URL or a token, and `validate` rejects a value that is not a
+  variable name. Section 6.9 says what is exported and sent.
 - `board.scope: { label, home, repos }` (unset: the board serves one repo): many repos on one board.
   Section 10 says what it does.
 - `commands.install`, `commands.verify` (the `Required` job), `commands.proofs_on_base` (the
@@ -346,6 +349,24 @@ needs `agent_command`.
    `null` with a `why`. With `product.slo` set it adds `errorBudget: { max, windowDays, actual,
    exhausted }`, where `actual` is the change failure rate over `slo.window_days`; the cycle starts
    no new `feature` ticket while `exhausted` (skills/sdlc, Run one cycle step 1).
+9. **Telemetry export** (opt-in; the mapping is `src/telemetry.ts`). `ledger export --format otlp|cdevents
+   [--since <days|iso>] [--run <id>] [--out <file>] [--send]` prints, writes or sends the run rows.
+   `otlp` is one OTLP/HTTP JSON document, one trace per heartbeat: an `invoke_workflow sdlc` span for the cycle and an
+   `invoke_agent <skill>` span per run (OpenTelemetry GenAI conventions, stability `development`, schema
+   `gen-ai-dev/1.42.0-dev`): `gen_ai.agent.name` is the skill, `gen_ai.agent.version` its content hash,
+   `gen_ai.request.model` the row's model; a run that is not `done` gets status error and `error.type` = its
+   outcome; ticket, CR, tier, executor, `ref`, tokens, minutes and scores are `agentic_sdlc.*` attributes, and each score is
+   a `gen_ai.evaluation.result` event. A row holds one `tokens` total, so it is `agentic_sdlc.tokens`; no input/output
+   split is invented, and `gen_ai.provider.name` is left out because no row knows the provider. Ids are hashes of
+   the heartbeat comment id and the run id, so a re-export is the same document. `cdevents` prints CDEvents
+   (spec 0.5.1) as JSON lines: `taskrun.finished` per run, `change.created` for the first `implement-spec` run per CR
+   in the window and `change.reviewed` for each done `review-pr` run. `--send` posts to the sinks the binding's
+   `telemetry` names: OTLP to `<url>/v1/traces`, each CDEvent as a CloudEvents HTTP binary-mode request, both
+   with the headers from `headers_env`, through `ctx.http`. The `merged` and `shipped` gates post their one
+   event the same way, best effort: `change.merged` for a merged CR, `service.deployed` or `service.rolledback`
+   with `environment.id` and `artifactId` `pkg:generic/<forge.options.repo>@<version or sha>`. A failed deploy has no CDEvents event, and
+   with `forge.options.repo` unset the deploy has no service name, so no event is built. A failed send writes
+   one line to stderr and never changes a gate's result.
 
 ## 7. Executors: who runs each stage
 
@@ -386,7 +407,7 @@ paths:
   factory needs no intake of its own.
 - **Data ownership.** The board, the repo and `traces.uri` hold every fact, score and trace. The
   binding names the inference endpoints (`models` may point at any provider or self-hosted model)
-  and where each stage runs (`sandbox`). Nothing leaves the project's own systems except calls to
+  and where each stage runs (`sandbox`). Nothing leaves the project's own systems except the telemetry the binding's `telemetry` keys name (off by default) and calls to
   the providers the binding names.
 
 ## 10. Runtimes and profiles: no dependency on one machine
