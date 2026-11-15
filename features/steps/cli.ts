@@ -11,7 +11,6 @@ import { http, setHttpTimeout } from '../../src/exec.ts';
 
 // ---- the CLI exactly as typed (no --root added) ----
 When('I run the CLI as typed {string}', (w, line: string) => { w.last = w.spawn([BIN, ...splitArgs(line)]); });
-Then('the output does not start with {string}', (w, text: string) => assert.ok(!w.last.output.startsWith(text), w.last.output));
 
 // ---- the HTTP helper ----
 const stubFetch = (w: World, answer: (url: string, n: number) => Response) => {

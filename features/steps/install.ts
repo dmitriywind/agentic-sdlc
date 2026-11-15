@@ -2,7 +2,7 @@
 // The CLI runs as a process on a project whose binding the scenario does not write (init makes it); the doctor checks
 // run in-process on a fake exec. A package fixture is a temp dir that AGENTIC_SDLC_PACKAGE points at.
 // State on w.state: pkg (package dir), d (doctor: rules, calls, tokens, env, lines), noted (file -> text), launch
-// (launcher: env, log), rename (a skill file under renameSkill), vcs (error of the last push).
+// (launcher: env, log), vcs (error of the last push).
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -11,20 +11,15 @@ import { dirname, join } from 'node:path';
 import { parse as parseYaml, stringify } from 'yaml';
 import { skillRegression } from '../../src/gates.ts';
 import { cli, cliPin, deliveryWorkflow, implementerToken, probeFailure, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../../src/install.ts';
-import { isInstallable, renameSkill, shippedHashes } from '../../src/pristine.ts';
+import { isInstallable, shippedHashes } from '../../src/pristine.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
-import { BIN, Outcome, REPO, splitArgs, type World } from '../support/world.ts';
+import { BIN, Outcome, REPO, merge, splitArgs, type World } from '../support/world.ts';
+import { capture } from './ledger.ts';
 
 type Obj = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const nl = (s: string) => s.replace(/\\n/g, '\n');
 const put = (dir: string, rel: string, text: string) => { mkdirSync(dirname(join(dir, rel)), { recursive: true }); writeFileSync(join(dir, rel), text); };
 const pkgOf = (w: World): string => w.state.pkg;
-const merge = (a: any, b: any): any => { // eslint-disable-line @typescript-eslint/no-explicit-any
-  if (b === null || typeof b !== 'object' || Array.isArray(b)) return b;
-  const out = { ...(a && typeof a === 'object' && !Array.isArray(a) ? a : {}) };
-  for (const [k, v] of Object.entries(b)) out[k] = merge(out[k], v);
-  return out;
-};
 
 // ---- the package fixture ----
 const fm = (name: string, meta: string, extra = '') => `---\nname: ${name}\ndescription: d\n${extra}metadata:\n${meta}---\nbody\n`;
@@ -74,7 +69,6 @@ Given('the package binding template also sets vcs.trunk and slo', (w) => {
 // ---- the project ----
 Given('the project has the file {string} holding {string}', (w, rel: string, text: string) => w.write(rel, nl(text)));
 Given('the adopter appends {string} to the installed file {string}', (w, text: string, rel: string) => w.write(rel, w.read(rel) + nl(text)));
-Given('the adopter makes the installed file {string} not executable', (w, rel: string) => chmodSync(w.path(rel), 0o644));
 Given('the project is a git repository with the origin {string}', (w, url: string) => { w.git(['init', '-q']); w.git(['remote', 'add', 'origin', url]); });
 Given('the installed binding also runs the executors {string}', (w, names: string) => {
   const b = parseYaml(w.read('.agents/binding.yml'));
@@ -116,7 +110,6 @@ Then('the installed file {string} contains {string} exactly {int} times', (w, re
 Then('the installed file {string} matches {string}', (w, rel: string, re: string) => assert.match(w.read(rel), new RegExp(re, 'm')));
 Then('the installed file {string} does not match {string}', (w, rel: string, re: string) => assert.doesNotMatch(w.read(rel), new RegExp(re, 'm')));
 Then('the installed file {string} is executable', (w, rel: string) => assert.ok(statSync(w.path(rel)).mode & 0o100, `${rel} is not executable`));
-Then('the installed file {string} has the mode {string}', (w, rel: string, mode: string) => assert.equal((statSync(w.path(rel)).mode & 0o777).toString(8), mode));
 Then('the installed folder {string} holds exactly {string}', (w, rel: string, names: string) =>
   assert.deepEqual(readdirSync(w.path(rel)).sort(), names.split(',').map((s) => s.trim()).sort()));
 
@@ -137,10 +130,6 @@ Then('the installed file {string} sets no {string}', (w, rel: string, path: stri
 Then('every value at {string} in the installed file {string} is {string}', (w, path: string, rel: string, value: string) => {
   const vs = valueAt(w, rel, path) as unknown[];
   assert.ok(vs.length > 0 && vs.every((v) => v === expected(value)), JSON.stringify(vs));
-});
-Then('the local board holds the tickets:', (w, t: DataTable) => {
-  const db = JSON.parse(w.read('.agents/board.json'));
-  assert.deepEqual(db.items.map((i: Obj) => [i.id, i.title, i.status]), t.raw().slice(1));
 });
 
 // ---- the install lock, read back ----
@@ -165,14 +154,6 @@ Then('the known hashes of the package cover every installable file it ships', ()
     .filter((p) => shippedHashes(p, readFileSync(join(REPO, p))).some((h) => !have.has(h)));
   assert.deepEqual(missing, [], 'run npm run hashes before committing a change to these files');
 });
-
-// ---- renameSkill: a pure function ----
-When('the skill file {string} holding {string} is renamed for a copied install knowing the skills {string}', (w, rel: string, text: string, names: string) => {
-  w.state.rename = { rel, text: nl(text), names: new Set(names.split(',').map((s) => s.trim())) };
-  w.state.renamed = renameSkill(rel, nl(text), 'to', w.state.rename.names);
-});
-Then('the renamed text is {string}', (w, text: string) => assert.equal(w.state.renamed, nl(text)));
-Then('renaming the text back as {string} gives the original', (w, rel: string) => assert.equal(renameSkill(rel, w.state.renamed, 'from', new Set()), w.state.rename.text));
 
 // ---- the launcher ----
 Given('a project with the launcher and the pin {string} at {string}', (w, pkg: string, ref: string) => {
@@ -221,7 +202,6 @@ Then('no stock workflow calls agentic-sdlc gate or vcs except through the launch
   const calls = readdirSync(dir).filter((n) => n.endsWith('.yml')).map((n) => readFileSync(join(dir, n), 'utf8').match(/(?<![\w./-])agentic-sdlc (?:gate|vcs) /g) ?? []);
   assert.deepEqual(calls.flat(), []);
 });
-Then('the stock file {string} matches {string}', (w, rel: string, re: string) => assert.match(readFileSync(join(REPO, rel), 'utf8'), new RegExp(re, 'm')));
 Then('every job of the stock workflow {string} that runs the launcher checks out the base', (w, rel: string) => {
   const wf = parseYaml(readFileSync(join(REPO, rel), 'utf8'));
   const jobs = Object.entries<Obj>(wf.jobs).filter(([, j]) => j.steps.some((s: Obj) => /\.agents\/bin\/agentic-sdlc/.test(s.run ?? '')));
@@ -288,19 +268,9 @@ When('doctor checks the delivery workflow', (w) => shown(w, deliveryWorkflow(bou
 When('doctor checks the CLI pin', (w) => shown(w, ...cliPin(w.root)));
 When('doctor checks the workflow actions', (w) => shown(w, unpinnedActions(w.root)));
 When('a probe fails with the message {string}', (w, msg: string) => shown(w, probeFailure(nl(msg), doc(w).env, bound(w))));
-When('doctor runs against the fake forge', async (w) => {
-  const out: string[] = [], err: string[] = [];
-  const log = console.log, cerr = console.error;
-  console.log = (...a: unknown[]) => { out.push(`${a.join(' ')}\n`); };
-  console.error = (...a: unknown[]) => { err.push(`${a.join(' ')}\n`); };
-  let code = -1;
-  try { code = await cli(['doctor'], ctxOf(w)); } finally { console.log = log; console.error = cerr; }
-  w.last = new Outcome(code, out.join(''), err.join(''));
-});
+When('doctor runs against the fake forge', async (w) => { await capture(w, () => cli(['doctor'], ctxOf(w))); });
 
 Then('doctor prints no line', (w) => assert.deepEqual(doc(w).lines, []));
 Then('doctor line {int} matches {string}', (w, n: number, re: string) => assert.match(doc(w).lines[n - 1] ?? '', new RegExp(re), doc(w).lines.join('\n')));
 Then('doctor line {int} is {string}', (w, n: number, text: string) => assert.equal(doc(w).lines[n - 1], text));
 Then('the forge was asked for check runs', (w) => assert.ok(doc(w).calls.some((c) => /check-runs/.test(c)), doc(w).calls.join('\n')));
-
-// ---- vcs push ----

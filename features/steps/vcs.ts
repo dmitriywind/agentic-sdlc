@@ -135,3 +135,10 @@ Then('the call fails saying {string}', (w, text: string) => {
 
 
 Then('the files the snapshot changed are {string}', async (w, files: string) => assert.deepEqual((await w.state.snap.changed()).sort(), names(files)));
+When('the line {string} cuts the release {string} at its head', async (w, name: string, release: string) => {
+  const l = line(w, name);
+  w.state.cut = await l.vcs.cut((await l.vcs.head()).sha, release);
+});
+Then('the cut ref is {string}', (w, ref: string) => assert.deepEqual(w.state.cut, { ref }));
+Then('the origin has {string} at the head of the line {string}', (w, ref: string, name: string) =>
+  assert.equal(git(origin(w), 'rev-parse', ref), git(line(w, name).workdir, 'rev-parse', 'HEAD')));

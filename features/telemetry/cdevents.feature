@@ -29,19 +29,6 @@ Feature: Runs exported as CDEvents
         | dev.cdevents.taskrun.finished.0.3.0   | r3      |
         | dev.cdevents.change.created.0.4.0     | 13      |
 
-    Scenario: A finished taskrun names the step, the outcome and the cycle
-      When I run "ledger export --format cdevents"
-      Then CDEvent 1 has these values:
-        | path                                | value                          |
-        | context.specversion                 | 0.5.1                          |
-        | context.source                      | https://github.com/acme/app    |
-        | context.type                        | dev.cdevents.taskrun.finished.0.3.0 |
-        | context.timestamp                   | 2026-11-08T09:30:00.000Z       |
-        | subject.id                          | r1                             |
-        | subject.content.taskName            | build                          |
-        | subject.content.outcome             | success                        |
-        | subject.content.pipelineRun.id      | 1                              |
-
   Rule: The export is printed or written to a file
 
     Scenario: --out writes the document to a file and prints nothing

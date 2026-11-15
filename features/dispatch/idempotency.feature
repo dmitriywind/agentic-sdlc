@@ -10,6 +10,13 @@ Feature: A dispatch starts one run per key
     And the local board holds a ticket at Ready as ticket 1 and the heartbeat ticket 2
     And the dedupe window is "10" minutes
 
+  Rule: A double fire is skipped
+
+    Scenario: The same step on the same ticket inside the window is skipped
+      Given dispatch runs "build --ticket 1"
+      When dispatch runs "build --ticket 1"
+      Then the result "skipped" is "true"
+
   Rule: A change request and the factory use the heartbeat ticket
 
     Scenario: The same change request head inside the window is skipped

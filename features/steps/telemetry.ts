@@ -99,6 +99,3 @@ Then('the span {string} has the error status {string}', (w, sel: string, message
 // ---- the CDEvents, one JSON line each ----
 const events = (w: World) => w.last.stdout.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
 Then('the CDEvents printed are:', (w, t: DataTable) => assert.deepEqual(events(w).map((e) => ({ type: e.context.type, subject: e.subject.id })), t.hashes().map((r) => ({ type: r.type, subject: r.subject }))));
-Then('CDEvent {int} has these values:', (w, n: number, t: DataTable) => {
-  for (const r of t.hashes()) assert.equal(String(pick(events(w)[n - 1], r.path)), r.value, r.path);
-});

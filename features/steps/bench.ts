@@ -159,6 +159,8 @@ const runCases = async (w: World, n: number, opts: Record<string, string>) => {
   } catch (e) { failed(w, e); }
 };
 When('the bench runs {int} cases', (w, n: number) => runCases(w, n, {}));
+When('the bench runs {int} cases with the options:', (w, n: number, t: DataTable) => runCases(w, n, Object.fromEntries(t.raw().map((r) => [r[0], r[1]]))));
+Then('the bench started no command', (w) => assert.deepEqual([bench(w).seen.commands, bench(w).made], [[], []]));
 
 
 // ---- the agent command ----
