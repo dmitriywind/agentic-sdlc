@@ -1,0 +1,128 @@
+# Source: src/forge/flow.ts "buildReport", "verdict"; src/forge/index.ts "cli"; references/architecture.md section 3.2 "verdict"
+@cli:forge
+Feature: forge verdict posts the review report for the head
+  `forge verdict <n> --pass|--fail --body-file <f>` stamps the verdict marker for the CR head and the one `Verdict:`
+  line, and posts the report. With a review identity it also posts the review status and, on pass, the approving
+  review. Without one, CI's review gate turns the report into the status. A missing review token fails with an Access
+  error before anything is posted.
+
+  Rule: The report is the marker for the head, the body, and one Verdict line last
+
+    Scenario: A body that already carries the marker and the verdict is normalised
+      When the report for the head "h1" is built as pass from:
+        """
+        <!-- review-pr h1 -->
+        all good
+        Verdict: PASS
+        """
+      Then the report is:
+        """
+        <!-- review-pr h1 -->
+        all good
+
+        Verdict: PASS
+        """
+
+    Scenario: Free text after Verdict: is dropped, and a fail says remediation is required
+      When the report for the head "h1" is built as fail from:
+        """
+        table
+        Verdict: see below
+        """
+      Then the report is:
+        """
+        <!-- review-pr h1 -->
+        table
+
+        Verdict: REMEDIATION REQUIRED
+        """
+
+    Scenario: A body line that contradicts the flag is refused
+      When the report for the head "h1" is built as pass from:
+        """
+        Verdict: REMEDIATION REQUIRED
+        """
+      Then the report is refused with the usage error "the body says"
+
+  Rule: Exactly one of --pass or --fail is given
+
+    Background:
+      Given the github forge for the repo "o/r"
+      And a file "report.md" containing:
+        """
+        ok
+        """
+
+    Scenario Outline: A verdict without a flag, or with both, is a usage error
+      When the forge CLI runs "verdict 5 <flags> --body-file report.md"
+      Then the exit code is 2
+
+      Examples:
+        | flags         |
+        |               |
+        | --pass --fail |
+
+  Rule: With one identity only the report is posted
+
+    Background:
+      Given the github forge for the repo "o/r"
+      And the repo has the open pull request 5 at the head "abc1234"
+      And a file "report.md" containing:
+        """
+        ok
+        """
+
+    Scenario: A pass posts the report and nothing else, CI posts the status
+      When the forge CLI runs "verdict 5 --pass --body-file report.md"
+      Then the exit code is 0
+      And the result "verdict" is "PASS"
+      And the result "status" is "ci"
+      And the comment posted on the CR "5" opens with "<!-- review-pr abc1234 -->"
+      And no call includes "statuses/"
+      And no call includes "pulls/5/reviews"
+
+  Rule: With a review identity the status and the approval are posted too
+
+    Background:
+      Given the github forge for the repo "o/r"
+      And the forge has the review identity "reviewer"
+      And the forge option "review_token_env" is "REV"
+      And the forge credential variable "REV" is "t"
+      And the repo has the open pull request 5 at the head "abc1234"
+      And a file "report.md" containing:
+        """
+        ok
+        """
+
+    Scenario: A pass posts the report, the success status and the approval
+      When the forge CLI runs "verdict 5 --pass --body-file report.md"
+      Then the exit code is 0
+      And the result "status" is "posted"
+      And the comment posted on the CR "5" opens with "<!-- review-pr abc1234 -->"
+      And a call includes "statuses/abc1234 -f state=success -f context=review"
+      And a call includes "-X POST repos/o/r/pulls/5/reviews"
+
+    Scenario: A fail posts the report and the failure status, and no approval
+      When the forge CLI runs "verdict 5 --fail --body-file report.md"
+      Then the exit code is 0
+      And the result "verdict" is "REMEDIATION REQUIRED"
+      And a call includes "statuses/abc1234 -f state=failure -f context=review"
+      And no call includes "pulls/5/reviews"
+
+  Rule: A missing review token fails with Access and posts nothing
+
+    Background:
+      Given the github forge for the repo "o/r"
+      And the forge has the review identity "reviewer"
+      And the forge option "review_token_env" is "REV"
+      And the repo has the open pull request 5 at the head "abc1234"
+      And a file "report.md" containing:
+        """
+        ok
+        """
+
+    Scenario: The review token is not set
+      When the forge CLI runs "verdict 5 --pass --body-file report.md"
+      Then the exit code is 1
+      And the output matches "^Access:"
+      And no call includes "-X POST"

@@ -49,19 +49,6 @@ Feature: Judge runs and improve the factory
     And improve-factory never marks the CR ready and never merges it
     And the CR holds one change only
 
-  # Source: skills/improve-factory/SKILL.md, "Rules" (merge classes); references/architecture.md, "6. The self-improvement loop", item 5
-  # Proof: test/gates.test.ts "classify: rename out of factory, quoted path, models-only binding, metadata.tier with a bench suite"
-  Scenario Outline: The class decides who merges
-    Given the change is <change>
-    When the approval gate classifies the CR
-    Then the class is <class>
-    And the merge waits for <merge>
-
-    Examples:
-      | change                                                  | class     | merge                                                           |
-      | only the models map                                     | tuning    | the agent review, when tuning is in learning.auto_merge_classes |
-      | skill text, scorers, gates, binding, executors or bench | guardrail | an approving review by owners.factory                           |
-
   # Source: skills/improve-factory/SKILL.md, "Rules"
   # Proof: skill text only
   Scenario: The loop never edits what grades it in the same CR

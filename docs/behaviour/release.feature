@@ -127,14 +127,6 @@ Feature: Release to the last environment
     Then it cuts the next version
     And it does not change the failed release line
 
-  # Source: skills/release/SKILL.md, "Steps 3. Ready check"; src/gates.ts, gate evidence
-  # Proof: test/gates.test.ts "gate evidence: runs commands.evidence_check with the sha; empty product.evidence passes; evidence without the command is an error"
-  Scenario: A release with required evidence is ready only when the evidence check passes
-    Given product.evidence lists kinds
-    When the release skill runs the ready check on the chosen revision
-    Then it runs commands.evidence_check for that revision
-    And it stops and names the failure when the command does not exit 0
-
   # Source: skills/release/SKILL.md, "Steps 6. Mark" and "Steps 7. Cut"
   # Proof: skill text only
   Scenario: The tickets show In release before the cut, and the ready check runs again
