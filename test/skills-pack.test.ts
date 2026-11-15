@@ -64,3 +64,16 @@ test('shipped skills: forbiddenHits fires on a setup word (the check itself work
   assert.equal(forbiddenHits('Post it as the review identity.').length, 1);
   assert.deepEqual(forbiddenHits('Run `agentic-sdlc gate evidence --sha x`.'), []);
 });
+
+test('shipped skills: every binding key a skill names is a key of templates/binding.yml', () => {
+  const tpl = readFileSync(join(ROOT, 'templates', 'binding.yml'), 'utf8');
+  const bad: string[] = [];
+  for (const f of md(SKILLS)) readFileSync(f, 'utf8').split('\n').forEach((l, i) => {
+    for (const m of l.matchAll(/`((?:board|forge|vcs|paths|commands|owners|product|learning|cycle|heartbeat|executors|models)\.[a-z_]+(?:\.[a-z_]+)*)`/g)) {
+      const last = m[1].split('.').pop()!;
+      if (/^learning\.(judge|due|lastProposal|benchBaseline)$/.test(m[1])) continue; // fields of `ledger summary` and the heartbeat, not binding keys
+      if (!new RegExp(`(^|[^\\w])${last}:`, 'm').test(tpl)) bad.push(`${f.slice(ROOT.length + 1)}:${i + 1}: ${m[1]}`);
+    }
+  });
+  assert.deepEqual(bad, [], `\n${bad.join('\n')}`);
+});
