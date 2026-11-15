@@ -6,7 +6,7 @@ import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import type { World } from '../support/world.ts';
 import { createBoard } from '../../src/board/index.ts';
 import { MovedError } from '../../src/ports.ts';
-import type { AdapterContext, Board, Item } from '../../src/ports.ts';
+import type { AdapterContext, Board, Item, LogicalField } from '../../src/ports.ts';
 
 const run = (w: World, line: string) => {
   const o = w.cliLine(line);
@@ -241,8 +241,8 @@ When('the factory assigns the ticket {string} to {string}', (w, id: string, logi
 When('the factory clears the assignee of the ticket {string}', (w, id: string) => attempt(w, (b) => b.assign(id, null)));
 When('the factory sets the milestone of the ticket {string} to {string}', (w, id: string, name: string) => attempt(w, (b) => b.milestone(id, name)));
 When('the factory clears the milestone of the ticket {string}', (w, id: string) => attempt(w, (b) => b.milestone(id, null)));
-When('the factory sets the field {string} of the ticket {string} to {string}', (w, f: string, id: string, v: string) => attempt(w, (b) => b.set(id, f, v)));
-When('the factory clears the field {string} of the ticket {string}', (w, f: string, id: string) => attempt(w, (b) => b.set(id, f, null)));
+When('the factory sets the field {string} of the ticket {string} to {string}', (w, f: string, id: string, v: string) => attempt(w, (b) => b.set(id, f as LogicalField, v)));
+When('the factory clears the field {string} of the ticket {string}', (w, f: string, id: string) => attempt(w, (b) => b.set(id, f as LogicalField, null)));
 When('the factory adds the label {string} to the ticket {string}', (w, l: string, id: string) => attempt(w, (b) => b.label(id, 'add', l)));
 When('the factory removes the label {string} from the ticket {string}', (w, l: string, id: string) => attempt(w, (b) => b.label(id, 'remove', l)));
 When('the factory closes the ticket {string} as {string}', (w, id: string, reason: string) => attempt(w, (b) => b.close(id, reason as 'completed' | 'not_planned')));

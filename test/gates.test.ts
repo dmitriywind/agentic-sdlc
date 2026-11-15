@@ -151,12 +151,14 @@ test('skill-regression: a valid pack passes; bad frontmatter, steps, links, forb
   assert.match(errs, /sdlc-ghost: tier nope invalid/);
   assert.match(errs, /sdlc-ghost: steps\/extra.md is not in metadata.steps/);
   rmSync(sk('none'), { recursive: true }); rmSync(sk('bad'), { recursive: true }); rmSync(sk('sdlc-ghost'), { recursive: true });
-  writeFileSync(sk('sdlc-build', 'SKILL.md'), '---\nname: sdlc-build\ndescription: d\nmetadata:\n  tier: deep\n---\nok\nUse the review token on GitHub.\nRun `agentic-sdlc board nope` then `agentic-sdlc forge verdict`.\nRun agentic-sdlc gate proofs-on-base and agentic-sdlc dispatch review/review, then agentic-sdlc dispatch plan.\n');
+  writeFileSync(sk('sdlc-build', 'SKILL.md'), '---\nname: sdlc-build\ndescription: d\nmetadata:\n  tier: deep\n---\nok\nUse the review token on GitHub.\nRun `agentic-sdlc board nope` then `agentic-sdlc forge verdict`.\nRun `agentic-sdlc gate proofs-on-base` and `dispatch review/review`, then `agentic-sdlc dispatch plan`.\nThen `forge land <n> --force` and `board comment 1\n  --body-file f --kind done --ref k`.\n');
   const e2 = skillRegression(root).errors;
   assert.ok(e2.some((m) => /sdlc-build\/SKILL\.md:8: forbidden 'review token'/.test(m)), e2.join('\n'));
   assert.ok(e2.some((m) => /SKILL\.md:8: forbidden 'GitHub'/.test(m)));
-  assert.ok(e2.some((m) => /SKILL\.md:9: 'agentic-sdlc board nope' is not a verb/.test(m)));
-  assert.ok(e2.some((m) => /SKILL\.md:10: 'agentic-sdlc dispatch plan' is not a step id/.test(m)));
+  assert.ok(e2.some((m) => /SKILL\.md:9: 'board nope' is not a verb/.test(m)));
+  assert.ok(e2.some((m) => /SKILL\.md:10: 'dispatch plan' is not a step id/.test(m)));
+  assert.ok(e2.some((m) => /SKILL\.md:11: '--force' is not a flag of 'forge land'/.test(m)));
+  assert.ok(!e2.some((m) => /SKILL\.md:12/.test(m)), 'a span that wraps over lines is read whole, and its flags exist');
   assert.ok(!e2.some((m) => /proofs-on-base/.test(m) && /forbidden/.test(m)), 'a gate verb is a CLI verb, not a hard-coded check name');
 });
 

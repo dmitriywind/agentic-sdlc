@@ -181,7 +181,7 @@ export function github(ctx: AdapterContext): Forge {
     },
     async approve(n) {
       n = num(n);
-      if (oneIdentity) throw new Error('one identity (forge.review_identity is empty): GitHub refuses an approving review from the CR\'s author; review-pr skips forge approve');
+      if (oneIdentity) throw new Error('one identity (forge.review_identity is empty): GitHub refuses an approving review from the CR\'s author; the review step skips forge approve');
       await post(`pulls/${n}/reviews`, { event: 'APPROVE', body: 'agentic-sdlc review: PASS' }, withToken('review_token_env'));
     },
     async approvals(n) {

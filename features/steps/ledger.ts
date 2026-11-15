@@ -99,11 +99,10 @@ Given('a scorer {string} on the scale {string} that applies to {string}', (w, na
   const list = applies === '*' ? '*' : `[${applies}]`;
   w.write(`.agents/scorers/${name}.md`, `---\nname: ${name}\napplies_to: ${list}\nscale: ${scale}\n---\nq\n`);
 });
-Given('an installed skill pack with the review step {string}', (w, step: string) => {
+Given('an installed skill pack with the review steps', (w) => {
   const skills = '.agents/skills/sdlc-review';
   w.write(`${skills}/SKILL.md`, '---\nname: sdlc-review\ndescription: d\nmetadata:\n  steps:\n    review: { tier: balanced }\n    verify: { tier: balanced }\n---\nbody\n');
   for (const s of ['review', 'verify']) w.write(`${skills}/steps/${s}.md`, `${s}\n`);
-  assert.ok(step);
 });
 Given('learning is enabled', (w) => w.binding({ learning: { enabled: true } }));
 Given('learning is due every {int} cycles', (w, n: number) => w.binding({ learning: { every_cycles: n } }));
@@ -130,7 +129,8 @@ const walk = (v: any, segs: string[]): any => { // eslint-disable-line @typescri
 };
 const near = (a: number, b: number) => Math.abs(a - b) < 0.0015;
 const show = (v: unknown) => (v === undefined ? '<absent>' : Array.isArray(v) ? v.map(show).join(', ') : v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v));
-export const at = (w: World, path: string) => walk(w.last.json(), path.split('.'));
+export const pick = (v: unknown, path: string) => walk(v, path.split('.'));
+const at = (w: World, path: string) => pick(w.last.json(), path);
 
 Then('the JSON result has these values:', (w, t: DataTable) => {
   for (const r of t.hashes()) {

@@ -151,8 +151,8 @@ const cd = (b: Binding, type: string, subject: string, at: string | number, disc
 const cdOutcome = (o: string) => (o === 'done' ? 'success' : o === 'timeout' || o === 'capped' ? 'cancel' : 'failure');
 
 /**
- * CDEvents for the run rows: `taskrun.finished` per run, `change.reviewed` for a done `review-pr` run on a CR and
- * `change.created` for the first `implement-spec` run per CR in the window. A row has no start time, no CR title
+ * CDEvents for the run rows: `taskrun.finished` per run, `change.reviewed` for a done `review/review` run on a CR and
+ * `change.created` for the first `build` run per CR in the window. A row has no start time, no CR title
  * and no pipeline URI, so `taskrun.started`, `change.created.description` and `pipelinerun.*` are not emitted.
  */
 export function cdEventsFromRuns(rows: LedgerRun[], meta: Map<string, CycleMeta>, b: Binding): CdEvent[] {
