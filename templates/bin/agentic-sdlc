@@ -13,7 +13,7 @@ package=$(field package) || fail "cannot read $pin"
 ref=$(field ref) || fail "cannot read $pin"
 # Both end up in a path and an npm argument: refuse anything that could read as an option or leave the folder.
 case "$package" in ""|-*|*[!0-9A-Za-z._:/@-]*) fail "$pin: package is missing or not a package spec" ;; esac
-case "$ref" in ""|-*|*[!0-9A-Za-z._+-]*) fail "$pin: ref is missing or not a commit sha or version tag" ;; esac
+case "$ref" in ""|-*|.*|*[!0-9A-Za-z._+-]*) fail "$pin: ref is missing or not a commit sha or version tag" ;; esac
 dir="$root/.agents/.cli/$ref"
 bin="$dir/node_modules/agentic-sdlc/dist/bin.js"
 if [ ! -f "$bin" ]; then

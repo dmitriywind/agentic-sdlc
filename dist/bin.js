@@ -12447,7 +12447,8 @@ function cliPin(root) {
     } catch (e) {
       out.push(`fail cli pin: ${CLI_PIN} is not valid JSON (${e.message})`);
     }
-    if (pin) {
+    if (pin !== void 0 && (!pin || typeof pin !== "object" || Array.isArray(pin))) out.push(`fail cli pin: ${CLI_PIN} is not a JSON object`);
+    else if (pin) {
       if (typeof pin.package !== "string" || !pin.package) out.push(`fail cli pin: ${CLI_PIN} has no package`);
       if (isSha(pin.ref)) out.push(`ok   cli pin: ${pin.package} at commit ${String(pin.ref).slice(0, 12)}`);
       else if (isTag(pin.ref)) out.push(`warn: cli pin: ref ${pin.ref} is a tag, and a tag can move; pin a commit sha (agentic-sdlc init --ref <sha>)`);
