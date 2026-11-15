@@ -11,11 +11,12 @@ The skills, hooks and MCP server ship as a Claude Code plugin named `agentic-sdl
 `/agentic-sdlc:sdlc`, `/agentic-sdlc:review-pr` and so on ([plugins](https://code.claude.com/docs/en/plugins)).
 
 ```bash
-npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0
-npx --no agentic-sdlc init --harness claude --profile individual --board github --forge github --vcs git
-claude --plugin-dir ./node_modules/agentic-sdlc
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init --harness claude --profile individual --board github --forge github --vcs git
+claude --plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc
 ```
-`--plugin-dir` loads the plugin from the installed package for that session. To install it for
+`init` pins the CLI in `.agents/cli.json` and installs the launcher `.agents/bin/agentic-sdlc`, which fetches that ref
+into `.agents/.cli/<ref>/` on first use (run any CLI call once first, for example `.agents/bin/agentic-sdlc validate`).
+`--plugin-dir` loads the plugin from that installed package for one session. To install it for
 every session, the repo is also a plugin marketplace:
 
 ```text
@@ -26,7 +27,7 @@ The plugin's hook refuses a push to the trunk and allows `forge approve` and `fo
 
 The plugin also carries:
 - `agents/`: `agentic-sdlc:sdlc-fast`, `sdlc-balanced`, `sdlc-deep` (each runs on the session's model; `init --harness claude` writes project agents with the models from `binding.models`) and `agentic-sdlc:sdlc-reviewer` for `review-pr`. The reviewer has Read, Grep, Glob, Skill, Bash and the plugin's MCP tools, no Edit or Write and a turn limit, and the guard hook refuses any Bash command from it that is not an `agentic-sdlc` call. Plugin agents are namespaced, so the project's `sdlc-<tier>` from `init` (below) does not clash with them; the `sdlc` skill uses the project's agent when it exists. Plugin agents ignore `hooks`, `mcpServers` and `permissionMode` ([sub-agents](https://code.claude.com/docs/en/sub-agents)).
-- `bin/agentic-sdlc`: on the Bash tool's PATH while the plugin is enabled ([plugins reference](https://code.claude.com/docs/en/plugins-reference)), it runs the project's `node_modules/agentic-sdlc` or else the plugin's own build. Without the plugin, call `npx --no agentic-sdlc`.
+- `bin/agentic-sdlc`: on the Bash tool's PATH while the plugin is enabled ([plugins reference](https://code.claude.com/docs/en/plugins-reference)), it runs the project's `.agents/bin/agentic-sdlc`, else its `node_modules/agentic-sdlc`, else the plugin's own build. Without the plugin, call `.agents/bin/agentic-sdlc`.
 - `evals/`: skill-triggering cases for `claude plugin eval` (paid runs; not part of CI). The case layout comes from `claude plugin eval init --bare`; the grader fields from the CLI's own schema, as the public docs do not list them.
 
 What `init --harness claude` writes:
@@ -44,11 +45,11 @@ The init log is the exact list.
 
 ## Run one cycle by hand
 ```bash
-claude -p "/agentic-sdlc:sdlc run one cycle"   --plugin-dir node_modules/agentic-sdlc   --permission-mode acceptEdits   --allowedTools "Bash(npx --no agentic-sdlc *)" "Bash(git add *)" "Bash(git commit *)" "Bash(git push *)" "Bash(npm run *)" "Bash(npm test *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"   --disallowedTools "Bash(npx --no agentic-sdlc forge approve *)"   --max-turns 200 --output-format json
+claude -p "/agentic-sdlc:sdlc run one cycle"   --plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc   --permission-mode acceptEdits   --allowedTools "Bash(agentic-sdlc *)" "Bash(git add *)" "Bash(git commit *)" "Bash(git push *)" "Bash(npm run *)" "Bash(npm test *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"   --disallowedTools "Bash(agentic-sdlc forge approve *)"   --max-turns 200 --output-format json
 ```
 Since v2.1.302 `-p` starts in Manual mode when nothing sets a mode, so a tool call that needs
 approval is denied and the run can exit 0 having done nothing: set the mode and list what the
-cycle needs. Permission rules use the space form `Bash(npx --no agentic-sdlc *)`
+cycle needs. Permission rules use the space form `Bash(agentic-sdlc *)` (put `.agents/bin` on `PATH` first, as `runner-setup.sh` does in CI)
 ([permissions](https://code.claude.com/docs/en/permissions), [headless](https://code.claude.com/docs/en/headless)).
 Prompt text:
 [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). With two identities,

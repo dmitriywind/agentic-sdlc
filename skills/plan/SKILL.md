@@ -1,6 +1,7 @@
 ---
 name: plan
 description: Turn raw input into Ready work - triage one Signal into one decision, groom the Backlog (priority, duplicates, initiatives, closing a finished initiative), and shape one ticket into a spec at Ready. Use on a ticket at Signals, a Backlog ticket with no Priority, an initiative whose children are all closed, a plan or Idea that must become tickets, or a prioritised Backlog ticket to take to Ready.
+user-invocable: false
 metadata:
   steps:
     triage: { tier: fast }

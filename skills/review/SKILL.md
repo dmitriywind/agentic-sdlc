@@ -1,6 +1,7 @@
 ---
 name: review
 description: Validate an open change request against its ticket and spec in a fresh context, publish one verdict for its head, and land it or leave it for rework; drive a preview of the head for criteria whose proof is computer-use. Use on a CR the queue lists with action review, including a factory or dependency CR, and when review dispatches its verify step.
+user-invocable: false
 metadata:
   steps:
     review: { tier: balanced }

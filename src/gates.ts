@@ -14,7 +14,9 @@ import { createVcs, VERBS as VCS_VERBS } from './vcs/index.ts';
 import { GROUPS } from './cli.ts';
 import { matches, selectComments, verdictOf } from './comments.ts';
 import { forbiddenHits, frontmatter, logicalName, readSkills, scorerTargets, skillOf, stepIdOf, TIER_NAMES } from './skills.ts';
-import { BENCH_STEP } from './bench.ts';
+import { BENCH_STEP, OPTIONS as BENCH_OPTIONS } from './bench.ts';
+import { OPTIONS as LEDGER_OPTIONS } from './ledger.ts';
+import { FLAGS as DISPATCH_FLAGS } from './dispatch.ts';
 import { changeMergedEvent, deployEvent, emitGateEvent } from './telemetry.ts';
 
 export interface Deps {
@@ -572,34 +574,67 @@ export function cliVerbs(): Record<string, Set<string>> {
   return out;
 }
 
+/** The flags a verb of a CLI group takes, when the group's tables say; undefined for a group the check does not know. */
+export function cliFlags(group: string, verb: string): Set<string> | undefined {
+  const table = { board: BOARD_VERBS, forge: FORGE_VERBS, vcs: VCS_VERBS }[group];
+  if (table) { const v = table[verb]; return new Set([...(v?.value ?? []), ...(v?.bool ?? [])]); }
+  if (group === 'ledger') return new Set(Object.keys(LEDGER_OPTIONS));
+  if (group === 'bench') return new Set(Object.keys(BENCH_OPTIONS));
+  if (group === 'dispatch') return new Set(DISPATCH_FLAGS);
+  return undefined;
+}
+
 /**
- * The installed skill pack and the scorers: the loader's problems (frontmatter, steps and their files), links between
- * skill files, forbidden content (FORBIDDEN in skills.ts), every `agentic-sdlc <group> <verb>` and `dispatch <id>`
- * a skill file names, and scorers' `applies_to`. A top-level tier still passes, with a warning.
+ * Every call of the CLI a skill file names in a code span: `agentic-sdlc board move <id> ...` or the short `board move <id> ...`
+ * (a span may wrap over lines). `verb` is the verb, or the step id for `dispatch`; `rest` the words after it; `line` the 1-based line.
  */
-export function skillRegression(root: string): { errors: string[]; warnings: string[] } {
-  const dir = join(root, '.agents', 'skills');
-  if (!existsSync(dir)) return { errors: [`${dir} does not exist`], warnings: [] };
+export function cliCalls(text: string): { group: string; verb: string; rest: string; line: number }[] {
+  const out: { group: string; verb: string; rest: string; line: number }[] = [];
+  const re = /`(?:agentic-sdlc\s+)?(board|forge|vcs|gate|ledger|bench|dispatch)\s+([a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)?)([^`]*)`/g;
+  for (const m of text.matchAll(re)) out.push({ group: m[1], verb: m[2], rest: m[3], line: text.slice(0, m.index).split('\n').length });
+  return out;
+}
+
+/**
+ * A skill pack in `dir`: the loader's problems (frontmatter, steps and their files), links between skill files, forbidden
+ * content (FORBIDDEN in skills.ts), every CLI call a skill file names (the verb exists, each `--flag` is one of its verb's,
+ * a `dispatch` names a step). `rel` is the folder file names in messages are relative to.
+ */
+export function skillPackCheck(dir: string, rel: string): { errors: string[]; warnings: string[]; pack: ReturnType<typeof readSkills> } {
   const pack = readSkills(dir);
   const errors = [...pack.errors], warnings = [...pack.warnings];
   const verbs = cliVerbs();
   const ids = new Set(pack.steps.map((x) => x.id));
-  for (const sk of pack.skills) for (const rel of mdFiles(sk.dir)) {
-    const file = join(sk.dir, rel), name = `${sk.name}/${rel}`;
+  for (const sk of pack.skills) for (const f of mdFiles(sk.dir)) {
+    const file = join(sk.dir, f), name = `${sk.name}/${f}`;
     const text = readFileSync(file, 'utf8');
+    const at = (line: number) => `${relative(rel, file).replaceAll('\\', '/')}:${line}`;
     for (const m of text.matchAll(/\]\(([^)\s]+)\)/g)) {
       const link = m[1].split('#')[0];
       if (!link || /^[a-z][a-z0-9+.-]*:/i.test(link)) continue;
-      if (!existsSync(resolve(dirname(file), link))) errors.push(`${rel === 'SKILL.md' ? sk.name : name}: broken link ${m[1]}`);
+      if (!existsSync(resolve(dirname(file), link))) errors.push(`${f === 'SKILL.md' ? sk.name : name}: broken link ${m[1]}`);
     }
-    for (const h of forbiddenHits(text)) errors.push(`${relative(root, file).replaceAll('\\', '/')}:${h.line}: forbidden '${h.match}' (${h.reason})`);
-    text.split(/\r?\n/).forEach((l, i) => {
-      for (const m of l.matchAll(/agentic-sdlc\s+(board|forge|vcs|gate|ledger|bench)\s+([a-z][a-z-]*)/g))
-        if (!verbs[m[1]].has(m[2])) errors.push(`${relative(root, file).replaceAll('\\', '/')}:${i + 1}: 'agentic-sdlc ${m[1]} ${m[2]}' is not a verb (${m[1]}: ${[...verbs[m[1]]].join(' ')})`);
-      for (const m of l.matchAll(/agentic-sdlc\s+dispatch\s+([a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)?)/g))
-        if (!ids.has(m[1])) errors.push(`${relative(root, file).replaceAll('\\', '/')}:${i + 1}: 'agentic-sdlc dispatch ${m[1]}' is not a step id (${[...ids].join(' ')})`);
-    });
+    for (const h of forbiddenHits(text)) errors.push(`${at(h.line)}: forbidden '${h.match}' (${h.reason})`);
+    for (const c of cliCalls(text)) {
+      if (c.group === 'dispatch') {
+        if (!ids.has(c.verb)) errors.push(`${at(c.line)}: 'dispatch ${c.verb}' is not a step id (${[...ids].join(' ')})`);
+      } else if (!verbs[c.group].has(c.verb)) { errors.push(`${at(c.line)}: '${c.group} ${c.verb}' is not a verb (${c.group}: ${[...verbs[c.group]].join(' ')})`); continue; }
+      const known = cliFlags(c.group, c.verb);
+      if (known) for (const m of c.rest.matchAll(/(?<![\w-])--([a-z][a-z-]*)/g))
+        if (!known.has(m[1])) errors.push(`${at(c.line)}: '--${m[1]}' is not a flag of '${c.group} ${c.verb}' (${[...known].map((k) => `--${k}`).join(' ') || 'none'})`);
+    }
   }
+  return { errors, warnings, pack };
+}
+
+/**
+ * The installed skill pack (`.agents/skills`, checked by `skillPackCheck`) and the scorers' `applies_to`.
+ * A top-level tier still passes, with a warning.
+ */
+export function skillRegression(root: string): { errors: string[]; warnings: string[] } {
+  const dir = join(root, '.agents', 'skills');
+  if (!existsSync(dir)) return { errors: [`${dir} does not exist`], warnings: [] };
+  const { errors, warnings, pack } = skillPackCheck(dir, root);
   const sdir = join(root, '.agents', 'scorers');
   const targets = scorerTargets(pack);
   if (existsSync(sdir)) for (const f of readdirSync(sdir).filter((n) => n.endsWith('.md'))) errors.push(...scorerErrors(f, readFileSync(join(sdir, f), 'utf8'), targets));

@@ -302,7 +302,9 @@ a scorer's `applies_to`, the `executors` keys and the `Agent-Skill` trailer all 
   } }` for a multi-step skill (each step in `steps/<step>.md`) or `metadata.tier` for a one-step
   skill (the step is the SKILL.md body). `tier` is `fast`, `balanced` or `deep`; `models` maps it to
   a model. `disable-model-invocation: true` marks skills only a person or the cycle starts (`ship`,
-  `learn`); `user-invocable: false` marks a skill only another step runs (`escalate`).
+  `learn`); `user-invocable: false` marks a skill only the navigator or another step runs (`plan`, `build`,
+  `review`, `escalate`). `sdlc` has neither flag. The `internal-skills-not-direct` and
+  `release-not-model-invoked` evals check the two lists.
 - **Body**: the SKILL.md of a multi-step skill is a table of its steps (what each runs on, its
   tier, what it ends with) and the rules common to them. A step points to
   `sdlc/references/contract.md`, lists numbered steps each ending on a checkable **Done when** (a

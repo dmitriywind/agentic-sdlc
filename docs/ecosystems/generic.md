@@ -7,7 +7,7 @@ Contract: [`references/architecture.md`](../../references/architecture.md) secti
 ## What you get
 | Route | The agent has | How it reaches the ports |
 |---|---|---|
-| Shell | A shell and Node | `npx --no agentic-sdlc <group> <verb>` |
+| Shell | A shell and Node | `.agents/bin/agentic-sdlc <group> <verb>` |
 | MCP only | MCP, no shell | `agentic-sdlc mcp` exposes every port verb as an MCP tool |
 | Vendor MCP tools only | A chat bot with a GitHub, Jira or Linear connector | The vendor tools that `board.mcp` maps to the port verbs |
 
@@ -15,13 +15,14 @@ Gates always run in the forge's CI, so trunk guarantees never depend on the runt
 
 ## Install
 ```bash
-npx --no agentic-sdlc init --harness generic --profile individual --board github --forge github --vcs git
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init --harness generic --profile individual --board github --forge github --vcs git
 ```
-It writes `.agents/binding.yml`, the skills in `.agents/skills/`, the gate templates and an `AGENTS.md` pointer.
+It writes the CLI pin `.agents/cli.json`, the launcher `.agents/bin/agentic-sdlc` (everything runs through it; it installs the pinned CLI on first use), `.agents/binding.yml`, the skills in `.agents/skills/`, the gate templates and an `AGENTS.md` pointer.
 Point your tool at `.agents/skills/sdlc/SKILL.md` if it does not scan that path. The init log lists the files; the `--harness` flag decides.
 Check the setup:
 ```bash
-npx --no agentic-sdlc doctor
+# upgrade later: run the new package's `init --upgrade`
+.agents/bin/agentic-sdlc doctor
 ```
 
 ## Run one cycle by hand
@@ -39,7 +40,7 @@ Set `AGENTIC_SDLC_UNATTENDED=1` in both.
 ## Route 2: MCP only
 Stdio, inside the agent's session. Register the server in the tool's MCP config:
 ```json
-{ "mcpServers": { "agentic-sdlc": { "command": "npx", "args": ["--no-install", "agentic-sdlc", "mcp"] } } }
+{ "mcpServers": { "agentic-sdlc": { "command": ".agents/bin/agentic-sdlc", "args": ["mcp"] } } }
 ```
 The server is stdio only; a bot that cannot spawn a process uses route 3.
 - The server holds the board and forge tokens of the process that started it. Run it as the implementer identity, never with the review token.

@@ -434,15 +434,14 @@ const USAGE = [
   '       ledger export --format otlp|cdevents [--since <days|iso>] [--run <id>] [--out <file>] [--send]',
 ].join('\n');
 
+/** The flags `ledger` takes (a verb reads the ones it needs). */
+export const OPTIONS = { since: { type: 'string' }, skill: { type: 'string' }, run: { type: 'string' }, file: { type: 'string' }, days: { type: 'string' }, 'max-hours': { type: 'string' }, format: { type: 'string' }, out: { type: 'string' }, send: { type: 'boolean' } } as const;
+
 export const cli: PortCli = async (argv, ctx) => {
   const [verb, ...rest] = argv;
   let a;
   try {
-    a = parseArgs({
-      args: rest,
-      options: { since: { type: 'string' }, skill: { type: 'string' }, run: { type: 'string' }, file: { type: 'string' }, days: { type: 'string' }, 'max-hours': { type: 'string' }, format: { type: 'string' }, out: { type: 'string' }, send: { type: 'boolean' } },
-      allowPositionals: true,
-    });
+    a = parseArgs({ args: rest, options: OPTIONS, allowPositionals: true });
   } catch (e) {
     console.error(flagError(e as Error));
     return 2;

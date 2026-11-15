@@ -83,8 +83,8 @@ CR pipelines never let the CR choose the rules. GitHub runs the gates of `agenti
 `pull_request_target` with the base branch checked out (the CR head is fetched as objects only,
 never run); the `Required` and `proofs-on-base` jobs run on plain `pull_request` with no secrets.
 `gate shipped` needs full history (fetch depth 0) and a git identity to tag. Actions and
-installs are pinned: the project's `agentic-sdlc` devDependency (a `github:` spec; `init` sets
-`allow-git=root` in `.npmrc` for npm 12) through `npm ci`, and each action by a 40-hex commit SHA with
+installs are pinned: the CLI by `.agents/cli.json` (a `github:` spec and a ref) through the launcher
+`.agents/bin/agentic-sdlc`, which a secret-holding job takes from the base checkout, and each action by a 40-hex commit SHA with
 its version in a trailing comment (`actions/checkout@<sha> # v7.0.1`). The installed workflows under
 `.github/workflows` are the adopter's to keep fresh: Dependabot's `github-actions` ecosystem
 (`.github/dependabot.yml`) bumps the SHA and the comment together. `doctor` warns when an installed
@@ -118,7 +118,7 @@ One-time setup (private repos need a plan with Environments: Pro, Team or Enterp
 2. Add `AGENTIC_FORGE_TOKEN` as a repo secret (`proofs-on-base` falls back to the read-only job token and
    its status post fails by design; the job's exit code is the check).
 3. Release line only: create Environment `agentic-release` with the Product owner as required reviewer and deployment branches limited to the trunk. Store `AGENTIC_RELEASE_TOKEN` there: the release bot, a bypass actor of `.github/rulesets/release.json`. The shipped ruleset lets repo admins bypass too (`RepositoryRole` 5); to make the bot the only bypass actor, replace that entry with your release GitHub App (`actor_type: Integration`, its `actor_id`) after you import the ruleset. The release skill starts `forge cut <revision> <version>`, which runs `agentic-sdlc-release.yml`; the Product owner's approval of that run is the go-ahead. The cycle never holds this token.
-4. Repo variables (Settings > Secrets and variables > Actions > Variables): `AGENTIC_SDLC_VERSION`, an exact version or a 40-hex commit SHA, which the workflows install when the repo does not pin `agentic-sdlc` as a devDependency; a SHA is the immutable choice, a tag can move. Without it those jobs fail. The runner workflows also read `AGENTIC_AGENT_CLI_VERSION`, an exact version of the Claude Code or Codex CLI, and fail without it.
+4. Repo variables (Settings > Secrets and variables > Actions > Variables): the workflows need none for the CLI; its version is `.agents/cli.json` (a commit SHA is the immutable choice, a tag can move: `doctor` warns). The runner workflows read `AGENTIC_AGENT_CLI_VERSION`, an exact version of the Claude Code or Codex CLI, and fail without it.
 5. `init` installs `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events to `human-approval`; it must stay in place or approvals do not update. A fork PR's review event carries no PR number, so its approval updates on the next PR event.
 
 ## Agent provenance and the SLSA Source track
