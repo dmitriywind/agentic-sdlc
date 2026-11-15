@@ -92,11 +92,13 @@ In order:
    `budget: exhausted`.
 1a. **Release holds.** For each held ticket in the listing (label `board.labels.human`): read its last
    ask (`board comments <id> --last 1 --marker "### Needs human" --trusted`) and the replies after it
-   (`board comments <id> --author <owners.product> --author <owners.factory>`). When one reply is newer than
+   (`board comments <id> --author <a>`, with one `--author` for each entry of every owner role:
+   `owners.product`, `factory`, `operator`, `security`, `compliance`; never `owners.bots`). When one reply is newer than
    the ask, `board label <id> remove <board.labels.human>`; the ticket routes in step 6 at the same
    Status. A held ticket with no such reply stays held. Done when no held ticket has an owner reply
    after its last ask, and the ids released are in the heartbeat's `did`.
-2. **Idle exit.** When no unheld ticket matches a Routing row the cycle dispatches (any skill but
+2. **Idle exit.** When no unheld ticket matches a Routing row the cycle dispatches (a Ready `feature`
+   ticket does not match while the error budget is exhausted; any skill but
    `review-pr` when `forge.review_identity` is set), no CR needs a review, and `ledger summary` shows neither `learning.due` nor
    `learning.judge` with an unscored run: write the idle heartbeat (`at`, `factory`, `runs: []`,
    `errors: []`, and `learning` copied forward when `learning.enabled` is true), fire no review, and stop. Done when it is posted.

@@ -30,7 +30,7 @@ every group and `npx --no agentic-sdlc <group> --help` its verbs; `--version` pr
 success, 1 is a refused or failed action, 2 is a usage error.
 
 On Claude Code, also install the plugin (skills, the guard hook, the MCP server):
-`/plugin install agentic-sdlc --marketplace dmitriywind/agentic-sdlc`.
+`/plugin marketplace add dmitriywind/agentic-sdlc`, then `/plugin install agentic-sdlc@agentic-sdlc`.
 
 ## Read the guide
 
