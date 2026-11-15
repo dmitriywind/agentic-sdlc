@@ -108,16 +108,6 @@ Feature: Review a change request
     And the pending check is not a finding
     And on a draft CR a check missing for longer than stall_minutes after the CR's pushedAt calls escalate-to-human once with the Access trigger
 
-  # Source: skills/review-pr/SKILL.md, "Decide" (Human approval)
-  # Proof: test/gates.test.ts "approval: classes and the human-approval status per forge.human_approval"
-  Scenario: A Full-lane CR asks for a human approval
-    Given a Full-lane product CR
-    And forge.human_approval is full-lane or always
-    When the reviewer decides PASS
-    Then it posts one CR comment that asks owners.product to approve the head
-    And it never approves for a human
-    And for a factory CR the ask goes to owners.factory
-
   # Source: skills/review-pr/SKILL.md, "Decide" (PASS)
   # Proof: test/guard.test.ts "forge approve is for the review role only"
   Scenario: No review token means no approval
