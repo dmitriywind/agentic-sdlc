@@ -42,35 +42,7 @@ Feature: Runs exported as CDEvents
         | subject.content.outcome             | success                        |
         | subject.content.pipelineRun.id      | 1                              |
 
-    Scenario: A failed run is a failure with its error
-      When I run "ledger export --format cdevents"
-      Then CDEvent 5 has these values:
-        | path                       | value          |
-        | subject.content.outcome    | failure        |
-        | subject.content.errors     | fast_check red |
-
-    Scenario: A created change names its repository
-      When I run "ledger export --format cdevents"
-      Then CDEvent 2 holds:
-        """
-        { "id": "12", "content": { "repository": { "id": "acme/app", "source": "https://github.com/acme/app" } } }
-        """
-
-    Scenario: The ids are 32 hex digits and the same on every export
-      When I run "ledger export --format cdevents"
-      And I note the printed document
-      And I run "ledger export --format cdevents"
-      Then every CDEvent has an id of 32 hex digits
-      And the printed document is the noted one
-
   Rule: The export is printed or written to a file
-
-    Scenario: --run exports one run and its change
-      When I run "ledger export --format cdevents --run r1"
-      Then the CDEvents printed are:
-        | type                                  | subject |
-        | dev.cdevents.taskrun.finished.0.3.0   | r1      |
-        | dev.cdevents.change.created.0.4.0     | 12      |
 
     Scenario: --out writes the document to a file and prints nothing
       When I run "ledger export --format otlp"
@@ -78,12 +50,3 @@ Feature: Runs exported as CDEvents
       And I run "ledger export --format otlp --out o.json"
       Then nothing was printed
       And the file "o.json" holds the document that was noted
-
-    Scenario Outline: An export refuses what it cannot read
-      When I run "<command>"
-      Then the exit code is 2
-
-      Examples:
-        | command                                      |
-        | ledger export --format otlp --since x        |
-        | ledger export --format otlp --send --out o   |

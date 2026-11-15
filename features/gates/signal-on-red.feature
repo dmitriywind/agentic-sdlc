@@ -19,5 +19,3 @@ Feature: Gate signal-on-red
       And the signal-on-red gate runs for the run "987"
       Then the gate result "created" is "false"
       And one Signal is opened with the labels "signal:ci"
-
-  Rule: Anything else opens no Signal

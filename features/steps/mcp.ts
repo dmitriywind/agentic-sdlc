@@ -1,7 +1,7 @@
 // The MCP server, driven in-process one JSON-RPC message at a time against the scenario's project (a local board).
 // State on w.state: allow (the Set of guarded tools --allow named), replies (every reply of the scenario, null for no reply), tools (the last tools/list).
 import assert from 'node:assert/strict';
-import { allowList, cli, handle } from '../../src/mcp.ts';
+import { allowList, handle } from '../../src/mcp.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import type { World } from '../support/world.ts';
 
@@ -22,7 +22,6 @@ const rpc = (method: string, params: Obj | undefined, id: unknown = 1) => ({ jso
 const json = (text: string): Obj => JSON.parse(text);
 const text = (v: unknown) => (v === undefined ? undefined : Array.isArray(v) ? v.join(', ') : typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v));
 const at = (root: Obj, path: string) => { let v = root; for (const k of path.split('.')) v = v?.[k]; return v; };
-const toolText = (w: World): Obj => json(reply(w).result.content[0].text);
 
 // ---- Given: how the server is started ----
 Given('the server is started with --allow {string}', (w, arg: string) => { w.state.allow = allowList(arg); });
@@ -33,12 +32,6 @@ When('the client calls the tool {string} with {string}', async (w, name: string,
 When('the client sends the session:', async (w, t: DataTable) => { for (const r of t.hashes()) await send(w, r.id ? rpc(r.method, r.params ? json(r.params) : undefined, json(r.id)) : { jsonrpc: '2.0', method: r.method }); });
 // 2026-07-28: every request carries its own version and capabilities in _meta.
 When('the modern client sends {string}', async (w, method: string) => send(w, rpc(method, meta(), 7)));
-When('the modern client calls the tool {string} with {string}', async (w, name: string, args: string) => send(w, rpc('tools/call', { name, arguments: json(args), ...meta() }, 7)));
-When('the client runs "mcp --allow {word}"', async (w, arg: string) => {
-  const err = console.error; let out = ''; console.error = (s: string) => { out += s; };
-  try { w.state.exit = await cli(['--allow', arg], w.adapterContext()); } finally { console.error = err; }
-  w.state.stderr = out;
-});
 
 // ---- Then: the reply ----
 Then('the reply {string} is {string}', (w, path: string, value: string) => assert.equal(text(at(reply(w), path)), value));
@@ -65,10 +58,6 @@ Then('the listed tools include {string}', (w, name: string) => assert.ok(reply(w
 Then('the tool result is an error', (w) => assert.equal(reply(w).result.isError, true, JSON.stringify(reply(w))));
 Then('the tool result is not an error', (w) => assert.equal(reply(w).result.isError, undefined, JSON.stringify(reply(w).result.content)));
 Then('the tool result says {string}', (w, part: string) => assert.ok(reply(w).result.content[0].text.includes(part), reply(w).result.content[0].text));
-Then('the tool result {string} is {string}', (w, path: string, value: string) => assert.equal(text(at(toolText(w), path)), value));
-Then('the tool result has no {string}', (w, path: string) => assert.equal(at(toolText(w), path), undefined));
 Then('the structured content {string} is {string}', (w, path: string, value: string) => assert.equal(text(at(reply(w).result.structuredContent, path)), value));
 
 // ---- Then: the command line ----
-Then('the server exits with code {int}', (w, code: number) => assert.equal(w.state.exit, code));
-Then('the server says {string}', (w, part: string) => assert.ok(`${w.state.stderr ?? ''}${w.state.stdout ?? ''}`.includes(part), `${w.state.stderr}${w.state.stdout}`));

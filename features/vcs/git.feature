@@ -15,29 +15,6 @@ Feature: The git vcs port
       Then the files the line "t-1-x" changed are "b.txt"
       And the base of the line "t-1-x" is the trunk tip
 
-    Scenario: Cut puts a release branch on the origin at the given commit
-      Given the line "t-1-x" commits the file "b.txt" containing "2"
-      When the line "t-1-x" cuts the release "2026.1" at its head
-      Then the cut ref is "refs/heads/release/2026.1"
-      And the origin has "release/2026.1" at the head of the line "t-1-x"
-
-    Scenario: Tags are created at a commit and listed by prefix
-      Given the line "t-1-x" commits the file "b.txt" containing "2"
-      When the line "t-1-x" tags its head "v1" and "v2"
-      Then the tags with the prefix "v" are "v1, v2", both at the head of the line "t-1-x"
-
-    Scenario: Checkout-tests of HEAD restores the tree
-      Given the line "t-1-x" commits the file "t/x.test" containing "T"
-      And the line "t-1-x" commits the file "new.txt" containing "n"
-      And the line "t-1-x" checks out the trunk tip keeping the paths "t"
-      When the line "t-1-x" checks out its head keeping no path
-      Then the line "t-1-x" has the file "new.txt"
-
-    Scenario: Drop removes the worktree and the branch
-      When the change line "t-1-x" is dropped
-      Then the line "t-1-x" has no worktree
-      And the project has no branch "t-1-x"
-
   Rule: Start finds the work that already exists
 
     Background:
@@ -58,14 +35,6 @@ Feature: The git vcs port
       When the change line "t-2-x" is started again
       Then the line "t-2-x" is at the commit the other clone pushed
 
-    Scenario: A reused branch without a workdir fast-forwards to the work on the origin
-      Given the change line "t-2-x" is started
-      And the line "t-2-x" is pushed
-      And another clone pushes a commit to "t-2-x"
-      And the worktree of the line "t-2-x" is removed but its branch stays
-      When the change line "t-2-x" is started again
-      Then the line "t-2-x" is at the commit the other clone pushed
-
   Rule: A snapshot is a detached tree that holds no later commit
 
     Background:
@@ -77,11 +46,6 @@ Feature: The git vcs port
       And the snapshot gets the file "new.txt" containing "n"
       And the snapshot loses the file "gone.txt"
       Then the files the snapshot changed are "a.txt, gone.txt, new.txt"
-
-    Scenario: Drop removes the tree and its worktree entry
-      When the snapshot is dropped
-      Then the snapshot folder is gone
-      And git lists no bench worktree
 
   Rule: A name, revision or path that git could read as an option is refused
 

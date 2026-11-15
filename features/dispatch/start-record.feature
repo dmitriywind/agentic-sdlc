@@ -8,10 +8,6 @@ Feature: Every dispatch prints its key and its done line
   Background:
     Given the installed skill pack
 
-  Rule: The key and the done line are always printed
-
-  Rule: A stage resolves its agent definition
-
   Rule: learn/judge never grades its own model
 
     Scenario: The judge tier wins over the model of the stage

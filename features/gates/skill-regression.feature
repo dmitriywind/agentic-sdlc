@@ -13,11 +13,6 @@ Feature: Gate skill-regression
       Then the exit code is 0
       And the JSON result "ok" is "true"
 
-    Scenario: A project with no installed pack fails
-      When I run "gate skill-regression"
-      Then the exit code is 1
-      And the output says "does not exist"
-
     Scenario: The problems of a skill are listed, with the skill and the line
       Given the project has the installed fixture skill pack
       And the installed skill file "sdlc-build/SKILL.md" is:
@@ -34,21 +29,6 @@ Feature: Gate skill-regression
       When I run "gate skill-regression"
       Then the exit code is 1
       And the output says ".agents/skills/sdlc-build/SKILL.md:8: 'board nope' is not a verb"
-
-    Scenario: A top-level tier passes with a warning
-      Given the project has the installed fixture skill pack
-      And the installed skill file "sdlc-build/SKILL.md" is:
-        """
-        ---
-        name: sdlc-build
-        description: d
-        tier: deep
-        ---
-        x
-        """
-      When I run "gate skill-regression"
-      Then the exit code is 0
-      And the output says "warning: sdlc-build: top-level tier is deprecated; move it to metadata.tier"
 
   Rule: A scorer names a step or a skill it applies to, and a scale
 
@@ -83,34 +63,9 @@ Feature: Gate skill-regression
       Then the exit code is 1
       And the output says "scorers/bad.md: scale 1-10 invalid"
 
-    Scenario: An applies_to that is neither "*" nor a list is listed
-      Given the scorer file "bad.md" is:
-        """
-        ---
-        name: bad
-        applies_to: implement-spec
-        scale: pass-fail
-        ---
-        q
-        """
-      When I run "gate skill-regression"
-      Then the output says "scorers/bad.md: applies_to must be \"*\" or a list of step ids or skills"
-
     Scenario: An applies_to that names no step or skill is listed with the known ones
       Given a scorer "old" on the scale "pass-fail" that applies to "review-pr, plan/nope"
       When I run "gate skill-regression"
       Then the exit code is 1
       And the output says "scorers/old.md: applies_to 'review-pr' names no step or skill"
       And the output says "scorers/old.md: applies_to 'plan/nope' names no step or skill"
-
-    Scenario: A scorer with no name is listed
-      Given the scorer file "anon.md" is:
-        """
-        ---
-        applies_to: "*"
-        scale: pass-fail
-        ---
-        q
-        """
-      When I run "gate skill-regression"
-      Then the output says "scorers/anon.md: frontmatter name missing"

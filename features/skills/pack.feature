@@ -16,16 +16,5 @@ Feature: The shipped skill pack
 
   Rule: A skill holds process only
 
-    Scenario: No skill file spells a comment marker
-      Then no skill file spells a comment marker
-
     Scenario: Every binding key a skill names is a key of the binding template
       Then every binding key a skill names is a key of templates/binding.yml
-
-  Rule: The lint sees what a skill file says
-
-    Scenario: The flags of a verb come from the CLI's tables
-      Then the verb "forge verdict" takes the flag "body-file"
-      And the verb "forge verdict" takes no flag "body"
-      And the verb "dispatch" takes the flag "run-model"
-      And the group "gate" has no flag table

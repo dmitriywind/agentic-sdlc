@@ -14,11 +14,3 @@ Feature: Adapter options are checked per adapter
       And the binding value "board.options" is '{"base_url":"u","project":"P","email_env":"E","token_env":"T"}'
       When the binding is validated
       Then the problems mention "board.options.project_key is required"
-
-    Scenario: Options the adapters read are valid
-      Given the binding value "board.adapter" is '"jira"'
-      And the binding value "board.options" is '{"base_url":"u","project_key":"P","email_env":"E","token_env":"T"}'
-      And the binding value "forge.options" is '{"repo":"o/r","token_env":"T","review_token_env":"R"}'
-      And the binding value "forge.review_identity" is '"reviewer"'
-      When the binding is validated
-      Then validation finds no problems

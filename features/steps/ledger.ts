@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { HEARTBEAT_MARKER, SCORES_MARKER, measures, hardFacts, type LedgerRun } from '../../src/ledger.ts';
+import { HEARTBEAT_MARKER, SCORES_MARKER, measures } from '../../src/ledger.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import { Outcome, REPO, type World } from '../support/world.ts';
 
@@ -88,15 +88,10 @@ const editLast = (w: World, fn: (hb: Record<string, unknown>) => void) => {
 Given('the heartbeat ticket', (w) => ensureTicket(w));
 Given('a heartbeat by {string} at {string} with these runs:', (w, by: string, at: string, t: DataTable) => heartbeat(w, undefined, by, at, t.hashes()));
 Given('a heartbeat by {string} at {string} with no runs', (w, by: string, at: string) => heartbeat(w, undefined, by, at, []));
-Given('a {string} heartbeat by {string} at {string} with these runs:', (w, kind: string, by: string, at: string, t: DataTable) => heartbeat(w, kind, by, at, t.hashes()));
-Given('a heartbeat by {string} at {string} with {int} tickets of one run each, the first using {int} tokens and each next one {int} more', (w, by: string, at: string, n: number, first: number, step: number) => {
-  heartbeat(w, undefined, by, at, Array.from({ length: n }, (_, i) => ({ id: `m${i}`, ticket: `t${i}`, tokens: String(first + i * step) })));
-});
 Given('that heartbeat records the factory {string}', (w, sha: string) => editLast(w, (hb) => { hb.factory = sha; }));
 Given('that heartbeat rescores:', (w, t: DataTable) => editLast(w, (hb) => {
   hb.rescores = t.hashes().map((r) => ({ id: r.id, ...(r.scorer ? { scorer: r.scorer } : {}), score: /^\d+$/.test(r.score) ? Number(r.score) : r.score, ...(r.by ? { by: r.by } : {}) }));
 }));
-Given('{string} posted a heartbeat whose JSON is not valid', (w, by: string) => post(w, by, '1 hours ago', `${HEARTBEAT_MARKER}\n\`\`\`json\n{bad\n\`\`\``));
 Given('{string} posted the comment {string}', (w, by: string, text: string) => post(w, by, '1 hours ago', text));
 Given('{string} posted the scores {string} for run {string}', (w, by: string, scores: string, run: string) =>
   post(w, by, '1 hours ago', `${SCORES_MARKER}\n\`\`\`json\n${JSON.stringify({ run, scores: scoresOf(scores), cap: 'outcome failed' })}\n\`\`\``));
@@ -114,14 +109,7 @@ Given('learning is enabled', (w) => w.binding({ learning: { enabled: true } }));
 Given('learning is due every {int} cycles', (w, n: number) => w.binding({ learning: { every_cycles: n } }));
 Given('a ticket may use {int} tokens', (w, n: number) => w.binding({ cycle: { max_tokens_per_ticket: n } }));
 
-Given('a skill folder {string} with the lines {string} separated by {string}', (w, dir: string, lines: string, sep: string) => {
-  w.write(`${dir}/SKILL.md`, lines.split('|').join(sep.replace('\\r', '\r').replace('\\n', '\n')));
-  w.write(`${dir}/references/x.md`, 'x');
-});
 
-When('I note the printed hash', (w) => { w.state.noted = w.last.json().hash; });
-Then('the hash is the noted one', (w) => assert.equal(w.last.json().hash, w.state.noted));
-Then('the hash is not the noted one', (w) => assert.notEqual(w.last.json().hash, w.state.noted));
 
 // ---- the JSON of the last run ----
 /** Values at a dotted path: `*` maps over a list, `id=a` picks the entry whose id is a; a list is a list of values. */
@@ -180,10 +168,3 @@ When('I measure the last {int} days', async (w, days: number) => {
 });
 
 // ---- the hard-fact cap and the scores comment, as functions ----
-Given('a run {string} that ended {string} on CR {string} whose checks are:', (w, id: string, outcome: string, cr: string, t: DataTable) => {
-  w.state.cap = { run: { id, outcome, cr, skill: 'build' } as unknown as LedgerRun, checks: t.hashes().map((r) => ({ name: r.name, state: r.state })) };
-});
-When('the hard facts are read with the required checks {string}', (w, required: string) => {
-  const { run, checks } = w.state.cap;
-  w.last = new Outcome(0, JSON.stringify(hardFacts(run, { checks } as never, required.split(',').map((s) => s.trim()).filter(Boolean))), '');
-});

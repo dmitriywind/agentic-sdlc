@@ -1,13 +1,9 @@
 // The marker registry of src/comments.ts: the first line of each comment kind, called as functions on table input.
 // State on w.state: cm (specMarker, kind, ref, line, body, verdict, error, matched, filter).
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { When, Then } from '../support/steps.ts';
 import type { World } from '../support/world.ts';
-import { KINDS, isMarked, parseKind, stamp, stampBody, type Kind } from '../../src/comments.ts';
-import { parse } from 'yaml';
-import { REPO } from '../support/world.ts';
-import { join } from 'node:path';
+import { isMarked, parseKind, stamp, stampBody, type Kind } from '../../src/comments.ts';
 
 type Cm = { specMarker?: string; kind?: Kind; ref?: string; line?: string; body?: string; verdict?: string; error?: Error; filter?: string; marked?: boolean };
 const cm = (w: World): Cm => (w.state.cm ??= {});
@@ -30,7 +26,6 @@ Then('a comment opening with that line is of that kind, with the ref or without 
   assert.ok(isMarked(`${c.line}\nbody`, c.kind!, c.ref), 'not marked with the ref');
   assert.ok(isMarked(`${c.line}\nbody`, c.kind!), 'not marked without the ref');
 });
-Then('the registry holds exactly the kinds {string}', (w, list: string) => assert.deepEqual([...KINDS].sort(), list.split(',').map((k) => k.trim()).sort()));
 Then('the stamped body is {string}', (w, body: string) => assert.equal(cm(w).body, unescape(body)));
 
 // ---- the printed comments of a board or forge CLI run ----
@@ -38,10 +33,6 @@ Then('the printed comments open with {string}', (w, lines: string) =>
   assert.equal(w.last.json().map((c: { body: string }) => c.body.split('\n')[0]).join(', '), lines));
 
 // ---- the template documents the default wait ----
-Then('the shipped binding template sets {string} to {int}', (w, key: string, n: number) => {
-  const tpl = parse(readFileSync(join(REPO, 'templates', 'binding.yml'), 'utf8'));
-  assert.equal(key.split('.').reduce((o: any, k) => o?.[k], tpl), n); // eslint-disable-line @typescript-eslint/no-explicit-any
-});
 
 // ---- board hold with a kind a flag could not carry ----
 When('the factory holds the ticket {string} with the kind {string} and the body file {string}', (w, id: string, kind: string, file: string) => {

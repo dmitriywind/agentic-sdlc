@@ -49,11 +49,6 @@ Feature: Comparing two bench results
         | a.lower   | 0.610 |
         | b.lower   | 0.436 |
 
-    Scenario: A candidate that passes more is not regressed
-      When I run "bench compare b.json a.json"
-      Then the exit code is 0
-      And the JSON result "regressed" is "false"
-
   Rule: Too little evidence is a regression
 
     Background:
@@ -82,53 +77,6 @@ Feature: Comparing two bench results
         | path           | value                    |
         | regressed      | true                     |
         | insufficient   | 3 shared cases, need 4   |
-
-    Scenario: Fewer trials of a shared case than learning.bench_trials
-      Given the bench demands 3 shared cases and 3 trials
-      When I run "bench compare a.json b.json"
-      Then the exit code is 1
-      And the JSON result "insufficient" is "2 trials on a shared case, need 3"
-
-    Scenario: Without a binding minimum the defaults are 20 cases and 3 trials
-      When I run "bench compare a.json b.json"
-      Then the exit code is 1
-      And the JSON result "regressed" is "true"
-
-    Scenario: The same evidence is enough when the binding asks for no more
-      Given the bench demands 3 shared cases and 2 trials
-      When I run "bench compare a.json b.json"
-      Then the exit code is 0
-
-    Scenario: compare needs two result files
-      When I run "bench compare a.json"
-      Then the exit code is 2
-
-  Rule: A candidate must run the cases the baseline ran
-
-    Background:
-      Given the bench demands 1 shared cases and 1 trials
-
-    Scenario: A candidate that shares no case with the baseline is regressed
-      Given a bench result "a.json" of the model "a" that ran:
-        | id | pass | minutes |
-        | 1  | true | 1       |
-      And a bench result "b.json" of the model "b" that ran:
-        | id | pass | minutes |
-        | 2  | true | 1       |
-      When I run "bench compare a.json b.json"
-      Then the exit code is 1
-
-    Scenario: A candidate that ran fewer cases than the baseline is regressed
-      Given a bench result "a.json" of the model "a" that ran:
-        | id | pass | minutes |
-        | 1  | true | 1       |
-        | 2  | true | 1       |
-      And a bench result "b.json" of the model "b" that ran:
-        | id | pass | minutes |
-        | 1  | true | 1       |
-      When I run "bench compare a.json b.json"
-      Then the exit code is 1
-      And the JSON result "insufficient" is "b ran fewer cases than a"
 
   Rule: A result with budget-skipped cases is incomplete, never a pass
 

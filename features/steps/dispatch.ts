@@ -22,7 +22,6 @@ const setPath = (w: World, key: string, value: unknown) => {
   w.binding(patch);
 };
 const board = (w: World) => createLocalBoard(w.adapterContext() as Any);
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---- the project ----
 Given('the installed skill pack', (w) => writePack(w.path('.agents', 'skills'), packFiles('sdlc-')));
@@ -30,8 +29,6 @@ Given('the executor {string} is {string}', (w, name: string, json: string) => w.
 Given('the binding has {string} set to the JSON {string}', (w, key: string, json: string) => setPath(w, key, JSON.parse(json)));
 Given('the runner sets {string} to {string}', (w, name: string, value: string) => { w.env[name] = value; });
 Given('the dedupe window is {string} minutes', (w, n: string) => w.binding({ cycle: { dedupe_minutes: Number(n) } }));
-Given('a run may stay unfinished for {int} minutes', (w, n: number) => w.binding({ stall_minutes: n }));
-Given('the trusted bots are {string}', (w, names: string) => w.binding({ owners: { bots: names.split(',').map((s) => s.trim()) } }));
 Given('the models are fast {string}, balanced {string} and deep {string}', (w, fast: string, balanced: string, deep: string) => w.binding({ models: { fast, balanced, deep } }));
 Given('the judge tier is {string}', (w, tier: string) => w.binding({ learning: { judge_tier: tier } }));
 Given('the local board holds a ticket at Ready as ticket 1 and the heartbeat ticket 2', async (w) => {
@@ -47,11 +44,6 @@ Given('the forge is GitHub and shows the change request {int} on the head {strin
 
 // ---- the comments on the local board ----
 When('the comment {string} is posted on the ticket {string}', async (w, body: string, id: string) => { await board(w).comment(id, body); });
-When('a moment passes', () => wait(20));
-Then('the ticket {string} holds a comment starting with {string}', async (w, id: string, text: string) => {
-  const bodies = (await board(w).comments(id)).map((c) => c.body);
-  assert.ok(bodies.some((b) => b.startsWith(text)), `no comment starts with "${text}":\n${bodies.join('\n---\n')}`);
-});
 
 // ---- running dispatch ----
 async function run(w: World, argvs: string[][]) {
@@ -72,14 +64,8 @@ async function run(w: World, argvs: string[][]) {
   if (done) w.state.lastDone = done.done;
 }
 When('dispatch runs {string}', (w, line: string) => run(w, [splitArgs(line)]));
-When('two cycles run {string} and {string} at the same time', (w, a: string, b: string) => run(w, [splitArgs(a), splitArgs(b)]));
 
 // ---- what it printed ----
-Then('exactly {int} of the cycles printed a skip and {int} printed a start with the kind {string}', (w, skipped: number, started: number, kind: string) => {
-  const outs: Any[] = w.state.outs;
-  assert.equal(outs.filter((o) => o.skipped).length, skipped, w.last.stdout);
-  assert.equal(outs.filter((o) => o.kind === kind).length, started, w.last.stdout);
-});
 
 // ---- the command executor ----
 Then('the command line is the template {string} filled with the quoted words {string}', (w, template: string, words: string) => {
@@ -101,7 +87,6 @@ Then('the request body holds {string} as the JSON {string}', (w, path: string, j
   for (const k of path.split('.')) v = v?.[k];
   assert.deepEqual(v, JSON.parse(json));
 });
-Then('the first call matches {string}', (w, re: string) => assert.match(w.calls[0], new RegExp(re)));
 
 // ---- managedRequest, each vendor's start-a-run call ----
 

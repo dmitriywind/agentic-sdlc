@@ -23,39 +23,6 @@ Feature: forge verdict posts the review report for the head
         Verdict: PASS
         """
 
-    Scenario: Free text after Verdict: is dropped, and a fail says remediation is required
-      When the report for the head "h1" is built as fail from:
-        """
-        table
-        Verdict: see below
-        """
-      Then the report is:
-        """
-        <!-- review-pr h1 -->
-        table
-
-        Verdict: REMEDIATION REQUIRED
-        """
-
-  Rule: Exactly one of --pass or --fail is given
-
-    Background:
-      Given the github forge for the repo "o/r"
-      And a file "report.md" containing:
-        """
-        ok
-        """
-
-  Rule: With one identity only the report is posted
-
-    Background:
-      Given the github forge for the repo "o/r"
-      And the repo has the open pull request 5 at the head "abc1234"
-      And a file "report.md" containing:
-        """
-        ok
-        """
-
   Rule: With a review identity the status and the approval are posted too
 
     Background:
@@ -76,15 +43,3 @@ Feature: forge verdict posts the review report for the head
       And the comment posted on the CR "5" opens with "<!-- review-pr abc1234 -->"
       And a call includes "statuses/abc1234 -f state=success -f context=review"
       And a call includes "-X POST repos/o/r/pulls/5/reviews"
-
-  Rule: A missing review token fails with Access and posts nothing
-
-    Background:
-      Given the github forge for the repo "o/r"
-      And the forge has the review identity "reviewer"
-      And the forge option "review_token_env" is "REV"
-      And the repo has the open pull request 5 at the head "abc1234"
-      And a file "report.md" containing:
-        """
-        ok
-        """

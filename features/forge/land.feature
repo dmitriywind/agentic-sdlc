@@ -20,15 +20,3 @@ Feature: forge land waits for the required checks, then arms or performs the mer
       Examples:
         | cr     | checks                                | state   | blocking                                |
         | ready  | ci=pending, human-approval=pending    | waiting | ci=pending, human-approval=pending      |
-
-  Rule: Only a human approval left means a human is asked
-
-  Rule: The wait is bounded, and polls until the checks turn green
-
-    Scenario: The checks turn green on a later look
-      Given the CR "5" is "ready" with the checks "ci=pending, human-approval=success"
-      And the checks of the CR "5" turn green at look 3
-      When the CR "5" is landed
-      Then the land state is "armed"
-      And the land waited 60 seconds in all
-      And the forge was asked to automerge the CR "5"

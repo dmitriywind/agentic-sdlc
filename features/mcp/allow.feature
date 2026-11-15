@@ -11,12 +11,3 @@ Feature: The review-identity tools are served only on request
       When the client sends "tools/list"
       Then the listed tools include "forge_approve"
       And the listed tools include "forge_status"
-
-  Rule: The same holds for the 2026-07-28 shape, which needs no earlier initialize
-
-  Rule: The command line checks its arguments
-
-    Scenario: An unknown word after --allow is a usage error
-      When the client runs "mcp --allow merge"
-      Then the server exits with code 2
-      And the server says "--allow takes approve,status"

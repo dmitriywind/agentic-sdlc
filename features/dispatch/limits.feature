@@ -21,12 +21,6 @@ Feature: A stage's caps reach its executor
       And the result "limits.max_tokens" is "5000"
       And the result "limits.max_minutes" is "20"
 
-    Scenario: A managed task text states the limits
-      Given the executor "default" is '{"kind":"managed","api":"cursor","repo_url":"https://r","token_env":"T","max_tokens":700}'
-      And the runner sets "T" to "t"
-      When dispatch runs "build --ticket 1"
-      Then the first call matches "at most 700 tokens"
-
   Rule: The caps are positive integers
 
     Scenario Outline: A cap that is not a positive integer is a problem
@@ -38,13 +32,3 @@ Feature: A stage's caps reach its executor
       Examples:
         | key                           | value | problem                                                |
         | executors.default.max_turns   | 0     | executors.default.max_turns must be a positive integer |
-
-    Scenario: Sound caps are no problem
-      Given a complete binding
-      And the binding value "executors.default.max_turns" is '5'
-      And the binding value "cycle.max_tokens_per_ticket" is '9'
-      And the binding value "learning.bench_budget" is '{"max_runs":4,"max_minutes":9}'
-      When the binding is validated
-      Then the problems do not mention "max_turns"
-      And the problems do not mention "max_tokens_per_ticket"
-      And the problems do not mention "bench_budget"

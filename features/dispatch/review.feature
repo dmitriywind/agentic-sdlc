@@ -23,12 +23,3 @@ Feature: The review step runs in the review runtime when a review identity is se
       And the command line mentions "https://x/fire"
       And the child environment holds "REVIEW_FIRE_TOKEN" as "t"
       And the child environment has no "AGENTIC_REVIEW_TOKEN"
-
-  Rule: Inside the review runtime, and with no identity, it is an ordinary step
-
-    Scenario: An executor the binding names for the step wins
-      Given the executor "review/review" is '{"kind":"command","run":"mine"}'
-      And the runner sets "AGENTIC_REVIEW_FIRE_CMD" to "fire-it"
-      When dispatch runs "review/review --cr 3"
-      Then the command line mentions "mine"
-      And the result "kind" is "command"

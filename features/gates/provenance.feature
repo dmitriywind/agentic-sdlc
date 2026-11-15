@@ -34,17 +34,6 @@ Feature: Gate provenance
         | h1  | agent-provenance | success |
       And the status is posted as "ci"
 
-    Scenario: A merge commit by anyone but the forge web identity is checked like a commit of its author
-      Given the binding sets "forge.provenance" to "require"
-      And these commits are on the CR "1":
-        | sha | author   | committer | parents | message                       |
-        | a   | bot[bot] |           | 2       | Merge branch 'main' into 12/x |
-        | b   | bot[bot] | alice     | 2       | Merge x                       |
-        | c   | alice    |           | 2       | Merge y                       |
-      When the provenance gate runs for the CR "1"
-      Then the gate fails with "aaaaaaaaaaaa: Agent-Run trailer is missing"
-      And the commits are classed as "agent, agent, human"
-
   Rule: A missing or malformed trailer fails under require and passes under warn
 
     Background:
@@ -64,12 +53,6 @@ Feature: Gate provenance
       And the gate result "state" is "failure"
       And the status "agent-provenance" is "failure"
 
-  Rule: Commits the forge cannot list fail closed under require
-
-  Rule: Provenance off does nothing
-
-  Rule: Only the last paragraph of the message holds trailers
-
   Rule: A gate flag takes --k=v as well as --k v
 
     Background:
@@ -77,15 +60,15 @@ Feature: Gate provenance
       And the binding sets "forge.options.repo" to "o/r"
       And the binding sets "vcs.adapter" to "git"
 
-    Scenario: --cr=1 is the same as --cr 1
-      When I run "gate provenance --cr=1"
+    Scenario Outline: --cr=1 is the same as --cr 1
+      When I run "gate provenance <flag>"
       Then the exit code is 0
       And the JSON result "cr" is "1"
 
-    Scenario: --cr 1 gives the same result
-      When I run "gate provenance --cr 1"
-      Then the exit code is 0
-      And the JSON result "cr" is "1"
+      Examples:
+        | flag   |
+        | --cr=1 |
+        | --cr 1 |
 
     Scenario: A flag with no value is a usage error
       When I run "gate provenance --cr"

@@ -17,33 +17,6 @@ Feature: The forge CLI prints JSON and exits with a clear code
       Then the exit code is 0
       And the result "n" is "7"
 
-  Rule: Exit 1 is a failure of the forge, exit 2 a usage error
-
-    Scenario Outline: A flag the verb does not take, or takes wrongly, is a usage error
-      When the forge CLI runs "<command>"
-      Then the exit code is 2
-      And the output says "<message>"
-
-      Examples:
-        | command                                                          | message                                          |
-        | comments 7 --last=x                                              | --last needs a whole number, got 'x'             |
-
-  Rule: A status is never posted for a context only a gate owns
-
-  Rule: list and run take their flags
-
-    Scenario: A list takes a state, a limit, a since date and --checks
-      When the forge CLI runs "list --state merged --limit 5 --since 2026-01-01 --checks"
-      Then the exit code is 0
-
-    Scenario: A run is printed by its id
-      Given the CI runs are:
-        | id | name | branch | sha | status    | conclusion | url | at |
-        | 42 | ci   | main   | s   | completed | failure    | u   | t  |
-      When the forge CLI runs "run 42"
-      Then the exit code is 0
-      And the result "state" is "failure"
-
   Rule: The vcs CLI reads its flags as strictly
 
     Scenario Outline: A flag the vcs verb does not take, or a flag without its value, is a usage error

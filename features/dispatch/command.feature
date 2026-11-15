@@ -7,10 +7,6 @@ Feature: A command stage starts a detached bot
   Background:
     Given the installed skill pack
 
-  Rule: The template is filled with quoted words
-
-  Rule: The bot runs detached with a private run log
-
   Rule: The bot gets only what the stage lists
 
     Background:

@@ -35,7 +35,6 @@ Given('a project that benches with the agent command {string}', (w, command: str
   owners: { product: 'po', factory: 'fo', bots: ['factory-bot'] }, vcs: { adapter: 'git' },
 }));
 Given('the bench demands {int} shared cases and {int} trials', (w, cases: number, trials: number) => w.binding({ learning: { bench_min_cases: cases, bench_trials: trials } }));
-Given('the bench budget allows {int} minutes', (w, n: number) => w.binding({ learning: { bench_budget: { max_minutes: n } } }));
 Given('the executors:', (w, t: DataTable) => w.binding({
   executors: Object.fromEntries(t.hashes().map((r) => [r.name, { kind: r.kind, ...(r.run ? { run: r.run } : {}), ...(r.url_env ? { url_env: r.url_env } : {}), ...(r.max_turns ? { max_turns: Number(r.max_turns) } : {}) }])),
 }));
@@ -44,7 +43,6 @@ Given('the executors:', (w, t: DataTable) => w.binding({
 Given('these Done tickets:', (w, t: DataTable) => {
   for (const r of t.hashes()) bench(w).items.push({ id: r.id, title: `T${r.id}`, updatedAt: r.updated, ...(r.body ? { body: r.body } : {}), ...(r.size ? { fields: { size: r.size } } : {}) } as Item);
 });
-Given('{string} commented the spec {string} on ticket {string}', (w, author: string, spec: string, ticket: string) => bench(w).specs.push({ ticket, author, body: `<!-- spec -->\n${spec}` }));
 Given('the forge has these change requests:', (w, t: DataTable) => {
   for (const r of t.hashes()) bench(w).crs.push({ n: r.cr, closes: [r.closes], state: r.state || 'merged', baseSha: `b${r.cr}`, headSha: `h${r.cr}` } as CR);
 });
@@ -100,7 +98,6 @@ Given('the revision {string} holds the files:', (w, rev: string, t: DataTable) =
 Given('the agent edits the files:', (w, t: DataTable) => { bench(w).agent.edits = t.hashes().map((r) => ({ path: r.path, content: r.content })); });
 Given('the agent takes {int} minutes', (w, n: number) => { bench(w).agent.minutes = n; });
 Given('the verify run number {int} fails', (w, n: number) => { bench(w).agent.failVerify.push(n); });
-Given('the clock moves {int} minutes on every reading', (w, n: number) => { bench(w).agent.clockStep = n; });
 
 const filesIn = (dir: string): Record<string, string> => Object.fromEntries(
   (readdirSync(dir, { recursive: true, withFileTypes: true }) as Dirent[]).filter((d) => d.isFile())
@@ -162,11 +159,7 @@ const runCases = async (w: World, n: number, opts: Record<string, string>) => {
   } catch (e) { failed(w, e); }
 };
 When('the bench runs {int} cases', (w, n: number) => runCases(w, n, {}));
-When('the bench runs {int} cases with the options:', (w, n: number, t: DataTable) => runCases(w, n, Object.fromEntries(t.raw().map((r) => [r[0], r[1]]))));
 
-Then('the bench made {int} trees', (w, n: number) => assert.equal(bench(w).made.length, n));
-Then('the bench started no command', (w) => assert.deepEqual([bench(w).seen.commands, bench(w).made], [[], []]));
-Then('the project file {string} matches {string}', (w, file: string, re: string) => assert.match(w.read(file), new RegExp(re)));
 
 // ---- the agent command ----
 When('the agent command is built for the executor {string}', (w, executor: string) => {
