@@ -183,6 +183,7 @@ Then('the status is posted as {string}', (w, as: string) => assert.equal(w.gate.
 
 // ---- Then: the board ----
 Then('the ticket {string} is at {string}', (w, id: string, status: string) => assert.equal(item(w, id).status, status));
+Then('the ticket {string} has the labels {string}', (w, id: string, labels: string) => assert.deepEqual(item(w, id).labels, list(labels)));
 Then('the ticket {string} has Shipped {string}', (w, id: string, v: string) => assert.equal(item(w, id).fields.shipped, v));
 Then('the ticket {string} has Release Version {string}', (w, id: string, v: string) => assert.equal(item(w, id).fields.release_version, v));
 Then('the ticket {string} has no Release Version', (w, id: string) => assert.equal(item(w, id).fields.release_version, undefined));
@@ -192,6 +193,8 @@ Then('one Signal is opened with the labels {string}', (w, labels: string) => {
   assert.equal(w.gate.created.length, 1, JSON.stringify(w.gate.created));
   assert.deepEqual(w.gate.created[0].labels, list(labels));
 });
+Then('the Signal body mentions {string}', (w, text: string) => assert.ok(w.gate.created.at(-1)?.body.includes(text), w.gate.created.at(-1)?.body));
+Then('the Signal body does not mention {string}', (w, text: string) => { assert.ok(w.gate.created.length, 'no Signal was opened'); assert.ok(!w.gate.created.at(-1)!.body.includes(text), w.gate.created.at(-1)!.body); });
 Then('the forge was asked about the tickets {string} only', (w, ids: string) => { assert.deepEqual(w.gate.asked, list(ids)); assert.equal(w.gate.listed, 0); });
 
 // ---- Then: branch-names and proofs ----

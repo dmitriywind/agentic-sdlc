@@ -1,6 +1,5 @@
 // A fixture skill pack in the new layout (one-step skills and skills with step files), for tests that read skills.
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 const fm = (name: string, meta: string, extra = '') => `---\nname: ${name}\ndescription: d\n${extra}metadata:\n${meta}---\nbody\n`;
@@ -29,11 +28,4 @@ export function packFiles(prefix = ''): Record<string, string> {
 
 export function writePack(skillsDir: string, files = packFiles()) {
   for (const [p, t] of Object.entries(files)) { mkdirSync(dirname(join(skillsDir, p)), { recursive: true }); writeFileSync(join(skillsDir, p), t); }
-}
-
-/** A temp project root holding the fixture pack as an installed `.agents/skills`. */
-export function packRoot(prefix = 'sdlc-'): string {
-  const root = mkdtempSync(join(tmpdir(), 'pack-'));
-  writePack(join(root, '.agents', 'skills'), packFiles(prefix));
-  return root;
 }

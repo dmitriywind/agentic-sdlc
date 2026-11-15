@@ -4,6 +4,7 @@
 // (the done line of the last start record), managed ({ url, headers, body } or error), judge (the last judgeTier answer).
 // The result of a run is w.last: the steps 'the result ... is ...' (board.ts) and 'the exit code is' read it.
 import assert from 'node:assert/strict';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createLocalBoard } from '../../src/board/local.ts';
 import { quote } from '../../src/bench.ts';
 import { cli, setSpawn } from '../../src/dispatch.ts';
@@ -43,6 +44,12 @@ Given('the forge is GitHub and shows the change request {int} on the head {strin
 });
 
 // ---- the comments on the local board ----
+Given('the comments of the ticket {string} are {int} minutes old', (w, id: string, minutes: number) => {
+  const file = w.path('.agents', 'board.json');
+  const db = JSON.parse(readFileSync(file, 'utf8'));
+  for (const c of db.comments[id]) c.createdAt = new Date(Date.now() - minutes * 60_000).toISOString();
+  writeFileSync(file, JSON.stringify(db));
+});
 When('the comment {string} is posted on the ticket {string}', async (w, body: string, id: string) => { await board(w).comment(id, body); });
 
 // ---- running dispatch ----
@@ -65,8 +72,6 @@ async function run(w: World, argvs: string[][]) {
 }
 When('dispatch runs {string}', (w, line: string) => run(w, [splitArgs(line)]));
 
-// ---- what it printed ----
-
 // ---- the command executor ----
 Then('the command line is the template {string} filled with the quoted words {string}', (w, template: string, words: string) => {
   const list = words.split('|');
@@ -87,10 +92,6 @@ Then('the request body holds {string} as the JSON {string}', (w, path: string, j
   for (const k of path.split('.')) v = v?.[k];
   assert.deepEqual(v, JSON.parse(json));
 });
-
-// ---- managedRequest, each vendor's start-a-run call ----
-
-// ---- the judge tier ----
 
 // ---- a table of executors for the lookup scenarios ----
 Given('the executors are:', (w, t: DataTable) => {

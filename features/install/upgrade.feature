@@ -29,6 +29,7 @@ Feature: Init upgrades an install
       Given the project has the file ".agents/skills.lock.json" holding "{}"
       When I run the install command "init --upgrade"
       Then the installed file ".agents/skills.lock.json" is absent
+      And the output has the line "removed .agents/skills.lock.json: merged into .agents/install.lock.json"
 
     Rule: A workflow the adopter edited is kept
 

@@ -16,3 +16,16 @@ Feature: Gate evidence
     And the binding sets "commands.evidence_check" to "test {sha} = abc123"
     When I run "gate evidence --sha abc123"
     Then the exit code is 0
+
+  Scenario: A command that exits non-zero fails the gate
+    Given the binding sets "product.evidence" to the list "report"
+    And the binding sets "commands.evidence_check" to "test {sha} = other"
+    When I run "gate evidence --sha abc123"
+    Then the exit code is 1
+
+  Scenario: Evidence with no command to check it is a failure, not a pass
+    Given the binding sets "product.evidence" to the list "report"
+    When I run "gate evidence --sha abc123"
+    Then the exit code is 1
+    And the output says "commands.evidence_check is unset"
+

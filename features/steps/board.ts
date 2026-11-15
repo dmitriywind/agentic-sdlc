@@ -230,6 +230,7 @@ When('the factory creates a ticket at {string} with the labels {string}, the mil
 // ---- Then: what the verb returned, what it called ----
 const items = (w: World) => w.state.result as Item[];
 Then('the verb fails matching {string}', (w, re: string) => assert.match(failed(w).message, new RegExp(re)));
+Then('the board adapter made {int} calls', (w, n: number) => assert.equal(w.calls.length, n, w.calls.join('\n')));
 Then('no call reaches the board', (w) => assert.equal(w.calls.length, 0, w.calls.join('\n')));
 Then('a call includes {string}', (w, text: string) => assert.ok(w.calls.some((c) => c.includes(text)), `no call includes ${text}:\n${w.calls.join('\n')}`));
 Then('no call includes {string}', (w, text: string) => assert.ok(!w.calls.some((c) => c.includes(text)), `a call includes ${text}:\n${w.calls.join('\n')}`));

@@ -12,6 +12,11 @@ Feature: Gate branch-names
       Examples:
         | name              |
         | PROJ-45/add-login |
+        | main              |
+        | release/1.0       |
+        | factory/tune      |
+        | dependabot/npm/x  |
+        | renovate/x        |
 
   Rule: A change line outside the patterns is refused
 

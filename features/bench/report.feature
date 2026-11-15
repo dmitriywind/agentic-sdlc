@@ -22,6 +22,11 @@ Feature: The bench report
         | 1  | false | 6       |
         | 2  | true  | 6       |
       And that result is of the suite "s"
+      And a bench result ".agents/bench/results/4.json" of the model "slow" that ran:
+        | id | pass | minutes |
+        | 1  | true | 7       |
+        | 2  | true | 7       |
+      And that result is of the suite "s"
       And a bench result ".agents/bench/results/3.json" of the model "other" that ran:
         | id | pass | minutes |
         | 1  | true | 0.1     |
@@ -31,12 +36,12 @@ Feature: The bench report
       When I run "bench report --suite s"
       Then the JSON result has these values:
         | path                 | value                |
-        | rows.*.model         | best, cheap, worse   |
-        | rows.*.passRate      | 1, 0.5, 0.5          |
-        | rows.*.medianMinutes | 5, 1, 6              |
-        | rows.*.n             | 2, 2, 2              |
-        | rows.*.pareto        | true, true, false    |
-        | results              | 3                    |
+        | rows.*.model         | best, slow, cheap, worse |
+        | rows.*.passRate      | 1, 1, 0.5, 0.5           |
+        | rows.*.medianMinutes | 5, 7, 1, 6               |
+        | rows.*.n             | 2, 2, 2, 2               |
+        | rows.*.pareto        | true, false, true, false |
+        | results              | 4                        |
 
   Rule: Results are grouped by executor name, not by kind
 

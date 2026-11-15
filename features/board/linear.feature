@@ -18,6 +18,7 @@ Feature: The Linear board
       And Linear answers every page with a next page and the same cursor
       When the factory lists the tickets
       Then the verb fails matching "linear: list does not advance"
+      And the board adapter made 2 calls
 
   Rule: Labels, states and children are read up to 250, and an issue keeps its own label ids
 

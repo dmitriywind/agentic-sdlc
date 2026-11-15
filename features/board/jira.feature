@@ -17,6 +17,7 @@ Feature: The Jira board
       And Jira answers every page with the same next page token
       When the factory lists the tickets
       Then the verb fails matching "jira: list does not advance"
+      And the search was called 2 times
 
   Rule: A search text cannot break out of its JQL string
 
