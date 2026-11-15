@@ -8,7 +8,7 @@
 
 ## Install
 The skills, hooks and MCP server ship as a Claude Code plugin named `agentic-sdlc`, so skills are
-`/agentic-sdlc:sdlc`, `/agentic-sdlc:review-pr` and so on ([plugins](https://code.claude.com/docs/en/plugins)).
+`/agentic-sdlc:sdlc`, `/agentic-sdlc:ship` and so on ([plugins](https://code.claude.com/docs/en/plugins)).
 
 ```bash
 npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init --harness claude --profile individual --board github --forge github --vcs git
@@ -54,7 +54,7 @@ cycle needs. Permission rules use the space form `Bash(agentic-sdlc *)` (put `.a
 Prompt text:
 [`templates/runner/cycle-prompt.md`](../../templates/runner/cycle-prompt.md). With two identities,
 reviews run after the cycle as a separate job with [`templates/runner/review-prompt.md`](../../templates/runner/review-prompt.md):
-only that job gets `AGENTIC_REVIEW_TOKEN` and allows `forge approve`. With one identity the cycle runs `review-pr`.
+only that job gets `AGENTIC_REVIEW_TOKEN` and allows `forge approve`. With one identity the cycle runs `review/review`.
 
 ## Run on your machine
 A scheduler on your machine runs the command above in a separate clone, with no sandbox. Opt in with
@@ -92,11 +92,11 @@ How `executors` kinds map:
 | `command` | `claude -p ...` as `run`. |
 
 ## Use it as a stage executor
-Give `implement-spec` to a Managed Agents agent and keep the rest on the harness:
+Give `build` to a Managed Agents agent and keep the rest on the harness:
 ```yaml
 executors:
   default: { kind: harness }
-  implement-spec: { kind: managed, api: claude, agent_env: IMPL_AGENT_ID, environment_env: IMPL_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY, sandbox: cloud }
+  build: { kind: managed, api: claude, agent_env: IMPL_AGENT_ID, environment_env: IMPL_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY, sandbox: cloud }
 ```
 The agent needs the skills (attach the plugin's `skills/`), the CLI or MCP server, and the listed secrets. A session can override model, tools, MCP servers
 and skills per run (`agent_with_overrides`). The reviewer is never the implementer of the same CR.

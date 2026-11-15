@@ -22,7 +22,7 @@ Each item needs a real run, not more code. Cloud runtime facts live in
 
 | Item | Why |
 |---|---|
-| An approval class for security paths | `owners.security` is asked by `escalate-to-human` only. A `paths.security` list would let the `approval` gate require a security owner's approval. |
+| An approval class for security paths | `owners.security` is asked by the `escalate` skill only. A `paths.security` list would let the `approval` gate require a security owner's approval. |
 | A token split in run rows | A run row holds one `tokens` total, so the OTLP export cannot fill `gen_ai.usage.input_tokens` and `output_tokens`, and names no provider. |
 | Status history on the board port | `ledger measures` reads lead time from `createdAt` and `statusChangedAt`: no adapter gives the time a ticket first reached In progress. |
 | Hooks and agents in the Codex and Cursor plugins | Their manifests carry the skills and the MCP server only; the guard hook and the tier agents ship for Claude Code alone. |

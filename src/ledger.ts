@@ -52,9 +52,9 @@ export function parseHeartbeat(body: string): any | undefined {
   while (lines.length && lines[0].startsWith('<!-- agentic-sdlc:')) lines.shift();
   body = lines.join('\n');
   if (!body.trimStart().startsWith(HEARTBEAT_MARKER)) return undefined;
+  // The JSON follows the marker line: in a `json` fence, or bare (what `board comment --kind heartbeat --body-file` stamps).
   const m = body.match(/```json\s*\r?\n([\s\S]*?)\r?\n```/);
-  if (!m) return undefined;
-  try { return JSON.parse(m[1]); } catch { return undefined; }
+  try { return JSON.parse(m ? m[1] : body.split(/\r?\n/).slice(1).join('\n')); } catch { return undefined; }
 }
 
 /** Per run and scorer: a human grade beats any judge value regardless of time; else the newest wins. Beats newest first. */

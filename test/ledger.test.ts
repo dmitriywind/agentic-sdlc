@@ -3,13 +3,21 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { clusters, flattenRuns, hashSkill, hardFacts, learningState, measures, readRuns, scoresComment, scorersFor, summarise, cli } from '../src/ledger.ts';
+import { clusters, flattenRuns, parseHeartbeat, hashSkill, hardFacts, learningState, measures, readRuns, scoresComment, scorersFor, summarise, cli } from '../src/ledger.ts';
 import type { Board, Comment } from '../src/ports.ts';
 
 const beat = (hb: object, createdAt = '2026-11-08T00:00:00Z'): Comment => ({
   id: 'c', author: 'bot', createdAt, body: `<!-- heartbeat -->\n\`\`\`json\n${JSON.stringify(hb)}\n\`\`\``,
 });
 const run = (o: object) => ({ id: 'r1', skill: 'build', skillHash: 'abc', tier: 'balanced', model: 'm1', outcome: 'done', ...o });
+
+test('parseHeartbeat reads the JSON after the marker line, fenced or bare, as `board comment --kind heartbeat` stamps it', () => {
+  const hb = { kind: 'cycle', at: '2026-11-08T00:00:00Z', runs: [], errors: [] };
+  assert.deepEqual(parseHeartbeat(`<!-- heartbeat -->\n${JSON.stringify(hb, null, 2)}`), hb);
+  assert.deepEqual(parseHeartbeat(`<!-- heartbeat -->\n\`\`\`json\n${JSON.stringify(hb)}\n\`\`\``), hb);
+  assert.equal(parseHeartbeat(`<!-- heartbeat -->\nnot json`), undefined);
+  assert.equal(parseHeartbeat(JSON.stringify(hb)), undefined, 'no marker: not a heartbeat');
+});
 
 test('flattenRuns filters by age and skill and applies the newest rescore', () => {
   const now = Date.parse('2026-11-09T00:00:00Z');
@@ -114,7 +122,7 @@ test('readRuns: scores comments by bots and grade comments by owners apply; othe
   assert.deepEqual(a.scores, { 'done-conditions': 2, 'redundant-tests': 'pass' }); // the owner's grade beats the judge
 });
 
-test('learningState: cycles since the last improve-factory heartbeat, due at every_cycles, off unless enabled', () => {
+test('learningState: cycles since the last learn/improve heartbeat, due at every_cycles, off unless enabled', () => {
   const comments = [
     beat({ at: '2026-11-08T00:00:00Z', runs: [run({ id: '5', skill: 'learn/judge' })] }),
     beat({ at: '2026-11-07T00:00:00Z', runs: [run({ id: '4' })] }),
@@ -124,7 +132,7 @@ test('learningState: cycles since the last improve-factory heartbeat, due at eve
   assert.deepEqual(learningState(comments, 2, true), { due: true, judge: true, cyclesSince: 2 });
   assert.equal(learningState(comments, 3, true).due, false);
   assert.deepEqual(learningState(comments, 2), { due: false, judge: false, cyclesSince: 2 }); // learning.enabled unset: off
-  assert.equal(learningState(comments.slice(0, 2), 3, true).cyclesSince, 2); // no improve-factory yet: every heartbeat
+  assert.equal(learningState(comments.slice(0, 2), 3, true).cyclesSince, 2); // no learn/improve yet: every heartbeat
 });
 
 test('plan scorers and caps; record validates names and scales and applies the cap', () => {
@@ -176,7 +184,7 @@ test('cli: plan, record and stale on a local board', async () => {
   }
 });
 
-test('learningState: review and learn heartbeats count no cycle; a learn heartbeat with improve-factory resets the count', () => {
+test('learningState: review and learn heartbeats count no cycle; a learn heartbeat with learn/improve resets the count', () => {
   const comments = [
     beat({ at: '2026-11-08T03:00:00Z', kind: 'review', runs: [run({ id: 'r', skill: 'review/review' })] }),
     beat({ at: '2026-11-08T02:00:00Z', runs: [] }),

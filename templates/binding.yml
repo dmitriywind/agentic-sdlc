@@ -72,7 +72,7 @@ forge:
                                 #   Agent-Run and Agent-Model; gate provenance posts status agent-provenance on the CR head.
                                 #   warn reports and passes. require fails a CR whose agent commit lacks them: add agent-provenance
                                 #   to required_checks below and pin it in the trunk ruleset (docs/forges.md, Source track)
-  review_check_name: review     # status context review/review posts on a pass
+  review_check_name: review     # the review status context: `forge verdict` posts it (a review identity), else CI's gate review
   verify_check_name: Required   # CI job (no secrets) running commands.install and commands.verify; review/review reads it
   required_checks: [ticket-linkage, Required, proofs-on-base, review, human-approval, skill-regression] # must be green before merge
   planned_checks: []            # wanted checks not supplied yet; review/review names each absent one

@@ -6,7 +6,7 @@ A portable software factory: a Claude Code plugin and a CLI, shipped from Git (n
 ## Layout
 
 - `skills/` the skill pack (plugin layout: `skills/<name>/SKILL.md`); `init` copies it to a project's `.agents/skills/`.
-- `scorers/` judge-run scorer definitions; `init` copies them to `.agents/scorers/`.
+- `scorers/` judge scorer definitions; `init` copies them to `.agents/scorers/`.
 - `src/` the CLI (`agentic-sdlc`): board, forge and VCS ports, gates, dispatch, ledger, bench, MCP server, init/validate/doctor.
 - `templates/` what `init` installs: `binding.yml`, `gates/` (CI per forge, the pre-push hook), `runner/` (schedulers, prompts, setup), `mcp/`.
 - `.claude-plugin/` the plugin and marketplace manifests; `hooks/` the plugin's guard hook and MCP launcher.

@@ -18,15 +18,6 @@ Feature: Implement a spec
     And the CR body has exactly one line "Closes <id>" for this ticket
     And the ticket shows In review
 
-  # Source: skills/implement-spec/SKILL.md, "Claim"
-  # Proof: test/board-adapters.test.ts "board move on github, jira and linear refuses when the status differs and writes nothing, else writes the resolved id"
-  Scenario: A second run cannot claim the same ticket
-    Given a ticket at Status Ready
-    And another run has already moved it to In progress
-    When the factory runs "board move <id> "In progress" --only-from Ready"
-    Then the move is refused
-    And the board does not change
-
   # Source: skills/implement-spec/SKILL.md, intro paragraph
   # Proof: skill text only
   Scenario: A ticket with no trusted spec goes back to shape
@@ -95,24 +86,6 @@ Feature: Implement a spec
     When the factory meets the failure
     Then the diagnosis belongs to shape, not to implement-spec
 
-  # Source: references/architecture.md, "Adapter"; src/board/
-  # Proof: test/board-adapters.test.ts "a board adapter without its credential fails naming the variable, and github passes token_env as GH_TOKEN on every call"
-  Scenario: A board adapter without its credential fails and names the variable
-    Given a board adapter whose token_env or credential variables are unset
-    When the factory runs a board verb
-    Then the verb fails
-    And the message names the missing variable
-    And no call reaches the board
-
-  # Source: references/architecture.md, "Adapter"; src/board/
-  # Proof: test/board-adapters.test.ts "board reads on jira, linear and github follow every page, and fail instead of returning a partial list"
-  # Proof: test/board-adapters.test.ts "github-issues comments page, newest first, and filter by marker"
-  Scenario: A board read returns every page or fails
-    Given a board with more items or comments than one page holds
-    When the factory runs "board list" or "board comments <id>"
-    Then it gets every item or comment from every page
-    And a board that does not advance, or holds more than the read limit, makes the verb fail
-
   # Source: src/board/index.ts, "comments"
   # Proof: test/board-local.test.ts "comments come newest first and narrow by marker, last and author, with --last counted after the filter"
   Scenario: Board comments come newest first and narrow by marker, author and count
@@ -124,7 +97,6 @@ Feature: Implement a spec
 
   # Source: src/exec.ts, "ghRetry"
   # Proof: test/forge.test.ts "gh reads retry up to 3 tries on 429, a rate-limit 403 and 5xx, honouring a retry-after hint; writes retry only on a rate limit"
-  # Proof: test/board-adapters.test.ts "the GitHub boards retry a milestone write on a rate limit but not on a 5xx; a read retries on both"
   Scenario: A gh call that hit a rate limit or a server error is retried when it is safe
     Given gh reports HTTP 429, a 403 that names a rate limit, or HTTP 5xx
     When an adapter makes a read call

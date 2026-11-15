@@ -55,14 +55,14 @@ How `executors` kinds map:
 ## Use it as a stage executor
 `@codex review` on a PR starts a standard review (P0 and P1 only); `@codex security review`; any other `@codex ...` comment
 starts a cloud task with the PR as context, for example fix CI ([docs](https://learn.chatgpt.com/docs/third-party/github)).
-So a `command` executor for `review-pr` or `implement-spec` can post that comment through `forge comment`.
+So a `command` executor for `review/review` or `build` can post that comment through `forge comment`.
 ```yaml
 executors:
   default: { kind: harness }
-  implement-spec: { kind: command, run: "codex exec --sandbox workspace-write --skip-git-repo-check \"$(cat {prompt_file})\"", secrets: [AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, CODEX_API_KEY], sandbox: container }
+  build: { kind: command, run: "codex exec --sandbox workspace-write --skip-git-repo-check \"$(cat {prompt_file})\"", secrets: [AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, CODEX_API_KEY], sandbox: container }
 ```
 `secrets` are the only env vars the child receives; never list `AGENTIC_REVIEW_TOKEN` for an implementer.
-Codex's own review is advisory. The `review` status still comes only from `review-pr`'s report (through CI's `gate review` with one identity).
+Codex's own review is advisory. The `review` status still comes only from the `review/review` report (through CI's `gate review` with one identity).
 
 ## Limits and unknowns
 - Plan requirements and limits for cloud tasks and scheduled tasks: not documented at the time of writing.

@@ -10,6 +10,6 @@ Preamble (scheduler setup, not part of the prompt):
 6. Copy everything below the line into the scheduler as the prompt (installed at `.agents/review-prompt.md`).
 
 ---
-Load the `review` skill: invoke `/agentic-sdlc:review` when that skill is available, otherwise read `.claude/skills/sdlc-review/SKILL.md`, otherwise `.agents/skills/sdlc-review/SKILL.md`. Call the CLI as `agentic-sdlc ...`.
+Load the `review` skill: invoke `agentic-sdlc:review` through the Skill tool when that skill is available, otherwise read `.claude/skills/sdlc-review/SKILL.md`, otherwise `.agents/skills/sdlc-review/SKILL.md`. Call the CLI as `agentic-sdlc ...`.
 For each row of `agentic-sdlc forge queue` with action `review`, run the review step: `agentic-sdlc dispatch review/review --cr <n> [--ticket <ticket>] --unattended`, then follow `steps/review.md` for that CR.
 Then write one heartbeat with `kind: review` and a row per review run, as the `sdlc` skill's Report step says. With no run, write nothing. Do nothing else.

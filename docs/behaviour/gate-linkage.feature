@@ -56,11 +56,3 @@ Feature: Gate ticket-linkage
     When "gate linkage" runs
     Then the gate passes with "dependency update: no ticket"
     And review-pr reviews it, dispatched with --cr
-
-  # Source: src/board/github-issues.ts, "get"
-  # Proof: test/board-adapters.test.ts "github-issues get refuses a pull request or an issue with no status label: it is not on the board"
-  Scenario: A change request cannot close an issue that is not on the board
-    Given a github-issues board
-    And a change request that closes a pull request, or an issue with no status label
-    When the linkage gate reads that ticket
-    Then the ticket is not on the board and the gate fails

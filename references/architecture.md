@@ -712,7 +712,7 @@ An owner's grade is a comment `agentic-sdlc:grade <run-id> <scorer> <value>` (se
 ### 11.2 Heartbeat
 
 One `heartbeat` comment on `heartbeat.ticket` per cycle; it is also the run ledger. The body is the
-marker line, then the JSON in a `json` code fence. `ledger runs` and `ledger summary` read only
+marker line (stamped by `--kind heartbeat`), then the JSON object, bare or in a `json` code fence. `ledger runs` and `ledger summary` read only
 heartbeats by `owners.bots`; `ledger summary` also prints `learning: { due, judge, cyclesSince }`,
 so no skill keeps a counter. Scores are not written here: `ledger` joins `scores` comments and
 grades to the run rows, and a human grade wins.
