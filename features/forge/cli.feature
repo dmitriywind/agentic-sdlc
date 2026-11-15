@@ -80,3 +80,17 @@ Feature: The forge CLI prints JSON and exits with a clear code
       When the forge CLI runs "run 42"
       Then the exit code is 0
       And the result "state" is "failure"
+
+  Rule: The vcs CLI reads its flags as strictly
+
+    Scenario Outline: A flag the vcs verb does not take, or a flag without its value, is a usage error
+      Given the binding sets "vcs.adapter" to "git"
+      And the binding sets "vcs.trunk" to "main"
+      When I run "vcs <command>"
+      Then the exit code is 2
+      And the output says "<message>"
+
+      Examples:
+        | command         | message                           |
+        | head --bogus    | unknown flag --bogus for vcs head |
+        | changed --since | --since needs a value             |

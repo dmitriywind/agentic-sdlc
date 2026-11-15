@@ -119,11 +119,3 @@ Feature: Escalate to a human
     And it posts the same comment on heartbeat.ticket
     And it sets no label and no assignee
     And the CR stays draft
-
-  # Source: skills/escalate-to-human/SKILL.md, "Search first" and "Hold"
-  # Proof: test/forge.test.ts "cli: comments --trusted keeps the owners and bots by forge name, --last counts after the filter, and pages come from gh api"
-  Scenario: A factory CR resumes on a trusted owner reply
-    Given a factory CR held with a "### Needs human" comment
-    When a trusted owner reply appears on the CR after that comment
-    Then the skill reads it with "forge comments <n> --trusted"
-    And review-pr reviews the CR again

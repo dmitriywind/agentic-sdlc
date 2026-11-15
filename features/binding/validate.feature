@@ -166,3 +166,39 @@ Feature: A binding is validated before anything runs
       And the warnings are exactly:
         | product.kind is unused; remove it   |
         | board.milestone is unused; remove it |
+
+  Rule: cycle.land_wait_minutes is whole minutes and cycle.max_rework a positive integer
+
+    Scenario: The template documents the default wait
+      Then the shipped binding template sets "cycle.land_wait_minutes" to 5
+
+    Scenario: Zero minutes of wait and a positive cap are valid
+      Given a complete binding
+      And the binding value "cycle.land_wait_minutes" is '0'
+      And the binding value "cycle.max_rework" is '3'
+      When the binding is validated
+      Then validation finds no problems
+
+    Scenario Outline: A wait that is not a whole number of minutes is a problem
+      Given a complete binding
+      And the binding value "cycle.land_wait_minutes" is '<value>'
+      When the binding is validated
+      Then the problems mention "cycle.land_wait_minutes must be a whole number of minutes"
+
+      Examples:
+        | value |
+        | -1    |
+        | 1.5   |
+        | "5"   |
+
+    Scenario Outline: A rework cap that is not a positive integer is a problem
+      Given a complete binding
+      And the binding value "cycle.max_rework" is '<value>'
+      When the binding is validated
+      Then the problems mention "cycle.max_rework must be a positive integer"
+
+      Examples:
+        | value |
+        | 0     |
+        | 2.5   |
+        | "x"   |

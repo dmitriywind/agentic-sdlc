@@ -40,17 +40,6 @@ Feature: Implement a spec
     And it makes the proof green
     And it refactors
 
-  # Source: skills/implement-spec/SKILL.md, "Claim"
-  # Proof: test/forge.test.ts "cli: comments --trusted keeps the owners and bots by forge name, --last counts after the filter, and pages come from gh api"
-  Scenario: Rework from CR comments
-    Given a ticket at In progress
-    And an open CR closes the ticket
-    And the CR has a trusted review-pr report with Important findings
-    When the factory runs implement-spec
-    Then it reads the newest report with "forge comments <n> --last 1 --marker "<!-- review-pr" --trusted"
-    And it fixes each Important finding first
-    And it opens no second CR
-
   # Source: skills/implement-spec/SKILL.md, "Draft CR"
   # Proof: skill text only
   Scenario: A CR that is already open moves the ticket to In review
@@ -94,14 +83,4 @@ Feature: Implement a spec
     Then the newest comment comes first
     And --author keeps only the named authors
     And --last counts after the filter
-
-  # Source: src/exec.ts, "ghRetry"
-  # Proof: test/forge.test.ts "gh reads retry up to 3 tries on 429, a rate-limit 403 and 5xx, honouring a retry-after hint; writes retry only on a rate limit"
-  Scenario: A gh call that hit a rate limit or a server error is retried when it is safe
-    Given gh reports HTTP 429, a 403 that names a rate limit, or HTTP 5xx
-    When an adapter makes a read call
-    Then it tries up to 3 times and waits the retry-after time gh prints, else 1 and 2 seconds
-    When an adapter makes a write call
-    Then it retries only a 429 or a rate limit, never a 5xx
-    And it does not retry any other 403
 

@@ -22,26 +22,6 @@ Feature: Install and validate the binding
     When a skill runs "board create" or "board move" with a status outside "board.statuses"
     Then the command fails and the ticket does not change
 
-  # Source: src/forge/github.ts, "view" and "viewBySha"
-  # Proof: test/forge.test.ts "github view reads every page of check runs and commit statuses"
-  Scenario: A CR view reads every page of checks and statuses
-    Given a head commit with more than 100 check runs or 30 statuses
-    When a skill runs "forge view <n>"
-    Then every check run and status is in the checks, so a failing one cannot fall off
-
-  # Source: src/forge/github.ts, "viewBySha"
-  # Proof: test/forge.test.ts "github viewBySha prefers the merge commit, then the head, then the first pull"
-  Scenario: A commit with several pulls resolves to the pull it merged, or else the one it heads
-    Given a commit is listed under several pulls
-    When a skill runs "forge view --sha <sha>"
-    Then the pull whose merge commit is the sha wins, then the pull whose head is the sha, then the first
-
-  # Source: src/forge/github.ts
-  # Proof: test/forge.test.ts "github refuses a change request number or sha that is not an id before calling gh"
-  Scenario: The github forge takes only numbers and hex shas as ids
-    When a skill runs a "forge" verb with a CR number that is not a number or a sha that is not hex
-    Then the command fails before gh runs
-
   # Source: src/board/index.ts, "milestone"
   # Proof: test/board-local.test.ts "milestone sets and clears the milestone of an existing ticket"
   Scenario: A ticket's milestone is set or cleared where create puts it
@@ -50,37 +30,6 @@ Feature: Install and validate the binding
     Then the ticket has that milestone, as "create --milestone" would have set it
     When the factory runs "board milestone <id> --clear"
     Then the ticket has no milestone
-
-  # Source: src/forge/util.ts, "parseStrict"
-  # Proof: test/board-local.test.ts "board cli: an unknown flag, a flag without a value and an unreadable --body-file are usage errors, --k=v works, milestone sets and clears"
-  # Proof: test/forge.test.ts "forge and vcs cli: an unknown flag, a flag without a value and an unreadable --body-file are usage errors; --k=v works"
-  Scenario: A board, forge or vcs verb refuses a flag it does not know
-    When the factory runs a verb with a flag the verb does not list
-    Then it exits 2 with "unknown flag --x for <group> <verb>"
-    When a flag that takes a value has none
-    Then it exits 2 with "--x needs a value"
-    When "--body-file" names a file that cannot be read
-    Then it exits 2 and names the flag and the path
-    And "--k=v" is the same as "--k v"
-    When a numeric flag ("--last", "--limit") has a value that is not a whole number
-    Then it exits 2 and names the flag and the value
-    When "board milestone <id> <name> --clear" gives a name and "--clear" together
-    Then it exits 2
-
-  # Source: src/forge/github.ts, "list"
-  # Proof: test/forge.test.ts "forge list: --limit and --since bound the read, and without --checks no check data is fetched"
-  Scenario: A CR list is bounded and carries no check data unless asked
-    When the factory runs "forge list --state merged --limit 2 --since <date>"
-    Then it gets the newest CRs merged since the date, at most 2
-    And each CR has no checks, unless "--checks" reads them
-    And "bench build" and "bench propose" read only the newest merged CRs, or those from "--merged-limit" and "--since"
-
-  # Source: src/forge/github.ts, "run"
-  # Proof: test/forge.test.ts "forge run reads one CI run by id; a missing run fails; cli list and run take their flags"
-  Scenario: One CI run is read by id
-    When the factory runs "forge run <id>"
-    Then it gets that run
-    And a run that does not exist exits 1
 
   # Source: hooks/guard.mjs, "sdlc-reviewer"
   # Proof: test/guard.test.ts "the sdlc-reviewer agent runs only the agentic-sdlc CLI in Bash"
