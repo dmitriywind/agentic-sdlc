@@ -25,6 +25,11 @@ Feature: Init upgrades an install
       Then the installed file ".github/workflows/gate.yml" holds "on: pull_request\n"
       And the output has the line "updated .github/workflows/gate.yml"
 
+    Scenario: Init --upgrade merges an old skills.lock.json into the install lock and removes it
+      Given the project has the file ".agents/skills.lock.json" holding "{}"
+      When I run the install command "init --upgrade"
+      Then the installed file ".agents/skills.lock.json" is absent
+
     Rule: A workflow the adopter edited is kept
 
       Background:

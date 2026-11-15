@@ -560,7 +560,7 @@ allows `forge approve` and `forge status`, and its MCP launcher serves `forge_ap
 
 **Install and upgrade.** `init --upgrade` without `--harness` reuses the install's harness: `.claude/skills` means `claude --no-plugin`, tier agents `.claude/agents/sdlc-*.md` mean `claude`. A generated tier agent with no lock entry is regenerated when it names `npx --no agentic-sdlc`, and an `npx` agentic-sdlc entry in `.mcp.json` moves to the launcher (other servers untouched). `init` records the sha256 of every file it copies from the package (skills,
 scorers, workflows, rulesets as patched, the pre-push hook, runner files, generated tier agents) in
-`.agents/install.lock.json`; it reads the older `.agents/skills.lock.json` once. A re-run (`init --upgrade`
+`.agents/install.lock.json`; it reads the older `.agents/skills.lock.json` once and removes it. A re-run (`init --upgrade`
 is the same run) updates a file still at its recorded hash, keeps an edited one and names the package file
 with the new version, writes files new in the package, and reports as `stale` any recorded file the package no
 longer ships, deleting none. A file with no lock entry, or a lock entry that does not match, counts as edited unless it equals the package's or its

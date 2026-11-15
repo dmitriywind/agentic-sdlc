@@ -12643,6 +12643,11 @@ ${END}`;
         const file = join10(this.root, INSTALL_LOCK);
         mkdirSync4(dirname4(file), { recursive: true });
         writeFileSync5(file, JSON.stringify(Object.fromEntries(Object.entries(this.lock).sort(([a], [b]) => a < b ? -1 : 1)), null, 2) + "\n");
+        const legacy = join10(this.root, LEGACY_LOCK);
+        if (existsSync8(legacy)) {
+          rmSync3(legacy);
+          this.log.push(`removed ${LEGACY_LOCK}: merged into ${INSTALL_LOCK}`);
+        }
       }
     };
     missingKeysLine = (keys) => keys.length ? `info: binding keys in the template that this binding does not set: ${keys.join(", ")}` : void 0;
