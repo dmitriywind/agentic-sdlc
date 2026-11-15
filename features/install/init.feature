@@ -33,7 +33,7 @@ Feature: Init installs the factory
       And the installed file "AGENTS.md" contains "/agentic-sdlc:sdlc"
       And the installed file "AGENTS.md" contains ".agents/bin/agentic-sdlc"
 
-    Scenario Outline: Init adds .agents/.cli/ to .gitignore once and keeps the rest of the file
+    Scenario Outline: Init adds .agents/.cli/ and .agents/work/ to .gitignore once and keeps the rest of the file
       Given the project has the file ".gitignore" holding "<before>"
       When I run the install command "init"
       And I run the install command "init"
@@ -41,8 +41,8 @@ Feature: Init installs the factory
 
       Examples:
         | before        | after                         |
-        | node_modules  | node_modules\n.agents/.cli/\n |
-        | /.agents/.cli | /.agents/.cli                 |
+        | node_modules  | node_modules\n.agents/.cli/\n.agents/work/\n |
+        | /.agents/.cli\n.agents/work | /.agents/.cli\n.agents/work |
 
   Rule: Init refuses what it does not support, before it writes anything
 

@@ -12159,10 +12159,12 @@ function pinCli(inst, version3, ref, force) {
 }
 function ignoreCliCache(root, log) {
   const file = join10(root, ".gitignore");
-  const text = existsSync8(file) ? readFileSync9(file, "utf8") : "";
-  if (/^\/?\.agents\/\.cli\/?\s*$/m.test(text)) return;
-  writeFileSync5(file, text + (text && !text.endsWith("\n") ? "\n" : "") + IGNORED + "\n");
-  log.push(`added ${IGNORED} to .gitignore`);
+  let text = existsSync8(file) ? readFileSync9(file, "utf8") : "";
+  const add = IGNORED.filter((e) => !new RegExp(`^/?${e.slice(0, -1).replace(/\./g, "\\.")}/?\\s*$`, "m").test(text));
+  if (!add.length) return;
+  text += (text && !text.endsWith("\n") ? "\n" : "") + add.map((e) => e + "\n").join("");
+  writeFileSync5(file, text);
+  log.push(`added ${add.join(", ")} to .gitignore`);
 }
 function oldPinHint(root, log) {
   try {
@@ -12653,7 +12655,7 @@ ${END}`;
     CLI_PIN = ".agents/cli.json";
     CLI_PACKAGE = "github:dmitriywind/agentic-sdlc";
     LAUNCHER = ".agents/bin/agentic-sdlc";
-    IGNORED = ".agents/.cli/";
+    IGNORED = [".agents/.cli/", ".agents/work/"];
     isSha = (s) => typeof s === "string" && /^[0-9a-f]{40}$/.test(s);
     isTag = (s) => typeof s === "string" && /^v\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.+-]+)?$/.test(s);
     envNames = (x, out = []) => {

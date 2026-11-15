@@ -226,7 +226,7 @@ function registerMcp(pkg: string, root: string, harness: string, force: boolean,
 const CLI_PIN = '.agents/cli.json';
 const CLI_PACKAGE = 'github:dmitriywind/agentic-sdlc';
 const LAUNCHER = '.agents/bin/agentic-sdlc';
-const IGNORED = '.agents/.cli/';
+const IGNORED = ['.agents/.cli/', '.agents/work/']; // the launcher's cache, vcs start's workdirs
 const isSha = (s: unknown) => typeof s === 'string' && /^[0-9a-f]{40}$/.test(s);
 const isTag = (s: unknown) => typeof s === 'string' && /^v\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.+-]+)?$/.test(s);
 
@@ -258,13 +258,15 @@ function pinCli(inst: Installer, version: string, ref: string | undefined, force
   inst.log.push(`${had ? 'updated' : 'wrote'} ${CLI_PIN} (ref ${want})`);
 }
 
-/** Keep the launcher's cache out of git: append the entry once. */
+/** Keep the launcher's cache and the change-line workdirs out of git: append each entry once. */
 function ignoreCliCache(root: string, log: string[]) {
   const file = join(root, '.gitignore');
-  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
-  if (/^\/?\.agents\/\.cli\/?\s*$/m.test(text)) return;
-  writeFileSync(file, text + (text && !text.endsWith('\n') ? '\n' : '') + IGNORED + '\n');
-  log.push(`added ${IGNORED} to .gitignore`);
+  let text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  const add = IGNORED.filter((e) => !new RegExp(`^/?${e.slice(0, -1).replace(/\./g, '\\.')}/?\\s*$`, 'm').test(text));
+  if (!add.length) return;
+  text += (text && !text.endsWith('\n') ? '\n' : '') + add.map((e) => e + '\n').join('');
+  writeFileSync(file, text);
+  log.push(`added ${add.join(', ')} to .gitignore`);
 }
 
 /** The old pin lived in package.json: say how to drop it. Never edits the file. */
