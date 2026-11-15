@@ -33,7 +33,6 @@ Given('the project ships to the environments {string}', (w, list: string) => w.b
 // ---- the sink ----
 Given('the sink fails with {string}', (w, message: string) => { sink(w).fail = message.replace(/\\n/g, '\n'); });
 Given('the sink never answers', (w) => { sink(w).never = true; });
-Given('the sink rejects {int} spans', (w, n: number) => { sink(w).rejected = n; });
 
 const context = (w: World) => {
   const ctx = w.adapterContext();
@@ -53,10 +52,6 @@ When('I run {string} against the recording sink', async (w, line: string) => {
   const ctx = context(w);
   await capture(w, () => cli(argv, ctx));
 });
-When('the gate posts the change merged event of CR {string}', async (w, cr: string) => {
-  const ctx = context(w);
-  await capture(w, async () => { await emitGateEvent(ctx, changeMergedEvent(ctx.binding, { cr, sha: 's' })); return 0; });
-});
 When('the gate posts its change merged event and waits at most {int} ms', async (w, ms: number) => {
   const ctx = context(w);
   await capture(w, async () => { await emitGateEvent(ctx, changeMergedEvent(ctx.binding, { cr: '1', sha: 's' }), undefined, ms); return 0; });
@@ -67,11 +62,6 @@ Then('request {int} was a POST to {string}', (w, n: number, url: string) => asse
 Then('request {int} has these headers:', (w, n: number, t: DataTable) => {
   const h = requests(w)[n - 1][2].headers;
   for (const r of t.hashes()) assert.equal(h[r.header], r.value, r.header);
-});
-Then('request {int} has the same id in its header as in its event', (w, n: number) => {
-  const o = requests(w)[n - 1][2];
-  assert.equal(o.headers['ce-id'], (o.body as { context: { id: string } }).context.id);
-  assert.match(o.headers['ce-id'], /^[0-9a-f]{32}$/);
 });
 Then('the body of request {int} has these values:', (w, n: number, t: DataTable) => {
   for (const r of t.hashes()) assert.equal(String(pick(requests(w)[n - 1][2].body, r.path)), r.value, r.path);
@@ -85,10 +75,7 @@ Then('the error output is the single line {string}', (w, line: string) => assert
 Then('the output shows none of {string}', (w, words: string) => {
   for (const x of words.split('|')) assert.ok(!w.last.output.includes(x), `the output shows "${x}":\n${w.last.output}`);
 });
-Then('the error output is empty', (w) => assert.equal(w.last.stderr, ''));
-Then('the error output says {string}', (w, text: string) => assert.ok(w.last.stderr.includes(text), w.last.stderr));
 Then('nothing was printed', (w) => assert.equal(w.last.output, ''));
-Then('nothing was printed on the standard output', (w) => assert.equal(w.last.stdout, ''));
 
 // ---- exporting twice, and a file ----
 When('I note the printed document', (w) => { w.state.exported = w.last.stdout; });

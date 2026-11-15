@@ -78,7 +78,6 @@ export function parse(text: string, file: string): Feature {
   let comment: string[] = [];
   let descTarget: 'feature' | 'other' | undefined;
   let lastStep: Step | undefined;
-  let inTags = false;
 
   const flush = () => {
     if (cur) {
@@ -105,10 +104,8 @@ export function parse(text: string, file: string): Feature {
         if (!tag.startsWith('@') || tag.length < 2) throw new GherkinError(file, n, `bad tag '${tag}'`);
         tags.push(tag);
       }
-      inTags = true;
       continue;
     }
-    inTags = false;
 
     // Doc string
     if (t === '"""' || t === '```') {

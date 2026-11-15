@@ -146,9 +146,7 @@ Then('the JSON result has these values:', (w, t: DataTable) => {
   }
 });
 Then('the JSON result {string} is {string}', (w, path: string, value: string) => assert.equal(show(at(w, path)), value, path));
-Then('the JSON result is null', (w) => assert.equal(w.last.json(), null));
 Then('the JSON result {string} holds:', (w, path: string, doc: string) => assert.deepEqual(at(w, path), JSON.parse(doc), path));
-Then('the JSON result holds:', (w, doc: string) => assert.deepEqual(w.last.json(), JSON.parse(doc)));
 
 // ---- measures: the board and the forge are in memory, the clock is fixed ----
 const NOW = Date.parse('2026-11-14T00:00:00Z');

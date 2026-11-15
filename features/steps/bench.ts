@@ -7,9 +7,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import type { Dirent } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { BENCH_STEP, agentCommand, benchStepFile, buildCases, diverse, quote, resolveExecutor, runBench, shell, stratify, fill, wilsonLower } from '../../src/bench.ts';
+import { agentCommand, buildCases, diverse, quote, resolveExecutor, runBench, wilsonLower } from '../../src/bench.ts';
 import type { BenchCase } from '../../src/bench.ts';
-import { exec } from '../../src/exec.ts';
 import type { Board, CR, Forge, Item, Vcs } from '../../src/ports.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import { Outcome, type World } from '../support/world.ts';
@@ -36,7 +35,6 @@ Given('a project that benches with the agent command {string}', (w, command: str
   owners: { product: 'po', factory: 'fo', bots: ['factory-bot'] }, vcs: { adapter: 'git' },
 }));
 Given('the bench demands {int} shared cases and {int} trials', (w, cases: number, trials: number) => w.binding({ learning: { bench_min_cases: cases, bench_trials: trials } }));
-Given('the bench budget allows {int} runs', (w, n: number) => w.binding({ learning: { bench_budget: { max_runs: n } } }));
 Given('the bench budget allows {int} minutes', (w, n: number) => w.binding({ learning: { bench_budget: { max_minutes: n } } }));
 Given('the executors:', (w, t: DataTable) => w.binding({
   executors: Object.fromEntries(t.hashes().map((r) => [r.name, { kind: r.kind, ...(r.run ? { run: r.run } : {}), ...(r.url_env ? { url_env: r.url_env } : {}), ...(r.max_turns ? { max_turns: Number(r.max_turns) } : {}) }])),
@@ -49,9 +47,6 @@ Given('these Done tickets:', (w, t: DataTable) => {
 Given('{string} commented the spec {string} on ticket {string}', (w, author: string, spec: string, ticket: string) => bench(w).specs.push({ ticket, author, body: `<!-- spec -->\n${spec}` }));
 Given('the forge has these change requests:', (w, t: DataTable) => {
   for (const r of t.hashes()) bench(w).crs.push({ n: r.cr, closes: [r.closes], state: r.state || 'merged', baseSha: `b${r.cr}`, headSha: `h${r.cr}` } as CR);
-});
-Given('the forge lists {int} merged change requests that close no ticket', (w, n: number) => {
-  bench(w).crs = Array.from({ length: n }, (_, i) => ({ n: String(i), state: 'merged', closes: [] }) as unknown as CR);
 });
 
 const diffText = (changes: string[], adds: string[]) => [
@@ -91,24 +86,16 @@ When('the bench builds {int} cases', async (w, n: number) => {
   const binding = w.adapterContext().binding;
   await capture(w, async () => { console.log(JSON.stringify(bench(w).cases = await buildCases(board, forge, binding, n))); return 0; });
 });
-Then('the forge was asked for the newest {int} merged change requests since {string}', (w, n: number, since: string) => {
-  assert.deepEqual(bench(w).asked.at(-1), { state: 'merged', limit: n, since: since || undefined });
-});
-Then('the error output has {int} lines', (w, n: number) => assert.equal(w.last.stderr.split('\n').filter(Boolean).length, n));
 
 Given('these bench cases:', (w, t: DataTable) => {
   bench(w).cases = t.hashes().map((r) => ({ id: r.id, ticket: r.id, title: 'T', spec: 's', baseSha: 'base', headSha: 'head', oracleTests: ['test/a.test.ts'], size: r.size, area: r.area, ...(r.merged ? { mergedAt: r.merged } : {}) }));
 });
-When('the cases are spread to {int} per size over the sizes {string}', (w, n: number, sizes: string) => done(w, stratify(bench(w).cases, n, list(sizes))));
 When('{int} cases are picked for diversity', (w, n: number) => done(w, diverse(bench(w).cases, n)));
 
 // ---- running the bench ----
 Given('the revision {string} holds the files:', (w, rev: string, t: DataTable) => {
   const files = (bench(w).trees[rev] ??= {});
   for (const r of t.hashes()) files[r.path] = r.content;
-});
-Given('the revision {string} is a factory whose agent command is {string}', (w, rev: string, command: string) => {
-  bench(w).trees[rev] = { '.agents/binding.yml': JSON.stringify({ ...w.adapterContext().binding, agent_command: command }), '.agents/skills/sdlc-build/SKILL.md': 'candidate' };
 });
 Given('the agent edits the files:', (w, t: DataTable) => { bench(w).agent.edits = t.hashes().map((r) => ({ path: r.path, content: r.content })); });
 Given('the agent takes {int} minutes', (w, n: number) => { bench(w).agent.minutes = n; });
@@ -177,17 +164,6 @@ const runCases = async (w: World, n: number, opts: Record<string, string>) => {
 When('the bench runs {int} cases', (w, n: number) => runCases(w, n, {}));
 When('the bench runs {int} cases with the options:', (w, n: number, t: DataTable) => runCases(w, n, Object.fromEntries(t.raw().map((r) => [r[0], r[1]]))));
 
-Then('the agent saw these files:', (w, t: DataTable) => assert.deepEqual(bench(w).seen.agentTree, Object.fromEntries(t.hashes().map((r) => [r.path, r.content]))));
-Then('the agent was told to follow the build skill and to do {string}', (w, spec: string) => assert.match(bench(w).seen.prompt!, new RegExp(`build[\\\\/]SKILL\\.md[\\s\\S]*${spec}`)));
-Then('the agent followed the skill whose text is {string}', (w, text: string) => assert.equal(bench(w).seen.skillText, text));
-Then('the agent command matches {string}', (w, re: string) => assert.match(bench(w).seen.commands[0], new RegExp(re)));
-Then('the commands after the agent are:', (w, t: DataTable) => assert.deepEqual(bench(w).seen.commands.slice(1, 1 + t.raw().length), t.raw().map((r) => r[0])));
-Then('verify run {int} saw these files:', (w, n: number, t: DataTable) => {
-  const seen = bench(w).seen.verifies[n - 1].files;
-  for (const r of t.hashes()) assert.equal(r.content === '<absent>' ? undefined : r.content, seen[r.path], r.path);
-});
-Then('no tree was made inside the project', (w) => assert.ok(!bench(w).made.some((d) => d.startsWith(w.root))));
-Then('every tree was deleted', (w) => assert.deepEqual(bench(w).made.filter((d) => existsSync(d)), []));
 Then('the bench made {int} trees', (w, n: number) => assert.equal(bench(w).made.length, n));
 Then('the bench started no command', (w) => assert.deepEqual([bench(w).seen.commands, bench(w).made], [[], []]));
 Then('the project file {string} matches {string}', (w, file: string, re: string) => assert.match(w.read(file), new RegExp(re)));
@@ -202,14 +178,6 @@ Then('the agent command is {string}', (w, expected: string) => {
   assert.equal(w.state.command, expected.replace(/<(\w+)>/g, (_m, k: string) => quote(vars[k])));
 });
 /** A table cell cannot hold these characters: <LF> a line feed, <NUL> a NUL, <BS> a backslash, <DQ> a double quote. */
-const chars = (s: string) => s.replaceAll('<LF>', '\n').replaceAll('<NUL>', '\0').replaceAll('<BS>', '\\').replaceAll('<DQ>', '"');
-When('{string} is quoted for a {word} shell', (w, value: string, shellName: string) => {
-  try { w.state.quoted = quote(chars(value), shellName === 'windows'); done(w, w.state.quoted); } catch (e) { failed(w, e); }
-});
-Then('the quoted value is {string}', (w, expected: string) => assert.equal(w.state.quoted, chars(expected)));
-When('a command that prints its arguments is run with the values {string} and {string}', (w, a: string, b: string) => {
-  done(w, JSON.parse(shell(exec, `node -e "console.log(JSON.stringify(process.argv.slice(1)))" ${fill('{a} {b}', { a, b })}`, tmpdir())));
-});
 
 // ---- results: files the CLI compares and reports ----
 const resultFile = (w: World, file: string) => JSON.parse(w.read(file));
@@ -225,7 +193,3 @@ Given('that result is of the executor {string} of the kind {string}', (w, execut
 When('the Wilson lower bound of {int} passes in {int} trials is computed', (w, pass: number, n: number) => done(w, { lower: wilsonLower(pass, n) }));
 
 // ---- the step the bench replays ----
-Given('an installed pack whose skills are named with the prefix {string}', (w, prefix: string) => {
-  w.write(`.agents/skills/${prefix}build/SKILL.md`, `---\nname: ${prefix}build\ndescription: d\nmetadata:\n  tier: deep\n---\nbody\n`);
-});
-When('the file of the bench step is looked up in the project', (w) => done(w, { step: BENCH_STEP, file: relative(w.root, benchStepFile(w.root)).replaceAll('\\', '/') }));
