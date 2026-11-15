@@ -228,7 +228,8 @@ export const cli: PortCli = async (argv, ctx) => {
       // count. Timestamps may have whole seconds only, so a same-second comment counts.
       const later = (c: { id: string; createdAt: string }) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
       const finished = mine && all.some((c) => later(c) && c.body.includes(stamp('done', key)));
-      const stall = Number(b.stall_minutes) || 0;
+      // A cycle (`sdlc`) cannot outlive cycle.time_budget_minutes: a claim older than that is dead, whatever stall_minutes says.
+      const stall = skill === 'sdlc' ? Number(b.cycle?.time_budget_minutes) || Number(b.stall_minutes) || 0 : Number(b.stall_minutes) || 0;
       const age = Number.isNaN(at) ? 0 : (Date.now() - at) / 60_000; // an unparseable time counts as just now: fail closed
       // A finished run never blocks: a re-run after it is a new run, not a double fire.
       if (mine && !finished && (age < window || age < stall)) {
