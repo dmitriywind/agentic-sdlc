@@ -35,10 +35,6 @@ export class GateFakes {
   created: { title: string; body: string; status: string; labels: string[] }[] = [];
   tags: string[] = [];
   tagError?: Error;
-  /** The error every status post fails with (the CI job holds no token). */
-  statusError?: Error;
-  /** The error the forge answers a lookup of a CR by merge sha with, other than "no change request". */
-  viewBySha?: Error;
   /** Does the forge search merged CRs by ticket? `asked` lists the tickets it was asked about. */
   searchByTicket = false;
   /** Merged CRs the search index does not show yet. */
@@ -50,12 +46,8 @@ export class GateFakes {
   ancestry?: { known: Map<string, boolean | undefined>; others: boolean };
   /** Shipped values a deploy of a later environment writes while the gate runs. */
   meanwhile = new Map<string, string>();
-  /** The proof files that pass on the merge base, and what the gate ran. */
+  /** The proof files that pass on the merge base. */
   passingProofs = new Set<string>();
-  ran: string[] = [];
-  tree: string[] = [];
-  /** Does a command runner exist (proofs-on-base)? */
-  runner = true;
 
   ticket(id: string, status: string, fields: Item['fields'] = {}, labels: string[] = []) {
     this.items.push({ id, title: id, url: '', status, labels, fields, children: [], assignees: [], createdAt: '', updatedAt: '' });
@@ -94,7 +86,6 @@ export class GateFakes {
     const forge: any = { // eslint-disable-line @typescript-eslint/no-explicit-any
       view,
       viewBySha: async (sha: string) => {
-        if (this.viewBySha) throw this.viewBySha;
         const hit = [...this.crs].find(([, c]) => c.mergeSha === sha);
         if (!hit) throw new Error(`no change request for ${sha}`);
         return cr(hit[0], hit[1]);
@@ -106,7 +97,6 @@ export class GateFakes {
       run: async (id: string) => { const r = this.runs.find((x) => x.id === id); if (!r) throw new Error(`no run ${id}`); return r; },
       list: async () => { this.listed++; return mergedCrs(); },
       status: async (sha: string, s: Omit<Status, 'sha' | 'as'>, o?: { as?: string }) => {
-        if (this.statusError) throw this.statusError;
         this.statuses.push({ sha, ...s, ...(o?.as ? { as: o.as } : {}) });
       },
     };
@@ -118,11 +108,11 @@ export class GateFakes {
       tags: async () => this.tags.map((name) => ({ name, sha: 's' })),
       head: async () => ({ ref: 'main', sha: 'HEAD1' }),
       base: async () => ({ sha: 'BASE1' }),
-      checkoutTests: async (rev: string, paths: string[]) => { this.tree.push(`${rev}:${paths.join(',')}`); },
+      checkoutTests: async () => {},
     };
     const d: Deps = { binding: this.binding as any, root, board, forge, vcs, fileAt: (p, sha) => this.files.get(`${sha}:${p}`) }; // eslint-disable-line @typescript-eslint/no-explicit-any
     if (this.ancestry) { const a = this.ancestry; d.isAncestor = (x) => (a.known.has(x) ? a.known.get(x) : a.others); }
-    if (this.runner) d.run = (cmd) => { this.ran.push(cmd); return [...this.passingProofs].some((p) => cmd.includes(p)); };
+    d.run = (cmd) => [...this.passingProofs].some((p) => cmd.includes(p));
     return d;
   }
 }

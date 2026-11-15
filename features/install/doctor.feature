@@ -41,6 +41,18 @@ Feature: Doctor checks what the gates rely on
       When doctor checks the self-hosted runner
       Then doctor prints no line
 
+    Scenario: A self-hosted runner on a public repo fails
+      Given the repo variable "AGENTIC_RUNS_ON" is '"self-hosted"'
+      And the repo is "public"
+      When doctor checks the self-hosted runner
+      Then doctor line 1 matches "^fail runner: a self-hosted runner on a public repo"
+
+    Scenario: One self-hosted runner for the CR code and the secret jobs warns
+      Given the repo variable "AGENTIC_RUNS_ON" is '"self-hosted"'
+      And the repo is "private"
+      When doctor checks the self-hosted runner
+      Then doctor line 1 matches "^warn: runner: CR code and the secret jobs share one self-hosted runner"
+
   Rule: The delivery workflow must name the trunk and the delivery of the binding
 
     Background:

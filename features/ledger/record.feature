@@ -115,12 +115,25 @@ Feature: Planning and recording the scores of a run
         { "done-conditions": "unscorable", "redundant-tests": "unscorable" }
         """
 
-  Rule: A missing heartbeat is found
+  Rule: A missing or old heartbeat is found
 
     Scenario: With no heartbeat the ledger is stale
       When I run "ledger stale --max-hours 2"
       Then the exit code is 1
       And the JSON result "stale" is "true"
+
+    Scenario: A heartbeat older than max-hours is stale
+      Given a heartbeat by "local" at "2020-01-01T00:00:00Z" with no runs
+      When I run "ledger stale --max-hours 2"
+      Then the exit code is 1
+      And the JSON result "stale" is "true"
+      And the JSON result "newest" is "2020-01-01T00:00:00Z"
+
+    Scenario: A heartbeat within max-hours is not stale
+      Given a heartbeat by "local" at "2020-01-01T00:00:00Z" with no runs
+      When I run "ledger stale --max-hours 100000"
+      Then the exit code is 0
+      And the JSON result "stale" is "false"
 
   Rule: A wrong command line is a one-line usage error
 

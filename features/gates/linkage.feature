@@ -25,6 +25,20 @@ Feature: Gate ticket-linkage
       Examples:
         | problem                         | source      | closes | message                       |
         | closes a ticket not on the board | 99/add-x   | 99     | ticket 99 is not on the board |
+        | closes a ticket that is Done     | 13/add-x   | 13     | ticket 13 is not open         |
+        | closes two tickets               | 12/add-x   | 12, 13 | must close exactly one ticket |
+        | closes no ticket                 | 12/add-x   |        | must close exactly one ticket |
+        | is on a line naming another ticket | 14/add-x | 12     | does not name 12              |
+
+    Scenario: A CR that closes the open ticket its line names passes
+      Given these CRs are on the forge:
+        | cr | source   | closes | changes  |
+        | 1  | 12/add-x | 12     | src/x.ts |
+      When the linkage gate runs for the CR "1"
+      Then the gate passes
+      And these statuses were posted:
+        | sha | context        | state   |
+        | h1  | ticket-linkage | success |
 
   Rule: A CR that changes only factory paths needs no ticket
 

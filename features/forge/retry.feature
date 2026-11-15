@@ -15,3 +15,16 @@ Feature: gh calls are retried on a rate limit or a server error
       When the forge runs diff on "5"
       Then the verb fails matching "503"
       And the forge made 3 calls
+
+  Rule: A write is retried only on a rate limit
+
+    Scenario: A write that fails with a server error is not retried
+      Given the gh calls fail 1 times with "gh: HTTP 503" before they answer
+      When the forge runs status on "abc1234"
+      Then the verb fails matching "503"
+      And the forge made 1 calls
+
+    Scenario: A write that hits a rate limit is retried
+      Given the gh calls fail 1 times with "gh: HTTP 429" before they answer
+      When the forge runs status on "abc1234"
+      Then the forge made 2 calls

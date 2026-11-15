@@ -33,3 +33,21 @@ Feature: A dispatch starts one run per key
       When dispatch runs "review/review --ticket 1"
       Then the result "kind" is "harness"
       And the result "instruction" contains "its dispatch key is 1-review/review"
+
+  Rule: A run that has not finished blocks a second start until stall_minutes
+
+    Scenario: An unfinished run older than the window but inside stall_minutes is not started twice
+      Given the binding has "stall_minutes" set to the JSON "60"
+      And dispatch runs "build --ticket 1"
+      And the comments of the ticket "1" are 30 minutes old
+      When dispatch runs "build --ticket 1"
+      Then the result "skipped" is "true"
+      And the result "reason" is "the previous run has not finished"
+
+    Scenario: An unfinished run older than stall_minutes is started again
+      Given the binding has "stall_minutes" set to the JSON "60"
+      And dispatch runs "build --ticket 1"
+      And the comments of the ticket "1" are 90 minutes old
+      When dispatch runs "build --ticket 1"
+      Then the result "kind" is "harness"
+
