@@ -153,6 +153,12 @@ Given('the forge has the review identity {string}', (w, who: string) => { w.bind
 Given('the forge requires the checks {string}', (w, list: string) => { w.binding({ forge: { required_checks: csv(list) } }); });
 Given('the forge credential variable {string} is {string}', (w, name: string, value: string) => { w.env[name] = value; });
 Given('the forge session is a Claude cloud session', (w) => { w.env.CLAUDE_CODE_REMOTE = 'true'; });
+Given('GitHub holds the open CR {int} at the head {string} for the server', (w, n: number, head: string) => {
+  // For the scenarios that run a port through w.adapterContext (the MCP server): a CR, no checks, and a comment that posts.
+  w.answer(new RegExp(`commits/${head}/(check-runs|status|check-suites)`), '');
+  w.answer(new RegExp(`issues/${n}/comments`), { id: 1, html_url: 'cu' });
+  w.answer(new RegExp(`pulls/${n}$`), { number: n, html_url: 'u', title: 't', head: { sha: head, ref: 's' }, base: { sha: 'm', ref: 'main' }, state: 'open', body: '', user: { login: 'bot' } });
+});
 Given('the repo refuses draft pull requests', (w) => { fake(w).noDraft = true; });
 Given('GitHub refuses to arm auto-merge', (w) => { fake(w).noAutoMerge = true; });
 Given('the gh calls fail {int} times with {string} before they answer', (w, times: number, message: string) => {
@@ -192,7 +198,7 @@ Given('the CI runs are:', (w, t: DataTable) => {
 });
 
 // ---- When: one forge verb ----
-When('the forge opens a CR from the branch {string} titled {string} with the body {string}', (w, source: string, title: string, body: string) => attempt(w, (f) => f.open({ source, title, body })));
+When('the forge opens a CR from the branch {string} titled {string} with the body {string}', (w, source: string, title: string, body: string) => attempt(w, (f) => f.open({ source, title, body, draft: false })));
 When('the forge opens a draft CR from the branch {string} titled {string} with the body {string}', (w, source: string, title: string, body: string) => attempt(w, (f) => f.open({ source, title, body, draft: true })));
 When('the forge runs {word} on {string}', (w, verb: string, arg: string) => attempt(w, (f) => {
   if (verb === 'status') return f.status(arg, { context: 'c', state: 'success', description: 'd' });

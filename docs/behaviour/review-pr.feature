@@ -6,58 +6,6 @@ Feature: Review a change request
   I want a fresh reviewer to grade a CR against its ticket and spec
   So that only a proven, correct CR is marked ready and auto-merged
 
-  # Source: skills/review-pr/SKILL.md, "Decide" (PASS)
-  # Proof: test/forge.test.ts "two identities: status and approve need review_token_env and never use the implementer token; a missing token env fails naming the variable"
-  Scenario: PASS with two identities marks the CR ready with auto-merge
-    Given forge.review_identity is set
-    And a draft CR for a ticket at In review
-    And every criterion is proven
-    And no Important finding is open
-    And "Required" and "proofs-on-base" are green on this head
-    When the review runtime decides
-    Then it posts the review status as forge.review_identity with state success
-    And it approves the CR with the review token
-    And it runs "forge ready <n>" and "forge automerge <n>"
-    And the ticket still shows In review
-
-  # Source: skills/review-pr/SKILL.md, "Decide" (PASS, one identity); src/forge/github.ts, "approve"
-  # Proof: test/forge.test.ts "one identity: status posts with the implementer token; approve is refused, since GitHub refuses the author"
-  Scenario: PASS with one identity posts only the report and gives no approval
-    Given forge.review_identity is empty
-    And a draft CR that passes review
-    When review-pr decides in the cycle
-    Then it posts its report and no status
-    And it does not run "forge approve", which refuses with one identity
-    And it runs "forge ready <n>", waits up to 5 minutes for CI's review status, then runs "forge automerge <n>"
-    And for a CR that needs a human it asks a collaborator to approve the head, or the owner to merge it as admin
-
-  # Source: src/forge/github.ts; references/architecture.md §3.2, "Adapter"
-  # Proof: test/forge.test.ts "github: in a cloud session every verb is REST under repos/ and ready, draft, automerge use the ccr routes; an unset token_env falls back to the proxy"
-  Scenario: The forge verbs work in a Claude cloud session
-    Given the runtime is a Claude cloud session (CLAUDE_CODE_REMOTE=true)
-    When the reviewer runs "forge ready <n>", "forge draft <n>" or "forge automerge <n>"
-    Then the adapter calls the proxy's pulls/<n>/ccr route for it
-    And no forge verb calls GraphQL
-    And only "closing" calls a path outside repos/<owner>/<repo> (search/issues), which the session refuses
-    And when the env var that forge.options.token_env names is unset, the verbs use the proxy's token
-
-  # Source: src/forge/github.ts; references/architecture.md §3.2, "Adapter"
-  # Proof: test/forge.test.ts "github: a repo without draft PRs marks drafts with the draft label; an unprotected trunk merges once required checks are green"
-  Scenario: A private repo on GitHub Free holds drafts and merges unattended
-    Given a repo that refuses draft pull requests and has no ruleset or branch protection on the trunk
-    When the factory runs "forge open --draft", "forge ready <n>" and "forge draft <n>"
-    Then a draft CR is a ready pull request with the "draft" label, and ready removes the label
-    When the reviewer runs "forge automerge <n>" and GitHub refuses auto-merge
-    Then the adapter merges the CR at its head only when it is ready and every forge.required_checks entry is green there
-
-  # Source: references/architecture.md, "One identity or two"; src/forge/index.ts, "status"
-  # Proof: test/forge.test.ts "cli: status refuses the contexts only a gate posts"
-  Scenario: The reviewer cannot post a gate's status
-    Given the review runtime holds the review token
-    When it runs "forge status <head> --context human-approval --state success"
-    Then the CLI refuses with a usage error
-    And no status is posted
-
   # Source: skills/review-pr/SKILL.md, "Send back"
   # Proof: skill text only
   Scenario: Findings on a CR a person opened go back to that person
@@ -116,32 +64,6 @@ Feature: Review a change request
     Then both fail
     And the reviewer calls escalate-to-human with the Access trigger
     And the reviewer posts nothing else
-
-  # Source: skills/review-pr/SKILL.md, "Behind the trunk"
-  # Proof: test/forge.test.ts "github: in a cloud session every verb is REST under repos/ and ready, draft, automerge use the ccr routes; an unset token_env falls back to the proxy"
-  Scenario: A ready CR behind the trunk is synced
-    Given a ready CR at In review
-    And its change line is behind the trunk
-    When the reviewer runs
-    Then it runs "forge sync <n>"
-    And it repeats the CI check and the decision on the new head once CI has reported
-
-  # Source: skills/review-pr/SKILL.md, "Red or stalled gate"
-  # Proof: test/forge.test.ts "github: draft = ready --undo outside the cloud, checks from REST (the newest run per name), status via api"
-  Scenario: A red check caused by the diff sends the ticket back
-    Given a ready CR at In review
-    And a required check is red
-    And the cause is in the diff or the ticket's scope
-    When the reviewer reads the failing check with "forge runs --failed"
-    Then it runs "forge draft <n>"
-    And the ticket moves to In progress with the cause
-
-  # Source: src/forge/github.ts, "view"
-  # Proof: test/forge.test.ts "github: draft = ready --undo outside the cloud, checks from REST (the newest run per name), status via api"
-  Scenario: A re-run check counts by its newest run
-    Given a check failed and a re-run of the same check passed on the head
-    When the reviewer reads the CR with "forge view <n>"
-    Then the check shows once, with the state of the newest run
 
   # Source: skills/review-pr/SKILL.md, intro paragraph and "Send back"
   # Proof: skill text only
@@ -227,41 +149,3 @@ Feature: Review a change request
     When review-pr handles it
     Then it posts one comment asking the author to update the CR
     And it runs no "forge sync"
-
-  # Source: skills/review-pr/SKILL.md, "Green but open"; skills/sdlc/SKILL.md, Routing
-  # Proof: test/forge.test.ts "github: a repo without draft PRs marks drafts with the draft label; an unprotected trunk merges once required checks are green"
-  Scenario: A ready CR with every required check green that is still open is merged
-    Given a ready CR at In review whose every forge.required_checks entry is green on its head
-    And the CR is still open
-    When the cycle routes it to review-pr
-    Then review-pr runs "forge automerge <n>"
-
-  # Source: src/ports.ts, "parseCloses"
-  # Proof: test/forge.test.ts "parseCloses never reads an id from the next line and dedupes"
-  Scenario: A CR names its ticket with a Closes line on one line
-    Given a CR body with "Closes" at the end of a line and a title on the next line
-    Then the CR links no ticket
-    And a repeated "Closes <id>" line links the ticket once
-
-  # Source: src/forge/index.ts, "cli"
-  # Proof: test/forge.test.ts "cli: JSON on stdout, usage error is 2, failure is 1"
-  Scenario: The forge CLI answers JSON and sets the exit code
-    When a skill runs a forge verb
-    Then the result is JSON on stdout and the exit code is 0
-    And a missing argument or an unknown verb exits with 2
-    And a failed call exits with 1
-
-  # Source: src/forge/github.ts, "list", "approvals" and "view"
-  # Proof: test/forge.test.ts "github reads: merged CRs are the closed pulls with a merge, approvals are { user, state, sha }, pushedAt is the first check suite on the head"
-  Scenario: The forge reads merged CRs, approvals and the push time of a head
-    When a skill runs "forge list --state merged", "forge approvals <n>" or "forge view <n>"
-    Then a merged CR is a closed CR with a merge
-    And an approval holds the user, the state and the head sha of the review
-    And the push time is the first check suite on the head, or absent when none can be read
-
-  # Source: src/forge/github.ts, "cut"
-  # Proof: test/forge.test.ts "cut: dispatches the release workflow and returns the run newer than any before it"
-  Scenario: A release cut starts the release workflow and returns its run
-    When the release skill runs "forge cut <revision> <version>"
-    Then the forge dispatches the release workflow for that revision and version
-    And the result names the run that is newer than every run before the dispatch

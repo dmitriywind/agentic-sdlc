@@ -152,3 +152,29 @@ Feature: Every port verb is an MCP tool
     Scenario: A milestone is cleared
       When the client calls the tool "board_milestone" with '{"id":"1","clear":true}'
       Then the tool result has no "milestone"
+
+  Rule: forge_verdict takes the report as its body
+
+    Background:
+      Given the binding sets "forge.adapter" to "github"
+      And the binding sets "forge.options.repo" to "o/r"
+      And the binding sets "forge.options.review_token_env" to "REV"
+      And the binding sets "forge.review_identity" to ""
+      And GitHub holds the open CR 5 at the head "abc1234" for the server
+
+    Scenario: The reviewer cannot write a file, so the report is an argument
+      When the client sends "tools/list"
+      Then the tool "forge_verdict" requires "n, body"
+      And the tool "forge_verdict" takes the arguments "pass, fail"
+
+    Scenario: With one identity the report is posted and CI posts the status
+      When the client calls the tool "forge_verdict" with '{"n":"5","pass":true,"body":"report\n"}'
+      Then the tool result is not an error
+      And the structured content "status" is "ci"
+      And a call includes "issues/5/comments"
+
+    Scenario: With a review identity and no review token the call fails with Access
+      Given the binding sets "forge.review_identity" to "rev-bot"
+      When the client calls the tool "forge_verdict" with '{"n":"5","pass":true,"body":"report\n"}'
+      Then the tool result is an error
+      And the tool result says "Access:"

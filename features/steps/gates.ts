@@ -254,8 +254,6 @@ Then('the trailer {string} is {string}', (w, key: string, value: string) => asse
 Then('no trailer is read', (w) => assert.deepEqual(w.state.trailers, {}));
 
 // ---- Given: the classify scenarios ----
-Given('the file {string} at the base of the CR is:', (w, path: string, text: string) => { w.gate.files.set(`base:${path}`, text + '\n'); });
-Given('the file {string} at the head of the CR is:', (w, path: string, text: string) => { w.gate.files.set(`h${CR}:${path}`, text + '\n'); });
 Given('the skill {string} has a bench suite', (w, skill: string) => w.write('.agents/bench/suites/s.json', JSON.stringify({ name: 's', skill, cases: [{ id: '1' }] })));
 Given('a CR that changes the binding file so that its head sets {string} to {string}', (w, key: string, value: string) => {
   w.gate.cr(CR);
