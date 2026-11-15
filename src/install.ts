@@ -176,6 +176,8 @@ class Installer {
     const file = join(this.root, INSTALL_LOCK);
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify(Object.fromEntries(Object.entries(this.lock).sort(([a], [b]) => (a < b ? -1 : 1))), null, 2) + '\n');
+    const legacy = join(this.root, LEGACY_LOCK);
+    if (existsSync(legacy)) { rmSync(legacy); this.log.push(`removed ${LEGACY_LOCK}: merged into ${INSTALL_LOCK}`); }
   }
 }
 
