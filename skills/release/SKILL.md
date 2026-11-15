@@ -18,7 +18,7 @@ The Product owner approves the last environment; this skill never does.
 
 0. **Resume.** `board comments <request> --trusted`. When the newest comment carrying
    `<!-- release-proposal` has no Product owner reply after it (`board comments <request> --author
-   <owners.product>` once per entry; a reply by any entry is a go-ahead; a bot or Factory owner comment never is), stop: no comment, no
+   <owners.product>`, one `--author` per entry; a reply by any entry is a go-ahead; a bot or Factory owner comment never is), stop: no comment, no
    further reads. A reply that approves goes to step 6, or to step 7 when a `<!-- release-cut`
    comment of this run's account follows it; one that changes contents, to step 3; one
    asking to refresh, to step 1. Done when the run stopped or knows its entry step.
@@ -49,7 +49,7 @@ The Product owner approves the last environment; this skill never does.
    and says only the commits needed for it are in the proposal. Then stop. Done when posted and the run has stopped.
 6. **Mark.**
    Go-ahead first: continue only after a Product owner reply on the proposal approves it
-   (`board comments <request> --author <owners.product>` once per entry; a later run resumes here). A reply that
+   (`board comments <request> --author <owners.product>`, one `--author` per entry; a later run resumes here). A reply that
    changes the contents restarts at step 3. Run the ready check (step 3) again on the same revision: a P0, a Signal or a red check that
    appeared since the proposal stops the cut. Then `board set <id> release_version <version>` and
    `board set <id> shipped "In release"` on each selected ticket still On <env before last>, before

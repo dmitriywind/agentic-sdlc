@@ -72,6 +72,7 @@ src/
   ledger.ts                  read heartbeats and scores, aggregate runs, measures and learning
   bench.ts                   build and run bench cases
   mcp.ts                     the port verbs as MCP tools
+  telemetry.ts               run and deploy records as OTLP traces and CDEvents (ledger export, the merged and shipped gates)
 references/architecture.md   this contract
 docs/                        guides and diagrams; never normative
 test/                        node:test, one file per module, fake exec only (no network)
@@ -137,14 +138,14 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `automerge <n>` | Merge when every required check is green | `CR` |
 | `comment <n> --body-file <f>` | CR comment | `{ id, url }` |
 | `comments <n> [--last <k>] [--marker <text>] [--author <a>]… [--trusted]` | CR comments (review report, owner reply on a factory CR), newest first, system notes dropped; same filters as `board comments` (`--last` counts after them) | `Comment[]` |
-| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted with `options.review_token_env`; with one identity (`review_identity` empty), with the implementer's token. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`). The `proofs-on-base` and `linkage` gates post with `options.token_env` (the CI job's token); with two identities the CLI verb never does. | `{}` |
+| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted with `options.review_token_env`; with one identity (`review_identity` empty), with the implementer's token. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`, `agent-provenance`). The `proofs-on-base` and `linkage` gates post with `options.token_env` (the CI job's token); with two identities the CLI verb never does. | `{}` |
 | `approve <n>` | Approving review as `review_identity`, with `options.review_token_env`. Refused with one identity: GitHub refuses an approval from the CR's author | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
 | `runs [--ref <r>] [--failed]` | CI runs (the newest 30) | `Run[]` |
 | `run <id>` | One CI run by id; a run that does not exist fails (exit 1) | `Run` |
+| `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
 
 The port also has `commits(n)`, used by gate `provenance` and not a CLI verb: every commit of the CR, oldest first, as `{ sha, message, author, committer, authorName, committerName, parents }` (logins empty when the forge links no account). It throws when the list may be cut off (GitHub lists at most 250 commits), so the gate fails closed.
-| `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
 
 The forge may implement `closing(id)`: the merged CRs whose body closes ticket `id` (GitHub searches the body). Gates use it to look up a ticket's merges without listing every merged CR. The search index can trail a merge, so a ticket the search finds no merge for is also looked up in `list({ state: 'merged' })`.
 `CR = { n, url, title, source, target, headSha, baseSha, mergeSha?, draft, state: 'open'|'merged'|'closed', behind, closes: string[], checks: {name, state}[], body, author, pushedAt? }`.
@@ -179,7 +180,7 @@ change line `start` opens.
 | `linkage` | Posts check `ticket-linkage`: a product CR closes exactly one open ticket and names it in its source. |
 | `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base, or when a product CR changes only `paths.no_proof`. |
 | `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (an owner, member or collaborator of the repo, not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by any `owners.factory` entry. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
-| `review --cr <n>` | One identity only (`forge.review_identity` empty): posts status `review` on the head from the newest `review-pr` report for that head by a trusted author (`owners.bots`, `owners.product`, `owners.factory`): success on `Verdict: PASS`, failure on `REMEDIATION REQUIRED`, pending with no report. Posts with the CI job's token. With two identities it does nothing. |
+| `review --cr <n>` | One identity only (`forge.review_identity` empty): posts status `review` on the head from the newest `review-pr` report for that head by a trusted author (`owners.bots` and every owner role): success on `Verdict: PASS`, failure on `REMEDIATION REQUIRED`, pending with no report. Posts with the CI job's token. With two identities it does nothing. |
 | `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. Done records a fact: a held ticket moves and keeps its label; a Cancelled ticket stays. A push with no CR changes nothing. No CR-pipeline gate writes the board; besides this gate only `shipped` moves a ticket (In review to Done, when a deploy reports first). |
 | `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
 | `provenance --cr <n>` | Off unless `forge.provenance` is `warn` or `require`. Reads the CR's commits through the forge API (no CR code runs) and posts status `agent-provenance`. A commit whose author or committer is in `owners.bots` (forge names) needs well-formed `Agent-Run` and `Agent-Model` trailers (the last paragraph of the message, one value each); other commits are `human`, a merge commit (the forge's branch update) is `merge`. Prints `{ commits: [{ sha, by, run?, model?, ok }], agentCommits, humanCommits, missing }`. `warn` always succeeds; `require` fails on a missing or malformed trailer and on commits it cannot read. A squash merge drops the trailers, so the status and report on the CR are the record; `merged` is untouched. Not in `forge.required_checks` by default: with `require`, add it there and to the trunk ruleset (`validate` warns otherwise). |
@@ -194,7 +195,7 @@ Checks:
 - **`review`** is posted by `review-pr` as `forge.review_identity`. With one identity (section 10) the
   `review` gate posts it in CI from the newest trusted `review-pr` report on the head.
 - **Required checks**: `ticket-linkage`, `Required`, `proofs-on-base`, `review`,
-  `human-approval`, `skill-regression`. The trunk ruleset pins the four CI checks to their
+  `human-approval`, `skill-regression`; `agent-provenance` joins them only with `forge.provenance: require`. The trunk ruleset pins the four CI checks to their
   source app (`integration_id`); with two identities `review` and `human-approval` post with the review token, so pin them
   to the review app when it is an App. `doctor` warns when a required check is not pinned. No CODEOWNERS file:
   the `approval` gate enforces owner approval by class, so `tuning` can auto-merge.
@@ -430,7 +431,8 @@ stages), `AGENTIC_SDLC_LOCAL=1` (local execution opt-in), `AGENTIC_SDLC_ROLE=rev
 allows `forge approve` and `forge status`, and its MCP launcher serves `forge_approve` and `forge_status`),
 `AGENTIC_SDLC_ALLOW_STATUS=1` (the plugin hook allows `forge status` outside the review role; a one-identity runner that starts `mcp --allow status` sets it, nothing else needs it),
 `CLAUDE_CODE_REMOTE=true` (a Claude cloud session: REST and `ccr` routes, the proxy token),
-`AGENTIC_SDLC_PACKAGE` (the package root `init` copies from; tests set it).
+`AGENTIC_SDLC_PACKAGE` (the package root `init` copies from; tests set it). `dispatch` sets
+`AGENTIC_SDLC_MAX_TURNS`, `AGENTIC_SDLC_MAX_TOKENS` and `AGENTIC_SDLC_MAX_MINUTES` in a `command` executor's child (executors.md).
 
 **Install and upgrade.** `init` records the sha256 of every file it copies from the package (skills,
 scorers, workflows, rulesets as patched, the pre-push hook, runner files, generated tier agents) in
@@ -495,7 +497,7 @@ token: `individual-api` names a managed executor's key otherwise (`executors.<sk
   with a fresh context that runs no CR code. `review-pr` posts its report and no status: a Claude cloud
   session's proxy refuses commit-status writes (HTTP 403). The report comment starts the CR workflow
   (`issue_comment`), whose `review` gate posts the `review` status from the newest report on the head
-  by a trusted author (`owners.bots`, `owners.product`, `owners.factory`) with the CI job's token.
+  by a trusted author (`owners.bots` and every owner role) with the CI job's token.
   `review-pr` then waits for that status and runs `forge automerge`. It gives no approving review, since
   GitHub refuses one from the CR's author, and `forge approve` refuses. `init` writes a trunk ruleset
   that needs no approving review and pins every required check to GitHub Actions. The
