@@ -12,7 +12,7 @@ Feature: What every board adapter does the same way
       And the ticket is at "Backlog"
       When the factory moves the ticket "<id>" to "In progress" only from "Ready"
       Then the move is refused because the ticket has moved
-      And no call includes "<write>"
+      And no call includes '<write>'
 
       Examples:
         | adapter | id     | write                 |

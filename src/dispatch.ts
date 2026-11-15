@@ -1,4 +1,4 @@
-// agentic-sdlc dispatch <skill>[/<step>] [--ticket <id>] [--cr <n>] (at least one) [--workdir <d>] [--run-model <id>] [--unattended]: start the step's executor.
+// agentic-sdlc dispatch <skill>[/<step>] [--ticket <id>] [--cr <n>] (at least one) [--run <id>] [--workdir <d>] [--run-model <id>] [--unattended]: start the step's executor.
 import { spawn } from 'node:child_process';
 import { chmodSync, closeSync, lstatSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -151,13 +151,16 @@ const need = <T>(v: T | undefined, name: string): T => {
   return v;
 };
 
+/** The flags `dispatch` takes. */
+export const FLAGS = ['ticket', 'cr', 'workdir', 'run', 'run-model', 'unattended'];
+
 export const cli: PortCli = async (argv, ctx) => {
   let onFail: (() => Promise<unknown>) | undefined;
   let sent = false;
   try {
     const f: Record<string, string> = {};
     const pos: string[] = [];
-    const KNOWN = ['ticket', 'cr', 'workdir', 'run', 'run-model', 'unattended'];
+    const KNOWN = FLAGS;
     for (let i = 0; i < argv.length; i++) {
       if (!argv[i].startsWith('--')) { pos.push(argv[i]); continue; }
       const [name, inline] = argv[i].slice(2).split(/=(.*)/s, 2) as [string, string | undefined];

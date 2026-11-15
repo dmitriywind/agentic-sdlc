@@ -381,18 +381,17 @@ const USAGE = [
 
 const readJson = (p: string) => JSON.parse(readFileSync(p, 'utf8'));
 
+/** The flags `bench` takes (a verb reads the ones it needs). */
+export const OPTIONS = {
+  limit: { type: 'string' }, model: { type: 'string' }, executor: { type: 'string' }, factory: { type: 'string' }, cases: { type: 'string' }, 'dry-run': { type: 'boolean' },
+  'merged-limit': { type: 'string' }, since: { type: 'string' }, suite: { type: 'string' }, paths: { type: 'string', multiple: true }, 'per-size': { type: 'string' }, n: { type: 'string' }, trials: { type: 'string' }, 'allow-over-budget': { type: 'boolean' },
+} as const;
+
 export const cli: PortCli = async (argv, ctx) => {
   const [verb, ...rest] = argv;
   let a;
   try {
-    a = parseArgs({
-      args: rest,
-      options: {
-        limit: { type: 'string' }, model: { type: 'string' }, executor: { type: 'string' }, factory: { type: 'string' }, cases: { type: 'string' }, 'dry-run': { type: 'boolean' },
-        'merged-limit': { type: 'string' }, since: { type: 'string' }, suite: { type: 'string' }, paths: { type: 'string', multiple: true }, 'per-size': { type: 'string' }, n: { type: 'string' }, trials: { type: 'string' }, 'allow-over-budget': { type: 'boolean' },
-      },
-      allowPositionals: true,
-    });
+    a = parseArgs({ args: rest, options: OPTIONS, allowPositionals: true });
   } catch (e) {
     console.error(flagError(e as Error));
     return 2;

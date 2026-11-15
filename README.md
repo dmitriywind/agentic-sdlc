@@ -17,16 +17,19 @@ step through a ticket in six scenarios, and get your setup command.
 ## Quick start
 
 ```bash
-npm i -D --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0
-npx --no agentic-sdlc init --profile individual --harness claude --board github-issues
-npx --no agentic-sdlc doctor
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init --profile individual --harness claude --board github-issues
+.agents/bin/agentic-sdlc doctor
 ```
 
-Needs Node 22.18 or later. npm 12 refuses Git dependencies without `--allow-git`; older npm versions
-that do not know the flag can drop it. The CLI installs from Git only. Warning: the npm package
-`agentic-sdlc` is a different project; do not install it. Before `doctor` passes, set `heartbeat.ticket` in `.agents/binding.yml` (and the board options for Jira,
-Linear or a GitHub Project; `init` reads the repo from `git remote origin`). `npx --no agentic-sdlc` lists
-every group and `npx --no agentic-sdlc <group> --help` its verbs; `npx --no agentic-sdlc -- --version` prints the version (without the `--`, npx takes the flag). The board, forge, vcs and gate verbs print JSON; `init`, `validate` and `doctor` print text. Exit 0 is
+Needs Node 22.18 or later. The first command runs the package once: `init` writes the pin
+`.agents/cli.json` and the launcher `.agents/bin/agentic-sdlc`, and adds `.agents/.cli/` to `.gitignore`. From then on
+everything runs through the launcher, which installs the pinned CLI on first use. `init` writes nothing into your
+`package.json` or `.npmrc`, and a product that is not a Node project needs neither. To upgrade, run the new
+package's `init --upgrade`: it rewrites `.agents/cli.json` and the templates in one factory change. npm 12 refuses
+Git dependencies without `--allow-git`; older npm versions that do not know the flag can drop it. The CLI installs
+from Git only. Warning: the npm package `agentic-sdlc` is a different project; do not install it. Before `doctor` passes, set `heartbeat.ticket` in `.agents/binding.yml` (and the board options for Jira,
+Linear or a GitHub Project; `init` reads the repo from `git remote origin`). `.agents/bin/agentic-sdlc` lists
+every group and `.agents/bin/agentic-sdlc <group> --help` its verbs; `.agents/bin/agentic-sdlc --version` prints the version. The board, forge, vcs and gate verbs print JSON; `init`, `validate` and `doctor` print text. Exit 0 is
 success, 1 is a refused or failed action, 2 is a usage error.
 
 On Claude Code, also install the plugin (skills, the guard hook, the MCP server):
