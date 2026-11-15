@@ -71,7 +71,7 @@ const VERBS: Record<string, VerbSpec> = {
   assign: { bool: ['none'] },
   milestone: { bool: ['clear'] },
   comment: { value: ['body-file'] },
-  comments: { value: ['last', 'marker', 'author'], bool: ['trusted'] },
+  comments: { value: ['last', 'marker', 'author'], bool: ['trusted'], num: ['last'] },
   close: { value: ['reason'] },
   child: {},
 };
@@ -135,6 +135,7 @@ export const cli: PortCli = async (argv, base) => {
       }
       case 'milestone':
         need(a.has('clear') ? 1 : 2);
+        if (a.has('clear') && a.pos.length > 1) throw new Usage('board milestone: a name and --clear together');
         out = await board.milestone(id, a.has('clear') ? null : a.pos[1]);
         break;
       case 'child': need(2); out = await board.child(id, a.pos[1]); break;

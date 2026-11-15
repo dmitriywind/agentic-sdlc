@@ -274,6 +274,7 @@ async function init(root: string, argv: string[], log: string[]) {
   if (noPlugin) inst.skills('skills', '.claude/skills');
   else for (const n of filesUnder(skills)) inst.skip(join('.claude/skills', n));
   const pinned = pinCli(root, version, force, log);
+  const pinMoved = log.some((l) => l.startsWith('set devDependencies.agentic-sdlc='));
   if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, pinned ? ['--no-install', 'agentic-sdlc', 'mcp'] : ['-y', ALLOW_GIT, gitSpec(version), 'mcp'], force, log);
   else log.push('MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)');
   const scorers = join(pkg, 'scorers');
@@ -371,6 +372,7 @@ async function init(root: string, argv: string[], log: string[]) {
   const s = cur.indexOf(START), e = cur.indexOf(END);
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, '\n\n') : '') + POINTER + '\n';
   if (next !== cur) writeFileSync(agents, next);
+  const agentsChanged = next !== cur;
   log.push('updated AGENTS.md');
   if (harness === 'claude') claudeSetup(root, inst, log, noPlugin);
   else for (const tier of TIERS) inst.skip(`.claude/agents/sdlc-${tier}.md`);
@@ -379,7 +381,9 @@ async function init(root: string, argv: string[], log: string[]) {
   if (missing) log.push(missing);
   const c = inst.counts;
   log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept with local edits, ${c.stale} stale`);
-  if (hadBinding) log.push('upgrade: run npm install to fetch the pinned CLI, review the kept files, then run agentic-sdlc validate and agentic-sdlc doctor');
+  const changed = c.wrote + c.updated > 0 || pinMoved || agentsChanged;
+  if (hadBinding && !changed) log.push('install: up to date');
+  else if (hadBinding) log.push('upgrade: run npm install to fetch the pinned CLI, review the kept files, then run agentic-sdlc validate and agentic-sdlc doctor');
 }
 
 /** Binding problems plus skill frontmatter problems; skill warnings go into `warnings`. */
@@ -539,7 +543,7 @@ export const cli: PortCli = async (argv, ctx) => {
       const c = { ...ctx, binding };
       const probes: [string, () => Promise<unknown>][] = [
         ['board.list', () => createBoard({ ...c, options: binding.board.options }).list()],
-        ['forge.list', () => createForge({ ...c, options: binding.forge.options }).list()],
+        ['forge.list', () => createForge({ ...c, options: binding.forge.options }).list({ checks: true, limit: 1 })],
         ['vcs.head', () => createVcs({ ...c, options: binding.vcs.options ?? {} }).head()],
       ];
       let bad = 0;

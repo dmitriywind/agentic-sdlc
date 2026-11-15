@@ -281,10 +281,14 @@ const trailerValue = (t: Record<string, string[]>, key: string): string | undefi
   return v.length === 1 && TRAILER_VALUE.test(v[0]) ? v[0] : undefined;
 };
 
+/** The forge's own web identity: it commits the merge a branch update makes (GitHub's `web-flow`). Only the login the forge verified counts: a committer email is the committer's own claim. */
+const FORGE_WEB = new Set(['web-flow']);
+
 /**
  * Status `agent-provenance` (forge.provenance: off | warn | require, default off). Every commit of the CR
  * whose author or committer is in owners.bots needs well-formed `Agent-Run` and `Agent-Model` trailers; other
- * authors' commits are listed as human, a merge commit (the forge's branch update) as merge. warn reports and
+ * authors' commits are listed as human, a merge commit made by the forge's own web identity (its branch update) as merge.
+ * Any other merge commit is checked like a commit of its author. warn reports and
  * succeeds; require fails on any agent commit without them, and on commits it cannot read. No CR code runs.
  */
 export async function provenance(d: Deps, n: string) {
@@ -300,7 +304,7 @@ export async function provenance(d: Deps, n: string) {
     const sha = c.sha.slice(0, 12);
     // A commit the forge links to no account is matched by the name git recorded.
     const names = [c.author || c.authorName, c.committer || c.committerName].map((u) => u.toLowerCase());
-    if (c.parents > 1) return { sha, by: 'merge' as const, ok: true };
+    if (c.parents > 1 && FORGE_WEB.has(c.committer.toLowerCase())) return { sha, by: 'merge' as const, ok: true };
     if (!names.some((u) => bots.has(u))) return { sha, by: 'human' as const, ok: true };
     const t = trailers(c.message);
     const run = trailerValue(t, 'agent-run'), model = trailerValue(t, 'agent-model');

@@ -604,6 +604,24 @@ test('gate evidence: runs commands.evidence_check with the sha; empty product.ev
   assert.ok((ran as string[]).some((c) => /check ["']?abc123["']?/.test(c)), ran.join('|'));
 });
 
+test('gate cli: --k=v is the same as --k v', async () => {
+  const { cli } = await import('../src/gates.ts');
+  const out: string[] = [], err: string[] = [];
+  const w = process.stdout.write, e = process.stderr.write;
+  process.stdout.write = ((s: string) => { out.push(String(s)); return true; }) as any;
+  process.stderr.write = ((s: string) => { err.push(String(s)); return true; }) as any;
+  try {
+    const ctx: any = { binding: { board: { adapter: 'local', options: {} }, forge: { adapter: 'github', options: { repo: 'o/r' } }, vcs: { adapter: 'git', trunk: 'main' } }, root: '.', exec: () => '', env: {} };
+    const first = await cli(['provenance', '--cr=1'], ctx);
+    assert.equal(first, 0, err.join(''));
+    assert.equal(await cli(['provenance', '--cr', '1'], ctx), 0);
+    assert.equal(await cli(['provenance', '--cr'], ctx), 2);
+  } finally { process.stdout.write = w; process.stderr.write = e; }
+  assert.equal(JSON.parse(out[0]).cr, '1');
+  assert.deepEqual(out[0], out[1]);
+  assert.match(err.join(''), /--cr needs a value/);
+});
+
 test('shipped: a failure with one environment returns the tickets of the failed revision to Not shipped', async () => {
   const f = fakes([item('1', 'Done', { shipped: 'In release', release_version: '1' })], { m1: { state: 'merged', closes: ['1'], mergeSha: 'm1' } });
   f.d.binding = { ...binding, product: { environments: ['production'] } } as any;
@@ -670,17 +688,30 @@ test('provenance: agent commits with well-formed trailers pass; human and merge 
     commit('a'.repeat(40), 'bot[bot]', `fix: x${TRAILERS}`),
     commit('b'.repeat(40), 'alice', 'fix: y'),
     commit('c'.repeat(40), 'AGENT', `fix: z${TRAILERS}`),
-    commit('d'.repeat(40), 'bot[bot]', "Merge branch 'main' into 12/x", 2),
+    { ...commit('d'.repeat(40), 'bot[bot]', "Merge branch 'main' into 12/x", 2), committer: 'web-flow', committerName: 'GitHub' },
+    { ...commit('e'.repeat(40), 'alice', "Merge branch 'main' into 12/x", 2), committer: '', committerEmail: 'noreply@github.com' },
   ]);
   const r = await provenance(f.d, 'c') as any;
   assert.equal(r.ok, true);
   assert.equal(r.agentCommits, 2);
-  assert.equal(r.humanCommits, 1);
-  assert.deepEqual(r.commits.map((c: any) => c.by), ['agent', 'human', 'agent', 'merge']);
+  assert.equal(r.humanCommits, 2);
+  assert.deepEqual(r.commits.map((c: any) => c.by), ['agent', 'human', 'agent', 'merge', 'human']);
   assert.equal(r.commits[0].run, '12-implement-spec-r1');
   assert.equal(r.commits[0].model, 'claude-sonnet-5-5');
   assert.deepEqual(r.missing, []);
   assert.deepEqual(f.statuses.map((s) => [s.sha, s.context, s.state]), [['h1', 'agent-provenance', 'success']]);
+});
+
+test('provenance: a merge commit by anyone but the forge web identity is checked like an agent commit', async () => {
+  const f = provFakes('require', [
+    commit('a'.repeat(40), 'bot[bot]', "Merge branch 'main' into 12/x", 2),
+    { ...commit('b'.repeat(40), 'bot[bot]', 'Merge x', 2), committer: 'alice', committerEmail: 'alice@example.com' },
+    commit('c'.repeat(40), 'alice', 'Merge y', 2),
+  ]);
+  const r = await provenance(f.d, 'c') as any;
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.commits.map((c: any) => c.by), ['agent', 'agent', 'human']);
+  assert.match(r.errors.join('\n'), /aaaaaaaaaaaa: Agent-Run trailer is missing/);
 });
 
 test('provenance: a missing, malformed or body-only trailer fails under require and passes under warn', async () => {

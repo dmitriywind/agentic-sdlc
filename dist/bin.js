@@ -7623,6 +7623,20 @@ function retryWait(retryAfter, attempt, now = Date.now()) {
   }
   return Math.min(MAX_WAIT_MS, Math.max(0, ms));
 }
+function scrubUrl(message, ...urls) {
+  let out = message.replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, "<url>");
+  for (const u of urls) {
+    if (!u) continue;
+    const parts = [u];
+    try {
+      const x = new URL(u);
+      parts.push(x.origin, x.username, x.password);
+    } catch {
+    }
+    for (const p of parts.sort((a, b) => b.length - a.length)) if (p.length > 2) out = out.split(p).join("<url>");
+  }
+  return out;
+}
 function ghReads(args) {
   if (args[0] === "api") {
     const i = args.findIndex((a) => a === "-X" || a === "--method");
@@ -7655,14 +7669,21 @@ var init_exec = __esm({
     TRIES = 3;
     MAX_WAIT_MS = 3e4;
     http = async (method, url, opts = {}) => {
+      const tries = opts.tries ?? TRIES;
       for (let attempt = 1; ; attempt++) {
-        const res = await fetch(url, {
-          method,
-          headers: { "content-type": "application/json", accept: "application/json", ...opts.headers },
-          body: opts.body === void 0 ? void 0 : JSON.stringify(opts.body),
-          signal: AbortSignal.timeout(HTTP_TIMEOUT_MS)
-        });
-        const text = await res.text();
+        let res, text;
+        try {
+          res = await fetch(url, {
+            method,
+            headers: { "content-type": "application/json", accept: "application/json", ...opts.headers },
+            body: opts.body === void 0 ? void 0 : JSON.stringify(opts.body),
+            signal: AbortSignal.timeout(opts.timeoutMs ?? HTTP_TIMEOUT_MS)
+          });
+          text = await res.text();
+        } catch (e) {
+          const cause = e.cause?.message;
+          throw new Error(scrubUrl(`${method} request failed: ${e.message}${cause ? ` (${cause})` : ""}`, url));
+        }
         if (res.ok) {
           try {
             return text ? JSON.parse(text) : {};
@@ -7671,7 +7692,7 @@ var init_exec = __esm({
           }
         }
         const retry = res.status === 429 || res.status >= 500 && method.toUpperCase() !== "POST";
-        if (!retry || attempt >= TRIES) throw new Error(`${method} ${new URL(url).host} -> ${res.status}: ${text.slice(0, 300)}`);
+        if (!retry || attempt >= tries) throw new Error(`${method} ${new URL(url).host} -> ${res.status}: ${text.slice(0, 300)}`);
         await sleep(retryWait(res.headers.get("retry-after"), attempt));
       }
     };
@@ -7729,7 +7750,11 @@ import { readFileSync as readFileSync2 } from "fs";
 function parseStrict(group, verb, argv, spec = {}) {
   const pos = [];
   const flags = {};
-  const value = spec.value ?? [], bool = spec.bool ?? [];
+  const value = spec.value ?? [], bool = spec.bool ?? [], num = spec.num ?? [];
+  const push = (k, v) => {
+    if (num.includes(k) && !/^\d+$/.test(v)) throw new UsageError(`--${k} needs a whole number, got '${v}'`);
+    (flags[k] ??= []).push(v);
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith("--") || a.length <= 2) {
@@ -7742,10 +7767,10 @@ function parseStrict(group, verb, argv, spec = {}) {
       if (eq >= 0) throw new UsageError(`--${k} takes no value`);
       (flags[k] ??= []).push("true");
     } else if (value.includes(k)) {
-      if (eq >= 0) (flags[k] ??= []).push(a.slice(eq + 1));
+      if (eq >= 0) push(k, a.slice(eq + 1));
       else {
         if (i + 1 >= argv.length) throw new UsageError(`--${k} needs a value`);
-        (flags[k] ??= []).push(argv[++i]);
+        push(k, argv[++i]);
       }
     } else throw new UsageError(`unknown flag --${k} for ${group} ${verb}`);
   }
@@ -7776,8 +7801,12 @@ function parseArgs(argv, bool = []) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith("--") && a.length > 2) {
-      const k = a.slice(2);
-      if (bool.includes(k)) (flags[k] ??= []).push("true");
+      const eq = a.indexOf("=");
+      const k = a.slice(2, eq < 0 ? void 0 : eq);
+      if (bool.includes(k)) {
+        if (eq >= 0) throw new UsageError(`--${k} takes no value`);
+        (flags[k] ??= []).push("true");
+      } else if (eq >= 0) (flags[k] ??= []).push(a.slice(eq + 1));
       else {
         if (i + 1 >= argv.length) throw new UsageError(`--${k} needs a value`);
         (flags[k] ??= []).push(argv[++i]);
@@ -8664,7 +8693,7 @@ var init_board = __esm({
       assign: { bool: ["none"] },
       milestone: { bool: ["clear"] },
       comment: { value: ["body-file"] },
-      comments: { value: ["last", "marker", "author"], bool: ["trusted"] },
+      comments: { value: ["last", "marker", "author"], bool: ["trusted"], num: ["last"] },
       close: { value: ["reason"] },
       child: {}
     };
@@ -8752,6 +8781,7 @@ var init_board = __esm({
           }
           case "milestone":
             need3(a.has("clear") ? 1 : 2);
+            if (a.has("clear") && a.pos.length > 1) throw new Usage("board milestone: a name and --clear together");
             out = await board.milestone(id, a.has("clear") ? null : a.pos[1]);
             break;
           case "child":
@@ -8972,7 +9002,7 @@ function github(ctx) {
     },
     async commits(n) {
       n = num(n);
-      const out = await gh(["api", "--paginate", `${api}/pulls/${n}/commits?per_page=100`, "--jq", '.[] | {sha: .sha, message: .commit.message, author: (.author.login // ""), committer: (.committer.login // ""), authorName: (.commit.author.name // ""), committerName: (.commit.committer.name // ""), parents: (.parents | length)}']);
+      const out = await gh(["api", "--paginate", `${api}/pulls/${n}/commits?per_page=100`, "--jq", '.[] | {sha: .sha, message: .commit.message, author: (.author.login // ""), committer: (.committer.login // ""), authorName: (.commit.author.name // ""), committerName: (.commit.committer.name // ""), committerEmail: (.commit.committer.email // ""), parents: (.parents | length)}']);
       const rows = out.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
       if (rows.length >= 250) throw new Error(`forge: CR ${n} has ${rows.length} or more commits; the forge lists at most 250`);
       return rows;
@@ -9037,14 +9067,14 @@ var init_forge = __esm({
       open: { value: ["source", "title", "body-file"], bool: ["draft"] },
       view: { value: ["sha"] },
       diff: {},
-      list: { value: ["state", "limit", "since"], bool: ["checks"] },
+      list: { value: ["state", "limit", "since"], bool: ["checks"], num: ["limit"] },
       ready: {},
       draft: {},
       sync: {},
       automerge: {},
       cut: {},
       comment: { value: ["body-file"] },
-      comments: { value: ["last", "marker", "author"], bool: ["trusted"] },
+      comments: { value: ["last", "marker", "author"], bool: ["trusted"], num: ["last"] },
       status: { value: ["state", "context", "description", "url"] },
       approve: {},
       approvals: {},
@@ -9504,6 +9534,7 @@ async function init(root, argv, log) {
   if (noPlugin) inst.skills("skills", ".claude/skills");
   else for (const n of filesUnder(skills)) inst.skip(join4(".claude/skills", n));
   const pinned = pinCli(root, version3, force, log);
+  const pinMoved = log.some((l) => l.startsWith("set devDependencies.agentic-sdlc="));
   if (harness !== "claude" || noPlugin) registerMcp(pkg, root, harness, pinned ? ["--no-install", "agentic-sdlc", "mcp"] : ["-y", ALLOW_GIT, gitSpec(version3), "mcp"], force, log);
   else log.push("MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)");
   const scorers = join4(pkg, "scorers");
@@ -9589,6 +9620,7 @@ async function init(root, argv, log) {
   const s = cur.indexOf(START), e = cur.indexOf(END);
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, "\n\n") : "") + POINTER + "\n";
   if (next !== cur) writeFileSync2(agents, next);
+  const agentsChanged = next !== cur;
   log.push("updated AGENTS.md");
   if (harness === "claude") claudeSetup(root, inst, log, noPlugin);
   else for (const tier of TIERS2) inst.skip(`.claude/agents/sdlc-${tier}.md`);
@@ -9597,7 +9629,9 @@ async function init(root, argv, log) {
   if (missing) log.push(missing);
   const c = inst.counts;
   log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept with local edits, ${c.stale} stale`);
-  if (hadBinding) log.push("upgrade: run npm install to fetch the pinned CLI, review the kept files, then run agentic-sdlc validate and agentic-sdlc doctor");
+  const changed = c.wrote + c.updated > 0 || pinMoved || agentsChanged;
+  if (hadBinding && !changed) log.push("install: up to date");
+  else if (hadBinding) log.push("upgrade: run npm install to fetch the pinned CLI, review the kept files, then run agentic-sdlc validate and agentic-sdlc doctor");
 }
 function validate(root, warnings = []) {
   const problems = [];
@@ -9890,7 +9924,7 @@ ${END}`;
           const c = { ...ctx, binding };
           const probes = [
             ["board.list", () => createBoard({ ...c, options: binding.board.options }).list()],
-            ["forge.list", () => createForge({ ...c, options: binding.forge.options }).list()],
+            ["forge.list", () => createForge({ ...c, options: binding.forge.options }).list({ checks: true, limit: 1 })],
             ["vcs.head", () => createVcs({ ...c, options: binding.vcs.options ?? {} }).head()]
           ];
           let bad = 0;
@@ -10058,6 +10092,14 @@ function sinkOf(b, env, kind) {
   if (!name) return void 0;
   const url = env[name];
   if (!url) throw new Error(`telemetry: env var ${name} is empty`);
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error(`telemetry: env var ${name} is not a valid http(s) URL`);
+  }
+  if (!/^https?:$/.test(u.protocol)) throw new Error(`telemetry: env var ${name} is not a valid http(s) URL`);
+  if (u.username || u.password) throw new Error(`telemetry: env var ${name} must not hold credentials in the URL: use the headers variable`);
   const h = t?.headers_env ? env[t.headers_env] : void 0;
   return { url: kind === "otlp" ? `${url.replace(/\/+$/, "")}/v1/traces` : url, headers: h ? parseHeaders(h) : {} };
 }
@@ -10068,32 +10110,41 @@ async function sendOtlp(ctx, doc) {
   const n = Number(r?.partialSuccess?.rejectedSpans ?? 0);
   if (n > 0) throw new Error(`the OTLP endpoint rejected ${n} span(s): ${String(r.partialSuccess.errorMessage ?? "").slice(0, 200)}`);
 }
-async function sendCdEvent(ctx, ev) {
+async function sendCdEvent(ctx, ev, send = {}) {
   const s = sinkOf(ctx.binding, ctx.env, "cdevents");
   if (!s) throw new Error("telemetry.cdevents_sink_env is unset in the binding: nothing to send to");
   const c = ev.context;
   const headers = { "ce-specversion": "1.0", "ce-id": c.id, "ce-source": c.source, "ce-type": c.type, "ce-time": c.timestamp, "ce-subject": ev.subject.id, ...s.headers };
-  await ctx.http("POST", s.url, { headers, body: ev });
+  await ctx.http("POST", s.url, { headers, body: ev, ...send });
 }
 async function emitGateEvent(ctx, ev, warn = (l) => process.stderr.write(`${l}
-`)) {
+`), deadlineMs = GATE_TELEMETRY_DEADLINE_MS) {
+  let timer;
   try {
-    if (!ctx.binding.telemetry?.cdevents_sink_env) return false;
+    const name = ctx.binding.telemetry?.cdevents_sink_env;
+    if (!name) return false;
     if ("skip" in ev) {
       warn(`telemetry: CDEvent not sent: ${ev.skip}`);
       return false;
     }
-    await sendCdEvent(ctx, ev);
+    const late = new Promise((_, rej) => {
+      timer = setTimeout(() => rej(new Error(`no answer within ${deadlineMs} ms`)), deadlineMs);
+    });
+    await Promise.race([sendCdEvent(ctx, ev, { tries: 1, timeoutMs: deadlineMs }), late]);
     return true;
   } catch (e) {
-    warn(`telemetry: CDEvent not sent: ${e.message.split("\n")[0].slice(0, 200)}`);
+    const name = ctx.binding.telemetry?.cdevents_sink_env;
+    warn(`telemetry: CDEvent not sent: ${scrubUrl(e.message.split("\n")[0], name ? ctx.env[name] : void 0).slice(0, 200)}`);
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
-var GENAI, NS, SCOPE_NAME, SPAN_KIND_INTERNAL, STATUS_ERROR, CDEVENTS, sha256, traceId, spanId, anyValue, attrs, nano, repoOf, repoRef, sourceOf, iso, cd, cdOutcome, changeMergedEvent;
+var GENAI, NS, SCOPE_NAME, SPAN_KIND_INTERNAL, STATUS_ERROR, CDEVENTS, sha256, traceId, spanId, anyValue, attrs, nano, repoOf, repoRef, sourceOf, iso, cd, cdOutcome, changeMergedEvent, GATE_TELEMETRY_DEADLINE_MS;
 var init_telemetry = __esm({
   "src/telemetry.ts"() {
     "use strict";
+    init_exec();
     GENAI = {
       schemaUrl: "https://opentelemetry.io/schemas/gen-ai-dev/1.42.0-dev",
       stability: "development",
@@ -10145,6 +10196,7 @@ var init_telemetry = __esm({
     });
     cdOutcome = (o) => o === "done" ? "success" : o === "timeout" || o === "capped" ? "cancel" : "failure";
     changeMergedEvent = (b, o) => cd(b, CDEVENTS.type.changeMerged, o.cr, o.at ?? Date.now(), o.sha, { ...repoRef(b) ? { repository: repoRef(b) } : {} });
+    GATE_TELEMETRY_DEADLINE_MS = 5e3;
   }
 });
 
@@ -10387,7 +10439,7 @@ async function provenance(d, n) {
   const commits = (list ?? []).map((c) => {
     const sha2 = c.sha.slice(0, 12);
     const names = [c.author || c.authorName, c.committer || c.committerName].map((u) => u.toLowerCase());
-    if (c.parents > 1) return { sha: sha2, by: "merge", ok: true };
+    if (c.parents > 1 && FORGE_WEB.has(c.committer.toLowerCase())) return { sha: sha2, by: "merge", ok: true };
     if (!names.some((u) => bots.has(u))) return { sha: sha2, by: "human", ok: true };
     const t = trailers(c.message);
     const run = trailerValue(t, "agent-run"), model = trailerValue(t, "agent-model");
@@ -10665,7 +10717,7 @@ function scorerErrors(f, text) {
   if (!["pass-fail", "0-4"].includes(fm.scale)) errors.push(`scorers/${f}: scale ${fm.scale} invalid`);
   return errors;
 }
-var import_yaml3, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tierOf, withoutTier, nameHas, esc, patternRe, readDiff, DEPENDENCY_LINES, DEPENDENCY_BOTS, TRAILER_LINE, TRAILER_VALUE, trailerValue, redact2, cleanUrl, cli5;
+var import_yaml3, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tierOf, withoutTier, nameHas, esc, patternRe, readDiff, DEPENDENCY_LINES, DEPENDENCY_BOTS, TRAILER_LINE, TRAILER_VALUE, trailerValue, FORGE_WEB, redact2, cleanUrl, cli5;
 var init_gates = __esm({
   "src/gates.ts"() {
     "use strict";
@@ -10698,6 +10750,7 @@ var init_gates = __esm({
       const v = [...new Set(t[key] ?? [])];
       return v.length === 1 && TRAILER_VALUE.test(v[0]) ? v[0] : void 0;
     };
+    FORGE_WEB = /* @__PURE__ */ new Set(["web-flow"]);
     redact2 = (s, max = 120) => String(s ?? "").replace(/[\x00-\x1f]/g, " ").replace(/\b[A-Za-z0-9_+/=-]{32,}\b/g, "[redacted]").slice(0, max);
     cleanUrl = (u) => redact2(String(u ?? "").replace(/^(\w+:\/\/)[^/@]*@/, "$1").replace(/[?#].*$/, ""), 200);
     cli5 = (argv, base) => guard(async () => {
@@ -10864,6 +10917,10 @@ function pickRescores(rescores) {
 }
 function applyRescores(r, m) {
   if (!m) return r;
+  if (m.get(SCORE_SCORER) === "unscorable" && hardFacts(r)) {
+    m = new Map(m);
+    m.delete(SCORE_SCORER);
+  }
   const s = m.get(SCORE_SCORER);
   const { score: _old, ...rest } = r;
   return { ...s === "unscorable" ? rest : r, scores: { ...r.scores, ...Object.fromEntries(m) }, ...typeof s === "number" ? { score: s } : {} };
@@ -11027,6 +11084,7 @@ function scoresComment(p, file, at = (/* @__PURE__ */ new Date()).toISOString())
   for (const [k, v] of Object.entries(scores)) {
     const s = p.scorers.find((x) => x.name === k);
     if (!s) errors.push(`scorer ${k} does not apply to ${p.run.skill} (applies: ${p.scorers.map((x) => x.name).join(", ")})`);
+    else if (v === "unscorable" && k === SCORE_SCORER && p.cap) errors.push(`scorer ${k}: unscorable is not allowed while a hard fact caps the run (${p.cap.facts.join("; ")}): grade it 0 to ${p.cap.score}`);
     else if (v === "unscorable") {
       if (!(typeof reasonOf[k] === "string" && reasonOf[k].trim())) errors.push(`scorer ${k}: unscorable needs a reason in reasons.${k}`);
     } else if (s.scale === "pass-fail" ? v !== "pass" && v !== "fail" : !(Number.isInteger(v) && v >= 0 && v <= 4)) errors.push(`scorer ${k}: ${JSON.stringify(v)} is not on scale ${s.scale}`);
@@ -11088,8 +11146,14 @@ async function measures(o) {
   const slo = b.product.slo;
   let errorBudget;
   if (slo) {
-    const actual = changeFailures(items, b, slo.window_days, now).rate;
-    errorBudget = { max: slo.change_failure_rate_max, windowDays: slo.window_days, actual: round(actual), exhausted: actual !== null && actual > slo.change_failure_rate_max };
+    const w = changeFailures(items, b, slo.window_days, now);
+    errorBudget = {
+      max: slo.change_failure_rate_max,
+      windowDays: slo.window_days,
+      actual: round(w.rate),
+      exhausted: w.rate !== null ? w.rate > slo.change_failure_rate_max : w.failures.length > 0,
+      ...w.rate === null && w.failures.length ? { why: "change failures in the window and no change shipped to the last environment" } : {}
+    };
   }
   return {
     window: { days, from: new Date(from).toISOString(), to: new Date(now).toISOString() },
@@ -11238,6 +11302,7 @@ var init_ledger = __esm({
             else console.log(JSON.stringify(doc));
           } else {
             const events = cdEventsFromRuns(rows2, meta, b);
+            if (a.values.send && !sinkOf(b, ctx.env, "cdevents")) throw new Error("telemetry.cdevents_sink_env is unset in the binding: nothing to send to");
             if (a.values.send) {
               for (const ev of events) await sendCdEvent(ctx, ev);
               console.log(JSON.stringify({ sent: "cdevents", events: events.length }));
@@ -11348,7 +11413,9 @@ async function buildCases(board, forge, binding, limit, o = {}) {
   const isTest = rule(binding, "proof_pattern", PROOF_FILE);
   const trusted = specAuthors(binding).map((a) => a.toLowerCase());
   const mergedLimit = o.mergedLimit ?? (Number.isFinite(limit) ? Math.max(100, limit * 10) : 500);
-  const merged2 = (await forge.list({ state: "merged", limit: mergedLimit, since: o.since })).filter((c) => c.state === "merged");
+  const read = await forge.list({ state: "merged", limit: mergedLimit, since: o.since });
+  if (read.length >= mergedLimit) console.error(`bench: read the newest ${mergedLimit} merged CRs; older CRs were not read. Raise the cap with --merged-limit <n> or narrow the window with --since <date>.`);
+  const merged2 = read.filter((c) => c.state === "merged");
   const tickets = (await board.list({ status: binding.board.done_statuses })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const cases = [];
   for (const t of tickets) {

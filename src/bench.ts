@@ -127,7 +127,9 @@ export async function buildCases(board: Board, forge: Forge, binding: Binding, l
   const trusted = specAuthors(binding).map((a) => a.toLowerCase());
   // Not every merged CR ever: the newest ones, enough to match the Done tickets the suite takes (--merged-limit, --since).
   const mergedLimit = o.mergedLimit ?? (Number.isFinite(limit) ? Math.max(100, limit * 10) : 500);
-  const merged = (await forge.list({ state: 'merged', limit: mergedLimit, since: o.since })).filter((c) => c.state === 'merged');
+  const read = await forge.list({ state: 'merged', limit: mergedLimit, since: o.since });
+  if (read.length >= mergedLimit) console.error(`bench: read the newest ${mergedLimit} merged CRs; older CRs were not read. Raise the cap with --merged-limit <n> or narrow the window with --since <date>.`);
+  const merged = read.filter((c) => c.state === 'merged');
   const tickets = (await board.list({ status: binding.board.done_statuses })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const cases: BenchCase[] = [];
   for (const t of tickets) {

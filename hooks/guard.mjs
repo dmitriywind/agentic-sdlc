@@ -20,7 +20,7 @@ try { input = JSON.parse(readFileSync(0, 'utf8') || '{}'); } catch { process.exi
 const dir = input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const review = process.env.AGENTIC_SDLC_ROLE === 'review';
 const status = review || process.env.AGENTIC_SDLC_ALLOW_STATUS === '1';
-// The sdlc-reviewer agent (plugin-scoped agent_type) runs only the agentic-sdlc CLI in Bash: review-pr never runs the CR's code.
+// The sdlc-reviewer agent (plugin-scoped agent_type) runs only the agentic-sdlc CLI from PATH in Bash: review-pr never runs the CR's code.
 const reviewer = /(^|:)sdlc-reviewer$/.test(input.agent_type ?? '');
 const REVIEWER = 'the sdlc-reviewer agent runs only agentic-sdlc commands in Bash: review-pr never runs the change request\'s code.';
 const APPROVE = 'forge approve is for the review runtime only (AGENTIC_SDLC_ROLE=review).';
@@ -84,17 +84,30 @@ const scan = (cmd) => {
   return segs;
 };
 
+// The reviewer's one allowed shape: a command word that is exactly `agentic-sdlc`, or `npx [--no|--no-install] agentic-sdlc`.
+const reviewerOk = (tt, seg) => {
+  if (seg.subst || tt.some((x) => x.dyn)) return false;
+  const t = tt.map((x) => x.s);
+  if (t[0] === 'agentic-sdlc') return true;
+  if (t[0] !== 'npx') return false;
+  let i = 1;
+  while (t[i] === '--no' || t[i] === '--no-install') i++;
+  return t[i] === 'agentic-sdlc';
+};
 const lit = (p, base) => (p.startsWith('~') ? join(homedir(), p.slice(1)) : resolve(base, p));
 const pushy = PUSH_WORD.test(command);
 let cwd = dir; // where the next command runs; null when a cd went to a path that is not a literal, existing directory
-for (const seg of scan(command)) {
+// The reviewer's command is scanned with its /dev/null redirections removed; any other redirection or `$` or backtick blocks it.
+const scanned = reviewer ? command.replace(/\s\d*>>?\s*\/dev\/null/g, '').replace(/\s2>&1/g, '') : command;
+if (reviewer && /[<>$`]/.test(scanned)) block(REVIEWER);
+for (const seg of scan(scanned)) {
   const tt = seg.t, t = tt.map((x) => x.s);
   let ci = 0;
   while (ci < t.length && /^[A-Za-z_]\w*=/.test(t[ci])) ci++;
   const envMoved = t.slice(0, ci).some((x) => /^GIT_(DIR|WORK_TREE)=/.test(x));
   if (t[ci] === 'builtin') ci++;
   const cmd = t[ci] ?? '';
-  if (reviewer && t.length && !(!tt[ci]?.dyn && !seg.subst && (CLI.test(cmd) || (/(^|[/\\])(npx|node)$/.test(cmd) && t.slice(ci + 1, ci + 4).some((x) => CLI.test(x)))))) block(REVIEWER);
+  if (reviewer && t.length && !(ci === 0 && reviewerOk(tt, seg))) block(REVIEWER);
   if (tt[ci]?.dyn && pushy) block('a command word built from a variable in a command that pushes is not allowed: write the git push out literally.');
   if (WRAP.test(cmd) && pushy && (seg.subst || tt.some((x) => x.dyn))) block('a shell expansion inside eval or sh -c in a command that pushes is not allowed: write the git push out literally.');
   if (cmd === 'cd' || cmd === 'pushd' || cmd === 'popd') {

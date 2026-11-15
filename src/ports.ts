@@ -67,8 +67,8 @@ export interface CR {
 /** assoc: the reviewer's relation to the repo (OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE ...), when the forge reports it. */
 export interface Review { user: string; state: string; sha: string; assoc?: string }
 
-/** One commit of a CR, oldest first. author and committer: forge logins, empty when the forge links no account to the commit email; authorName and committerName: the names git recorded. */
-export interface CrCommit { sha: string; message: string; author: string; committer: string; authorName: string; committerName: string; parents: number }
+/** One commit of a CR, oldest first. author and committer: forge logins, empty when the forge links no account to the commit email; authorName and committerName: the names git recorded; committerEmail: the committer email git recorded. */
+export interface CrCommit { sha: string; message: string; author: string; committer: string; authorName: string; committerName: string; committerEmail?: string; parents: number }
 
 export interface Run { id: string; name: string; ref: string; sha: string; state: 'pending' | 'success' | 'failure'; url: string; at: string }
 

@@ -191,7 +191,7 @@ export function github(ctx: AdapterContext): Forge {
     },
     async commits(n) {
       n = num(n);
-      const out = await gh(['api', '--paginate', `${api}/pulls/${n}/commits?per_page=100`, '--jq', '.[] | {sha: .sha, message: .commit.message, author: (.author.login // ""), committer: (.committer.login // ""), authorName: (.commit.author.name // ""), committerName: (.commit.committer.name // ""), parents: (.parents | length)}']);
+      const out = await gh(['api', '--paginate', `${api}/pulls/${n}/commits?per_page=100`, '--jq', '.[] | {sha: .sha, message: .commit.message, author: (.author.login // ""), committer: (.committer.login // ""), authorName: (.commit.author.name // ""), committerName: (.commit.committer.name // ""), committerEmail: (.commit.committer.email // ""), parents: (.parents | length)}']);
       const rows = out.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
       // The endpoint lists at most 250 commits: a full list may be cut off, so it is not trusted.
       if (rows.length >= 250) throw new Error(`forge: CR ${n} has ${rows.length} or more commits; the forge lists at most 250`);

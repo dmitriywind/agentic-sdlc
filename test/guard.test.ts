@@ -159,10 +159,14 @@ test('the sdlc-reviewer agent runs only the agentic-sdlc CLI in Bash', () => {
     input: JSON.stringify({ cwd: tmp, agent_type, tool_name: 'Bash', tool_input: { command } }),
     env: { ...process.env, AGENTIC_SDLC_ROLE: '', ...env }, encoding: 'utf8' }).status;
   const rev = 'agentic-sdlc:sdlc-reviewer';
-  for (const c of ['agentic-sdlc forge view 3', 'npx --no agentic-sdlc forge diff 3', 'agentic-sdlc forge view 3 | agentic-sdlc ledger summary',
-    'node node_modules/agentic-sdlc/dist/bin.js board get 4', '/p/bin/agentic-sdlc forge comments 3 --last 1']) assert.equal(as(rev, c), 0, c);
+  for (const c of ['agentic-sdlc forge view 1', 'agentic-sdlc forge view 3', 'npx --no agentic-sdlc forge diff 1', 'npx --no-install agentic-sdlc forge diff 3',
+    'agentic-sdlc forge view 3 2>/dev/null', 'agentic-sdlc forge view 3 > /dev/null 2>&1']) assert.equal(as(rev, c), 0, c);
   for (const c of ['npm test', 'cat .env', 'node script.js', 'agentic-sdlc forge view 3 && npm test', 'agentic-sdlc forge view 3 > out.txt',
-    'echo $(npm test)', 'x=agentic-sdlc; $x forge view 3', 'cd sub']) assert.equal(as(rev, c), 2, c);
+    'echo $(npm test)', 'x=agentic-sdlc; $x forge view 3', 'cd sub',
+    'node ./evil.js agentic-sdlc', 'npx evil-pkg agentic-sdlc', './agentic-sdlc board list', '/tmp/x/agentic-sdlc',
+    'node node_modules/agentic-sdlc/dist/bin.js board get 4', 'FOO=1 agentic-sdlc board list', 'agentic-sdlc board list $(id)',
+    'agentic-sdlc board list `id`', 'agentic-sdlc board list $HOME', 'npx --package=evil agentic-sdlc board list',
+    'agentic-sdlc forge list --checks | head -5']) assert.equal(as(rev, c), 2, c);
   assert.equal(as(rev, 'agentic-sdlc forge approve 3'), 2, 'the approve rule still applies');
   assert.equal(as(rev, 'agentic-sdlc forge approve 3', { AGENTIC_SDLC_ROLE: 'review' }), 0);
   for (const a of [undefined, 'agentic-sdlc:sdlc-fast', 'sdlc-fast']) assert.equal(as(a, 'npm test'), 0, String(a));

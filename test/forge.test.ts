@@ -345,6 +345,8 @@ test('forge and vcs cli: an unknown flag, a flag without a value and an unreadab
   assert.deepEqual(await t(['view', '7', '--bogus']), [2, 'unknown flag --bogus for forge view']);
   assert.deepEqual(await t(['list', '--state']), [2, '--state needs a value']);
   assert.deepEqual(await t(['list', '--checks=yes']), [2, '--checks takes no value']);
+  assert.deepEqual(await t(['list', '--limit', 'abc']), [2, "--limit needs a whole number, got 'abc'"]);
+  assert.deepEqual(await t(['comments', '7', '--last=x']), [2, "--last needs a whole number, got 'x'"]);
   const open = await t(['open', '--source', 'b', '--title', 't', '--body-file', '/nonexistent/body.md']);
   assert.equal(open[0], 2);
   assert.match(String(open[1]), /--body-file cannot be read: \/nonexistent\/body\.md/);
