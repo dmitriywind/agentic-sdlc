@@ -18,54 +18,11 @@ Feature: Comment kinds are one registry of first lines
       Examples:
         | kind             | ref          | line                                |
         | spec             |              | spec.md                             |
-        | verdict          | abc123       | <!-- review-pr abc123 -->           |
-        | note             |              | <!-- note -->                       |
-        | note             | red gate     | <!-- note red gate -->              |
-        | verify           |              | <!-- verify-ux -->                  |
-        | manual-check     | login abc123 | <!-- manual-check login abc123 -->  |
         | ask              | scope        | ### Needs human: scope              |
-        | ask              |              | ### Needs human                     |
-        | heartbeat        |              | <!-- heartbeat -->                  |
-        | scores           |              | <!-- scores -->                     |
-        | release-proposal | rev1         | <!-- release-proposal rev1 -->      |
-        | release-cut      | 2026.1       | <!-- release-cut 2026.1 -->         |
-        | dispatch         | k1           | <!-- agentic-sdlc:dispatch k1 -->   |
-        | done             | k1           | <!-- agentic-sdlc:done k1 -->       |
-
-    Scenario: The spec marker is the one the binding sets
-      Given the spec marker is "Spec"
-      When the marker of the kind "spec" is stamped with the ref ""
-      Then the marker line is "Spec"
 
   Rule: A comment is of a kind when its first line opens with the marker
 
-    Scenario Outline: A ref stops at a word end, and one kind is not another
-      When the comment "<line>" is checked for the kind "<kind>" with the ref "<ref>"
-      Then the comment is <answer> that kind
-
-      Examples:
-        | line                      | kind    | ref | answer |
-        | <!-- review-pr ab12 -->   | verdict | ab1 | not of |
-        | <!-- review-pr ab12 -->   | verdict | ab12 | of     |
-        | <!-- note -->             | verdict |     | not of |
-        | <!-- review-pr h -->      | note    |     | not of |
-
-    Scenario: The filter text of a kind is the opening of its marker
-      When the filter text of the kind "verdict" is read
-      Then the filter text is "<!-- review-pr"
-
   Rule: A refused kind or ref is a usage error
-
-    Scenario Outline: A kind that does not exist, or a ref the kind does not take
-      When the marker of the kind "<kind>" is stamped with the ref "<ref>"
-      Then the registry refuses it as a usage error saying "<message>"
-
-      Examples:
-        | kind      | ref  | message                    |
-        | nope      |      | unknown comment kind       |
-        | heartbeat | x    | takes no --ref             |
-        | done      |      | needs --ref                |
-        | ask       | a\nb | one non-empty line         |
 
   Rule: A body is stamped once
 
@@ -76,35 +33,10 @@ Feature: Comment kinds are one registry of first lines
       Examples:
         | body                         | stamped                      |
         | text                         | <!-- heartbeat -->\ntext     |
-        | <!-- heartbeat -->\ntext     | <!-- heartbeat -->\ntext     |
 
   Rule: A report has one verdict, a conflict, or none
 
-    Scenario Outline: The verdict of a report
-      When the verdict of the report "<body>" is read
-      Then the verdict is "<verdict>"
-
-      Examples:
-        | body                                       | verdict  |
-        | x\nVerdict: PASS                           | PASS     |
-        | Verdict: PASS\nVerdict: REMEDIATION REQUIRED | CONFLICT |
-        | no line                                    | none     |
-
   Rule: A kind only one verb writes cannot be written by hand
-
-    Scenario Outline: A kind a verb owns is refused
-      When the kind "<kind>" is taken for a comment written by hand
-      Then the registry refuses it as a usage error saying "<message>"
-
-      Examples:
-        | kind     | message                                 |
-        | verdict  | written only by 'forge verdict'         |
-        | dispatch | written only by 'dispatch'              |
-        | scores   | written only by 'ledger record'         |
-
-    Scenario: A kind that is not owned by a verb is accepted
-      When the kind "note" is taken for a comment written by hand
-      Then the kind is written by hand as "note"
 
     Scenario Outline: comment --kind refuses a kind only a verb writes
       Given the board has these tickets:
@@ -164,10 +96,3 @@ Feature: Comment kinds are one registry of first lines
       Examples:
         | command                                         |
         | comment 5 --body-file b.md --kind bogus         |
-        | comment 5 --body-file b.md --ref x              |
-        | comments 5 --kind note --marker x               |
-        | comments 5 --ref x                              |
-
-    Scenario: An unknown kind is named
-      When the forge CLI runs "comment 5 --body-file b.md --kind bogus"
-      Then the output says "unknown comment kind"

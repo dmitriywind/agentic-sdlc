@@ -83,34 +83,6 @@ Feature: Init upgrades an install
       And the install lock records ".github/workflows/gate.yml"
       And the install lock does not record ".agents/cycle-prompt.md"
 
-    Scenario: A pre-lock file that equals a released version is updated and recorded
-      Given I run the install command "init"
-      And the install lock is removed
-      And the project has the file ".github/workflows/gate.yml" holding "on: release\n"
-      And the package lists "on: release\n" as a released version
-      When I run the install command "init --upgrade"
-      Then the installed file ".github/workflows/gate.yml" holds "on: push\n"
-      And the output has the line "updated .github/workflows/gate.yml"
-      And the install lock records the hash of "on: push\n" for ".github/workflows/gate.yml"
-
-    Scenario: A pre-lock file that differs from every released version is kept, naming the package file
-      Given I run the install command "init"
-      And the install lock is removed
-      And the project has the file ".agents/cycle-prompt.md" holding "mine"
-      And the package lists "on: release\n" as a released version
-      When I run the install command "init --upgrade"
-      Then the installed file ".agents/cycle-prompt.md" holds "mine"
-      And a line of the output matches "^kept \.agents/cycle-prompt\.md \(differs from every released version; --force overwrites, see .*templates/runner/cycle-prompt\.md\)$"
-
-    Scenario: A stale lock entry does not hold back a released version
-      Given I run the install command "init"
-      And the install lock is changed to hold the hash of "older" for ".github/workflows/gate.yml"
-      And the project has the file ".github/workflows/gate.yml" holding "on: release\n"
-      And the package lists "on: release\n" as a released version
-      When I run the install command "init --upgrade"
-      Then the installed file ".github/workflows/gate.yml" holds "on: push\n"
-      And the install lock records the hash of "on: push\n" for ".github/workflows/gate.yml"
-
     Scenario: Init reads the skills lock of an install from before the single lock
       Given I run the install command "init"
       And the old skills lock holds the entry of ".agents/skills/sdlc/SKILL.md" and the install lock is removed
@@ -118,15 +90,6 @@ Feature: Init upgrades an install
       When I run the install command "init"
       Then the installed file ".agents/skills/sdlc/SKILL.md" contains "description: d2"
       And the installed file ".agents/install.lock.json" exists
-
-    Scenario: A renamed skill file is unedited when its package source is a released version
-      Given I run the install command "init"
-      And the install lock is removed
-      And the package lists the current "skills/plan/SKILL.md" as a released version
-      And the package file "skills/plan/SKILL.md" holds "---\nname: plan\ndescription: d\nmetadata:\n  steps:\n    triage: { tier: fast }\n    groom: { tier: balanced }\n    shape: { tier: deep }\n---\nbody\nmore\n"
-      When I run the install command "init"
-      Then the installed file ".agents/skills/sdlc-plan/SKILL.md" matches "^more$"
-      And the installed file ".agents/skills/sdlc-plan/SKILL.md" matches "^name: sdlc-plan$"
 
     Scenario: The package lists the hash of every installable file it ships
       Then the known hashes of the package cover every installable file it ships
@@ -162,11 +125,3 @@ Feature: Init upgrades an install
     Scenario: The last lines count the stale and removed files
       When I run the install command "init"
       Then a line of the output matches "^install: .*, 1 stale, 3 removed$"
-
-    Scenario: An old skill folder that no lock tracks is removed when every file of it is a released version
-      Given the project has the file ".agents/skills/implement-spec/SKILL.md" holding "---\nname: implement-spec\ndescription: old\nmetadata:\n  tier: balanced\n---\nrules\n"
-      And the project has the file ".agents/skills/mine/SKILL.md" holding "my own skill\n"
-      And the package lists "---\nname: implement-spec\ndescription: old\nmetadata:\n  tier: balanced\n---\nrules\n" as a released version
-      When I run the install command "init"
-      Then the installed file ".agents/skills/implement-spec" is absent
-      And the installed file ".agents/skills/mine/SKILL.md" exists

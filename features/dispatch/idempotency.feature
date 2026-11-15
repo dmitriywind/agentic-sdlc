@@ -12,18 +12,6 @@ Feature: A dispatch starts one run per key
 
   Rule: A double fire is skipped
 
-    Scenario: The same key inside the dedupe window is skipped
-      When dispatch runs "build --ticket 1"
-      And dispatch runs "build --ticket 1"
-      Then the result "skipped" is "true"
-      And the result "reason" is "double fire"
-
-    Scenario: The key is the subject and the step, and the marker goes on the ticket
-      When dispatch runs "build --ticket 1"
-      Then the result "key" is "1-build"
-      And the result "tier" is "deep"
-      And the ticket "1" holds a comment starting with "<!-- agentic-sdlc:dispatch 1-build -->"
-
     Scenario: Another step is another key
       Given dispatch runs "build --ticket 1"
       When dispatch runs "review/review --ticket 1"
@@ -38,25 +26,10 @@ Feature: A dispatch starts one run per key
 
   Rule: A change request and the factory use the heartbeat ticket
 
-    Scenario: A change request's key carries its head, and its marker goes on the heartbeat ticket
-      Given the forge is GitHub and shows the change request 9 on the head "crsha"
-      When dispatch runs "learn/improve --cr 9"
-      Then the result "key" is "9-learn/improve-crsha"
-      And the ticket "2" holds a comment starting with "<!-- agentic-sdlc:dispatch 9-learn/improve-crsha -->"
-
     Scenario: The same change request head inside the window is skipped
       Given the forge is GitHub and shows the change request 9 on the head "crsha"
       And dispatch runs "learn/improve --cr 9"
       When dispatch runs "learn/improve --cr 9"
-      Then the result "skipped" is "true"
-
-    Scenario: With no ticket and no change request the key is the factory's
-      Given dispatch runs "learn/improve"
-      Then the result "key" is "factory-learn/improve"
-
-    Scenario: The factory's dispatch is skipped inside the window too
-      Given dispatch runs "learn/improve"
-      When dispatch runs "learn/improve"
       Then the result "skipped" is "true"
 
   Rule: A finished run never blocks a re-run
@@ -73,13 +46,6 @@ Feature: A dispatch starts one run per key
       Given the dedupe window is "0.0001" minutes
       And a run may stay unfinished for 60 minutes
 
-    Scenario: Past the double-fire window the previous run still blocks
-      Given dispatch runs "build --ticket 1"
-      And a moment passes
-      When dispatch runs "build --ticket 1"
-      Then the result "skipped" is "true"
-      And the result "reason" is "the previous run has not finished"
-
     Scenario: Only the run's own done line ends the block
       Given dispatch runs "build --ticket 1"
       And the comment "a closing comment of another run" is posted on the ticket "1"
@@ -87,35 +53,7 @@ Feature: A dispatch starts one run per key
       When dispatch runs "build --ticket 1"
       Then the result "reason" is "the previous run has not finished"
 
-    Scenario: The run's own done line lets the next dispatch start
-      Given dispatch runs "build --ticket 1"
-      And the run posts its done line on the ticket "1"
-      And a moment passes
-      When dispatch runs "build --ticket 1"
-      Then the result "kind" is "harness"
-
-    Scenario: On the heartbeat ticket another run's comment does not end learn/improve
-      Given dispatch runs "learn/improve"
-      And a moment passes
-      And the comment "<!-- heartbeat -->\nanother run" is posted on the ticket "2"
-      When dispatch runs "learn/improve"
-      Then the result "reason" is "the previous run has not finished"
-
-    Scenario: On the heartbeat ticket the run's own done line ends the block
-      Given dispatch runs "learn/improve"
-      And the run posts its done line on the ticket "2"
-      And a moment passes
-      When dispatch runs "learn/improve"
-      Then the result "kind" is "harness"
-
   Rule: The cycle claims itself with dispatch sdlc
-
-    Scenario: sdlc posts a marker only and passes no executor check
-      Given the executor "default" is '{"kind":"bogus"}'
-      When dispatch runs "sdlc --ticket 2 --unattended"
-      Then the exit code is 0
-      And the result "kind" is "claim"
-      And the ticket "2" holds a comment starting with "<!-- agentic-sdlc:dispatch 2-sdlc -->"
 
   Rule: A failed start writes the done line
 

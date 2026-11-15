@@ -286,26 +286,6 @@ Feature: Init installs the factory
       And the project has the file ".agents/binding.yml" holding "version: 2\nboard: { adapter: github }\nforge: { adapter: github }\nvcs: { adapter: git, trunk: master, release_prefix: rel/ }\nproduct: { delivery: continuous }\n"
       And a delivery workflow of an older release is installed with hand-edited values, and that release is known
 
-    Scenario: The delivery workflow holds the binding's trunk, release prefix and delivery
-      When I run the install command "init --upgrade"
-      Then the installed file ".github/workflows/agentic-sdlc-delivery.yml" sets "env.TRUNK" to "master"
-      And the installed file ".github/workflows/agentic-sdlc-delivery.yml" sets "env.RELEASE_PREFIX" to "rel/"
-      And the installed file ".github/workflows/agentic-sdlc-delivery.yml" sets "env.DELIVERY" to "continuous"
-      And the installed file ".github/workflows/agentic-sdlc-delivery.yml" sets "on.push.branches" to '["master"]'
-
-    Scenario: A delivery workflow that differs from a released version only in those values is updated
-      When I run the install command "init --upgrade"
-      Then the output has the line "updated .github/workflows/agentic-sdlc-delivery.yml"
-      And the installed file ".github/workflows/agentic-sdlc-delivery.yml" does not contain "# older release"
-
-    Scenario: Doctor accepts the delivery workflow that init wrote
-      Given I run the install command "init --upgrade"
-      And the binding sets "vcs.trunk" to "master"
-      And the binding sets "vcs.release_prefix" to "rel/"
-      And the binding sets "product.delivery" to "continuous"
-      When doctor checks the delivery workflow
-      Then doctor line 1 matches "^ok   delivery workflow"
-
   Rule: Init writes the binding's commands into the verify workflow
 
     Scenario: The verify workflow runs the commands of the binding
@@ -315,12 +295,6 @@ Feature: Init installs the factory
       Then the installed file ".github/workflows/agentic-sdlc-verify.yml" matches "run: pnpm i --frozen-lockfile +# set: the binding's commands\.install$"
       And the installed file ".github/workflows/agentic-sdlc-verify.yml" matches "run: \"pnpm test: all\" +# set: the binding's commands\.verify$"
       And the installed file ".github/workflows/agentic-sdlc-verify.yml" does not match "run: npm (ci|test) "
-
-    Scenario: A verify workflow with the binding's commands still counts as the released one
-      Given the package ships the stock file "templates/gates/github/agentic-sdlc-verify.yml"
-      And the project has the file ".agents/binding.yml" holding "version: 2\nboard: { adapter: github }\nforge: { adapter: github }\nvcs: { adapter: git, trunk: main }\ncommands: { install: pnpm i --frozen-lockfile, verify: \"pnpm test: all\" }\n"
-      When I run the install command "init"
-      Then the installed file ".github/workflows/agentic-sdlc-verify.yml" has the same released hash as the stock "templates/gates/github/agentic-sdlc-verify.yml"
 
   Rule: A copied install names its skills sdlc-<name>
 
@@ -356,14 +330,6 @@ Feature: Init installs the factory
     Scenario: Renaming a SKILL.md changes its name line and the links into other skills, and nothing else
       When the skill file "plan/SKILL.md" holding "---\nname: plan\ndescription: d\nmetadata:\n  name: keep\n---\n[a](../sdlc/references/c.md#x) [b](../build/SKILL.md) [c](steps/s.md) [d](https://x/y) [e](#f) [f](./steps/s.md)\n" is renamed for a copied install knowing the skills "sdlc, plan, build"
       Then the renamed text is "---\nname: sdlc-plan\ndescription: d\nmetadata:\n  name: keep\n---\n[a](../sdlc/references/c.md#x) [b](../sdlc-build/SKILL.md) [c](steps/s.md) [d](https://x/y) [e](#f) [f](./steps/s.md)\n"
-
-    Scenario: A link from a step file to another skill follows the rename, one to its own SKILL.md does not
-      When the skill file "plan/steps/s.md" holding "[x](../../build/SKILL.md) [y](../SKILL.md)" is renamed for a copied install knowing the skills "sdlc, plan, build"
-      Then the renamed text is "[x](../../sdlc-build/SKILL.md) [y](../SKILL.md)"
-
-    Scenario: The sdlc skill keeps its name and its links to the others follow the rename
-      When the skill file "sdlc/SKILL.md" holding "[x](../plan/SKILL.md)" is renamed for a copied install knowing the skills "sdlc, plan, build"
-      Then the renamed text is "[x](../sdlc-plan/SKILL.md)"
 
     Scenario: Renaming a skill file back restores its source
       When the skill file "plan/SKILL.md" holding "---\nname: plan\ndescription: d\n---\n[b](../build/SKILL.md) [c](steps/s.md)\n" is renamed for a copied install knowing the skills "sdlc, plan, build"

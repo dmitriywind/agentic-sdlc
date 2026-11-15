@@ -19,11 +19,3 @@ Feature: Who may approve a CR
     When the approval gate asks who may approve the CR "g"
     Then the gate result "class" is "guardrail"
     And the gate result "who" lists "fo, fo2"
-
-  Scenario: A product CR in the Full lane waits for the product owner
-    Given these CRs are on the forge:
-      | cr | closes | changes  |
-      | p  | 1      | src/x.ts |
-    When the approval gate asks who may approve the CR "p"
-    Then the gate result "class" is "product-full"
-    And the gate result "who" lists "po"

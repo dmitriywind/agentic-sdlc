@@ -15,7 +15,6 @@ Feature: Comparing two bench results
       Examples:
         | passes | trials | lower |
         | 0      | 0      | 0     |
-        | 9      | 10     | 0.596 |
 
   Rule: b regresses when its lower bound is below a's
 

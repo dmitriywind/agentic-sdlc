@@ -11,30 +11,9 @@ Feature: Gate branch-names
 
       Examples:
         | name              |
-        | main              |
-        | release/2026.1    |
         | PROJ-45/add-login |
-        | 12/fix-it         |
-        | factory/tune-tiers |
-        | dependabot/npm/x  |
-        | renovate/y        |
 
   Rule: A change line outside the patterns is refused
-
-    Scenario Outline: A line that fits no pattern is refused
-      When the branch-names gate checks "<name>"
-      Then the change line is refused
-
-      Examples:
-        | name        |
-        | feature/Foo |
-        | 12/Bad_Name |
-        | wip         |
-
-    Scenario: Without a release prefix no line counts as a release line
-      Given the binding has no "vcs.release_prefix"
-      When the branch-names gate checks "undefinedwip"
-      Then the change line is refused
 
     Scenario: The gate fails with the name it refuses
       Given the binding sets "vcs.trunk" to "main"

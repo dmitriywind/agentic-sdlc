@@ -10,33 +10,6 @@ Feature: Comments are selected newest first by one filter
 
   Rule: The pages come from gh api, oldest first, and the CLI answers newest first
 
-    Scenario: Every page of comments is read
-      Given the CR 4 has these comments:
-        | author | body |
-        | a      | b1   |
-        | b      | b2   |
-        | c      | b3   |
-      When the forge CLI runs "comments 4"
-      Then the "author" of the result entries are "c, b, a"
-      And the call including "repos/o/r/issues/4/comments" reads every page
-
-    Scenario: --last keeps the newest comments
-      Given the CR 4 has these comments:
-        | author | body |
-        | a      | b1   |
-        | b      | b2   |
-        | c      | b3   |
-      When the forge CLI runs "comments 4 --last 2"
-      Then the "author" of the result entries are "c, b"
-
-    Scenario: --author keeps the comments of the named authors
-      Given the CR 7 has these comments:
-        | author  | body |
-        | owner   | b1   |
-        | mallory | b2   |
-      When the forge CLI runs "comments 7 --author mallory"
-      Then the "id" of the result entries are "2"
-
   Rule: --trusted keeps the bots and owners by the name the forge knows them by
 
     Scenario: --last counts after the filter

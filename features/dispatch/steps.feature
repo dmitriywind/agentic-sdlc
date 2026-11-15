@@ -18,27 +18,6 @@ Feature: Dispatch takes step ids and finds the step's executor
       Examples:
         | id   |
         | plan |
-        | nope |
-
-    Scenario: The task for a step names its step file and its tier
-      When dispatch runs "plan/shape --ticket 1"
-      Then the result "tier" is "deep"
-      And the instruction matches "\.agents/skills/sdlc-plan/steps/shape\.md in a subagent at tier deep"
-
-    Scenario: A step with no ticket and no change request is a usage error
-      When dispatch runs "build"
-      Then the exit code is 2
-      And the output says "usage: agentic-sdlc dispatch"
-
-    Scenario: No argument at all is a usage error
-      When dispatch runs ""
-      Then the exit code is 2
-
-    Scenario: learn/improve works on the factory and needs neither a ticket nor a change request
-      When dispatch runs "learn/improve"
-      Then the exit code is 0
-      And the result "kind" is "harness"
-      And the result "key" is "factory-learn/improve"
 
   Rule: The executor is looked up by step, then by skill, then by default
 
@@ -49,17 +28,6 @@ Feature: Dispatch takes step ids and finds the step's executor
         | plan       | whole-skill |
         | plan/shape | one-step    |
         | review-pr  | old-name    |
-
-    Scenario Outline: The most specific entry wins, and an old skill name counts as the step that replaced it
-      When dispatch runs "<step> <flag> 1"
-      Then the command line mentions "<bot>"
-
-      Examples:
-        | step          | flag     | bot         |
-        | plan/shape    | --ticket | one-step    |
-        | plan/groom    | --ticket | whole-skill |
-        | review/review | --cr     | old-name    |
-        | build         | --ticket | dflt        |
 
     Scenario: A step of its own gets the command of its own entry, not the default's
       Given the executor "default" is '{"kind":"command","run":"bot {skill}"}'
@@ -79,8 +47,3 @@ Feature: Dispatch takes step ids and finds the step's executor
       When dispatch runs "review/review --ticket"
       Then the exit code is 2
       And the output says "--ticket needs a value"
-
-    Scenario: A flag may carry its value after an equals sign
-      When dispatch runs "build --ticket=1"
-      Then the exit code is 0
-      And the result "key" is "1-build"

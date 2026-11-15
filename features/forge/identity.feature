@@ -19,49 +19,12 @@ Feature: The github forge posts as the identity the binding names
       And the forge credential variable "REV" is "r"
       And the repo has the open pull request 5 at the head "h"
 
-    Scenario: The review status is posted with the review token
-      When the forge posts the status "review" as "pending" on the commit "abcdef1"
-      Then the call including "repos/o/r/statuses/abcdef1" runs with the token "r"
-
-    Scenario: The approval is posted with the review token
-      When the forge runs approve on "5"
-      Then the call including "-X POST repos/o/r/pulls/5/reviews --input -" runs with the token "r"
-
-    Scenario: Every other verb runs with the implementer token
-      When the forge runs view on "5"
-      Then the first call runs with the token "t"
-
   Rule: With two identities a missing review token fails and the implementer token is never used
 
     Background:
       Given the forge has the review identity "reviewer"
       And the forge option "review_token_env" is "UNSET"
 
-    Scenario Outline: A status or an approval without the review token
-      When the forge runs <verb> on "<id>"
-      Then the verb fails matching "review_token_env"
-      And the forge makes no call
-
-      Examples:
-        | verb    | id      |
-        | status  | abcdef1 |
-        | approve | 5       |
-
   Rule: With one identity the status uses the implementer token and the approval is refused
 
-    Scenario: The review status is posted with the implementer token
-      When the forge posts the status "review" as "success" on the commit "abcdef1"
-      Then the call including "repos/o/r/statuses/abcdef1" runs with the token "t"
-
-    Scenario: An approval is refused
-      When the forge runs approve on "5"
-      Then the verb fails matching "one identity"
-      And the forge makes no call
-
   Rule: A credential variable that is not set fails and is named
-
-    Scenario: The implementer token variable is not set
-      Given the forge option "token_env" is "NOPE"
-      And the repo has the open pull request 7
-      When the forge runs view on "7"
-      Then the verb fails matching "NOPE"

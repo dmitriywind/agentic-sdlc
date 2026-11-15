@@ -1,7 +1,7 @@
 // Names the scenarios that run no src/ block another kept scenario does not run.
 //   COVERMAP=/tmp/cover.jsonl node --test features/support/run.ts ; node scripts/prune-features.mjs /tmp/cover.jsonl [--apply]
 // Greedy set cover over V8 block coverage. A scenario with no in-process coverage (it spawns the CLI or a hook)
-// is reported as "unknown" and never removed. --apply deletes redundant plain scenarios and Examples rows.
+// is reported as "unknown" and never removed. Files named in KEEP (decision tables) are never pruned. --apply deletes redundant plain scenarios and Examples rows.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const [file, apply] = [process.argv[2], process.argv.includes('--apply')];
@@ -19,9 +19,13 @@ for (const r of order) {
   const fresh = r.blocks.filter((b) => !seen.has(b));
   if (fresh.length) { keep.add(r); for (const b of r.blocks) seen.add(b); } else drop.push(r);
 }
+// Decision tables stay whole: their rows run the same blocks with different inputs, and the table is the contract.
+const tables = (process.env.KEEP ?? 'forge/queue,gates/approval.feature,gates/classify,gates/shipped').split(',').filter(Boolean);
+const spared = drop.filter((r) => tables.some((t) => r.file.includes(t)));
+for (const r of spared) drop.splice(drop.indexOf(r), 1);
 const byFile = new Map();
 for (const r of drop) byFile.set(r.file, [...(byFile.get(r.file) ?? []), r]);
-console.log(`${rows.length} scenarios: keep ${keep.size}, redundant ${drop.length}, unknown ${unknown.length} (no in-process coverage)`);
+console.log(`${rows.length} scenarios: keep ${keep.size}, redundant ${drop.length}, decision-table rows spared ${spared.length}, unknown ${unknown.length} (no in-process coverage)`);
 for (const [f, rs] of [...byFile].sort()) console.log(`${String(rs.length).padStart(4)}  ${f}`);
 if (!apply) process.exit(0);
 
