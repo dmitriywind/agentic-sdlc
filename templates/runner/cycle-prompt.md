@@ -14,5 +14,5 @@ Preamble (scheduler setup, not part of the prompt):
 9. Copy everything below the line into the scheduler as the prompt (installed at `.agents/cycle-prompt.md`).
 
 ---
-Load the `sdlc` skill: invoke `/agentic-sdlc:sdlc` when that skill is available, otherwise read `.claude/skills/sdlc/SKILL.md`, otherwise `.agents/skills/sdlc/SKILL.md`. Then run exactly one cycle, and stop.
+Load the `sdlc` skill: invoke `agentic-sdlc:sdlc` through the Skill tool when that skill is available, otherwise read `.claude/skills/sdlc/SKILL.md`, otherwise `.agents/skills/sdlc/SKILL.md`. Then run exactly one cycle, and stop.
 Call the CLI as `agentic-sdlc ...` (it is `.agents/bin/agentic-sdlc`) and pass `--unattended` to every `dispatch` call.

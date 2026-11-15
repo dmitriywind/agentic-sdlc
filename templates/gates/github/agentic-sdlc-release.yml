@@ -1,5 +1,5 @@
 name: agentic-sdlc release
-# The release cut. The release skill starts it with `agentic-sdlc forge cut <revision> <version>` after the
+# The release cut. The `ship` step starts it with `agentic-sdlc forge cut <revision> <version>` after the
 # Product owner's go-ahead on the release request; the Environment below makes that approval a forge rule:
 # set Environment `agentic-release` with the Product owner as a required reviewer, deployment branches
 # limited to the trunk, and secret AGENTIC_RELEASE_TOKEN: a release bot that can bypass

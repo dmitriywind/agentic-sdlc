@@ -19,7 +19,7 @@ Models: set the binding's `models` to Claude ids, for example Sonnet for `fast` 
 Proxy: Linear and Jira calls go out through the session's network proxy only when Node reads the proxy env:
 add `NODE_USE_ENV_PROXY=1` to both environments (the cloud's Node 22 honours it and prints an `UNDICI-EHPA` experimental warning).
 One identity (`forge.review_identity` empty, the default): one routine, one cloud environment. The routine acts as your
-GitHub account, and the cycle runs review-pr itself.
+GitHub account, and the cycle runs review/review itself.
 - environment: AGENTIC_SDLC_UNATTENDED=1, NODE_USE_ENV_PROXY=1, and a board token for Jira or Linear. No forge token: the proxy is the forge login.
 
 1. Create the cloud environment for the repo with the env vars above and the setup script under "Environment setup script" below.

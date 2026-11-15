@@ -49,14 +49,14 @@ How `executors` kinds map:
 | `command` | `agent -p --force ...` as `run`. |
 
 ## Use it as a stage executor
-Hand `implement-spec` to a Cloud Agent through the API, and use Bugbot as an extra reviewer signal:
+Hand `build` to a Cloud Agent through the API, and use Bugbot as an extra reviewer signal:
 ```yaml
 executors:
   default: { kind: harness }
-  implement-spec: { kind: managed, api: cursor, token_env: CURSOR_API_KEY, repo_url: "https://github.com/<owner>/<repo>", sandbox: cloud }
+  build: { kind: managed, api: cursor, token_env: CURSOR_API_KEY, repo_url: "https://github.com/<owner>/<repo>", sandbox: cloud }
 ```
 Bugbot reviews each PR update and reads `.cursor/BUGBOT.md` ([docs](https://cursor.com/docs/bugbot)). Its comments are input to
-`review-pr`; the `review` status still comes only from `review-pr`'s report (through CI's `gate review` with one identity).
+`review/review`; the `review` status still comes only from its report (through CI's `gate review` with one identity).
 
 ## Limits and unknowns
 - Cloud Agents API is beta; v1 has no webhooks.

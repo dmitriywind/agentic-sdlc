@@ -56,7 +56,7 @@ test('each executor kind starts a run; a bad kind, an unset env var, a board fai
   assert.equal((await run({ default: { kind: 'harness' } }, [])).code, 2);
 });
 
-test('judge-run: binding judge_tier, stepped off the judged model; one model everywhere skips', async () => {
+test('learn/judge: binding judge_tier, stepped off the judged model; one model everywhere skips', async () => {
   const b = (judge_tier: string, models: object) => ({ learning: { judge_tier }, models }) as any;
   const m = { fast: 'f', balanced: 'b', deep: 'd' };
   assert.ok('skip' in judgeTier(b('balanced', m))); // an unknown run model is never judged
@@ -90,7 +90,7 @@ test('command: minimal env plus listed secrets, {model} and {mcps_file}; no secr
   assert.equal((await run(ex, ['build', '--ticket', '1'], { PATH: '/bin' }, undefined, { models, mcps })).code, 1, 'a listed secret that is unset');
 });
 
-test('model: id wins over tier; judge-run keeps its judge tier', async () => {
+test('model: id wins over tier; learn/judge keeps its judge tier', async () => {
   const pin = await run({ default: { kind: 'command', run: 'bot', model: { id: 'pinned' } } }, ['build', '--ticket', '1'], {}, undefined, { models });
   assert.equal(pin.out.model, 'pinned');
   const j = await run({ default: { kind: 'command', run: 'bot', model: { id: 'pinned' } } }, ['learn/judge', '--ticket', '1', '--run-model', 'other'], {}, undefined, { models, learning: { judge_tier: 'balanced' } });

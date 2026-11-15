@@ -1,7 +1,7 @@
 # Scheduling the factory cycle
 
 One identity (`forge.review_identity` empty, the individual default): one prompt, the cycle (`cycle-prompt.md`,
-installed at `.agents/cycle-prompt.md`). It runs `review-pr` itself. Ignore the review prompt and `AGENTIC_REVIEW_FIRE_CMD`.
+installed at `.agents/cycle-prompt.md`). It runs `review/review` itself. Ignore the review prompt and `AGENTIC_REVIEW_FIRE_CMD`.
 
 Two identities (required for organization): every scheduler runs two prompts, one run of each at a time:
 - the cycle: `cycle-prompt.md`, WITHOUT `AGENTIC_REVIEW_TOKEN`;
@@ -23,8 +23,8 @@ Setup step everywhere (a Claude cloud environment uses its own setup script, see
 | Your own machine (cron, launchd, Task Scheduler, a Claude Desktop scheduled task) | `local.md` (no sandbox: opt in with `sandbox: local` and `AGENTIC_SDLC_LOCAL=1`) | any |
 
 Secrets: the agent's own credential plus `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN` (or the names the binding gives); with two identities, `AGENTIC_REVIEW_TOKEN` in the review run only.
-Every `learning.every_cycles` cycles the sdlc skill runs `improve-factory`; the schedule does nothing extra.
-Executors: `.agents/skills/sdlc/references/executors.md`. Scheduled runs pass `--unattended`.
+Every `learning.every_cycles` cycles the sdlc skill runs `learn/improve`; the schedule does nothing extra.
+Executors: `executors` in the binding (`references/architecture.md` section 7 in the package). Scheduled runs pass `--unattended`.
 
 ## Review after the cycle
 

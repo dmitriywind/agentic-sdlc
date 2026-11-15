@@ -2,7 +2,7 @@ name: agentic-sdlc CR gate
 # Event -> gate wiring only. Process rules live in the CLI and the binding.
 # Required checks (ruleset.trunk.json): job "ticket-linkage" here; status "human-approval" posted here by
 # `gate approval`; "Required", "proofs-on-base" and "skill-regression" come from agentic-sdlc-verify.yml;
-# "review" is posted by review-pr (the review runtime; with one identity, the cycle).
+# "review" is posted by `forge verdict` (the review runtime; with one identity, the gate review-gate from the report).
 # pull_request_target: this file and the binding come from the base branch, so a PR cannot change
 # what runs with these secrets. The PR's code is never checked out or run here; its number, head ref
 # and head sha reach the gates only as data (env).
@@ -20,7 +20,7 @@ on:
     workflows: ["agentic-sdlc review event"]
     types: [completed]
   merge_group:   # merge queue: carries the PR head's review statuses to the queue commit
-  issue_comment: # one identity: a review-pr report becomes the review status (job review-gate)
+  issue_comment: # one identity: a verdict report becomes the review status (job review-gate)
     types: [created]
 
 permissions: {}
@@ -131,7 +131,7 @@ jobs:
         run: .agents/bin/agentic-sdlc gate approval --cr "$CR"
 
   review-gate:
-    # One identity: posts status review on the head from the newest trusted review-pr report for it,
+    # One identity: posts status review on the head from the newest trusted verdict report for it,
     # with this job's token (a Claude cloud session cannot write statuses). Runs on a new report and on
     # every PR event, so `forge ready` after an earlier report also gets the status. `gate review` does nothing
     # with two identities. issue_comment runs this file from the default branch; no PR code runs here.

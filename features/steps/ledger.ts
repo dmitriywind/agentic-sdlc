@@ -51,7 +51,7 @@ export const post = (w: World, author: string, createdAt: string, body: string) 
   save(w, db);
 };
 
-const scoresOf = (s: string) => Object.fromEntries(s.split(';').map((x) => x.trim()).filter(Boolean).map((p) => {
+const scoresOf = (s: string) => Object.fromEntries(s.split(/[;,]/).map((x) => x.trim()).filter(Boolean).map((p) => {
   const [k, v] = p.split('=').map((x) => x.trim());
   return [k, /^\d+$/.test(v) ? Number(v) : v];
 }));
@@ -86,6 +86,9 @@ Given('a heartbeat by {string} at {string} with these runs:', (w, by: string, at
 Given('a heartbeat by {string} at {string} with no runs', (w, by: string, at: string) => heartbeat(w, undefined, by, at, []));
 Given('a {string} heartbeat by {string} at {string} with these runs:', (w, kind: string, by: string, at: string, t: DataTable) => heartbeat(w, kind, by, at, t.hashes()));
 Given('a {string} heartbeat by {string} at {string} with no runs', (w, kind: string, by: string, at: string) => heartbeat(w, kind, by, at, []));
+Given('a heartbeat by {string} at {string} with {int} tickets of one run each, the first using {int} tokens and each next one {int} more', (w, by: string, at: string, n: number, first: number, step: number) => {
+  heartbeat(w, undefined, by, at, Array.from({ length: n }, (_, i) => ({ id: `m${i}`, ticket: `t${i}`, tokens: String(first + i * step) })));
+});
 Given('that heartbeat records the factory {string}', (w, sha: string) => editLast(w, (hb) => { hb.factory = sha; }));
 Given('that heartbeat rescores:', (w, t: DataTable) => editLast(w, (hb) => {
   hb.rescores = t.hashes().map((r) => ({ id: r.id, ...(r.scorer ? { scorer: r.scorer } : {}), score: /^\d+$/.test(r.score) ? Number(r.score) : r.score, ...(r.by ? { by: r.by } : {}) }));

@@ -5,7 +5,7 @@
 #   individual, individual-api: CLAUDE_CODE_OAUTH_TOKEN  (create with `claude setup-token`)
 #   organization: ANTHROPIC_API_KEY
 # Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, and AGENTIC_REVIEW_TOKEN with two identities (the names your binding uses).
-# One identity (forge.review_identity empty): the cycle runs review-pr itself; delete the `review` job
+# One identity (forge.review_identity empty): the cycle runs review/review itself; delete the `review` job
 # (`dead-man` needs only `cycle`, so the file stays valid; with two identities add `review` to its needs).
 # Repo variable: AGENTIC_AGENT_CLI_VERSION (an exact Claude Code version); a job fails when it is unset.
 # The agentic-sdlc CLI is the pin in .agents/cli.json, run through .agents/bin/agentic-sdlc (it installs itself on first use).

@@ -26,7 +26,7 @@ wait on). No gate can block that merge, so the review is the last check; `doctor
 | `Required` | CI job on `pull_request`, no secrets | `commands.install` then `commands.verify` on the CR head. No agent posts it. |
 | `proofs-on-base` | gate, own no-secrets job | Each new or changed proof must fail on the merge base. |
 | `ticket-linkage` | gate `linkage` | One `Closes <id>` for one open ticket. |
-| `review` | `review-pr`, or gate `review` | Two identities: `review-pr` as the review identity, from the review runtime only. One identity: gate `review` in CI, from the newest trusted `review-pr` report on the head. |
+| `review` | `forge verdict`, or gate `review` | Two identities: `forge verdict` as the review identity, from the review runtime only. One identity: gate `review` in CI, from the newest trusted `verdict` comment on the head. |
 | `human-approval` | gate `approval` | By class; see below. |
 | `skill-regression` | gate | Factory changes keep the skill pack valid. |
 
@@ -41,7 +41,7 @@ The gate jobs on GitHub are named `linkage-gate` and `approval-gate`. `ticket-li
 that the linkage job posts with its own `GITHUB_TOKEN`.
 
 ## Review identity and approval
-**One identity** (`forge.review_identity` empty, the default of both individual profiles): `review-pr`
+**One identity** (`forge.review_identity` empty, the default of both individual profiles): `forge verdict`
 posts only its report, since a Claude cloud session's proxy refuses commit-status writes. The CR
 workflow's `review-gate` job runs on that comment and posts `review` from the newest trusted report on
 the head (`agentic-sdlc gate review --cr <n>`). `forge approve` refuses, since GitHub refuses an
@@ -148,7 +148,7 @@ The table maps what the shipped setup does to the requirements of the
 | Source provenance attestations for each revision, created with the branch update (L2) | None. `agent-provenance`, `human-approval` and `review` statuses are evidence on the CR | No attestation is issued or signed, and the statuses are not tied to the trunk revision. A squash merge makes a new revision with no provenance. |
 | Continuous technical controls on named references, recorded in attestations (L3) | The trunk ruleset and required checks (`ticket-linkage`, `Required`, `proofs-on-base`, `review`, `human-approval`, `skill-regression`, `agent-provenance` when set) | Controls are enforced but not recorded in a Source VSA. |
 | Human readable changes (L2) | The CR's diff on the forge | None. |
-| Two-party review of protected branches (L4) | `forge.human_approval` (a human approval on the head for the Full lane, or `always`), `require_last_push_approval`, stale reviews dismissed | Fast-lane product CRs, `tuning` CRs and the review-pr agent's approval need no second person; one-identity mode has no approving review at all; admin bypass. Agents count as a "Trusted Robot" only if the organization says so. |
+| Two-party review of protected branches (L4) | `forge.human_approval` (a human approval on the head for the Full lane, or `always`), `require_last_push_approval`, stale reviews dismissed | Fast-lane product CRs, `tuning` CRs and the review agent's approval need no second person; one-identity mode has no approving review at all; admin bypass. Agents count as a "Trusted Robot" only if the organization says so. |
 
 ## Secret exposure
 The review token is readable only in the trunk-only Environment `agentic-review`. The release token
@@ -181,7 +181,7 @@ still ships.
 
 ## Continuous delivery
 With `product.delivery: continuous`, every environment deploys from the trunk. There is no release line, no
-`release` skill and no release workflow. Wire each deploy to `gate shipped <env> --sha <sha> --result
+`ship` step and no release workflow. Wire each deploy to `gate shipped <env> --sha <sha> --result
 success|failure|rolled-back --version <v>`, so the board records the artifact version.
 
 ## Non-code products

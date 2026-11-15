@@ -257,6 +257,16 @@ test('forge cli: --kind stamps, --ref needs --kind, an unknown kind or both --ki
   assert.ok(errs.some((e) => /unknown comment kind/.test(e)));
 });
 
+test('validateBinding: cycle.land_wait_minutes is a whole number of minutes (0 allowed), cycle.max_rework a positive integer', async () => {
+  const { validateBinding } = await import('../src/binding.ts');
+  const { default: tpl } = await import('node:fs').then(async (fs) => ({ default: (await import('yaml')).parse(fs.readFileSync(new URL('../templates/binding.yml', import.meta.url), 'utf8')) }));
+  const msgs = (cycle: object) => validateBinding({ ...tpl, cycle: { ...tpl.cycle, ...cycle } } as any).filter((m) => /cycle\./.test(m)).join('\n');
+  assert.equal(tpl.cycle.land_wait_minutes, 5, 'the template documents the default');
+  assert.equal(msgs({ land_wait_minutes: 0, max_rework: 3 }), '');
+  for (const v of [-1, 1.5, '5']) assert.match(msgs({ land_wait_minutes: v }), /cycle\.land_wait_minutes must be a whole number of minutes/);
+  for (const v of [0, 2.5, 'x']) assert.match(msgs({ max_rework: v }), /cycle\.max_rework must be a positive integer/);
+});
+
 test('forge verdict by cli: callable with no review identity; with one it needs the review token and posts nothing without it', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'fv-'));
   const file = join(dir, 'b.md');
@@ -279,6 +289,28 @@ test('forge verdict by cli: callable with no review identity; with one it needs 
   assert.equal(denied.code, 1);
   assert.match(denied.err, /^Access:/);
   assert.ok(!denied.calls.some((c) => /POST/.test(c)), 'nothing was posted');
+});
+
+test('mcp: forge_verdict takes the report as `body` (the reviewer cannot write a file); without the review token it fails with Access', async () => {
+  const { handle } = await import('../src/mcp.ts');
+  const dir = mkdtempSync(join(tmpdir(), 'mv-'));
+  const pr = { number: 5, html_url: 'u', title: 't', head: { sha: 'abc1234', ref: 's' }, base: { sha: 'm', ref: 'main' }, state: 'open', body: '', user: { login: 'bot' } };
+  const f = fakeCtx(dir, {}, (c) => (/\/comments/.test(c) && /POST/.test(c) ? { id: 1, html_url: 'cu' } : /pulls\/5$/.test(c) ? pr : ''), {});
+  const bind = (identity: string) => ({ ...b(), forge: { adapter: 'github', options: { repo: 'o/r', review_token_env: 'REV' }, review_identity: identity, required_checks: [] }, spec_marker: 'spec.md' }) as any;
+  f.ctx.binding = bind('');
+  const list: any = await handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, f.ctx);
+  const tool = list.result.tools.find((t: any) => t.name === 'forge_verdict');
+  assert.deepEqual(tool.inputSchema.required.sort(), ['body', 'n']);
+  assert.ok('pass' in tool.inputSchema.properties && 'fail' in tool.inputSchema.properties);
+  const call = (args: object) => handle({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'forge_verdict', arguments: args } }, f.ctx) as Promise<any>;
+  const ok = await call({ n: '5', pass: true, body: 'report\n' });
+  assert.equal(ok.result.isError, undefined, JSON.stringify(ok));
+  assert.equal(ok.result.structuredContent.status, 'ci');
+  assert.ok(f.calls.some((c) => /POST.*\/comments/.test(c) || /comments/.test(c)));
+  f.ctx.binding = bind('rev-bot');
+  const denied = await call({ n: '5', pass: true, body: 'report\n' });
+  assert.equal(denied.result.isError, true);
+  assert.match(denied.result.content[0].text, /^Access:/);
 });
 
 test('comment --kind refuses the kinds only a verb writes', async () => {

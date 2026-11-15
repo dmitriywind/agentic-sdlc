@@ -533,7 +533,7 @@ test('merged: a forge error fails the gate; only "no change request" is a direct
   assert.match((await merged(f.d, 's')).reason!, /no CR/);
 });
 
-test('gate review: with one identity the newest trusted review-pr report for the head becomes the review status, posted as ci', async () => {
+test('gate review: with one identity the newest trusted verdict report for the head becomes the review status, posted as ci', async () => {
   const f = fakes([], { 5: { headSha: 'h2' } });
   const posted: any[] = [];
   f.d.forge.status = async (sha: string, s: any, o: any) => { posted.push({ sha, state: s.state, context: s.context, as: o?.as }); };
@@ -634,7 +634,7 @@ test('signal-on-red: a run that did not fail opens no Signal; an unset release_p
 });
 
 const commit = (sha: string, author: string, message: string, parents = 1) => ({ sha, message, author, committer: author, authorName: author, committerName: author, parents });
-const TRAILERS = '\n\nAgent-Run: 12-implement-spec-r1\nAgent-Model: claude-sonnet-5-5\nCo-Authored-By: Claude <noreply@anthropic.com>';
+const TRAILERS = '\n\nAgent-Run: 12-build-r1\nAgent-Model: claude-sonnet-5-5\nCo-Authored-By: Claude <noreply@anthropic.com>';
 
 function provFakes(mode: string | undefined, commits: any[] | Error) {
   const f = fakes([], { c: { headSha: 'h1' } });
@@ -656,7 +656,7 @@ test('provenance: agent commits with well-formed trailers pass; human and merge 
   assert.equal(r.agentCommits, 2);
   assert.equal(r.humanCommits, 2);
   assert.deepEqual(r.commits.map((c: any) => c.by), ['agent', 'human', 'agent', 'merge', 'human']);
-  assert.equal(r.commits[0].run, '12-implement-spec-r1');
+  assert.equal(r.commits[0].run, '12-build-r1');
   assert.equal(r.commits[0].model, 'claude-sonnet-5-5');
   assert.deepEqual(r.missing, []);
   assert.deepEqual(f.statuses.map((s) => [s.sha, s.context, s.state]), [['h1', 'agent-provenance', 'success']]);

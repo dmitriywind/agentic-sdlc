@@ -523,7 +523,7 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
     // Reset only tickets whose every merged CR is in the failed deploy; a newer release line stays.
     const isAnc = d.isAncestor;
     if (isAnc) {
-      // The release skill sets In release at the cut; key on the version so a deploy that fails first still resets.
+      // `ship` sets In release at the cut; key on the version so a deploy that fails first still resets.
       const cut = done.filter((x) => x.status === 'Done' && x.fields.release_version && rank(x.fields.shipped) < rank(target));
       const byId = await mergeShas(d, cut.map((x) => x.id));
       for (const x of cut) {

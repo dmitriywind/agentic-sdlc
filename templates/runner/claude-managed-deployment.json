@@ -15,7 +15,7 @@
     },
     {
       "name": "agentic-sdlc review",
-      "agent": "<set: agent id from POST /v1/agents; give it the sdlc and review-pr skills, bash, and the agentic-sdlc MCP server>",
+      "agent": "<set: agent id from POST /v1/agents; give it the sdlc and review skills, bash, and the agentic-sdlc MCP server>",
       "environment_id": "<set: review environment id; the cycle's secrets plus AGENTIC_REVIEW_TOKEN and AGENTIC_SDLC_ROLE=review>",
       "initial_events": [
         {

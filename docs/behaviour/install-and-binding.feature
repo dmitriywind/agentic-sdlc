@@ -213,22 +213,6 @@ Feature: Install and validate the binding
     Then doctor prints a "fail delivery workflow" line
     And the command exits with code 1
 
-  # Source: src/board/github-issues.ts, "toItem"
-  # Proof: test/board-adapters.test.ts "github-issues: an issue at Done carries its closed time as statusChangedAt; an open or other-status one carries none"
-  Scenario: A github-issues ticket at Done reached Done when its issue closed
-    Given a github-issues board with a closed issue at Done, an open issue at Done and a closed issue at Cancelled
-    When the board lists the tickets
-    Then only the closed issue at Done has a statusChangedAt, its closed time
-    And "ledger measures" can compute a lead time from it
-
-  # Source: src/board/github-issues.ts, "comments"
-  # Proof: test/board-adapters.test.ts "github-issues: comments and comment work on an issue with no status label, which the board does not list"
-  Scenario: The heartbeat ticket on github-issues is an issue with no status label
-    Given an issue with no status label
-    When the board lists the tickets
-    Then the issue is not listed
-    And "board comments" and "board comment" read and write its comments
-
   # Source: src/install.ts, "unpinnedActions"
   # Proof: test/install.test.ts "doctor: an installed workflow action not pinned to a commit SHA is a warning"
   Scenario: Doctor warns about an action that is not pinned to a commit SHA
@@ -243,40 +227,6 @@ Feature: Install and validate the binding
     Given the delivery workflow sets env.DELIVERY
     When doctor runs
     Then it fails when env.DELIVERY differs from product.delivery
-
-  # Source: src/board/github.ts, "items"
-  # Proof: test/board-adapters.test.ts "github: a Project shared by two repos yields only the issues of this repo"
-  Scenario: Repos can share one GitHub Project
-    Given a GitHub Project holds issue 12 of this repo and issue 12 of another repo
-    When the board adapter lists the board
-    Then it returns only the issue of board.options.repo
-
-  # Source: src/board/github-issues.ts, "createGithubIssuesBoard"
-  # Proof: test/board-adapters.test.ts "github-issues list reads status and fields from labels, pages by 100, skips PRs and unlabelled issues"
-  Scenario: The github-issues board reads Status and fields from labels over repo REST only
-    Given board.adapter is "github-issues" and an issue has the labels "status:Ready" and "size:S"
-    When the board adapter lists the board
-    Then the item has status Ready and field size S
-    And issues without a status label and pull requests are left out
-    And every call is "gh api" under "repos/<owner>/<repo>/", never GraphQL, "gh issue" or "gh project"
-
-  # Source: src/board/github-issues.ts, "move"
-  # Proof: test/board-adapters.test.ts "github-issues move swaps the status label, and refuses with --only-from when the status differs"
-  Scenario: A github-issues move swaps the status label
-    Given an issue with the label "status:Backlog"
-    When the factory runs "board move <id> "In progress" --only-from Ready"
-    Then the move is refused and the labels do not change
-    When the factory runs "board move <id> "In progress" --only-from Backlog"
-    Then the issue has "status:In progress" and no other status label
-
-  # Source: src/board/github-issues.ts, "create" and "close"
-  # Proof: test/board-adapters.test.ts "github-issues create ensures every label exists, then sets the milestone and the parent"
-  # Proof: test/board-adapters.test.ts "github-issues set and label edit labels; close sets the state reason and Cancelled"
-  Scenario: github-issues create makes missing labels, and close closes the issue
-    When the factory creates a ticket with a status and labels the repo lacks
-    Then the repo gets those labels before the issue is opened
-    When the factory closes a ticket with reason not_planned
-    Then the issue is closed as not planned and has "status:Cancelled"
 
   # Source: src/install.ts, "init" (heartbeat ticket)
   # Proof: test/install.test.ts "init --board local creates the heartbeat ticket off every route and sets heartbeat.ticket"
@@ -389,34 +339,11 @@ Feature: Install and validate the binding
     When the adopter runs "agentic-sdlc init --forge github"
     Then init writes .github/rulesets/release.json
 
-  # Source: src/board/index.ts, "createBoard"
-  # Proof: test/board-adapters.test.ts "a board verb with a missing required option fails naming the binding key and validate, not a raw gh call"
-  Scenario: A board verb fails clearly when the adapter's required option is missing
-    Given "board.options.project_number" is unset for the github board adapter
-    When a skill runs any "agentic-sdlc board" verb
-    Then the command fails naming "board.options.project_number" and "agentic-sdlc validate"
-    And no vendor CLI runs
-
   # Source: src/board/index.ts, "checked"
   # Proof: test/board-local.test.ts "create and move refuse a status the binding does not list"
   Scenario: A board refuses a status that board.statuses does not list
     When a skill runs "board create" or "board move" with a status outside "board.statuses"
     Then the command fails and the ticket does not change
-
-  # Source: src/board/index.ts, "checked"
-  # Proof: test/board-adapters.test.ts "the GitHub boards refuse an id that is not an issue number before calling gh"
-  Scenario: The GitHub boards take only issue numbers as ids
-    When a skill runs a "board" verb with an id that is not a number on the github or github-issues adapter
-    Then the command fails before any request is sent
-
-  # Source: src/board/github.ts and src/board/github-issues.ts, "assign"
-  # Proof: test/board-adapters.test.ts "assign sets or clears the one assignee on github and github-issues: it replaces, never adds"
-  Scenario: Assign replaces the assignee
-    Given a ticket assigned to "old"
-    When a skill runs "board assign <id> new"
-    Then "new" is the only assignee
-    When a skill runs "board assign <id> --none"
-    Then the ticket has no assignee
 
   # Source: src/forge/github.ts, "view" and "viewBySha"
   # Proof: test/forge.test.ts "github view reads every page of check runs and commit statuses"
@@ -437,18 +364,6 @@ Feature: Install and validate the binding
   Scenario: The github forge takes only numbers and hex shas as ids
     When a skill runs a "forge" verb with a CR number that is not a number or a sha that is not hex
     Then the command fails before gh runs
-
-  # Source: src/board/jira.ts, "quote"
-  # Proof: test/board-adapters.test.ts "jira escapes a backslash before a quote in JQL"
-  Scenario: A Jira search text with a backslash or quote cannot break out of its JQL string
-    When a skill lists with a search text holding a backslash and a quote
-    Then both are escaped in the JQL
-
-  # Source: src/board/linear.ts, "withLabels"
-  # Proof: test/board-adapters.test.ts "linear reads up to 250 labels, states and children, and keeps the ids of the issue's own labels"
-  Scenario: Linear reads up to 250 labels, states and children and keeps an issue's own label ids
-    When a skill adds a label the issue already carries, such as a workspace label
-    Then the issue keeps that label's id and no label is created
 
   # Source: src/install.ts, "init"
   # Proof: test/install.test.ts "init refuses an unknown board, an unknown flag and a package.json that is not JSON, before it writes anything"
@@ -475,7 +390,6 @@ Feature: Install and validate the binding
 
   # Source: src/board/index.ts, "milestone"
   # Proof: test/board-local.test.ts "milestone sets and clears the milestone of an existing ticket"
-  # Proof: test/board-adapters.test.ts "board milestone sets or clears the milestone where create --milestone puts it, on github, github-issues, jira and linear"
   Scenario: A ticket's milestone is set or cleared where create puts it
     Given a ticket on any board adapter
     When the factory runs "board milestone <id> <name>"
