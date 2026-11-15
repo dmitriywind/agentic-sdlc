@@ -10,9 +10,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parse as parseYaml, stringify } from 'yaml';
 import { skillRegression } from '../../src/gates.ts';
-import { cli, cliPin, cloudBoard, deliveryWorkflow, implementerToken, probeFailure, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../../src/install.ts';
-import { DEFAULTS, bindWorkflow, isInstallable, releasedHash, renameSkill, sha, shippedHashes } from '../../src/pristine.ts';
-import { git } from '../../src/vcs/git.ts';
+import { cli, deliveryWorkflow, implementerToken, probeFailure, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../../src/install.ts';
+import { DEFAULTS, bindWorkflow, isInstallable, releasedHash, renameSkill, shippedHashes } from '../../src/pristine.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import { BIN, Outcome, REPO, splitArgs, type World } from '../support/world.ts';
 
@@ -72,8 +71,6 @@ const listed = (w: World, ...hashes: string[]) => {
   const have: string[] = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : [];
   put(pkgOf(w), 'templates/known-hashes.json', JSON.stringify([...have, ...hashes]));
 };
-Given('the package lists {string} as a released version', (w, text: string) => listed(w, sha(nl(text))));
-Given('the package lists the current {string} as a released version', (w, rel: string) => listed(w, sha(readFileSync(join(pkgOf(w), rel), 'utf8'))));
 Given('the package binding template also sets vcs.trunk and slo', (w) => {
   const f = join(pkgOf(w), 'templates/binding.yml');
   writeFileSync(f, readFileSync(f, 'utf8').replace('vcs: { adapter: git }', 'vcs: { adapter: git, trunk: main }') + 'slo: { target: 99 }\n');
@@ -115,9 +112,7 @@ Given('I note the installed file {string}', (w, rel: string) => { (w.state.noted
 // ---- the install lock ----
 const lockFile = '.agents/install.lock.json';
 const lockOf = (w: World): Record<string, string> => JSON.parse(w.read(lockFile));
-Given('the install lock is removed', (w) => rmSync(w.path(lockFile)));
 Given('the install lock is emptied', (w) => w.write(lockFile, '{}\n'));
-Given('the install lock is changed to hold the hash of {string} for {string}', (w, text: string, rel: string) => w.write(lockFile, JSON.stringify({ ...lockOf(w), [rel]: sha(nl(text)) })));
 Given('the old skills lock holds the entry of {string} and the install lock is removed', (w, rel: string) => {
   w.write('.agents/skills.lock.json', JSON.stringify({ [rel]: lockOf(w)[rel] }));
   rmSync(w.path(lockFile));
@@ -159,10 +154,6 @@ Then('every value at {string} in the installed file {string} is {string}', (w, p
   const vs = valueAt(w, rel, path) as unknown[];
   assert.ok(vs.length > 0 && vs.every((v) => v === expected(value)), JSON.stringify(vs));
 });
-Then('the installed file {string} has the same released hash as the stock {string}', (w, rel: string, stock: string) => {
-  const name = rel.split('/').pop()!;
-  assert.equal(releasedHash(name, readFileSync(w.path(rel))), releasedHash(name, readFileSync(join(REPO, stock))));
-});
 Then('the local board holds the tickets:', (w, t: DataTable) => {
   const db = JSON.parse(w.read('.agents/board.json'));
   assert.deepEqual(db.items.map((i: Obj) => [i.id, i.title, i.status]), t.raw().slice(1));
@@ -171,7 +162,6 @@ Then('the local board holds the tickets:', (w, t: DataTable) => {
 // ---- the install lock, read back ----
 Then('the install lock records {string}', (w, rel: string) => assert.ok(lockOf(w)[rel], `no entry for ${rel}`));
 Then('the install lock does not record {string}', (w, rel: string) => assert.equal(lockOf(w)[rel], undefined));
-Then('the install lock records the hash of {string} for {string}', (w, text: string, rel: string) => assert.equal(lockOf(w)[rel], sha(nl(text))));
 
 // ---- the output lines ----
 const lines = (w: World) => w.last.output.split('\n');
@@ -285,17 +275,11 @@ const answer = (w: World, re: RegExp, text: string | Error) => doc(w).rules.push
 const shown = (w: World, ...ls: (string | undefined)[]) => { doc(w).lines = ls.filter((l): l is string => l !== undefined); };
 
 Given('the environment variable {string} is {string}', (w, name: string, value: string) => { doc(w).env[name] = value; });
-Given('the session is a Claude cloud session', (w) => { doc(w).env.CLAUDE_CODE_REMOTE = 'true'; });
 Given('the trunk rules require the checks:', (w, t: DataTable) => answer(w, /rules\/branches/, JSON.stringify([{
   type: 'required_status_checks',
   parameters: { required_status_checks: t.hashes().map((r) => (r.integration_id ? { context: r.context, integration_id: Number(r.integration_id) } : { context: r.context })) },
 }])));
-Given('the trunk rules are empty', (w) => answer(w, /rules\/branches/, '[]'));
-Given('reading the trunk rules fails with {string}', (w, msg: string) => answer(w, /rules\/branches/, new Error(nl(msg))));
-Given('the trunk branch protection reads {string}', (w, v: string) => answer(w, /branches\/main --jq/, nl(v)));
 Given('the user read at GitHub answers with the token scopes {string}', (w, scopes: string) => answer(w, /^gh api -i user/, `HTTP/2.0 200 OK\nX-Oauth-Scopes: ${scopes}\n\n{}`));
-Given('the user read at GitHub answers with no token scopes header', (w) => answer(w, /^gh api -i user/, 'HTTP/2.0 200 OK\n\n{}'));
-Given('the user read at GitHub fails with {string}', (w, msg: string) => answer(w, /^gh api -i user/, new Error(msg)));
 Given('the repo variable {string} is {string}', (w, name: string, value: string) => {
   const d = doc(w);
   const vars: Record<string, string> = (d as Obj).vars ?? ((d as Obj).vars = {});
@@ -304,7 +288,6 @@ Given('the repo variable {string} is {string}', (w, name: string, value: string)
   answer(w, /variable list/, JSON.stringify(Object.entries(vars).map(([n, v]) => ({ name: n, value: v }))));
 });
 Given('the repo is {string}', (w, visibility: string) => answer(w, /--jq \.visibility/, `${visibility}\n`));
-Given('reading the repo variables fails with {string}', (w, msg: string) => answer(w, /variable list/, new Error(msg)));
 Given('the delivery workflow pushes on the branches {string} and sets the env:', (w, branches: string, t: DataTable) => {
   const env = Object.fromEntries(t.raw().map((r) => [r[0], r[1]]));
   w.write('.github/workflows/agentic-sdlc-delivery.yml', stringify({ on: { push: { branches: branches.split(',').map((s) => s.trim()) } }, env }));
@@ -319,10 +302,8 @@ Given('the forge lists one pull request but refuses check data', (w) => {
 When('doctor checks the trunk protection', (w) => shown(w, ...trunkProtection(bound(w), ctxOf(w))));
 When('doctor checks the implementer token', (w) => shown(w, implementerToken(bound(w), ctxOf(w))));
 When('doctor checks the self-hosted runner', (w) => shown(w, selfHostedRunner(bound(w), ctxOf(w))));
-When('doctor checks the board against the session', (w) => shown(w, cloudBoard(bound(w), doc(w).env)));
 When('doctor checks the delivery workflow', (w) => shown(w, deliveryWorkflow(bound(w), w.root)));
 When('doctor checks the workflow actions', (w) => shown(w, unpinnedActions(w.root)));
-When('doctor checks the CLI pin', (w) => shown(w, ...cliPin(w.root)));
 When('a probe fails with the message {string}', (w, msg: string) => shown(w, probeFailure(nl(msg), doc(w).env, bound(w))));
 When('doctor runs against the fake forge', async (w) => {
   const out: string[] = [], err: string[] = [];
@@ -334,21 +315,9 @@ When('doctor runs against the fake forge', async (w) => {
   w.last = new Outcome(code, out.join(''), err.join(''));
 });
 
-Then('doctor prints one line', (w) => assert.equal(doc(w).lines.length, 1, doc(w).lines.join('\n')));
 Then('doctor prints no line', (w) => assert.deepEqual(doc(w).lines, []));
 Then('doctor line {int} matches {string}', (w, n: number, re: string) => assert.match(doc(w).lines[n - 1] ?? '', new RegExp(re), doc(w).lines.join('\n')));
 Then('doctor line {int} is {string}', (w, n: number, text: string) => assert.equal(doc(w).lines[n - 1], text));
-Then('a doctor line matches {string}', (w, re: string) => assert.ok(doc(w).lines.some((l) => new RegExp(re).test(l)), doc(w).lines.join('\n')));
-Then('the user read used the token {string}', (w, token: string) => assert.equal(doc(w).tokens[0], token));
 Then('the forge was asked for check runs', (w) => assert.ok(doc(w).calls.some((c) => /check-runs/.test(c)), doc(w).calls.join('\n')));
 
 // ---- vcs push ----
-Given('the checkout is on the branch {string}', (w, branch: string) => { w.state.branch = branch; });
-When('the vcs port pushes the checkout', async (w) => {
-  const trunk = bound(w).vcs.trunk;
-  const port = git({ root: '.', binding: { vcs: { trunk, release_prefix: 'release/' } }, exec: (_c: string, a: string[]) => (a[0] === 'rev-parse' ? w.state.branch : '') } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-  w.state.pushError = undefined;
-  try { await port.push(); } catch (e) { w.state.pushError = (e as Error).message; }
-});
-Then('the push is refused saying {string}', (w, text: string) => assert.ok(String(w.state.pushError).includes(text), String(w.state.pushError)));
-Then('the push goes through', (w) => assert.equal(w.state.pushError, undefined));

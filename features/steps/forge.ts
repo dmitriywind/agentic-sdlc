@@ -11,12 +11,10 @@ import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import { Outcome, splitArgs, type World } from '../support/world.ts';
 import { cli as forgeCli, createForge } from '../../src/forge/index.ts';
 import { buildReport, land, nextAction, queue, signalOfHead } from '../../src/forge/flow.ts';
-import { parseCloses } from '../../src/ports.ts';
 import type { AdapterContext, Binding, CR, Comment, Forge } from '../../src/ports.ts';
 
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const csv = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean);
-const unescape = (v: string) => v.replace(/\\n/g, '\n');
 
 // =====================================================================================================================
 // The fake gh
@@ -169,13 +167,10 @@ Given('the gh calls fail {int} times with {string} before they answer', (w, time
 Given('the repo has the open pull request {int}', (w, n: number) => { fake(w).pulls.push(pullRow({ number: String(n) })); });
 Given('the repo has the open pull request {int} at the head {string}', (w, n: number, head: string) => { fake(w).pulls.push(pullRow({ number: String(n), head })); });
 Given('the repo has these pull requests:', (w, t: DataTable) => { fake(w).pulls.push(...t.hashes().map(pullRow)); });
-Given('the pull request {int} is behind the trunk', (w, n: number) => { fake(w).pulls.find((p) => p.number === n)!.mergeable_state = 'behind'; });
-Given('the pull request {int} is labelled {string}', (w, n: number, label: string) => { (fake(w).labels[String(n)] ??= new Set()).add(label); });
 Given('the head {string} has the check runs:', (w, sha: string, t: DataTable) => {
   fake(w).runs[sha] = t.hashes().map((r) => ({ id: Number(r.id), name: r.name, status: r.status, conclusion: r.conclusion || null }));
 });
 Given('the head {string} has the commit statuses:', (w, sha: string, t: DataTable) => { fake(w).statuses[sha] = t.hashes().map((r) => ({ context: r.context, state: r.state })); });
-Given('the first check suite of the head {string} was created at {string}', (w, sha: string, at: string) => { fake(w).suites[sha] = at; });
 Given('the CR {int} has these comments:', (w, n: number, t: DataTable) => {
   fake(w).comments[String(n)] = t.hashes().map((r, i) => ({ id: String(i + 1), author: r.author, createdAt: String(i + 1), body: r.body, url: 'u' }));
 });
@@ -198,16 +193,12 @@ Given('the CI runs are:', (w, t: DataTable) => {
 });
 
 // ---- When: one forge verb ----
-When('the forge opens a CR from the branch {string} titled {string} with the body {string}', (w, source: string, title: string, body: string) => attempt(w, (f) => f.open({ source, title, body, draft: false })));
 When('the forge opens a draft CR from the branch {string} titled {string} with the body {string}', (w, source: string, title: string, body: string) => attempt(w, (f) => f.open({ source, title, body, draft: true })));
 When('the forge runs {word} on {string}', (w, verb: string, arg: string) => attempt(w, (f) => {
   if (verb === 'status') return f.status(arg, { context: 'c', state: 'success', description: 'd' });
   if (verb === 'viewBySha') return f.viewBySha(arg);
   return (f as Any)[verb](arg);
 }));
-When('the forge comments {string} on the CR {string}', (w, body: string, n: string) => attempt(w, (f) => f.comment(n, body)));
-When('the forge posts the status {string} as {string} on the commit {string}', (w, context: string, state: string, sha: string) =>
-  attempt(w, (f) => f.status(sha, { context, state: state as 'success', description: 'd' })));
 When('the forge lists the CRs with {string}', (w, query: string) => attempt(w, (f) => {
   const q: Any = {};
   for (const part of csv(query.replace(/ /g, ','))) {
@@ -239,27 +230,10 @@ const text = (v: unknown): string | undefined =>
       : typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
 const read = (w: World, path: string) => { let v: Any = w.state.result; for (const k of path.split('.')) v = v?.[k]; return v; };
 const joined = (w: World) => w.calls.join('\n');
-const callWith = (w: World, part: string) => fake(w).execs.find((x) => x.args.join(' ').includes(part));
 
 Then('the forge reads {string} as {string}', (w, path: string, value: string) => { assert.ok(!w.state.error, String(w.state.error)); assert.equal(text(read(w, path)), value); });
-Then('the forge reads no {string}', (w, path: string) => { assert.ok(!w.state.error, String(w.state.error)); assert.equal(read(w, path), undefined); });
 Then('the listed CRs are {string}', (w, ids: string) => assert.equal((w.state.result as CR[]).map((c) => c.n).join(', '), ids));
 Then('the forge made {int} calls', (w, n: number) => assert.equal(fake(w).execs.length, n, joined(w)));
-Then('the slept milliseconds are {string}', (w, list: string) => assert.equal(w.sleeps.join(', '), list));
-Then('the forge makes no call', (w) => assert.equal(w.calls.length, 0, joined(w)));
-Then('the call including {string} reads every page', (w, part: string) => assert.ok(callWith(w, part)?.args.includes('--paginate'), `no paginated call includes ${part}:\n${joined(w)}`));
-Then('the call including {string} runs with the token {string}', (w, part: string, token: string) => {
-  const c = callWith(w, part);
-  assert.ok(c, `no call includes ${part}:\n${joined(w)}`);
-  assert.equal(c.token, token);
-});
-Then('the first call runs with the token {string}', (w, token: string) => assert.equal(fake(w).execs[0].token, token));
-Then('no call carries a token of its own', (w) => { assert.ok(fake(w).execs.length > 0); assert.deepEqual(fake(w).execs.map((x) => x.token), fake(w).execs.map(() => undefined)); });
-Then('the call including {string} sends {string}', (w, part: string, json: string) => {
-  const c = callWith(w, part);
-  assert.ok(c?.input, `no call including ${part} sent a body:\n${joined(w)}`);
-  assert.deepEqual(JSON.parse(c.input!), JSON.parse(json));
-});
 Then('every call is a gh api call under {string}', (w, prefix: string) => {
   assert.ok(fake(w).execs.length > 0);
   for (const { args } of fake(w).execs) {
@@ -273,7 +247,6 @@ Then('the comment posted on the CR {string} opens with {string}', (w, n: string,
   assert.equal(String(post.input.body).split('\n')[0], first);
 });
 Then('the approvals are {string}', (w, list: string) => assert.equal((w.state.result as Any[]).map((a) => `${a.user}:${a.state}:${a.sha}`).join(', '), list));
-Then('the ids {string} closes are {string}', (w, body: string, ids: string) => assert.equal(parseCloses(unescape(body)).join(', ') || 'none', ids));
 
 // =====================================================================================================================
 // The flow verbs: the next action, the queue, land, the report. A fake forge port holds the CRs of the scenario.
@@ -339,7 +312,6 @@ Given('the approval class of every CR is {string}', (w, klass: string) => { flow
 Given('the approval class of every CR is {string}, owned by {string}', (w, klass: string, who: string) => { flow(w).klass = { class: klass, who: csv(who) }; });
 Given('the approval class of a CR cannot be decided', (w) => { flow(w).klass = new Error('no diff'); });
 Given('the CR {string} is {string} with the checks {string}', (w, n: string, traits: string, checks: string) => { const f = flow(w); f.crs.push({ ...crOf(n, traits), checks: checksOf(checks) }); });
-Given('the forge merges a CR at once when asked', (w) => { flow(w).merges = true; });
 Given('the checks of the CR {string} turn green at look {int}', (w, n: string, look: number) => { flow(w).greenAt = { n, look, views: 0 }; });
 Given('these CRs are open:', (w, t: DataTable) => {
   const f = flow(w);
@@ -380,7 +352,6 @@ When('the Signal of the head is read from the comments {string}', (w, comments: 
 });
 When('the queue is read', async (w) => { const f = flow(w); f.rows = await queue(portOf(w), flowBinding(w), classOf(w), T0, async (id) => f.open.has(id), async (id) => f.held.has(id)); });
 When('the CR {string} is landed', async (w, n: string) => { w.useFakeSleep(); flow(w).land = await land(portOf(w), flowBinding(w), n, undefined, classOf(w)); });
-When('the CR {string} is landed waiting at most {int} minutes', async (w, n: string, minutes: number) => { w.useFakeSleep(); flow(w).land = await land(portOf(w), flowBinding(w), n, minutes, classOf(w)); });
 When('the report for the head {string} is built as {word} from:', (w, head: string, flag: string, body: string) => {
   const f = flow(w);
   f.report = undefined; f.error = undefined;
@@ -407,10 +378,7 @@ Then('the class of the first queue row is {string}', (w, klass: string) => asser
 const blocking = (w: World) => (flow(w).land.blocking as { check: string; state: string }[]).map((b) => `${b.check}=${b.state}`).join(', ') || 'none';
 Then('the land state is {string}', (w, state: string) => assert.equal(flow(w).land.state, state));
 Then('the checks blocking the land are {string}', (w, list: string) => assert.equal(blocking(w), list));
-Then('a human of the class {string} must approve: {string}', (w, klass: string, who: string) => assert.deepEqual(flow(w).land.needsHuman, { class: klass, who: csv(who) }));
-Then('no human is asked to approve', (w) => assert.equal(flow(w).land.needsHuman, undefined));
 Then('the forge was asked to automerge the CR {string}', (w, n: string) => assert.deepEqual(flow(w).log, [`automerge ${n}`]));
-Then('the forge was asked to merge nothing', (w) => assert.deepEqual(flow(w).log, []));
 Then('the land waited {int} seconds in all', (w, s: number) => assert.equal(w.sleeps.reduce((a, b) => a + b, 0), s * 1000));
 
 Then('the report is:', (w, doc: string) => {
@@ -418,10 +386,4 @@ Then('the report is:', (w, doc: string) => {
   assert.ok(r, String(flow(w).error));
   assert.equal(r.text.trimEnd(), doc.trimEnd());
   assert.ok(r.text.endsWith('\n') && !r.text.endsWith('\n\n'), 'the report ends with one newline');
-});
-Then('the report is refused with the usage error {string}', (w, part: string) => {
-  const e = flow(w).error;
-  assert.ok(e, 'the report was built');
-  assert.ok(e.message.includes(part), e.message);
-  assert.equal(e.constructor.name, 'UsageError');
 });

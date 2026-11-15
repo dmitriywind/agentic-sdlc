@@ -1,11 +1,9 @@
 // The binding as a value: a complete binding is built in memory, edited by dotted key, then validated or warned about.
 // State on w.state: b (the binding), problems and warnings (from the last validation), selected (comment bodies).
 import assert from 'node:assert/strict';
-import { stringify } from 'yaml';
-import { bindingWarnings, loadBinding, shippedOptions, validateBinding } from '../../src/binding.ts';
-import { selectComments } from '../../src/comments.ts';
-import { ownersFor, type Binding } from '../../src/ports.ts';
-import { Given, When, Then, type DataTable } from '../support/steps.ts';
+import { bindingWarnings, validateBinding } from '../../src/binding.ts';
+import { type Binding } from '../../src/ports.ts';
+import { Given, When, Then } from '../support/steps.ts';
 import type { World } from '../support/world.ts';
 
 const good = {
@@ -31,16 +29,11 @@ const joined = (xs: string[]) => xs.join('\n');
 
 Given('a complete binding', (w) => { w.state.b = structuredClone(good); });
 Given('the binding value {string} is {string}', (w, key: string, json: string) => { const { o, last } = parent(binding(w), key); o[last] = parse(json); });
-Given('the binding has no value {string}', (w, key: string) => { const { o, last } = parent(binding(w), key); delete o[last]; });
 
 When('the binding is validated', (w) => {
   const b = binding(w) as Binding;
   w.state.problems = validateBinding(b);
   w.state.warnings = bindingWarnings(b);
-});
-When('the project binding file is loaded and validated', (w) => {
-  w.write('.agents/binding.yml', stringify(binding(w)));
-  w.state.problems = validateBinding(loadBinding(w.root));
 });
 
 Then('validation finds no problems', (w) => assert.deepEqual(w.state.problems, []));
@@ -49,20 +42,7 @@ Then('the problems do not mention {string}', (w, text: string) => assert.ok(!joi
 Then('the warnings mention {string}', (w, text: string) => assert.ok(joined(w.state.warnings).includes(text), `no warning mentions "${text}":\n${joined(w.state.warnings)}`));
 Then('the warnings do not mention {string}', (w, text: string) => assert.ok(!joined(w.state.warnings).includes(text), `a warning mentions "${text}":\n${joined(w.state.warnings)}`));
 Then('there are no warnings', (w) => assert.deepEqual(w.state.warnings, []));
-Then('the warnings are exactly:', (w, t: DataTable) => assert.deepEqual(w.state.warnings, t.raw().map((r) => r[0])));
-Then('there is exactly one warning', (w) => assert.equal(w.state.warnings.length, 1, joined(w.state.warnings)));
 
 // ---- the Shipped options ----
-Then('the shipped options for the environments {string} are {string}', (w, envs: string, options: string) =>
-  assert.deepEqual(shippedOptions(envs.split(',').map((e) => e.trim())), options.split(',').map((e) => e.trim())));
 
 // ---- owners ----
-Then('the owners read for the {word} as:', (w, side: 'board' | 'forge', t: DataTable) => {
-  const got = ownersFor(binding(w).owners, side) as unknown as Record<string, string[]>;
-  for (const r of t.hashes()) assert.deepEqual(got[r.role], r.names.split(',').map((s) => s.trim()).filter(Boolean), r.role);
-});
-When('comments by {string} are selected with --trusted', (w, authors: string) => {
-  const comments = authors.split(',').map((a) => a.trim()).map((author) => ({ author, body: author }) as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-  w.state.selected = selectComments(comments, { owners: ownersFor(binding(w).owners, 'forge'), trusted: true }).map((c) => c.body);
-});
-Then('the selected comments are by {string}', (w, authors: string) => assert.deepEqual(w.state.selected, authors.split(',').map((a) => a.trim())));

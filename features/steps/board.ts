@@ -5,7 +5,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import type { World } from '../support/world.ts';
 import { createBoard } from '../../src/board/index.ts';
-import { MovedError } from '../../src/ports.ts';
 import type { AdapterContext, Board, Item, LogicalField } from '../../src/ports.ts';
 
 const run = (w: World, line: string) => {
@@ -66,7 +65,6 @@ const DEFAULTS: Record<string, { options: Record<string, unknown>; env: Record<s
   jira: { options: { base_url: 'https://x.atlassian.net', project_key: 'PROJ', email_env: 'JE', token_env: 'JT' }, env: { JE: 'a@b', JT: 'secret' } },
   linear: { options: { team_key: 'LIN', token_env: 'LT' }, env: { LT: 'k' } },
 };
-const TICKET: Record<string, string> = { github: '7', 'github-issues': '7', jira: 'PROJ-1', linear: 'LIN-9' };
 
 // github Projects: `gh project ...` and `gh issue view`
 const ghAnswer = (w: World) => (c: string): unknown => {
@@ -187,14 +185,10 @@ Given('the {word} board adapter', (w, name: string) => {
   Object.assign(w.env, d.env);
 });
 Given('the board adapter has no option {string}', (w, key: string) => { delete w.state.options[key]; });
-Given('the credential variables of the board are not set', (w) => { for (const k of Object.keys(DEFAULTS[w.state.adapter].env)) delete w.env[k]; });
 Given('the ticket is at {string}', (w, status: string) => { w.state.status = status; });
 Given('the ticket is assigned to {string}', (w, login: string) => { w.state.assignee = login; });
 Given('the GitHub Project holds issue {int} of {string} and issue {int} of {string}', (w, a: number, repoA: string, b: number, repoB: string) => {
   w.state.ghItems = [{ id: 'A', status: 'Ready', content: { number: a, title: `of ${repoA}`, url: 'u', repository: repoA } }, { id: 'B', status: 'Done', content: { number: b, title: `of ${repoB}`, url: 'u', repository: repoB } }];
-});
-Given('the GitHub Project holds {int} items', (w, n: number) => {
-  w.state.ghItems = Array.from({ length: n }, (_, i) => ({ id: `I${i}`, status: 'Ready', content: { number: i + 1, title: 't', url: 'u' } }));
 });
 Given('Jira lists the issues {string} and {string} on two pages', (w, a: string, b: string) => { w.state.jiraPages = 'two'; w.state.jiraFirst = a; w.state.jiraLast = b; });
 Given('Jira answers every page with the same next page token', (w) => { w.state.jiraPages = 'stuck'; });
@@ -210,18 +204,12 @@ Given('the repo has these issues:', (w, t: DataTable) => {
     ...(r.assignee ? { assignees: [{ login: r.assignee }] } : {}),
   })));
 });
-Given('the repo has the issues {int} to {int} labelled {string}', (w, from: number, to: number, labels: string) => {
-  for (let n = from; n <= to; n++) (w.state.issues ??= []).push(iss(n, csv(labels)));
-});
 Given('the repo has the labels {string}', (w, labels: string) => { (w.state.repoLabels ??= []).push(...csv(labels)); });
 Given('the repo has the milestone {string} as number {int}', (w, title: string, number: number) => { (w.state.milestones ??= []).push({ number, title }); });
 Given('the issue {int} has {int} comments saying {string}', (w, n: number, count: number, text: string) => {
   w.state.issues.find((i: Any) => i.number === n).comments = Array.from({ length: count }, (_, k) => ({ id: k, user: { login: 'bot' }, created_at: String(k), body: text, html_url: '' }));
 });
 Given('the comment {int} of the issue {int} says {string}', (w, k: number, n: number, text: string) => { w.state.issues.find((i: Any) => i.number === n).comments[k].body = text; });
-Given('the issue {int} has the comment {string}', (w, n: number, body: string) => {
-  w.state.issues.find((i: Any) => i.number === n).comments = [{ id: 1, user: { login: 'bot' }, created_at: '1', body, html_url: '' }];
-});
 Given('gh fails {int} times with {string} before it answers', (w, times: number, message: string) => {
   w.state.failure = { times, message, done: 0 };
   w.useFakeSleep();
@@ -238,11 +226,8 @@ When('the factory reads the comments of the ticket {string}', (w, id: string) =>
 When('the factory reads the comments of the ticket {string} with the marker {string}', (w, id: string, marker: string) => attempt(w, (b) => b.comments(id, { marker })));
 When('the factory comments {string} on the ticket {string}', (w, body: string, id: string) => attempt(w, (b) => b.comment(id, body)));
 When('the factory assigns the ticket {string} to {string}', (w, id: string, login: string) => attempt(w, (b) => b.assign(id, login)));
-When('the factory clears the assignee of the ticket {string}', (w, id: string) => attempt(w, (b) => b.assign(id, null)));
 When('the factory sets the milestone of the ticket {string} to {string}', (w, id: string, name: string) => attempt(w, (b) => b.milestone(id, name)));
-When('the factory clears the milestone of the ticket {string}', (w, id: string) => attempt(w, (b) => b.milestone(id, null)));
 When('the factory sets the field {string} of the ticket {string} to {string}', (w, f: string, id: string, v: string) => attempt(w, (b) => b.set(id, f as LogicalField, v)));
-When('the factory clears the field {string} of the ticket {string}', (w, f: string, id: string) => attempt(w, (b) => b.set(id, f as LogicalField, null)));
 When('the factory adds the label {string} to the ticket {string}', (w, l: string, id: string) => attempt(w, (b) => b.label(id, 'add', l)));
 When('the factory removes the label {string} from the ticket {string}', (w, l: string, id: string) => attempt(w, (b) => b.label(id, 'remove', l)));
 When('the factory closes the ticket {string} as {string}', (w, id: string, reason: string) => attempt(w, (b) => b.close(id, reason as 'completed' | 'not_planned')));
@@ -252,25 +237,16 @@ When('the factory creates a ticket at {string} with the labels {string}, the mil
 // ---- Then: what the verb returned, what it called ----
 const items = (w: World) => w.state.result as Item[];
 Then('the verb fails matching {string}', (w, re: string) => assert.match(failed(w).message, new RegExp(re)));
-Then('the move is refused because the ticket has moved', (w) => assert.ok(failed(w) instanceof MovedError, String(w.state.error)));
 Then('no call reaches the board', (w) => assert.equal(w.calls.length, 0, w.calls.join('\n')));
 Then('a call includes {string}', (w, text: string) => assert.ok(w.calls.some((c) => c.includes(text)), `no call includes ${text}:\n${w.calls.join('\n')}`));
 Then('no call includes {string}', (w, text: string) => assert.ok(!w.calls.some((c) => c.includes(text)), `a call includes ${text}:\n${w.calls.join('\n')}`));
-Then('every call passes the credential {string} as GH_TOKEN', (w, token: string) => {
-  assert.ok(w.state.tokens.length > 0);
-  assert.ok(w.state.tokens.every((t: string) => t === token), w.state.tokens.join(','));
-});
 Then('the listed ticket ids are {string}', (w, ids: string) => assert.equal(items(w).map((i) => i.id).join(', '), ids));
 Then('the listed ticket titles are {string}', (w, titles: string) => assert.equal(items(w).map((i) => i.title).join(', '), titles));
-Then('the board lists {int} tickets', (w, n: number) => assert.equal(items(w).length, n));
 Then('the listed ticket {string} has the status {string}', (w, id: string, status: string) => assert.equal(items(w).find((i) => i.id === id)?.status, status));
 Then('the listed ticket {string} has the fields {string}', (w, id: string, fields: string) =>
   assert.equal(Object.entries(items(w).find((i) => i.id === id)!.fields).map(([k, v]) => `${k}=${v}`).join(', '), fields));
 Then('the listed ticket {string} has the labels {string}', (w, id: string, labels: string) => assert.equal(items(w).find((i) => i.id === id)!.labels.join(', '), labels));
-Then('the listed ticket {string} reached its status at {string}', (w, id: string, at: string) => assert.equal(items(w).find((i) => i.id === id)?.statusChangedAt ?? '', at));
 Then('the comment ids are {string}', (w, ids: string) => assert.equal((w.state.result as { id: string }[]).map((c) => c.id).sort().join(', '), ids));
-Then('the first comment is {string}', (w, id: string) => assert.equal((w.state.result as { id: string }[])[0].id, id));
-Then('the board returns {int} comments', (w, n: number) => assert.equal((w.state.result as unknown[]).length, n));
 Then('the returned ticket has the status {string}', (w, status: string) => assert.equal((w.state.result as Item).status, status));
 Then('the returned ticket has the fields {string}', (w, fields: string) => assert.equal(Object.entries((w.state.result as Item).fields).map(([k, v]) => `${k}=${v}`).join(', '), fields));
 Then('the returned ticket has the labels {string}', (w, labels: string) => assert.equal((w.state.result as Item).labels.join(', '), labels));
@@ -300,20 +276,14 @@ Then('every call is a gh api call under the repo, never GraphQL, gh issue or gh 
     assert.ok(!args.some((a) => /graphql|^issue$|^project$/.test(a)), args.join(' '));
   }
 });
-Then('the list is read in pages of 100 up to page 2', (w) => assert.ok(rest(w).some((c) => c.args[4].includes('per_page=100&page=2'))));
-Then('no call writes to the issues', (w) => assert.ok(!rest(w).some((c) => c.args[3] === 'PATCH')));
 Then('the issue {int} has the labels {string}', (w, n: number, labels: string) => assert.equal(issueOf(w, n).labels.map((l: Any) => l.name).join(', '), labels));
 Then('the repo has the labels exactly {string}', (w, labels: string) => assert.equal(w.state.repoLabels.join(', '), labels));
-Then('the new issue is opened with the milestone number {int}', (w, n: number) => assert.equal(rest(w).find((c) => c.args[4] === 'repos/o/r/issues' && c.args[3] === 'POST')!.input.milestone, n));
-Then('the new issue is linked as a sub issue of the issue {int}', (w, n: number) => assert.ok(rest(w).some((c) => c.args[4] === `repos/o/r/issues/${n}/sub_issues` && c.input?.sub_issue_id === 9000)));
 Then('the issue {int} is closed with the reason {string}', (w, n: number, reason: string) => { assert.equal(issueOf(w, n).state, 'closed'); assert.equal(issueOf(w, n).state_reason, reason); });
 Then('the last patch sets the milestone to {int}', (w, n: number) => assert.equal(rest(w).filter((c) => c.args[3] === 'PATCH').at(-1)!.input.milestone, n));
-Then('the last patch clears the milestone', (w) => assert.equal(rest(w).filter((c) => c.args[3] === 'PATCH').at(-1)!.input.milestone, null));
 Then('the one patch sets the assignees to {string}', (w, logins: string) => {
   assert.equal(rest(w).find((c) => c.args[3] === 'PATCH')!.input.assignees.join(', '), logins);
   assert.ok(!rest(w).some((c) => c.args[4]?.endsWith('/assignees')));
 });
-Then('the repo holds {int} issues', (w, n: number) => assert.equal(w.state.issues.length, n));
 
 // ---- holds: comments written by a given author at a given time, read straight from the local board ----
 const boardDb = (w: World) => JSON.parse(readFileSync(w.path('.agents', 'board.json'), 'utf8'));

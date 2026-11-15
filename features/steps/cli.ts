@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import { BIN, REPO, splitArgs, type World } from '../support/world.ts';
-import { http, retryWait, setHttpTimeout } from '../../src/exec.ts';
+import { http, setHttpTimeout } from '../../src/exec.ts';
 
 // ---- the CLI exactly as typed (no --root added) ----
 When('I run the CLI as typed {string}', (w, line: string) => { w.last = w.spawn([BIN, ...splitArgs(line)]); });
@@ -35,9 +35,6 @@ Given('the API answers in turn:', (w, t: DataTable) => {
   });
 });
 
-Given('the network fails before any answer, quoting the URL', (w) => {
-  stubFetch(w, (url) => { throw new TypeError(`Failed to parse URL from ${url}`, { cause: new Error(`bad ${url}`) }); });
-});
 
 Given('an API that never answers', async (w) => {
   const srv = createServer(() => {}).listen(0);
@@ -53,17 +50,12 @@ const call = async (w: World, method: string, url: string, tries?: number) => {
   catch (e) { w.state.failed = true; w.state.error = e as Error; }
 };
 When('the adapter makes a {word} call to {string}', (w, method: string, url: string) => call(w, method, url));
-When('the adapter makes a {word} call to {string} allowing {int} try', (w, method: string, url: string, tries: number) => call(w, method, url, tries));
 When('the adapter makes a {word} call to the API', (w, method: string) => call(w, method, w.state.apiUrl));
 
 Then('the call returns {string}', (w, json: string) => { assert.ok(!w.state.failed, String(w.state.error)); assert.deepEqual(w.state.result, JSON.parse(json)); });
 Then('the call fails with {string}', (w, text: string) => { assert.ok(w.state.failed, 'the call succeeded'); assert.ok(w.state.error.message.includes(text), w.state.error.message); });
-Then('the call fails with exactly {string}', (w, text: string) => { assert.ok(w.state.failed, 'the call succeeded'); assert.equal(w.state.error.message, text); });
-Then('the error does not mention {string}', (w, text: string) => assert.ok(!w.state.error.message.includes(text), w.state.error.message));
 Then('the API was called {int} times', (w, n: number) => assert.equal(w.state.fetchCalls.length, n));
 Then('the helper waited {string} milliseconds', (w, list: string) => assert.deepEqual(w.sleeps, list.split(',').map((x) => Number(x.trim()))));
-Then('the wait for the Retry-After {string} on attempt {int} at {string} is {int} milliseconds', (w, header: string, attempt: number, now: string, ms: number) =>
-  assert.equal(retryWait(header || null, attempt, Date.parse(now)), ms));
 
 // ---- the built CLI ----
 const bin = join(REPO, 'dist', 'bin.js');

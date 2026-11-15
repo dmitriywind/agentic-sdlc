@@ -42,7 +42,6 @@ Given('a trunk with one commit, pushed to an origin', (w) => {
   w.state.pushed = {};
 });
 
-Given('the git vcs port for the project', (w) => { w.state.vcs = portAt(w.root); });
 
 /** A plain repository (no origin): a.txt and gone.txt, then a later commit adding one file. */
 Given('a repository with a commit, and a later commit that adds {string}', (w, later: string) => {
@@ -58,7 +57,6 @@ Given('a repository with a commit, and a later commit that adds {string}', (w, l
   w.state.vcs = portAt(r);
 });
 
-Given('the first commit is the trunk on the origin', (w) => git(w.state.repo, 'update-ref', 'refs/remotes/origin/main', w.state.base));
 
 Given('a snapshot is taken of the first commit', async (w) => { w.state.snap = await w.state.vcs.snapshot!(w.state.base); });
 
@@ -102,7 +100,6 @@ Given('another clone pushes a commit to {string}', (w, name: string) => {
   w.state.otherSha = git(other, 'rev-parse', 'HEAD');
 });
 
-Given('the origin is moved to a place that does not exist', (w) => git(main(w), 'remote', 'set-url', 'origin', w.path('gone.git')));
 
 // ---- When: the port ----
 When('the line {string} cuts the release {string} at its head', async (w, name: string, release: string) => {
@@ -129,7 +126,6 @@ const attempt = async (w: World, f: () => Promise<unknown>) => {
   try { await f(); } catch (e) { w.state.error = e; w.state.failed = true; return; }
   w.state.failed = false;
 };
-When('I try to {word} the change line {string}', (w, action: string, name: string) => attempt(w, () => (action === 'start' ? port(w).start(name) : port(w).drop(name))));
 When('I try the vcs verb {string} with {string} and {string}', (w, verb: string, a: string, b: string) => attempt(w, async () => {
   const v = port(w);
   if (verb === 'changed') await v.changed(a);
@@ -139,21 +135,14 @@ When('I try the vcs verb {string} with {string} and {string}', (w, verb: string,
   else if (verb === 'checkout-tests') await v.checkoutTests(a, b ? [b] : []);
   else throw new Error(`unknown verb ${verb}`);
 }));
-When('the files changed since the first commit are listed', async (w) => { w.state.listed = await w.state.vcs.changed(w.state.base); });
 
 When('the snapshot gets the file {string} containing {string}', (w, file: string, text: string) => put(w.state.snap.workdir, file, text));
 When('the snapshot loses the file {string}', (w, file: string) => rmSync(join(w.state.snap.workdir, file)));
 When('the snapshot is dropped', async (w) => { await w.state.snap.drop(); });
 
 // ---- Then ----
-Then('the line {string} is a worktree under {string} on the branch {string}', (w, name: string, under: string, branch: string) => {
-  const { workdir } = line(w, name);
-  assert.ok(workdir.replace(/\\/g, '/').endsWith(under), workdir);
-  assert.equal(git(workdir, 'rev-parse', '--abbrev-ref', 'HEAD'), branch);
-});
 Then('the files the line {string} changed are {string}', async (w, name: string, files: string) => assert.deepEqual(await line(w, name).vcs.changed(), names(files)));
 Then('the base of the line {string} is the trunk tip', async (w, name: string) => assert.equal((await line(w, name).vcs.base()).sha, git(main(w), 'rev-parse', 'main')));
-Then('the origin has the branch {string}', (w, name: string) => assert.match(git(origin(w), 'branch', '--list', name), new RegExp(name)));
 Then('the cut ref is {string}', (w, ref: string) => assert.deepEqual(w.state.cut, { ref }));
 Then('the origin has {string} at the head of the line {string}', (w, ref: string, name: string) =>
   assert.equal(git(origin(w), 'rev-parse', ref), git(line(w, name).workdir, 'rev-parse', 'HEAD')));
@@ -163,14 +152,10 @@ Then('the tags with the prefix {string} are {string}, both at the head of the li
   assert.deepEqual(tags.map((t) => t.name).sort(), names(list));
   for (const t of tags) assert.equal(t.sha, (await l.vcs.head()).sha);
 });
-Then('in the index of the line {string} the file {string} holds {string}', (w, name: string, file: string, text: string) => assert.equal(git(line(w, name).workdir, 'show', `:${file}`), text));
-Then('the line {string} has no file {string}', (w, name: string, file: string) => assert.ok(!existsSync(join(line(w, name).workdir, file)), `${file} exists`));
 Then('the line {string} has the file {string}', (w, name: string, file: string) => assert.ok(existsSync(join(line(w, name).workdir, file)), `${file} is missing`));
 Then('the line {string} has no worktree', (w, name: string) => assert.ok(!existsSync(line(w, name).workdir)));
 Then('the project has no branch {string}', (w, name: string) => assert.equal(git(main(w), 'branch', '--list', name), ''));
 
-Then('the line {string} is at the trunk tip', (w, name: string) => assert.equal(git(line(w, name).workdir, 'rev-parse', 'HEAD'), git(main(w), 'rev-parse', 'main')));
-Then('both starts returned the same workdir', (w) => { const [a, b] = Object.values<string[]>(w.state.starts)[0]; assert.equal(a, b); });
 Then('the line {string} is at the commit that was pushed', (w, name: string) => assert.equal(git(line(w, name).workdir, 'rev-parse', 'HEAD'), w.state.pushed[name]));
 Then('the line {string} is at the commit the other clone pushed', (w, name: string) => assert.equal(git(line(w, name).workdir, 'rev-parse', 'HEAD'), w.state.otherSha));
 
@@ -179,12 +164,8 @@ Then('the call fails saying {string}', (w, text: string) => {
   assert.ok(w.state.failed, 'the call succeeded');
   assert.match(String(w.state.error?.message ?? w.state.error), new RegExp(text));
 });
-Then('the project has no file {string}', (w, file: string) => assert.ok(!existsSync(join(w.state.repo ?? w.root, file)), `${file} exists`));
 
-Then('the files listed are {string}', (w, files: string) => assert.deepEqual(w.state.listed, names(files)));
 
-Then('the snapshot is outside the repository', (w) => assert.ok(!w.state.snap.workdir.startsWith(w.state.repo)));
-Then('the snapshot has no file {string}', (w, file: string) => assert.ok(!existsSync(join(w.state.snap.workdir, file)), `${file} leaked into the snapshot`));
 Then('the files the snapshot changed are {string}', async (w, files: string) => assert.deepEqual((await w.state.snap.changed()).sort(), names(files)));
 Then('the snapshot folder is gone', (w) => assert.ok(!existsSync(w.state.snap.workdir)));
 Then('git lists no bench worktree', (w) => assert.doesNotMatch(git(w.state.repo, 'worktree', 'list'), /agentic-bench-/));
