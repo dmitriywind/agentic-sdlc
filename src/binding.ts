@@ -160,6 +160,13 @@ export function validateBinding(b: Binding): string[] {
   if (x.learning?.enabled !== undefined && typeof x.learning.enabled !== 'boolean') p.push('learning.enabled must be true or false');
   for (const k of ['preview', 'proofs_on_base', 'evidence_check']) if (x.commands?.[k] !== undefined && typeof x.commands[k] !== 'string') p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? '').includes('{run_id}')) p.push('traces.uri must contain {run_id}');
+  if (x.telemetry !== undefined) {
+    if (!x.telemetry || typeof x.telemetry !== 'object' || Array.isArray(x.telemetry)) p.push('telemetry must be { otlp_endpoint_env, cdevents_sink_env, headers_env }');
+    else for (const [k, v] of Object.entries<any>(x.telemetry)) {
+      if (!['otlp_endpoint_env', 'cdevents_sink_env', 'headers_env'].includes(k)) p.push(`telemetry.${k} is not a telemetry key (otlp_endpoint_env, cdevents_sink_env, headers_env)`);
+      else if (typeof v !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(v)) p.push(`telemetry.${k} must be the NAME of an env var, never a URL or a value`);
+    }
+  }
   if (x.executors && !x.executors.default) p.push('executors.default is missing');
   if (x.heartbeat && !String(x.heartbeat.ticket ?? '').trim()) p.push('heartbeat.ticket is empty: create the heartbeat ticket and put its id here');
   // Keys the gates and skills read without a guard.

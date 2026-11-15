@@ -13,10 +13,10 @@ const front = (text: string) => {
 };
 
 test('plugin agents: one per tier plus a reviewer that reads files and runs only the CLI', () => {
-  for (const [tier, model] of [['fast', 'haiku'], ['balanced', 'sonnet'], ['deep', 'opus']]) {
+  for (const tier of ['fast', 'balanced', 'deep']) {
     const f = front(read(`agents/sdlc-${tier}.md`));
     assert.equal(f.name, `sdlc-${tier}`);
-    assert.equal(f.model, model);
+    assert.equal(f.model, 'inherit'); // the tier's model is a binding value: init writes it into the project's agent
     assert.match(f.description, new RegExp(`metadata\\.tier is ${tier}`));
   }
   const r = front(read('agents/sdlc-reviewer.md'));

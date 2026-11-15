@@ -258,3 +258,48 @@ Feature: Judge runs and improve the factory
     When it is compared or reported
     Then compare is regressed with an insufficient reason
     And report leaves it off the Pareto front
+
+  # Source: src/telemetry.ts, "otlpTraces"
+  # Proof: test/telemetry.test.ts "otlpTraces: one trace per heartbeat, a workflow root and one invoke_agent span per run, with the GenAI attribute names"
+  Scenario: Runs export as OpenTelemetry GenAI spans
+    Given a heartbeat with run rows
+    When "ledger export --format otlp" runs
+    Then it prints one OTLP/HTTP JSON document with one trace per heartbeat
+    And each run is an "invoke_agent <skill>" span with gen_ai.agent.name, gen_ai.agent.version and gen_ai.request.model
+    And a run that did not end done is an error span with error.type set to its outcome
+    And the run's ticket, CR, executor, tier, tokens and scores are agentic_sdlc.* attributes and gen_ai.evaluation.result events
+    And a row's single token total is never split into input and output tokens
+
+  # Source: src/telemetry.ts, "traceId" and "spanId"
+  # Proof: test/telemetry.test.ts "otlpTraces: ids are a hash of the cycle and run ids, so a re-export is the same document"
+  # Proof: test/telemetry.test.ts "exportRows: --since takes days or an ISO time and --run names one run"
+  Scenario: A re-export is the same document
+    Given the same heartbeats exported twice, or exported with --since or --run
+    Then trace and span ids are a hash of the heartbeat and run ids
+    And the rows are in time order, so the document is byte-identical
+
+  # Source: src/telemetry.ts, "cdEventsFromRuns"
+  # Proof: test/telemetry.test.ts "cdEventsFromRuns: taskrun finished per run, change created once per CR, change reviewed for a done review"
+  Scenario: Runs export as CDEvents
+    Given a heartbeat with implement-spec and review-pr runs on a CR
+    When "ledger export --format cdevents" runs
+    Then it prints one CDEvent per line: taskrun finished per run, change created for the first implement-spec run of each CR and change reviewed for each done review-pr run
+    And an event whose required field the ledger cannot fill (taskrun started, pipelinerun) is not printed
+
+  # Source: src/telemetry.ts, "sinkOf", "sendOtlp" and "sendCdEvent"
+  # Proof: test/telemetry.test.ts "delivery: nothing is sent unless the binding names the env vars; headers come from headers_env"
+  # Proof: test/telemetry.test.ts "delivery: OTLP posts to <endpoint>/v1/traces and a CDEvent as a CloudEvents binary request"
+  # Proof: test/telemetry.test.ts "ledger export: otlp and cdevents print to stdout, write --out, and --send posts through ctx.http"
+  Scenario: Nothing is sent unless the binding says where
+    Given the binding has no telemetry keys
+    Then "ledger export --send" refuses and nothing is posted
+    When telemetry.otlp_endpoint_env or telemetry.cdevents_sink_env names an env var that holds a URL
+    Then "ledger export --send" posts the document to "<url>/v1/traces", or each CDEvent as a CloudEvents binary-mode request
+    And the headers come from the env var telemetry.headers_env names
+
+  # Source: src/binding.ts, "telemetry"
+  # Proof: test/telemetry.test.ts "validate: telemetry keys name env vars, never URLs"
+  Scenario: The binding holds env var names, never URLs
+    Given telemetry.otlp_endpoint_env is a URL
+    When "validate" runs
+    Then it reports that the key must be the name of an env var

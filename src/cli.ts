@@ -13,7 +13,7 @@ const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, string]>
   vcs: [() => import('./vcs/index.ts'), true, 'start head changed base push cut tag tags drop checkout-tests'],
   dispatch: [() => import('./dispatch.ts'), true, 'dispatch <skill> --ticket <id> | --cr <n> [--workdir <d>]'],
   gate: [() => import('./gates.ts'), true, 'branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red skill-regression review provenance'],
-  ledger: [() => import('./ledger.ts'), true, 'runs summary plan record stale hash: the run ledger from heartbeats'],
+  ledger: [() => import('./ledger.ts'), true, 'runs summary plan record stale hash measures export: the run ledger from heartbeats; export sends runs as OTLP or CDEvents'],
   bench: [() => import('./bench.ts'), true, 'build propose run report compare'],
   mcp: [() => import('./mcp.ts'), true, 'serve the port verbs as MCP tools over stdio; --allow approve,status'],
 };
