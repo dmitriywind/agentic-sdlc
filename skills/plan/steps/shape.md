@@ -30,8 +30,8 @@ on the ticket is checked, not redone.
    (`owners.product` unless it names another owner role). Use the words of `paths.glossary`; add
    what is out of scope. Done when every criterion is checkable and names its proof.
 6. **Lane.** `board set <id> lane <Fast|Full>` as [Lanes](../../sdlc/references/board.md#lanes)
-   says, then run `escalate` for the ticket. Done when the Lane is set and the `escalate` result is
-   on the ticket (a held ticket stops this run).
+   says, then run `escalate` for the ticket. Done when the Lane is set and `escalate` returned
+   proceed, or it held the ticket and this run stopped.
 7. **Spec.** Fast lane: the criteria and a proof list, each proof with its tier, file and rule as
    `paths.test_standard` defines them. Full lane: design from the project's existing seams first;
    prefer deep modules (a small interface, much behaviour behind it); add a seam only where

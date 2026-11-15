@@ -27,7 +27,8 @@
   "scripts": {
     "build": "tsup && node scripts/guide.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test test/*.test.ts",
+    "test": "npm run build && node --test features/support/run.ts test/*.test.ts",
+    "test:features": "node --test features/support/run.ts",
     "hashes": "node scripts/known-hashes.mjs"
   },
   "keywords": [

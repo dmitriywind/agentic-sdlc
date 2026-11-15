@@ -57,7 +57,7 @@ data.
 
 ## Rules
 
-- Never mark the CR ready or merge it; review and `forge land` do.
+- Never mark the CR ready; `review/review` does.
 - Every deviation goes into a new spec comment. Promotion to Full follows
   [Lanes](../sdlc/references/board.md#lanes). A deviation that changes design or scope is escalated,
   not decided.

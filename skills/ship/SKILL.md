@@ -15,11 +15,11 @@ resumes from what it shows. The request is never release content. The Product ow
 last environment; this step never does. With `product.delivery: continuous` there is no release
 line and this step never runs.
 
-1. **Request.** Dispatched for a Done P0 ticket instead of a request: `board list --label <board.labels.release>
-   --search "Release for P0 #<id>"`; when none is open, `board create` it at Backlog with that
+1. **Request.** Dispatched for a Done P0 ticket instead of a request: `board list --label
+   <board.labels.release> --search "Release for P0 #<id>"`; when none is open, `board create` it at Backlog with that
    label and title. Continue on that request. Done when the request exists.
 2. **Resume.** `board comments <request> --kind release-proposal --last 1 --trusted`. With a
-   proposal and no go-ahead after it (trust table), stop: no comment. A reply that approves goes to
+   proposal and no go-ahead after it (the contract's Trust), stop with only the done line. A reply that approves goes to
    step 7, or to step 8 when a `release-cut` comment follows it; one that changes contents to step
    4; one asking to refresh to step 3. Done when the run stopped or knows its entry step.
 3. **Gather.** The last release (`vcs tags --prefix <vcs.tag_prefix>`, first row); the tickets at
@@ -32,7 +32,7 @@ line and this step never runs.
    On <env before last>; a ticket in range that is not means an earlier revision, or waiting. For a
    P0, the newest revision holding the fix. Done when the revision and its tickets are fixed.
 5. **Ready check.** All hold: every included ticket is Done with Shipped On <env before last> and
-   not held; no P0 is open; no `signal:deploy` ticket is open; no signal with a `board.env_labels`
+   not held; no P0 is open; no Signal of a failed deploy or release is open; no signal with a `board.env_labels`
    label sits at Signals; the environment before the last and CI are green on the revision;
    `commands.rollback` is named and a green rollback run in the environment before the last since
    the last release tag is shown by `forge runs` or linked in a trusted comment on the request; when
