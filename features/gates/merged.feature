@@ -2,7 +2,7 @@
 @gate:merged
 Feature: Gate merged
   One gate, on the trunk push, moves a merged ticket to Done, so that each Status transition has one writer and no CR
-  pipeline writes the board. Done records a fact: a held ticket moves too and keeps its label.
+  pipeline writes the board. Done records a fact: a held ticket moves too and loses its human label.
 
   Rule: Whatever is not one merged CR into the trunk with one live ticket moves nothing
 
@@ -55,7 +55,7 @@ Feature: Gate merged
       And the ticket "12" is at "Done"
       And the ticket "12" has Shipped "Not shipped"
 
-    Scenario: A held ticket moves too and keeps its label
+    Scenario: A held ticket moves too and loses its human label
       Given these tickets are on the board:
         | id | status    | labels      |
         | 12 | In review | needs-human |
@@ -64,4 +64,4 @@ Feature: Gate merged
         | 1  | 12/x   | 12     | m1    |
       When the merged gate runs for the sha "m1"
       Then the ticket "12" is at "Done"
-      And the ticket "12" has the labels "needs-human"
+      And the ticket "12" has the labels ""

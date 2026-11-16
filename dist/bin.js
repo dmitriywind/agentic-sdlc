@@ -8907,6 +8907,14 @@ var init_board = __esm({
           case "comment": {
             need3(1);
             if (a.has("ref") && !a.has("kind")) throw new Usage("board comment: --ref needs --kind");
+            if (a.get("kind") === "heartbeat") {
+              let f;
+              try {
+                f = JSON.parse(body()).factory;
+              } catch {
+              }
+              if (f !== void 0 && !(typeof f === "string" && /^[0-9a-f]{7,40}$/.test(f))) throw new Usage("board comment: heartbeat factory must be a hex sha (the sha field of vcs head)");
+            }
             out = await board.comment(id, a.has("kind") ? stampBody(body(), parseWritableKind(a.get("kind")), a.get("ref"), { specMarker: base.binding.spec_marker }) : body());
             break;
           }
@@ -11490,6 +11498,7 @@ async function merged(d, sha2) {
       if (!b.done_statuses.includes((await d.board.get(id)).status)) throw e;
     }
   }
+  if ((await d.board.get(id)).labels.includes(b.labels.human)) await d.board.label(id, "remove", b.labels.human);
   if (!(await d.board.get(id)).fields?.shipped) await d.board.set(id, "shipped", opts[0]);
   return { cr: cr.n, sha: sha2, moved: [id] };
 }

@@ -390,7 +390,7 @@ export async function proofsOnBase(d: Deps, n: string) {
 
 /**
  * A push to the trunk: the CR merged at that sha moves its one ticket to Done (Shipped Not shipped when
- * empty). Done records a fact, so a held ticket moves too and keeps its label; a Cancelled ticket stays.
+ * empty). A held ticket moves too, and Done drops its human label: nothing is left to ask; a Cancelled ticket stays.
  * A push with no CR (a direct push) changes nothing.
  */
 export async function merged(d: Deps, sha: string): Promise<{ cr?: string; sha: string; moved: string[]; reason?: string }> {
@@ -409,6 +409,7 @@ export async function merged(d: Deps, sha: string): Promise<{ cr?: string; sha: 
     try { await d.board.move(id, 'Done', it.status); }
     catch (e) { if (!b.done_statuses.includes((await d.board.get(id)).status)) throw e; } // shipped moved it first
   }
+  if ((await d.board.get(id)).labels.includes(b.labels.human)) await d.board.label(id, 'remove', b.labels.human);
   if (!(await d.board.get(id)).fields?.shipped) await d.board.set(id, 'shipped', opts[0]);
   return { cr: cr.n, sha, moved: [id] };
 }

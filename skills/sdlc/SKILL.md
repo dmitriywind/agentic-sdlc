@@ -94,7 +94,7 @@ the run is a double fire or still going: leave it.
 8. **Review.** `forge queue` again, since this cycle may have opened CRs; act on every `review` row
    not dispatched in this cycle. Done when each is dispatched.
 9. **Report.** One `board comment <heartbeat.ticket> --kind heartbeat --body-file <f>`, the body a
-   JSON object: `kind: cycle`, `at` (UTC end time), `factory` (`vcs head` sha of the trunk read),
+   JSON object: `kind: cycle`, `at` (UTC end time), `factory` (the bare hex string in the `sha` field of `vcs head`, not the whole object),
    `runs`, `errors` (`step`, `id`, `msg` per failed step), `did` (one line per result, with its id),
    `learning` copied forward when `learning.enabled`, and `budget: exhausted` when step 1 found it.
    One row in `runs` per run this cycle dispatched, except a run that writes its own heartbeat

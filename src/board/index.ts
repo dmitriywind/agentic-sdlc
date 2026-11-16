@@ -157,6 +157,7 @@ export const cli: PortCli = async (argv, base) => {
       case 'comment': {
         need(1);
         if (a.has('ref') && !a.has('kind')) throw new Usage('board comment: --ref needs --kind');
+        if (a.get('kind') === 'heartbeat') { let f: unknown; try { f = JSON.parse(body()).factory; } catch { /* not JSON: the ledger skips it */ } if (f !== undefined && !(typeof f === 'string' && /^[0-9a-f]{7,40}$/.test(f))) throw new Usage('board comment: heartbeat factory must be a hex sha (the sha field of vcs head)'); }
         out = await board.comment(id, a.has('kind') ? stampBody(body(), parseWritableKind(a.get('kind')!), a.get('ref'), { specMarker: base.binding.spec_marker }) : body());
         break;
       }
