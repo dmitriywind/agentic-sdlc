@@ -7,7 +7,7 @@ import { createBoard } from './board/index.ts';
 import { fill } from './bench.ts';
 import type { Binding, Board, Executor, Limits, McpServer, PortCli } from './ports.ts';
 import { limitsOf, ownersFor } from './ports.ts';
-import { matches, stamp } from './comments.ts';
+import { isMarked, matches, stamp } from './comments.ts';
 import { findStep, readSkills, skillOf } from './skills.ts';
 
 const envOf = (env: NodeJS.ProcessEnv, name: string) => {
@@ -227,7 +227,10 @@ export const cli: PortCli = async (argv, ctx) => {
       // Finished: the run's own done line, which dispatch hands to every executor. Other runs' comments never
       // count. Timestamps may have whole seconds only, so a same-second comment counts.
       const later = (c: { id: string; createdAt: string }) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
-      const finished = mine && all.some((c) => later(c) && c.body.includes(stamp('done', key)));
+      // A cycle's last act is its `kind: cycle` heartbeat (step 9), so that heartbeat ends the claim too: a cycle that
+      // posted it but forgot the done line (found on the pilot) must not hold the lock until the time budget passes.
+      const ends = (c: { body: string }) => c.body.includes(stamp('done', key)) || (skill === 'sdlc' && isMarked(c.body, 'heartbeat') && /"kind"\s*:\s*"cycle"/.test(c.body));
+      const finished = mine && all.some((c) => later(c) && ends(c));
       // A cycle (`sdlc`) cannot outlive cycle.time_budget_minutes: a claim older than that is dead, whatever stall_minutes says.
       const stall = skill === 'sdlc' ? Number(b.cycle?.time_budget_minutes) || Number(b.stall_minutes) || 0 : Number(b.stall_minutes) || 0;
       const age = Number.isNaN(at) ? 0 : (Date.now() - at) / 60_000; // an unparseable time counts as just now: fail closed

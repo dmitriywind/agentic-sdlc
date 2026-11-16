@@ -67,3 +67,9 @@ Feature: A dispatch starts one run per key
       And the comment "<!-- agentic-sdlc:done 2-sdlc -->" is posted on the ticket "2"
       When dispatch runs "sdlc --ticket 2"
       Then the result "kind" is "claim"
+
+    Scenario: A cycle that posted its heartbeat but not its done line does not block the next cycle
+      Given dispatch runs "sdlc --ticket 2"
+      And the comment '<!-- heartbeat -->\n{"kind":"cycle","runs":[],"errors":[],"did":["idle"]}' is posted on the ticket "2"
+      When dispatch runs "sdlc --ticket 2"
+      Then the result "kind" is "claim"

@@ -101,7 +101,8 @@ the run is a double fire or still going: leave it.
    (`learn/improve`, and a review that `dispatch` started elsewhere) (`id`, `skill` as
    `<skill>/<step>`, `skillHash`, `ticket`, `cr`, `tier`, `model`, `executor`, `ref`, `tokens`,
    `minutes`, `outcome`, `error`, `trace`); a value the run did not report is left out. `outcome`
-   is `done`, `sent_back`, `failed`, `escalated`, `timeout` or `capped`. Then the cycle's done line.
+   is `done`, `sent_back`, `failed`, `escalated`, `timeout` or `capped`. Then the cycle's done line: `board comment <heartbeat.ticket> --kind done --ref <key>`, the `key` the
+   claim printed.
    Done when both are posted.
 
 Rules for a cycle:
