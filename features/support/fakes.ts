@@ -74,6 +74,7 @@ export class GateFakes {
       },
       list: async (q: { status?: string[]; label?: string } = {}) => this.items.filter((i) => (!q.status || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label))),
       move: async (id: string, s: string) => { get(id)!.status = s; return get(id)!; },
+      label: async (id: string, op: 'add' | 'remove', l: string) => { const i = get(id)!; i.labels = op === 'add' ? [...i.labels, l] : i.labels.filter((x) => x !== l); return i; },
       set: async (id: string, f: string, v: string | null) => { if (v === null) delete (get(id)!.fields as any)[f]; else (get(id)!.fields as any)[f] = v; return get(id)!; }, // eslint-disable-line @typescript-eslint/no-explicit-any
       create: async (t: { title: string; body: string; status: string; labels?: string[] }) => {
         this.created.push({ ...t, labels: t.labels ?? [] });
