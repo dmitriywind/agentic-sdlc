@@ -1,0 +1,30 @@
+name: agentic-sdlc dead-man
+# Fails (and notifies) when no heartbeat landed for --max-hours. It runs outside the cycle on purpose: a Claude cloud
+# scheduled task stops silently (runs rejected at the subscription usage limit never start, the task turns off after
+# 72 h without a GitHub connection, a run can show Succeeded with nothing done), and only a check outside it sees that.
+# Installed for every runtime. Set --max-hours above your cycle cadence (a few cadences).
+on:
+  schedule:
+    - cron: "23 */3 * * *"   # not minute :00: schedules are delayed or dropped at peak
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash   # self-hosted Windows runners default to PowerShell
+jobs:
+  dead-man:
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
+      - name: Heartbeat is fresh
+        env:
+          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
+        run: .agents/bin/agentic-sdlc ledger stale --max-hours 6   # set: above your cycle cadence plus one cycle's run time

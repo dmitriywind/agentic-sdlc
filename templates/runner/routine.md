@@ -38,12 +38,12 @@ put the command that starts the review run in the cycle environment as `AGENTIC_
   If the API insists on a schedule, give the review one and pause it (`POST /v1/deployments/{id}/pause`); `/run` still starts it (unverified).
 
 If nothing can chain, use the scheduler's own concurrency lock (one run of cycle or review at a time per
-repo, queued, not dropped) and give both the same cadence; never pick fixed offsets such as :15 and :45.
+repo; GitHub Actions keeps one running and one pending run per group, and a newer pending run cancels the older pending one) and give both the same cadence; never pick fixed offsets such as :15 and :45.
 `dispatch`'s idempotency key skips a second dispatch of the same skill and subject inside `cycle.dedupe_minutes` (a double fire). It also skips one while the previous run has not finished, until `stall_minutes` pass. So a repeated review of an unchanged head is a no-op.
 
 A dead-man check runs `.agents/bin/agentic-sdlc ledger stale --max-hours <h>` (exit 1 when the newest heartbeat is older).
-The CI templates have it as a job; elsewhere schedule it anywhere that alerts on failure.
-GitHub disables scheduled workflows after 60 days without repo activity, so the CI templates' dead-man job stops with the cycle; keep a check that runs elsewhere if the repo can go quiet.
+`init` installs it as its own workflow, `.github/workflows/agentic-sdlc-dead-man.yml`, for every runtime: a cloud task stopped at the usage limit writes no heartbeat, so only a check outside it sees the stop.
+In a public repo GitHub disables scheduled workflows after 60 days without repo activity, so the dead-man workflow stops too; keep a check that runs elsewhere if a public repo can go quiet.
 
 ## Claude Managed Agents deployment
 

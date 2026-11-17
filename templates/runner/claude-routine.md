@@ -2,7 +2,8 @@
 
 Profile: individual or individual-api (also works on Team and Enterprise seats of the Claude plan). Research preview; needs a claude.ai login (not an API key, Bedrock or Vertex).
 Install at: claude.ai/code/routines, or `/schedule` in Claude Code. The task belongs to, and acts as, one claude.ai account.
-Usage: scheduled runs draw the same subscription usage as interactive work. The shortest schedule interval is 1 hour.
+Usage: scheduled runs draw the same subscription usage as interactive work, and are rejected at the subscription usage limit unless usage credits are on. The shortest schedule interval is 1 hour; pick a minute off the hour (for example `7 */2 * * *`), since on-the-hour starts can be late.
+Silent stops: the task turns off after 72 h without a GitHub connection, and a run row that says "Succeeded" does not prove work was done. Neither writes a heartbeat, so install the dead-man workflow (`agentic-sdlc-dead-man.yml`, installed by `init`).
 Skills: a cloud session loads no repo plugin, only `.claude/skills/`. Install with
 the package's `init --harness claude --no-plugin` (`npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v<version> init ...`) and commit `.claude/skills/` and `.mcp.json`.
 Board: the GitHub proxy refuses GraphQL and every `orgs/*` and `users/*` route, so a `github` (Projects v2)
@@ -10,8 +11,10 @@ board is out of reach; `doctor` fails on it in a cloud session. Use one of:
 - `github-issues`: reached through `repos/{owner}/{repo}/...`, with the session's own GitHub auth.
 - `jira` or `linear`: both hosts are refused at the default network level; see "Jira and Linear" below.
 A `github` board runs from GitHub Actions instead (`github-actions-claude.yml`); Actions is an option for any board.
-Verify: a cloud session has no Docker daemon and stops a foreground command at 10 minutes (2 hours in the
-background). The cycle runs `commands.fast_check`; `commands.verify` runs in CI as the `Required` check.
+Verify: Docker is available in a cloud session. A foreground command waits 2 minutes by default, up to 10, then can continue in the
+background for up to 30 more minutes; set `BASH_DEFAULT_TIMEOUT_MS` and `BASH_MAX_TIMEOUT_MS` in the environment to raise both. The cycle
+runs `commands.fast_check` (it may run containers); `commands.verify` still runs in CI as the `Required` check.
+Toolchains: Node, Python, Java, Go, Rust, PostgreSQL and Redis are pre-installed; anything else (.NET for example) needs the setup script (`dotnet-install.sh`).
 Draft and merge: on a private repo on GitHub Free a draft CR is a PR with the `draft` label, and `forge automerge`
 merges directly once every `forge.required_checks` entry is green; no gate blocks that merge.
 Secrets: none for the model. The repo needs the Claude GitHub App or `/web-setup`; the session's `GH_TOKEN` is a placeholder the proxy replaces.
@@ -35,8 +38,8 @@ Two identities (`forge.review_identity` set): two routines, two cloud environmen
 5. Optional API trigger: `POST https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire`,
    `Authorization: Bearer <per-task token>`, `anthropic-beta: experimental-cc-routine-2026-04-01`, optional body `text`.
    Limit: 30 fires per hour per task.
-6. A routine pushes only `claude/*` branches by default: set `vcs.change_pattern: claude/feature/<ticket>-<name>` and
-   `vcs.factory_change_pattern: claude/sdlc/<name>` in the binding, or allow unrestricted branch pushes on the routine.
+6. Claude pushes to `claude/` branches unless the prompt directs another branch. Nothing enforces it: the proxy does not limit which
+   branch a push updates (it rejects tag pushes and branch deletions), and a rule the connected GitHub access can bypass does not block a run's push.
 
 ## Environment setup script
 The committed `.mcp.json` starts the MCP server through `.agents/bin/agentic-sdlc`, which installs the pinned CLI on first use.
@@ -52,6 +55,7 @@ if [ -d <repo> ]; then
 fi
 ```
 
+The setup script is cached only when it finishes in about 5 minutes; a longer one runs on every session.
 The pin is `.agents/cli.json` (`init` writes it). The install fetches the package from github.com through npm, so
 the environment's network must reach github.com and the npm registry.
 Unproved: this has not been run in a cloud session. Still open: confirm that the MCP server connects in the session
@@ -63,6 +67,7 @@ Not yet proved in a cloud run. In the environment's network settings, add to the
 - Jira Cloud: the host of the binding's `board.options.base_url`, `<site>.atlassian.net` (the adapter calls
   `<base_url>/rest/api/3/...` only, never `api.atlassian.com`).
 
+A host that has a network secret is reachable even with Limited network access, so the allowed-domain entry is not needed when a secret exists.
 Add the token as a network secret for that host (the proxy injects it into requests to the host; it is never sent to
 GitHub). Match what the adapter sends:
 - Linear: header `Authorization`, value the raw API key with no `Bearer` prefix (`lin_api_...`).
@@ -71,6 +76,6 @@ GitHub). Match what the adapter sends:
 
 Both adapters refuse to run when their token env var is unset (`set <token_env> for the Linear board`; Jira also
 needs `email_env`), and they send the header themselves. So set the env vars the binding names (`board.options.token_env`,
-and `email_env` for Jira) in the environment to a placeholder value; whether the proxy then replaces the adapter's
+and `email_env` for Jira) in the environment to a placeholder value (the adapter still needs its env var); whether the proxy then replaces the adapter's
 header with the secret is unproved, so if it does not, put the real token in the env var as well. Also set
 `NODE_USE_ENV_PROXY=1` (above), or Node ignores the proxy.

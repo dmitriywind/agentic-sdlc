@@ -13,6 +13,8 @@ What you do after the first cycle: watch it, upgrade it, and keep the repo and t
 `ledger summary` reads the heartbeats: runs, outcomes and failures by cluster. `ledger stale` fails
 when no heartbeat arrived in time; schedule it where a failure alerts you.
 
+`init` installs that check as its own workflow, `agentic-sdlc-dead-man.yml`, for every runtime: it runs every 3 hours outside the cycle and fails when no heartbeat landed for `--max-hours` (set it above your cycle cadence). It catches what stops silently: a cloud task whose runs are rejected at the usage limit, a task switched off after 72 hours without a GitHub connection, a run that shows Succeeded and did nothing.
+
 `ledger measures` prints deploy frequency, lead time, change failure rate, time to restore and
 rework rate over the last 30 days (`--days <n>`), computed from the board and the forge. A measure
 the data cannot give is `null` with a reason. Set `product.slo` (`change_failure_rate_max` and

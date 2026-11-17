@@ -21,7 +21,7 @@ export const ADAPTERS = {
 const OPTIONS: Record<string, Record<string, [string[], string[]]>> = {
   board: {
     github: [['owner', 'project_number', 'repo'], ['token_env']],
-    'github-issues': [['repo'], []],
+    'github-issues': [['repo'], ['field_ids']],
     jira: [['base_url', 'project_key', 'email_env', 'token_env'], []],
     linear: [['team_key', 'token_env'], []],
     local: [[], []],
@@ -80,6 +80,14 @@ export function validateBinding(b: Binding): string[] {
     const opts = x[port].options ?? {};
     for (const k of spec[0]) if (opts[k] === undefined || opts[k] === null || opts[k] === '') p.push(`${port}.options.${k} is required for adapter ${a}`);
     for (const k of Object.keys(opts)) if (!spec[0].includes(k) && !spec[1].includes(k)) p.push(`${port}.options.${k} is not read by adapter ${a} (known: ${[...spec[0], ...spec[1]].join(', ') || 'none'})`);
+  }
+  const fids = x.board?.adapter === 'github-issues' ? x.board.options?.field_ids : undefined;
+  if (fids !== undefined) {
+    if (!fids || typeof fids !== 'object' || Array.isArray(fids)) p.push('board.options.field_ids must be a map from status or a board.fields name to an org issue field id');
+    else for (const [k, v] of Object.entries(fids)) {
+      if (k !== 'status' && !(k in (x.board.fields ?? {}))) p.push(`board.options.field_ids.${k} is not 'status' or a key of board.fields`);
+      if (!Number.isInteger(v) || (v as number) <= 0) p.push(`board.options.field_ids.${k} must be a positive integer`);
+    }
   }
   if (x.board) {
     if (!Array.isArray(x.board.statuses)) p.push('board.statuses must be a list');

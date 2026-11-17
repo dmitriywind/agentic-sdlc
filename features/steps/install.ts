@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parse as parseYaml, stringify } from 'yaml';
 import { skillRegression } from '../../src/gates.ts';
-import { cli, cliPin, deliveryWorkflow, implementerToken, probeFailure, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../../src/install.ts';
+import { cli, cliPin, deliveryWorkflow, implementerToken, issueFields, probeFailure, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../../src/install.ts';
 import { isInstallable, shippedHashes } from '../../src/pristine.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import { BIN, Outcome, REPO, merge, splitArgs, type World } from '../support/world.ts';
@@ -266,6 +266,12 @@ When('doctor checks the trunk protection', (w) => shown(w, ...trunkProtection(bo
 When('doctor checks the implementer token', (w) => shown(w, implementerToken(bound(w), ctxOf(w))));
 When('doctor checks the self-hosted runner', (w) => shown(w, selfHostedRunner(bound(w), ctxOf(w))));
 When('doctor checks the delivery workflow', (w) => shown(w, deliveryWorkflow(bound(w), w.root)));
+Given('the board is github-issues on "acme/shop" with the statuses "Ready, Done" and the field_ids {string}', (w, map: string) =>
+  w.binding({ board: { adapter: 'github-issues', options: { repo: 'acme/shop', field_ids: Object.fromEntries(map.split(',').map((kv) => kv.split('=').map((x) => x.trim())).map(([k, v]) => [k, Number(v)])) }, fields: { size: 'Size' }, statuses: ['Ready', 'Done'] } }));
+Given('the org "acme" has the issue fields:', (w, t: DataTable) => answer(w, /orgs.acme.issue-fields/, JSON.stringify(t.hashes().map((r) => ({
+  id: Number(r.id), name: r.name, data_type: r.options ? 'single_select' : 'text', options: r.options ? r.options.split(',').map((n) => ({ id: 1, name: n.trim() })) : undefined,
+})))));
+When('doctor checks the issue fields', (w) => shown(w, ...issueFields(bound(w), ctxOf(w))));
 When('doctor checks the CLI pin', (w) => shown(w, ...cliPin(w.root)));
 When('doctor checks the workflow actions', (w) => shown(w, unpinnedActions(w.root)));
 When('a probe fails with the message {string}', (w, msg: string) => shown(w, probeFailure(nl(msg), doc(w).env, bound(w))));

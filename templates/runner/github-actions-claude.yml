@@ -5,25 +5,28 @@
 #   individual, individual-api: CLAUDE_CODE_OAUTH_TOKEN  (create with `claude setup-token`)
 #   organization: ANTHROPIC_API_KEY
 # Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, and AGENTIC_REVIEW_TOKEN with two identities (the names your binding uses).
-# One identity (forge.review_identity empty): the cycle runs review/review itself; delete the `review` job
-# (`dead-man` needs only `cycle`, so the file stays valid; with two identities add `review` to its needs).
+# One identity (forge.review_identity empty): the cycle runs review/review itself; delete the `review` job.
 # Repo variable: AGENTIC_AGENT_CLI_VERSION (an exact Claude Code version); a job fails when it is unset.
 # The agentic-sdlc CLI is the pin in .agents/cli.json, run through .agents/bin/agentic-sdlc (it installs itself on first use).
 # The agent CLI installs in a step with no secrets in its env; each secret reaches only the steps that need it.
-# GitHub disables scheduled workflows after 60 days without repo activity, so `dead-man` stops with the cycle.
+# GitHub disables scheduled workflows after 60 days without repo activity in a public repo only (docs.github.com, disabling and enabling workflows).
+# The dead-man check is its own workflow, agentic-sdlc-dead-man.yml, installed by init.
 # --allowedTools: set the npm entries to your binding's commands.fast_check and commands.verify.
-# Three jobs: `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
-# `review` starts when the cycle finishes, with the review token and the review prompt only;
-# `dead-man` fails (and notifies) when no heartbeat landed for --max-hours.
+# Two jobs: `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
+# `review` starts when the cycle finishes, with the review token and the review prompt only.
 # Setup script and prompts come from `agentic-sdlc init` (.agents/runner-setup.sh, .agents/cycle-prompt.md, .agents/review-prompt.md).
 # The plugin loads from the pinned CLI package (--plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc): skills, the
 # forge-approve / trunk-push hook and the MCP server. runner-setup.sh installs it and puts .agents/bin on PATH.
 name: factory-cycle-claude
 on:
   schedule:
-    - cron: "*/30 * * * *"  # set: your cadence
+    # Minutes: GitHub Free gives a private repo $12 of hosted compute a month (about 2,000 Linux minutes; Pro/Team $18,
+    # about 3,000). A cycle of N minutes every 4 h is N x 180 minutes a month, and CR CI draws on the same pool.
+    # A self-hosted runner (AGENTIC_RUNS_ON) uses none. Avoid minute :00: schedules are delayed or dropped at peak.
+    - cron: "17 */4 * * *"  # set: your cadence
   workflow_dispatch:
-concurrency: factory-cycle
+# A group keeps one running and one pending run; a newer pending run replaces the older pending one, which is fine for a cycle.
+concurrency: { group: factory-cycle, cancel-in-progress: false }
 permissions:
   contents: read   # pushes use AGENTIC_FORGE_TOKEN, not this token
 env:
@@ -109,21 +112,3 @@ jobs:
           --output-format json --max-budget-usd 5 --max-turns 200
           --permission-mode acceptEdits
           --allowedTools "Bash(agentic-sdlc *)" "Bash(.agents/bin/agentic-sdlc *)" "mcp__agentic-sdlc" "mcp__plugin_agentic-sdlc_agentic-sdlc"   # review: no git writes, no npm
-  dead-man:
-    needs: [cycle]   # two identities: add review, so the check waits for the review run
-    if: ${{ always() }}
-    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-      # Not runner-setup.sh: its doctor probes the forge too, which this job has no token for, so it would stay red.
-      # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
-      - name: Heartbeat is fresh
-        env:
-          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
-        run: .agents/bin/agentic-sdlc ledger stale --max-hours 3   # set: a few cadences

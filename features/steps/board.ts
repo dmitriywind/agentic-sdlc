@@ -115,6 +115,13 @@ const linearAnswer = (w: World) => (c: string): unknown => {
 const iss = (number: number, labels: string[], extra: Record<string, unknown> = {}) =>
   ({ number, id: number * 10, title: `t${number}`, body: '', html_url: `u${number}`, labels: labels.map((name) => ({ name })), assignees: [], ...extra });
 const names = (ls: string[]) => ls.map((name) => ({ name }));
+/** An issue field value as GitHub returns it: a single select carries its option, a text field its value. */
+const fieldValue = (w: World, id: number, value: string) => {
+  const type = (w.state.fieldTypes ?? {})[id] ?? 'text';
+  return type === 'single_select'
+    ? { issue_field_id: id, data_type: type, value: 1, single_select_option: { id: 1, name: value } }
+    : { issue_field_id: id, data_type: type, value };
+};
 const issuesExec = (w: World) => (cmd: string, args: string[], o?: { input?: string }): string => {
   const s = w.state;
   const input = o?.input ? JSON.parse(o.input) : undefined;
@@ -135,6 +142,15 @@ const issuesExec = (w: World) => (cmd: string, args: string[], o?: { input?: str
   if (/^issues\/\d+$/.test(path)) {
     if (method === 'PATCH') Object.assign(it, input, input.labels ? { labels: names(input.labels) } : {});
     return JSON.stringify(it);
+  }
+  const fv = path.split('/');
+  if (fv[0] === 'issues' && fv[2] === 'issue-field-values') {
+    const t: Any = issues.find((i) => i.number === Number(fv[1]));
+    t.issue_field_values ??= [];
+    const drop = (id: number) => { t.issue_field_values = t.issue_field_values.filter((v: Any) => v.issue_field_id !== id); };
+    if (method === 'DELETE') drop(Number(fv[3]));
+    for (const v of input?.issue_field_values ?? []) { drop(v.field_id); t.issue_field_values.push(fieldValue(w, v.field_id, v.value)); }
+    return method === 'DELETE' ? '' : JSON.stringify(t.issue_field_values);
   }
   if (path.endsWith('/comments')) return method === 'POST' ? JSON.stringify({ id: 5, html_url: 'c5' }) : pageOf(it.comments ?? []);
   if (path.endsWith('/sub_issues')) return '[]';
@@ -196,8 +212,18 @@ Given('the repo has these issues:', (w, t: DataTable) => {
   (w.state.issues ??= []).push(...t.hashes().map((r) => iss(Number(r.number), csv(r.labels ?? ''), {
     ...(r['pull request'] ? { pull_request: {} } : {}),
     ...(r.state ? { state: r.state, closed_at: r['closed at'] } : {}),
+    ...(r['issue fields'] ? { issue_field_values: csv(r['issue fields']).map((kv) => { const [k, v] = kv.split('='); return fieldValue(w, w.state.options.field_ids[k], v); }) } : {}),
     ...(r.assignee ? { assignees: [{ login: r.assignee }] } : {}),
   })));
+});
+Given('the board maps the issue fields {string}', (w, map: string) => {
+  w.state.options.field_ids = {};
+  w.state.fieldTypes = {};
+  for (const kv of csv(map)) {
+    const [k, rest] = kv.split('='), [id, type] = rest.split(':');
+    w.state.options.field_ids[k] = Number(id);
+    w.state.fieldTypes[Number(id)] = type;
+  }
 });
 Given('the repo has the labels {string}', (w, labels: string) => { (w.state.repoLabels ??= []).push(...csv(labels)); });
 Given('the repo has the milestone {string} as number {int}', (w, title: string, number: number) => { (w.state.milestones ??= []).push({ number, title }); });
@@ -222,6 +248,7 @@ When('the factory reads the comments of the ticket {string} with the marker {str
 When('the factory assigns the ticket {string} to {string}', (w, id: string, login: string) => attempt(w, (b) => b.assign(id, login)));
 When('the factory sets the milestone of the ticket {string} to {string}', (w, id: string, name: string) => attempt(w, (b) => b.milestone(id, name)));
 When('the factory sets the field {string} of the ticket {string} to {string}', (w, f: string, id: string, v: string) => attempt(w, (b) => b.set(id, f as LogicalField, v)));
+When('the factory clears the field {string} of the ticket {string}', (w, f: string, id: string) => attempt(w, (b) => b.set(id, f as LogicalField, null)));
 When('the factory adds the label {string} to the ticket {string}', (w, l: string, id: string) => attempt(w, (b) => b.label(id, 'add', l)));
 When('the factory closes the ticket {string} as {string}', (w, id: string, reason: string) => attempt(w, (b) => b.close(id, reason as 'completed' | 'not_planned')));
 When('the factory creates a ticket at {string} with the labels {string}, the milestone {string} and the parent {string}', (w, status: string, labels: string, milestone: string, parent: string) =>
@@ -269,6 +296,17 @@ Then('every call is a gh api call under the repo, never GraphQL, gh issue or gh 
   }
 });
 Then('the issue {int} has the labels {string}', (w, n: number, labels: string) => assert.equal(issueOf(w, n).labels.map((l: Any) => l.name).join(', '), labels));
+Then('the issue {int} has the issue field {string} set to {string}', (w, n: number, key: string, value: string) => {
+  const v = issueOf(w, n).issue_field_values.find((x: Any) => x.issue_field_id === w.state.options.field_ids[key]);
+  assert.equal(String(v?.single_select_option?.name ?? v?.value), value);
+});
+Then('the issue {int} has no value for the issue field {string}', (w, n: number, key: string) =>
+  assert.ok(!(issueOf(w, n).issue_field_values ?? []).some((x: Any) => x.issue_field_id === w.state.options.field_ids[key])));
+Then('every issue field call sends the API version header {string}', (w, version: string) => {
+  const calls = rest(w).filter((c) => c.args[4].includes('issue-field-values'));
+  assert.ok(calls.length > 0);
+  for (const c of calls) assert.deepEqual(c.args.slice(5, 7), ['-H', `X-GitHub-Api-Version: ${version}`]);
+});
 Then('the repo has the labels exactly {string}', (w, labels: string) => assert.equal(w.state.repoLabels.join(', '), labels));
 Then('the issue {int} is closed with the reason {string}', (w, n: number, reason: string) => { assert.equal(issueOf(w, n).state, 'closed'); assert.equal(issueOf(w, n).state_reason, reason); });
 Then('the last patch sets the milestone to {int}', (w, n: number) => assert.equal(rest(w).filter((c) => c.args[3] === 'PATCH').at(-1)!.input.milestone, n));

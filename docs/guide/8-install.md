@@ -68,6 +68,18 @@ through the checks.
 
 </div>
 
+## Org issue fields on the github-issues board
+
+On an organisation repo the `github-issues` board can keep its status and fields as GitHub org issue fields instead of labels. A Project can use them as board columns, so you keep a Project view while the cycle runs in a Claude cloud session (which reaches `repos/*` only).
+
+1. In the organisation, create an issue field for the status (a single select whose options are exactly `board.statuses`) and one per field you want typed (`Size`, `Priority`, `Lane`, `Shipped`, `Release Version`).
+2. Read the ids: `gh api orgs/<org>/issue-fields --jq '.[] | {id,name,options:[.options[]?.name]}'`.
+3. Put them in the binding, `board.options.field_ids: { status: 101, size: 102 }`. A field you leave out stays a label; with no `field_ids` nothing changes. `doctor` checks the ids and the status options, and prints the map by name when they are wrong.
+4. In the Project, point the Board view at the status field.
+5. Copy each existing item's Project Status to the field once, with a `gh` loop that reads the Project's items and runs `gh api -X POST repos/<repo>/issues/<n>/issue-field-values -H 'X-GitHub-Api-Version: 2026-03-10' --input -` with `{"issue_field_values":[{"field_id":101,"value":"<status>"}]}`.
+
+GitHub has no compare-and-swap, so a move checks the status it expects, then writes; two writers at the same instant are not told apart. The behaviour is in [the github-issues feature](../../features/board/github-issues.feature) and [doctor's checks](../../features/install/doctor.feature).
+
 ## Claude Code plugin
 
 For Claude Code, the skills, the guard hook and the MCP server ship as a plugin:

@@ -151,6 +151,13 @@ Feature: Init installs the factory
         | release-line | exists  |
         | continuous   | is absent |
 
+  Rule: Init installs the dead-man workflow for every runtime
+
+    Scenario: The dead-man workflow is installed whatever the harness
+      Given the package ships the stock file "templates/gates/github/agentic-sdlc-dead-man.yml"
+      When I run the install command "init --harness codex"
+      Then the installed file ".github/workflows/agentic-sdlc-dead-man.yml" matches "ledger stale --max-hours"
+
   Rule: Init writes the binding's commands into the verify workflow
 
     Scenario: The verify workflow runs the commands of the binding
