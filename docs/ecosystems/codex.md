@@ -9,7 +9,7 @@ OpenAI's `developers.openai.com/codex/*` pages redirect to `learn.chatgpt.com/do
 
 ## Install
 ```bash
-npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init --harness codex --profile individual --board github --forge github --vcs git
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.1 init --harness codex --profile individual --board github --forge github --vcs git
 ```
 Files it writes:
 - `.agents/cli.json` (the CLI pin) and `.agents/bin/agentic-sdlc` (the launcher), `.agents/binding.yml`, the skills in `.agents/skills/` (the path Codex scans from the working directory up to the repo root: [docs](https://learn.chatgpt.com/docs/build-skills); `.codex/skills` is not listed), gate templates, and an `AGENTS.md` pointer (Codex reads `AGENTS.md`: [docs](https://learn.chatgpt.com/docs/agent-configuration/agents-md)).

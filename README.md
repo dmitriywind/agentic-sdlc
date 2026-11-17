@@ -17,7 +17,7 @@ step through a ticket in six scenarios, and get your setup command.
 ## Quick start
 
 ```bash
-npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init --profile individual --harness claude --board github-issues
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.1 init --profile individual --harness claude --board github-issues
 .agents/bin/agentic-sdlc doctor
 ```
 

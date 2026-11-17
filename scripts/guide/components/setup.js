@@ -150,7 +150,7 @@ VIZ.setup = (el) => {
     const p = pick;
     const harness = { claude: 'claude', codex: 'codex', cursor: 'cursor', other: 'generic' }[p.agent];
     const board = { issues: 'github-issues', project: 'github', jira: 'jira', linear: 'linear', local: 'local' }[p.board];
-    const cmd = ['npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init', '--profile ' + prof, '--harness ' + harness, '--board ' + board, '--forge github']
+    const cmd = ['npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.1 init', '--profile ' + prof, '--harness ' + harness, '--board ' + board, '--forge github']
       .concat(p.agent === 'claude' && p.runs === 'claude' ? ['--no-plugin'] : []);
 
     const owners = {

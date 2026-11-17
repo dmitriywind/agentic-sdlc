@@ -1,6 +1,6 @@
 {
   "name": "agentic-sdlc",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Software factory skills for any board, forge and trunk-based Git, and the agentic-sdlc MCP server.",
   "keywords": ["software-factory", "agentic-sdlc", "trunk-based"],
   "skills": "./skills",
