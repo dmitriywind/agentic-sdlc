@@ -9,7 +9,7 @@ The `local` board is a file, `.agents/board.json`. No board account and no forge
 
 ```bash
 mkdir try-agentic && cd try-agentic && git init -b main
-npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init --board local --forge github --harness generic
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --board local --forge github --harness generic
 printf 'Show a greeting on the home page.\n' > body.md
 .agents/bin/agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog
 .agents/bin/agentic-sdlc dispatch plan/shape --ticket 2

@@ -15,7 +15,7 @@ Gates always run in the forge's CI, so trunk guarantees never depend on the runt
 
 ## Install
 ```bash
-npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.0 init --harness generic --profile individual --board github --forge github --vcs git
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --harness generic --profile individual --board github --forge github --vcs git
 ```
 It writes the CLI pin `.agents/cli.json`, the launcher `.agents/bin/agentic-sdlc` (everything runs through it; it installs the pinned CLI on first use), `.agents/binding.yml`, the skills in `.agents/skills/` (each named `sdlc-<skill>`; `sdlc` stays `sdlc`), the gate templates and an `AGENTS.md` pointer.
 Point your tool at `.agents/skills/sdlc/SKILL.md` if it does not scan that path. The init log lists the files; the `--harness` flag decides.
