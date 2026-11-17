@@ -12,20 +12,11 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x + '" is not supported');
 });
-var __esm = (fn, res, err) => function __init() {
-  if (err) throw err[0];
-  try {
-    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-  } catch (e) {
-    throw err = [e], e;
-  }
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
 var __commonJS = (cb, mod) => function __require2() {
-  try {
-    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
-  } catch (e) {
-    throw mod = 0, e;
-  }
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 var __export = (target, all) => {
   for (var name in all)
@@ -7421,6 +7412,14 @@ function validateBinding(b) {
     for (const k of spec[0]) if (opts[k] === void 0 || opts[k] === null || opts[k] === "") p.push(`${port}.options.${k} is required for adapter ${a}`);
     for (const k of Object.keys(opts)) if (!spec[0].includes(k) && !spec[1].includes(k)) p.push(`${port}.options.${k} is not read by adapter ${a} (known: ${[...spec[0], ...spec[1]].join(", ") || "none"})`);
   }
+  const fids = x.board?.adapter === "github-issues" ? x.board.options?.field_ids : void 0;
+  if (fids !== void 0) {
+    if (!fids || typeof fids !== "object" || Array.isArray(fids)) p.push("board.options.field_ids must be a map from status or a board.fields name to an org issue field id");
+    else for (const [k, v] of Object.entries(fids)) {
+      if (k !== "status" && !(k in (x.board.fields ?? {}))) p.push(`board.options.field_ids.${k} is not 'status' or a key of board.fields`);
+      if (!Number.isInteger(v) || v <= 0) p.push(`board.options.field_ids.${k} must be a positive integer`);
+    }
+  }
   if (x.board) {
     if (!Array.isArray(x.board.statuses)) p.push("board.statuses must be a list");
     else for (const s of STATUSES) if (!x.board.statuses.includes(s)) p.push(`board.statuses lacks '${s}'`);
@@ -7574,7 +7573,7 @@ var init_binding = __esm({
     OPTIONS = {
       board: {
         github: [["owner", "project_number", "repo"], ["token_env"]],
-        "github-issues": [["repo"], []],
+        "github-issues": [["repo"], ["field_ids"]],
         jira: [["base_url", "project_key", "email_env", "token_env"], []],
         linear: [["team_key", "token_env"], []],
         local: [[], []]
@@ -8113,8 +8112,9 @@ var init_github = __esm({
 // src/board/github-issues.ts
 function createGithubIssuesBoard(ctx) {
   const repo = String(ctx.options.repo);
+  const fieldIds = ctx.options.field_ids ?? {};
   const api = async (method, path, body) => {
-    const args = ["api", "-X", method, `repos/${repo}/${path}`];
+    const args = ["api", "-X", method, `repos/${repo}/${path}`, ...Object.keys(fieldIds).length ? FIELDS_API : []];
     if (body !== void 0) args.push("--input", "-");
     const out = await ghRetry(ctx.exec, args, body === void 0 ? {} : { input: JSON.stringify(body) });
     return out.trim() ? JSON.parse(out) : null;
@@ -8129,7 +8129,11 @@ function createGithubIssuesBoard(ctx) {
   };
   const prefix = (f) => `${(ctx.binding?.board?.fields?.[f] ?? f).toLowerCase()}:`;
   const names = (i) => (i.labels ?? []).map((l) => typeof l === "string" ? l : l.name);
-  const statusOf = (i) => names(i).find((l) => l.toLowerCase().startsWith(STATUS))?.slice(STATUS.length);
+  const fieldOf = (i, key) => {
+    const v = (i.issue_field_values ?? []).find((x) => x.issue_field_id === fieldIds[key]);
+    return v ? String(v.single_select_option?.name ?? v.value) : void 0;
+  };
+  const statusOf = (i) => fieldIds.status ? fieldOf(i, "status") : names(i).find((l) => l.toLowerCase().startsWith(STATUS))?.slice(STATUS.length);
   const toItem = (i) => {
     const fields = {}, labels = [];
     let status = "";
@@ -8137,9 +8141,15 @@ function createGithubIssuesBoard(ctx) {
       const low = l.toLowerCase();
       const f = LOGICAL.find((k) => low.startsWith(prefix(k)));
       if (f) fields[f] = l.slice(prefix(f).length);
-      else if (low.startsWith(STATUS)) status = l.slice(STATUS.length);
+      else if (low.startsWith(STATUS) && !fieldIds.status) status = l.slice(STATUS.length);
       else labels.push(l);
     }
+    for (const f of LOGICAL) if (fieldIds[f]) {
+      delete fields[f];
+      const v = fieldOf(i, f);
+      if (v !== void 0) fields[f] = v;
+    }
+    if (fieldIds.status) status = statusOf(i) ?? "";
     return {
       id: String(i.number),
       title: i.title,
@@ -8171,6 +8181,15 @@ function createGithubIssuesBoard(ctx) {
     const labels = [.../* @__PURE__ */ new Set([...names(i).filter((l) => !drop(l.toLowerCase())), ...add])];
     await api("PATCH", `issues/${i.number}`, { ...extra, labels });
   };
+  const store = async (i, key, value, extra = {}) => {
+    if (!fieldIds[key]) {
+      const p = key === "status" ? STATUS : prefix(key);
+      return relabel(i, (l) => l.startsWith(p), value === null ? [] : [p + value], extra);
+    }
+    if (Object.keys(extra).length) await api("PATCH", `issues/${i.number}`, extra);
+    if (value === null) await api("DELETE", `issues/${i.number}/issue-field-values/${fieldIds[key]}`);
+    else await api("POST", `issues/${i.number}/issue-field-values`, { issue_field_values: [{ field_id: fieldIds[key], value }] });
+  };
   const get = async (id) => {
     const raw = await issue(id);
     if (raw.pull_request || statusOf(raw) === void 0) throw new Error(`#${id} is not on the board`);
@@ -8187,7 +8206,7 @@ function createGithubIssuesBoard(ctx) {
     const i = await issue(id);
     const cur = statusOf(i) ?? "";
     if (onlyFrom && cur !== onlyFrom) throw new MovedError(id, onlyFrom, cur);
-    await relabel(i, (l) => l.startsWith(STATUS), [STATUS + status], extra);
+    await store(i, "status", status, extra);
     return get(id);
   };
   const milestone = async (title) => {
@@ -8203,18 +8222,18 @@ ${i.body ?? ""}`.toLowerCase().includes(w))).map(toItem).filter((i) => (!q.statu
     },
     get,
     async create(t) {
-      const labels = [.../* @__PURE__ */ new Set([...t.labels ?? [], STATUS + t.status])];
+      const labels = [.../* @__PURE__ */ new Set([...t.labels ?? [], ...fieldIds.status ? [] : [STATUS + t.status]])];
       await ensureLabels(labels);
       const body = { title: t.title, body: t.body, labels };
       if (t.milestone) body.milestone = await milestone(t.milestone);
       const id = String((await api("POST", "issues", body)).number);
+      if (fieldIds.status) await store({ number: id }, "status", t.status);
       if (t.parent) await this.child(t.parent, id);
       return get(id);
     },
     move: (id, status, onlyFrom) => move(id, status, onlyFrom),
     async set(id, f, value) {
-      const p = prefix(f);
-      await relabel(await issue(id), (l) => l.startsWith(p), value === null ? [] : [p + value]);
+      await store(await issue(id), f, value);
       return get(id);
     },
     async label(id, op, label) {
@@ -8247,7 +8266,7 @@ ${i.body ?? ""}`.toLowerCase().includes(w))).map(toItem).filter((i) => (!q.statu
     }
   };
 }
-var LOGICAL, STATUS, PAGE;
+var LOGICAL, STATUS, PAGE, FIELDS_API;
 var init_github_issues = __esm({
   "src/board/github-issues.ts"() {
     "use strict";
@@ -8256,6 +8275,7 @@ var init_github_issues = __esm({
     LOGICAL = ["size", "priority", "lane", "shipped", "release_version"];
     STATUS = "status:";
     PAGE = 100;
+    FIELDS_API = ["-H", "X-GitHub-Api-Version: 2026-03-10"];
   }
 });
 
@@ -12055,6 +12075,7 @@ __export(install_exports, {
   cloudBoard: () => cloudBoard,
   deliveryWorkflow: () => deliveryWorkflow,
   implementerToken: () => implementerToken,
+  issueFields: () => issueFields,
   missingBindingKeys: () => missingBindingKeys,
   packageRoot: () => packageRoot,
   pathWarnings: () => pathWarnings,
@@ -12428,6 +12449,31 @@ function cloudBoard(b, env = {}) {
   if (b.board?.adapter !== "github" || env.CLAUDE_CODE_REMOTE !== "true") return void 0;
   return "fail board: a Claude cloud session cannot reach GitHub Projects (board adapter github); use github-issues, jira or linear, or run the cycle from GitHub Actions (templates/runner/github-actions-claude.yml)";
 }
+function issueFields(b, ctx) {
+  const ids = b.board?.adapter === "github-issues" ? b.board.options?.field_ids : void 0;
+  if (!ids || typeof ids !== "object") return [];
+  if (ctx.env.CLAUDE_CODE_REMOTE === "true") return ["info board field_ids: not checked in a Claude cloud session (orgs/* is not reachable); run doctor where gh reaches the org"];
+  const org = String(b.board.options.repo).split("/")[0];
+  let defs;
+  try {
+    defs = JSON.parse(ctx.exec("gh", ["api", "-H", "X-GitHub-Api-Version: 2026-03-10", `orgs/${org}/issue-fields?per_page=100`]));
+  } catch (e) {
+    return [`fail board field_ids: cannot read orgs/${org}/issue-fields (${e.message.split("\n")[0]})`];
+  }
+  const bad = [];
+  for (const [k, id] of Object.entries(ids)) if (!defs.some((d) => d.id === id)) bad.push(`${k} ${id} is not an issue field of ${org}`);
+  const st = defs.find((d) => d.id === ids.status);
+  const lacks = st ? (b.board.statuses ?? []).filter((s) => !(st.options ?? []).some((o) => o.name === s)) : [];
+  if (lacks.length) bad.push(`the status field '${st.name}' lacks the options ${lacks.join(", ")}`);
+  if (!bad.length) return [`ok   board field_ids: every id is an issue field of ${org}`];
+  const want = {};
+  const named = [["status", ""], ...Object.entries(b.board.fields ?? {})];
+  for (const [k, name] of named) {
+    const d = defs.find((x) => k === "status" ? /^(status|stage)$/i.test(x.name) : x.name.toLowerCase() === name.toLowerCase());
+    if (d) want[k] = d.id;
+  }
+  return [`fail board field_ids: ${bad.join("; ")}; by name the org has field_ids: { ${Object.entries(want).map(([k, v]) => `${k}: ${v}`).join(", ")} }`];
+}
 function deliveryWorkflow(b, root) {
   const f = join10(root, ".github", "workflows", "agentic-sdlc-delivery.yml");
   if (!existsSync8(f)) return void 0;
@@ -12729,6 +12775,10 @@ ${END}`;
             out(cb);
             bad++;
             probes.shift();
+          }
+          for (const l of issueFields(binding, ctx)) {
+            out(l);
+            if (l.startsWith("fail")) bad++;
           }
           trunkProtection(binding, ctx).forEach(out);
           const it = implementerToken(binding, ctx);

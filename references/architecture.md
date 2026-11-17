@@ -579,18 +579,25 @@ protection (an empty rule list, or the 403 a private repo on GitHub Free gets).
 **Runners.** The GitHub templates read `runs-on` from two repo variables, as JSON: `AGENTIC_RUNS_ON` for the
 jobs that run CR or agent code (`agentic-sdlc-verify.yml`, the runner's `cycle` job) and
 `AGENTIC_RUNS_ON_TRUSTED` for the jobs that hold secrets (default: `AGENTIC_RUNS_ON`, then
-`"ubuntu-latest"`). A self-hosted runner bills no minutes. `doctor` fails a self-hosted runner on a public
+`"ubuntu-latest"`). A self-hosted runner bills no minutes; hosted runners draw on a monthly compute amount ($12 on Free, about 2,000 Linux minutes; $18 on Pro and Team) and stop when it is spent without a payment method. `doctor` fails a self-hosted runner on a public
 repo and warns when both variables name the same runner. Every job runs `bash`.
 
-**Claude cloud session.** A cloud routine (`templates/runner/claude-routine.md`) is a full runtime on a
-subscription. Its GitHub proxy refuses GraphQL and every `orgs/*` and `users/*` route; REST works under
-`repos/{owner}/{repo}/...`. So it runs a `github-issues`, `jira` or `linear` board, never `github`
-(Projects v2): `doctor` in a cloud session (`CLAUDE_CODE_REMOTE=true`) fails a `github` board, which runs
-from GitHub Actions (`templates/runner/github-actions-claude.yml`) instead. Jira and Linear need their host in
-the environment's allowed domains and the token as a network secret. A cloud session loads no repo plugin, so
-it gets the skills from `.claude/skills` (`init --harness claude --no-plugin`). It has no Docker daemon and
-stops a foreground command at 10 minutes: the cycle runs `commands.fast_check`, and `commands.verify` runs in
-CI. The shortest schedule interval is 1 hour; runs draw subscription usage.
+**Claude cloud session.** A Claude cloud scheduled task (formerly routine; "routine" is the short name from here on
+and in file names; `templates/runner/claude-routine.md`) is a full runtime on a subscription. Its GitHub proxy
+refuses GraphQL and every `orgs/*` and `users/*` route; REST works under `repos/{owner}/{repo}/...`. So it runs a
+`github-issues`, `jira` or `linear` board, never `github` (Projects v2): `doctor` in a cloud session
+(`CLAUDE_CODE_REMOTE=true`) fails a `github` board, which runs from GitHub Actions
+(`templates/runner/github-actions-claude.yml`) instead. A `github-issues` board can store status and fields as org
+issue fields (`board.options.field_ids`); a GitHub Project shows them as columns, so a Project view stays available
+while the cycle runs in the cloud. Issue fields exist only in organization repos. Jira and Linear need their host
+in the environment's allowed domains and the token as a network secret. A cloud session loads no repo plugin, so it
+gets the skills from `.claude/skills` (`init --harness claude --no-plugin`). Docker is available (Docker, dockerd,
+docker compose installed). A foreground command waits 2 minutes by default, up to 10, then can continue in the
+background for up to 30 more minutes; the environment variables `BASH_DEFAULT_TIMEOUT_MS` and
+`BASH_MAX_TIMEOUT_MS` raise both. `commands.verify` still runs in CI as `Required` (the gate), and
+`commands.fast_check` may run containers. The shortest schedule interval is 1 hour; runs draw subscription usage.
+The dead-man check is its own workflow, `agentic-sdlc-dead-man.yml`, installed by `init` for every runtime, because
+a cloud task stopped at the usage limit or disconnected from GitHub writes no heartbeat.
 
 **Packaging per harness.** For Claude Code the package is a plugin (`.claude-plugin/`: skills,
 hooks, the MCP server, `agents/` with a subagent per tier and `sdlc-reviewer`, `bin/` with the CLI on the Bash PATH, `evals/`), so skills are named `/agentic-sdlc:<skill>`. The plugin's tier agents are the default; `.claude/agents/sdlc-<tier>.md` from `init` carries the binding's models and is used when present (the names differ: `agentic-sdlc:sdlc-<tier>` against `sdlc-<tier>`). `sdlc-reviewer` has no Edit or Write tool, and the guard hook lets it run only `agentic-sdlc` commands in Bash, so `review/review` never runs CR code. Codex and Cursor each have a manifest (`.codex-plugin/`, `.cursor-plugin/`) for skills and MCP (`mcp.json`, `.agents/bin/agentic-sdlc mcp`); neither carries the hook or the agents. `init` always
@@ -623,7 +630,7 @@ token: `individual-api` names a managed executor's key otherwise (`executors.<sk
   factory acts as one account, yours: on a Claude cloud routine, the proxy's GitHub login. There is
   one scheduled job, the cycle. It dispatches `review/review` like any other step, as a harness subagent
   with a fresh context that runs no CR code. `forge verdict` posts the report and no status: a Claude cloud
-  session's proxy refuses commit-status writes (HTTP 403). The report comment starts the CR workflow
+  session's proxy refuses commit-status writes (HTTP 403; observed in pilot runs, not documented by Anthropic, can change). The report comment starts the CR workflow
   (`issue_comment`), whose `review` gate posts the `review` status from the newest report on the head
   by a trusted author (`owners.bots` and every owner role) with the CI job's token.
   `forge land` then waits for that status and arms the merge. `forge verdict` gives no approving review, since

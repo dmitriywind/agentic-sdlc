@@ -1,4 +1,4 @@
-# Source: src/board/github-issues.ts; references/architecture.md "Board port"
+# Source: src/board/github-issues.ts; src/binding.ts "validateBinding" (field_ids); references/architecture.md "Board port"
 @board:github-issues
 Feature: The github-issues board
   A project with no GitHub Project keeps Status and fields as labels on the repo's issues ("status:Ready", "size:S").
@@ -96,3 +96,76 @@ Feature: The github-issues board
         | error                                                  | call                          | then                                       |
         | gh: HTTP 502: Bad Gateway                              | gets the ticket "7"           | the returned ticket has the status "Ready" |
         | gh: HTTP 403: You have exceeded a secondary rate limit | assigns the ticket "7" to "x" | the one patch sets the assignees to "x"    |
+
+  Rule: With field_ids, the status and the mapped fields are org issue fields; an unmapped field stays a label
+
+    Background:
+      Given the github-issues board adapter
+      And the board maps the issue fields "status=10:single_select, size=11:single_select, release_version=12:text"
+
+    Scenario: Status and fields are read from the issue field values, and an issue with no status value is left out
+      Given the repo has these issues:
+        | number | labels | issue fields                                    |
+        | 1      |        | status=Ready, size=S, release_version=1.2       |
+        | 2      | bug    |                                                 |
+        | 3      | lane:fast | status=Backlog                               |
+      When the factory lists the tickets in the status "Ready"
+      Then the listed ticket ids are "1"
+      And the listed ticket "1" has the fields "size=S, release_version=1.2"
+      When the factory gets the ticket "3"
+      Then the returned ticket has the status "Backlog"
+      And the returned ticket has the fields "lane=fast"
+
+    Scenario: A move writes the status field, sends the API version header and leaves the labels alone
+      Given the repo has these issues:
+        | number | labels | issue fields   |
+        | 7      | bug    | status=Backlog |
+      When the factory moves the ticket "7" to "In progress" only from "Backlog"
+      Then the returned ticket has the status "In progress"
+      And the issue 7 has the issue field "status" set to "In progress"
+      And the issue 7 has the labels "bug"
+      And every issue field call sends the API version header "2026-03-10"
+
+    Scenario: A move from another status than the one required is refused and writes nothing
+      Given the repo has these issues:
+        | number | labels | issue fields |
+        | 7      |        | status=Ready |
+      When the factory moves the ticket "7" to "In progress" only from "Backlog"
+      Then the verb fails matching "7 is at Ready, not Backlog"
+      And the issue 7 has the issue field "status" set to "Ready"
+
+    Scenario: A field is written, a text field by its value, and cleared
+      Given the repo has these issues:
+        | number | labels | issue fields               |
+        | 7      |        | status=Ready, size=M       |
+      When the factory sets the field "size" of the ticket "7" to "L"
+      Then the returned ticket has the fields "size=L"
+      When the factory sets the field "release_version" of the ticket "7" to "2.0"
+      Then the issue 7 has the issue field "release_version" set to "2.0"
+      When the factory clears the field "size" of the ticket "7"
+      Then the issue 7 has no value for the issue field "size"
+
+    Scenario: A field the map leaves out is still a label
+      Given the repo has these issues:
+        | number | labels | issue fields |
+        | 7      |        | status=Ready |
+      When the factory sets the field "lane" of the ticket "7" to "fast"
+      Then the issue 7 has the labels "lane:fast"
+
+    Scenario: Create makes the issue without a status label, then writes the status field
+      Given the repo has these issues:
+        | number | labels | issue fields   |
+        | 1      |        | status=Backlog |
+      And the repo has the milestone "M1" as number 3
+      When the factory creates a ticket at "Ready" with the labels "bug", the milestone "M1" and the parent "1"
+      Then the returned ticket has the status "Ready"
+      And the issue 101 has the labels "bug"
+      And the issue 101 has the issue field "status" set to "Ready"
+
+    Scenario: Closing as not planned moves the status field and closes the issue
+      Given the repo has these issues:
+        | number | labels | issue fields    |
+        | 7      |        | status=In review |
+      When the factory closes the ticket "7" as "not_planned"
+      Then the returned ticket has the status "Cancelled"
+      And the issue 7 is closed with the reason "not_planned"

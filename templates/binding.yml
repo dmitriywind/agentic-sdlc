@@ -27,6 +27,8 @@ board:
     #          token_env (optional): env var holding a PAT with project scope, passed to gh as GH_TOKEN; Projects v2 needs it
     # github-issues: { repo: my-org/my-repo }   # the repo's issues, REST only: the board a Claude cloud session reaches.
     #          Status and the fields are labels status:<s> and <field name, lower case>:<value> (size:S, release version:1.2)
+    #          field_ids (optional): { status: 101, size: 102 } maps the status and any board.fields key to an org issue field id
+    #          (gh api orgs/<org>/issue-fields); a mapped one is an issue field, not a label. Org repos only; docs/guide/8-install.md
     # jira:    { base_url: https://example.atlassian.net, project_key: PROJ, email_env: JIRA_EMAIL, token_env: JIRA_TOKEN }
     # linear:  { team_key: ENG, token_env: LINEAR_API_KEY }
     # local:   {}                 # always .agents/board.json

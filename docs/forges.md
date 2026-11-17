@@ -42,12 +42,12 @@ that the linkage job posts with its own `GITHUB_TOKEN`.
 
 ## Review identity and approval
 **One identity** (`forge.review_identity` empty, the default of both individual profiles): `forge verdict`
-posts only its report, since a Claude cloud session's proxy refuses commit-status writes. The CR
+posts only its report, since a Claude cloud session's proxy refuses commit-status writes (observed in pilot runs; not documented by Anthropic, can change). The CR
 workflow's `review-gate` job runs on that comment and posts `review` from the newest trusted report on
 the head (`agentic-sdlc gate review --cr <n>`). `forge approve` refuses, since GitHub refuses an
 approving review from the CR's author. `init` writes a trunk ruleset that needs no approving review. The `approval` gate
 posts `human-approval` with the CI job's token. A CR that needs a human waits until a collaborator
-approves its head, or the owner merges it as admin (the ruleset lets admins bypass in a pull request).
+approves its head, or the owner merges it as admin (the ruleset lets admins bypass in a pull request). The cloud task pushes and merges as the owner, and a rule the owner can bypass does not block it, so with the shipped admin bypass the agent can merge past every pinned check.
 
 **Two identities** (required for `organization`): `forge status` and `forge approve` use only
 `forge.options.review_token_env` (the `forge.review_identity` account); without it they fail. The implementer's `token_env` cannot post
@@ -107,17 +107,17 @@ history, no direct push except the bot) and release branches cut with `vcs cut` 
 | Verify | job `Required` on `pull_request`, no secrets, plus `proofs-on-base` |
 | Merged, shipped, signals | `agentic-sdlc-delivery.yml`: a trunk push runs `gate merged`, deploy runs run `gate shipped`, red CI runs run `signal-on-red`. A failed deploy opens one Signal with its env label |
 | Release cut | `agentic-sdlc-release.yml` (release-line delivery only) |
-| Auto-merge, merge queue | native; the CR workflow also triggers on `merge_group` |
+| Auto-merge, merge queue | native; the CR workflow also triggers on `merge_group`. Merge queue: only public org repos or private repos in Enterprise Cloud |
 | Trunk | `ruleset.trunk.json`: one approving review (none with one identity), stale reviews dismissed, the four CI checks pinned to the Actions app (with one identity `review` and `human-approval` too; with two, pin them to the review app when it is an App), linear history; a second ruleset for release branches, `.github/rulesets/release.json` |
 
-One-time setup (private repos need a plan with Environments: Pro, Team or Enterprise):
+One-time setup (private repos need a plan with Environments for `agentic-review`: Pro, Team or Enterprise; on Free private there are no environment secrets at all, so the tokens are repo secrets any same-repo PR workflow can read):
 
 1. Create Environment `agentic-review`. Deployment branches: selected branches, the trunk exactly,
    `gh-readonly-queue/<trunk>/*` and the release line glob (`<release_prefix>*`; without it a CR to a release line never gets `human-approval`). Store `AGENTIC_REVIEW_TOKEN` there and nowhere else. Only the jobs
    `approval-gate`, `carry-statuses` and the review job of the runner workflow (`github-actions-claude.yml`, `github-actions-codex.yml`) declare it, so no PR-ref run can read it.
 2. Add `AGENTIC_FORGE_TOKEN` as a repo secret (`proofs-on-base` falls back to the read-only job token and
    its status post fails by design; the job's exit code is the check).
-3. Release line only: create Environment `agentic-release` with the Product owner as required reviewer and deployment branches limited to the trunk. Store `AGENTIC_RELEASE_TOKEN` there: the release bot, a bypass actor of `.github/rulesets/release.json`. The shipped ruleset lets repo admins bypass too (`RepositoryRole` 5); to make the bot the only bypass actor, replace that entry with your release GitHub App (`actor_type: Integration`, its `actor_id`) after you import the ruleset. The `ship` step starts `forge cut <revision> <version>`, which runs `agentic-sdlc-release.yml`; the Product owner's approval of that run is the go-ahead. The cycle never holds this token.
+3. Release line only: create Environment `agentic-release` with the Product owner as required reviewer and deployment branches limited to the trunk. Store `AGENTIC_RELEASE_TOKEN` there: the release bot, a bypass actor of `.github/rulesets/release.json`. The shipped ruleset lets repo admins bypass too (`RepositoryRole` 5); to make the bot the only bypass actor, replace that entry with your release GitHub App (`actor_type: Integration`, its `actor_id`) after you import the ruleset. The `ship` step starts `forge cut <revision> <version>`, which runs `agentic-sdlc-release.yml`; the Product owner's approval of that run is the go-ahead. A required reviewer on a private repo needs Enterprise (Free, Pro and Team give required reviewers on public repos only), so below Enterprise the release go-ahead is not enforced. The cycle never holds this token.
 4. Repo variables (Settings > Secrets and variables > Actions > Variables): the workflows need none for the CLI; its version is `.agents/cli.json` (a commit SHA is the immutable choice, a tag can move: `doctor` warns). The runner workflows read `AGENTIC_AGENT_CLI_VERSION`, an exact version of the Claude Code or Codex CLI, and fail without it.
 5. `init` installs `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events to `human-approval`; it must stay in place or approvals do not update. A fork PR's review event carries no PR number, so its approval updates on the next PR event.
 

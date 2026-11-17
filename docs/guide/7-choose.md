@@ -37,9 +37,9 @@ You can change every answer later.
 
 | Runtime | Pick it when | Limits |
 |---|---|---|
-| Claude cloud routine | No machine of your own; subscription usage. | Board: GitHub issues, Jira or Linear (not a GitHub Project). No Docker: `commands.verify` runs in CI. At most hourly. |
+| Claude cloud routine | No machine of your own; subscription usage. | Board: GitHub issues (a GitHub Project can show them through org issue fields), Jira or Linear. Docker available; `commands.verify` still runs in CI as the gate. At most hourly. |
 | Codex or Cursor cloud task | You use Codex or Cursor. | See [docs/ecosystems](../ecosystems/codex.md). |
-| GitHub Actions | Any board, a GitHub Project included. | A subscription token or an API key in a secret. |
+| GitHub Actions | Any board, a GitHub Project included. | A subscription token or an API key in a secret. Hosted runners: $12 of compute a month on Free (about 2,000 minutes); a self-hosted runner is free. A `setup-token` lasts one year. |
 | Your own machine | Code, tools or a network only your machine reaches. | No sandbox: opt in with `sandbox: local` and `AGENTIC_SDLC_LOCAL=1`. The machine must be on. |
 | Managed agents | `individual-api` or `organization`. | API billing. |
 

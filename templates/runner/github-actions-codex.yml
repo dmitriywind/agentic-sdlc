@@ -1,22 +1,26 @@
-# Profile: organization or individual-api (API key). One identity (forge.review_identity empty): delete the `review` job
-# (`dead-man` needs only `cycle`, so the file stays valid; with two identities add `review` to its needs).
+# Profile: organization or individual-api (API key). One identity (forge.review_identity empty): delete the `review` job.
 # Repo variable: AGENTIC_AGENT_CLI_VERSION (an exact Codex CLI version); a job fails when it is unset.
 # The agentic-sdlc CLI is the pin in .agents/cli.json, run through .agents/bin/agentic-sdlc (it installs itself on first use).
 # The agent CLI installs in a step with no secrets in its env; each secret reaches only the steps that need it.
-# GitHub disables scheduled workflows after 60 days without repo activity, so `dead-man` stops with the cycle.
+# GitHub disables scheduled workflows after 60 days without repo activity in a public repo only (docs.github.com, disabling and enabling workflows).
+# The dead-man check is its own workflow, agentic-sdlc-dead-man.yml, installed by init.
 # Install at: .github/workflows/factory-cycle-codex.yml
 # Secrets: CODEX_API_KEY (an OpenAI API key), AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, AGENTIC_REVIEW_TOKEN.
 # Two jobs: `cycle` implements and never sees AGENTIC_REVIEW_TOKEN;
-# `review` starts when the cycle finishes, with the review token and the review prompt only; `dead-man` runs `ledger stale`.
+# `review` starts when the cycle finishes, with the review token and the review prompt only.
 # Note: a ChatGPT-login auth.json can also work in CI (seed it with `codex login`, keep it in a secret
 # store, one runner at a time, tokens rotate), but the OpenAI docs call it an advanced path for trusted
 # runners and say an API key is the right way to authenticate automation. This template uses the key.
 name: factory-cycle-codex
 on:
   schedule:
-    - cron: "*/30 * * * *"  # set: your cadence
+    # Minutes: GitHub Free gives a private repo $12 of hosted compute a month (about 2,000 Linux minutes; Pro/Team $18,
+    # about 3,000). A cycle of N minutes every 4 h is N x 180 minutes a month, and CR CI draws on the same pool.
+    # A self-hosted runner (AGENTIC_RUNS_ON) uses none. Avoid minute :00: schedules are delayed or dropped at peak.
+    - cron: "17 */4 * * *"  # set: your cadence
   workflow_dispatch:
-concurrency: factory-cycle
+# A group keeps one running and one pending run; a newer pending run replaces the older pending one, which is fine for a cycle.
+concurrency: { group: factory-cycle, cancel-in-progress: false }
 permissions:
   contents: read   # pushes use AGENTIC_FORGE_TOKEN, not this token
 env:
@@ -89,21 +93,3 @@ jobs:
           AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
           AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
           CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
-  dead-man:
-    needs: [cycle]   # two identities: add review, so the check waits for the review run
-    if: ${{ always() }}
-    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-      # Not runner-setup.sh: its doctor probes the forge too, which this job has no token for, so it would stay red.
-      # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
-      - name: Heartbeat is fresh
-        env:
-          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
-        run: .agents/bin/agentic-sdlc ledger stale --max-hours 3   # set: a few cadences

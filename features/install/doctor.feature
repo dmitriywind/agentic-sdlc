@@ -1,4 +1,4 @@
-# Source: src/install.ts "doctor", "trunkProtection", "implementerToken", "selfHostedRunner", "cloudBoard", "deliveryWorkflow", "unpinnedActions", "cliPin", "probeFailure"
+# Source: src/install.ts "doctor", "trunkProtection", "implementerToken", "selfHostedRunner", "cloudBoard", "issueFields", "deliveryWorkflow", "unpinnedActions", "cliPin", "probeFailure"
 @cli:doctor
 Feature: Doctor checks what the gates rely on
   `agentic-sdlc doctor` validates, then probes the board, the forge and the vcs and checks the project's setup: that
@@ -52,6 +52,40 @@ Feature: Doctor checks what the gates rely on
       And the repo is "private"
       When doctor checks the self-hosted runner
       Then doctor line 1 matches "^warn: runner: CR code and the secret jobs share one self-hosted runner"
+
+  Rule: github-issues field_ids must name org issue fields, and the status field must hold every board status
+
+    Background:
+      Given the board is github-issues on "acme/shop" with the statuses "Ready, Done" and the field_ids "status=10, size=11"
+
+    Scenario: Every id is an issue field and the status field has every status
+      Given the org "acme" has the issue fields:
+        | id | name   | options    |
+        | 10 | Status | Ready, Done |
+        | 11 | Size   | S, M       |
+      When doctor checks the issue fields
+      Then doctor line 1 is "ok   board field_ids: every id is an issue field of acme"
+
+    Scenario: An id the org does not have fails and the line names the ids to use
+      Given the org "acme" has the issue fields:
+        | id | name   | options    |
+        | 20 | Stage  | Ready, Done |
+        | 21 | Size   | S, M       |
+      When doctor checks the issue fields
+      Then doctor line 1 matches "^fail board field_ids: status 10 is not an issue field of acme; size 11 is not an issue field of acme; by name the org has field_ids: { status: 20, size: 21 }$"
+
+    Scenario: A status field without a board status as an option fails
+      Given the org "acme" has the issue fields:
+        | id | name   | options |
+        | 10 | Status | Ready   |
+        | 11 | Size   | S, M    |
+      When doctor checks the issue fields
+      Then doctor line 1 matches "^fail board field_ids: the status field 'Status' lacks the options Done; by name"
+
+    Scenario: A Claude cloud session cannot read the org and skips the check
+      Given the environment variable "CLAUDE_CODE_REMOTE" is "true"
+      When doctor checks the issue fields
+      Then doctor line 1 matches "^info board field_ids: not checked in a Claude cloud session"
 
   Rule: The delivery workflow must name the trunk and the delivery of the binding
 

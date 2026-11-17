@@ -1,6 +1,8 @@
 // The repo's GitHub issues as the board, through `gh api repos/{owner}/{repo}/…` REST only (a Claude cloud
 // session reaches nothing else). Status and the logical fields are labels "<name>:<value>": `status:` and the
 // lower-cased board.fields name (`size:S`, `release version:1.2`). An issue without a status label is off the board.
+// With board.options.field_ids, the status and each field it maps are org issue fields instead (GA 2026-07, typed fields
+// on the issue, reached through `repos/*` too); a field it does not map stays a label.
 import type { AdapterContext, Board, Comment, Item, LogicalField } from '../ports.ts';
 import { MovedError } from '../ports.ts';
 import { ghRetry } from '../exec.ts';
@@ -8,12 +10,14 @@ import { ghRetry } from '../exec.ts';
 const LOGICAL: LogicalField[] = ['size', 'priority', 'lane', 'shipped', 'release_version'];
 const STATUS = 'status:';
 const PAGE = 100;
+const FIELDS_API = ['-H', 'X-GitHub-Api-Version: 2026-03-10'];
 
 export function createGithubIssuesBoard(ctx: AdapterContext): Board {
   const repo = String((ctx.options as { repo: string }).repo);
+  const fieldIds = ((ctx.options as { field_ids?: Record<string, number> }).field_ids ?? {}) as Record<string, number>;
   // Every gh call retries on a rate limit, and a read also on a 5xx (ghRetry).
   const api = async (method: string, path: string, body?: unknown) => {
-    const args = ['api', '-X', method, `repos/${repo}/${path}`];
+    const args = ['api', '-X', method, `repos/${repo}/${path}`, ...(Object.keys(fieldIds).length ? FIELDS_API : [])];
     if (body !== undefined) args.push('--input', '-');
     const out = await ghRetry(ctx.exec, args, body === undefined ? {} : { input: JSON.stringify(body) });
     return out.trim() ? JSON.parse(out) : null;
@@ -28,7 +32,12 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
   };
   const prefix = (f: LogicalField) => `${(ctx.binding?.board?.fields?.[f] ?? f).toLowerCase()}:`;
   const names = (i: any): string[] => (i.labels ?? []).map((l: any) => (typeof l === 'string' ? l : l.name));
-  const statusOf = (i: any) => names(i).find((l) => l.toLowerCase().startsWith(STATUS))?.slice(STATUS.length);
+  /** The value of a mapped issue field on a raw issue: the option name of a single select, else the value. */
+  const fieldOf = (i: any, key: string): string | undefined => {
+    const v = (i.issue_field_values ?? []).find((x: any) => x.issue_field_id === fieldIds[key]);
+    return v ? String(v.single_select_option?.name ?? v.value) : undefined;
+  };
+  const statusOf = (i: any) => fieldIds.status ? fieldOf(i, 'status') : names(i).find((l) => l.toLowerCase().startsWith(STATUS))?.slice(STATUS.length);
   const toItem = (i: any): Item => {
     const fields: Item['fields'] = {}, labels: string[] = [];
     let status = '';
@@ -36,9 +45,11 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
       const low = l.toLowerCase();
       const f = LOGICAL.find((k) => low.startsWith(prefix(k)));
       if (f) fields[f] = l.slice(prefix(f).length);
-      else if (low.startsWith(STATUS)) status = l.slice(STATUS.length);
+      else if (low.startsWith(STATUS) && !fieldIds.status) status = l.slice(STATUS.length);
       else labels.push(l);
     }
+    for (const f of LOGICAL) if (fieldIds[f]) { delete fields[f]; const v = fieldOf(i, f); if (v !== undefined) fields[f] = v; }
+    if (fieldIds.status) status = statusOf(i) ?? '';
     return {
       id: String(i.number), title: i.title, url: i.html_url ?? '', status, labels, fields, milestone: i.milestone?.title ?? undefined,
       children: [], assignees: (i.assignees ?? []).map((a: any) => a.login), createdAt: i.created_at ?? '', updatedAt: i.updated_at ?? '', body: i.body ?? '',
@@ -58,6 +69,13 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
     const labels = [...new Set([...names(i).filter((l) => !drop(l.toLowerCase())), ...add])];
     await api('PATCH', `issues/${i.number}`, { ...extra, labels });
   };
+  /** Writes the status (key 'status') or a logical field: an issue field when mapped, else a label; null clears it. */
+  const store = async (i: any, key: 'status' | LogicalField, value: string | null, extra: Record<string, unknown> = {}) => {
+    if (!fieldIds[key]) { const p = key === 'status' ? STATUS : prefix(key); return relabel(i, (l) => l.startsWith(p), value === null ? [] : [p + value], extra); }
+    if (Object.keys(extra).length) await api('PATCH', `issues/${i.number}`, extra);
+    if (value === null) await api('DELETE', `issues/${i.number}/issue-field-values/${fieldIds[key]}`);
+    else await api('POST', `issues/${i.number}/issue-field-values`, { issue_field_values: [{ field_id: fieldIds[key], value }] });
+  };
   const get = async (id: string): Promise<Item> => {
     const raw = await issue(id);
     // A pull request, or an issue with no status label, is not a ticket on this board.
@@ -74,7 +92,8 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
     const i = await issue(id);
     const cur = statusOf(i) ?? '';
     if (onlyFrom && cur !== onlyFrom) throw new MovedError(id, onlyFrom, cur);
-    await relabel(i, (l) => l.startsWith(STATUS), [STATUS + status], extra);
+    // GitHub has no compare-and-swap: a writer between this read and the write is not detected.
+    await store(i, 'status', status, extra);
     return get(id);
   };
   const milestone = async (title: string) => {
@@ -94,18 +113,18 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
     },
     get,
     async create(t) {
-      const labels = [...new Set([...(t.labels ?? []), STATUS + t.status])];
+      const labels = [...new Set([...(t.labels ?? []), ...(fieldIds.status ? [] : [STATUS + t.status])])];
       await ensureLabels(labels);
       const body: Record<string, unknown> = { title: t.title, body: t.body, labels };
       if (t.milestone) body.milestone = await milestone(t.milestone);
       const id = String((await api('POST', 'issues', body)).number);
+      if (fieldIds.status) await store({ number: id }, 'status', t.status);
       if (t.parent) await this.child(t.parent, id);
       return get(id);
     },
     move: (id, status, onlyFrom) => move(id, status, onlyFrom),
     async set(id, f, value) {
-      const p = prefix(f);
-      await relabel(await issue(id), (l) => l.startsWith(p), value === null ? [] : [p + value]);
+      await store(await issue(id), f, value);
       return get(id);
     },
     async label(id, op, label) {

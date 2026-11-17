@@ -569,6 +569,31 @@ export function cloudBoard(b: any, env: Record<string, string | undefined> = {})
   return 'fail board: a Claude cloud session cannot reach GitHub Projects (board adapter github); use github-issues, jira or linear, or run the cycle from GitHub Actions (templates/runner/github-actions-claude.yml)';
 }
 
+/** A github-issues board with field_ids: every mapped id is an org issue field and the status field has every board status. */
+export function issueFields(b: any, ctx: { exec: (c: string, a: string[], o?: any) => string; env: Record<string, string | undefined> }): string[] {
+  const ids: Record<string, number> | undefined = b.board?.adapter === 'github-issues' ? b.board.options?.field_ids : undefined;
+  if (!ids || typeof ids !== 'object') return [];
+  if (ctx.env.CLAUDE_CODE_REMOTE === 'true') return ['info board field_ids: not checked in a Claude cloud session (orgs/* is not reachable); run doctor where gh reaches the org'];
+  const org = String(b.board.options.repo).split('/')[0];
+  let defs: { id: number; name: string; options?: { name: string }[] }[];
+  try { defs = JSON.parse(ctx.exec('gh', ['api', '-H', 'X-GitHub-Api-Version: 2026-03-10', `orgs/${org}/issue-fields?per_page=100`])); }
+  catch (e) { return [`fail board field_ids: cannot read orgs/${org}/issue-fields (${(e as Error).message.split('\n')[0]})`]; }
+  const bad: string[] = [];
+  for (const [k, id] of Object.entries(ids)) if (!defs.some((d) => d.id === id)) bad.push(`${k} ${id} is not an issue field of ${org}`);
+  const st = defs.find((d) => d.id === ids.status);
+  const lacks = st ? (b.board.statuses ?? []).filter((s: string) => !(st.options ?? []).some((o) => o.name === s)) : [];
+  if (lacks.length) bad.push(`the status field '${st!.name}' lacks the options ${lacks.join(', ')}`);
+  if (!bad.length) return [`ok   board field_ids: every id is an issue field of ${org}`];
+  // The map the org's field names suggest: Status or Stage for the status, the board.fields name for each field.
+  const want: Record<string, number> = {};
+  const named: [string, string][] = [['status', ''], ...Object.entries<string>(b.board.fields ?? {})];
+  for (const [k, name] of named) {
+    const d = defs.find((x) => (k === 'status' ? /^(status|stage)$/i.test(x.name) : x.name.toLowerCase() === name.toLowerCase()));
+    if (d) want[k] = d.id;
+  }
+  return [`fail board field_ids: ${bad.join('; ')}; by name the org has field_ids: { ${Object.entries(want).map(([k, v]) => `${k}: ${v}`).join(', ')} }`];
+}
+
 /** The stock delivery workflow's push branches must name this project's trunk and release lines. */
 export function deliveryWorkflow(b: any, root: string): string | undefined {
   const f = join(root, '.github', 'workflows', 'agentic-sdlc-delivery.yml');
@@ -659,6 +684,7 @@ export const cli: PortCli = async (argv, ctx) => {
       let bad = 0;
       const cb = cloudBoard(binding, ctx.env);
       if (cb) { out(cb); bad++; probes.shift(); } // the board.list probe would only repeat it
+      for (const l of issueFields(binding, ctx)) { out(l); if (l.startsWith('fail')) bad++; }
       trunkProtection(binding, ctx).forEach(out);
       const it = implementerToken(binding, ctx);
       if (it) out(it);
