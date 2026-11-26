@@ -64,6 +64,8 @@ Given('the built CLI dist/bin.js and an empty project', () => {
   assert.ok(existsSync(bin), 'dist/bin.js is missing: run npm run build');
 });
 When('the built CLI runs {string}', (w, line: string) => { w.state.distOut = runBuilt(w, splitArgs(line)); });
+// A verb that exits 1 still prints its report (validate --json on a binding with unresolved values).
+When('the built CLI runs {string}, which may fail', (w, line: string) => { try { w.state.distOut = runBuilt(w, splitArgs(line)); } catch (e) { w.state.distOut = String((e as { stdout?: string }).stdout ?? ''); } });
 Then('the built CLI output says {string}', (w, text: string) => { assert.match(w.state.distOut, new RegExp(text)); });
 When('an MCP client calls the tool {string} with the title {string}, the body {string} and the status {string}', (w, name: string, title: string, body: string, status: string) => {
   const req = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: { title, body, status } } };

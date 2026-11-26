@@ -4,8 +4,8 @@ import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rm
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, parseDocument } from 'yaml';
-import { ADAPTERS, BINDING_PATH, bindingWarnings, loadBinding, validateBinding } from './binding.ts';
-import { createBoard } from './board/index.ts';
+import { ADAPTERS, BINDING_PATH, UNRESOLVED, bindingWarnings, loadBinding, unresolved, unresolvedValue, validateBinding } from './binding.ts';
+import { HEARTBEAT, createBoard } from './board/index.ts';
 import { createForge } from './forge/index.ts';
 import { createVcs } from './vcs/index.ts';
 import { createLocalBoard } from './board/local.ts';
@@ -188,6 +188,7 @@ export function missingBindingKeys(template: string, binding: string): string[] 
   const out: string[] = [];
   for (const [k, v] of Object.entries(t)) {
     if (!(k in b)) out.push(k);
+    else if (k === 'paths') continue; // init leaves out a paths file key whose file the project does not have
     else if (isMap(v) && isMap(b[k])) for (const k2 of Object.keys(v)) if (!(k2 in (b[k] as object))) out.push(`${k}.${k2}`);
   }
   return out;
@@ -276,7 +277,7 @@ function claudeSetup(root: string, inst: Installer, log: string[], noPlugin: boo
   try { models = parse(readFileSync(join(root, BINDING_PATH), 'utf8'))?.models ?? {}; } catch { /* reported by validate */ }
   for (const tier of TIERS) {
     const rel = `.claude/agents/sdlc-${tier}.md`;
-    const model = !models[tier] || /^your-/.test(models[tier]) ? 'inherit' : models[tier]; // template placeholder: the session's model
+    const model = !models[tier] || /^your-/.test(models[tier]) || String(models[tier]).startsWith(UNRESOLVED) ? 'inherit' : models[tier]; // a placeholder: the session's model
     inst.put(rel, `---
 name: sdlc-${tier}
 description: Runs one agentic-sdlc step whose tier is ${tier}. The sdlc skill hands a step to this agent when the step is at the ${tier} tier.
@@ -315,19 +316,25 @@ function reviewSandbox(root: string, inst: Installer, log: string[]) {
     .replaceAll('agentic-sdlc:review', `${COPY_PREFIX}review`)
     .replace(/\b([Tt]he) plugin's /g, '$1 ');
   inst.put('.claude/agents/sdlc-reviewer.md', agent, 'agents/sdlc-reviewer.md');
-  inst.copy('hooks/guard.mjs', GUARD);
-  const want = JSON.parse(readFileSync(need(inst.pkg, 'hooks/hooks.json'), 'utf8').replaceAll('${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs', `\${CLAUDE_PROJECT_DIR}/${GUARD}`));
+  const hooksJson = readFileSync(need(inst.pkg, 'hooks/hooks.json'), 'utf8');
+  // Every script hooks.json runs (the guard, the session-start orientation), copied to .agents/hooks.
+  for (const n of new Set([...hooksJson.matchAll(/\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/([\w.-]+\.mjs)/g)].map((m) => m[1]))) inst.copy(`hooks/${n}`, `.agents/hooks/${n}`);
+  const want = JSON.parse(hooksJson.replaceAll('${CLAUDE_PLUGIN_ROOT}/hooks/', '${CLAUDE_PROJECT_DIR}/.agents/hooks/'));
   const rel = '.claude/settings.json', file = join(root, rel);
   const had = existsSync(file);
   const doc = had ? parseJson(readFileSync(file, 'utf8') || '{}', rel) : {};
-  const pre: any[] = (doc.hooks ??= {}).PreToolUse ??= []; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const has = (e: any) => pre.some((x) => x?.matcher === e.matcher && JSON.stringify(x.hooks) === JSON.stringify(e.hooks)); // eslint-disable-line @typescript-eslint/no-explicit-any
-  const add = want.hooks.PreToolUse.filter((e: unknown) => !has(e));
-  if (!add.length) { log.push(`kept ${rel} (the guard hook is registered)`); return; }
-  pre.push(...add);
+  let added = 0;
+  for (const [event, entries] of Object.entries<any[]>(want.hooks)) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const cur: any[] = (doc.hooks ??= {})[event] ??= []; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const has = (e: any) => cur.some((x) => x?.matcher === e.matcher && JSON.stringify(x.hooks) === JSON.stringify(e.hooks)); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const add = entries.filter((e) => !has(e));
+    cur.push(...add);
+    added += add.length;
+  }
+  if (!added) { log.push(`kept ${rel} (the guard and session-start hooks are registered)`); return; }
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify(doc, null, 2) + '\n');
-  log.push(`${had ? 'updated' : 'wrote'} ${rel}: the guard hook (${GUARD})`);
+  log.push(`${had ? 'updated' : 'wrote'} ${rel}: the guard hook (${GUARD}) and the session-start hook`);
 }
 
 /** owner/name of a GitHub origin remote, or undefined. */
@@ -335,6 +342,13 @@ function originRepo(root: string): string | undefined {
   try {
     const url = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     return /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(url)?.[1];
+  } catch { return undefined; }
+}
+
+/** The branch origin/HEAD names (the remote's default branch), or undefined. */
+function originHead(root: string): string | undefined {
+  try {
+    return execFileSync('git', ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().replace(/^origin\//, '') || undefined;
   } catch { return undefined; }
 }
 
@@ -393,7 +407,7 @@ async function init(root: string, argv: string[], log: string[]) {
       // Two identities: the implementer's token and the review app's token.
       doc.setIn(['forge', 'options', 'token_env'], 'AGENTIC_FORGE_TOKEN');
       doc.setIn(['forge', 'options', 'review_token_env'], 'AGENTIC_REVIEW_TOKEN');
-      doc.setIn(['forge', 'review_identity'], 'your-review-app[bot]');
+      doc.setIn(['forge', 'review_identity'], unresolvedValue('the review account or app login'));
     }
     const repo = forge === 'github' ? originRepo(root) : undefined;
     if (repo) {
@@ -403,12 +417,23 @@ async function init(root: string, argv: string[], log: string[]) {
     }
     if (board === 'local') {
       // The local board can hold the heartbeat ticket now; Cancelled keeps it out of every route.
-      const hb = await createLocalBoard({ root } as AdapterContext).create({ title: 'Heartbeat', body: 'agentic-sdlc heartbeat comments. Not a ticket.', status: 'Cancelled' });
+      const hb = await createLocalBoard({ root } as AdapterContext).create({ ...HEARTBEAT, status: 'Cancelled' });
       doc.setIn(['heartbeat', 'ticket'], hb.id);
       log.push(`created heartbeat ticket ${hb.id} on the local board`);
-    } else log.push('create the heartbeat ticket on the board and put its id in heartbeat.ticket');
+    }
+    const trunk = originHead(root);
+    if (trunk) doc.setIn(['vcs', 'trunk'], trunk);
+    // A paths file key whose file is not in the project is left out: the skills then read nothing there.
+    const paths = doc.get('paths') as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    for (const it of [...(paths?.items ?? [])]) {
+      const k = String(it.key?.value ?? it.key), v = it.value?.toJSON?.() ?? it.value?.value;
+      if (['factory', 'lane_areas', 'no_proof', 'importance_doc'].includes(k)) continue; // init writes AGENTS.md below
+      const kept = [v].flat().filter((f: unknown) => typeof f === 'string' && existsSync(join(root, f)));
+      if (!kept.length) paths.delete(k);
+      else if (Array.isArray(v) && kept.length < v.length) paths.set(k, kept);
+    }
     mkdirSync(dirname(bindingFile), { recursive: true });
-    writeFileSync(bindingFile, String(doc));
+    writeFileSync(bindingFile, doc.toString({ lineWidth: 0, flowCollectionPadding: false }));
     log.push(`wrote ${BINDING_PATH}`);
   }
 
@@ -418,9 +443,11 @@ async function init(root: string, argv: string[], log: string[]) {
   const bound = parse(readFileSync(bindingFile, 'utf8'));
   const continuous = bound?.product?.delivery === 'continuous';
   const oneIdentity = !bound?.forge?.review_identity;
+  const real = (v: unknown, d: string) => (typeof v === 'string' && v && !v.startsWith(UNRESOLVED) ? v : d); // a placeholder writes the default
   inst.bound = {
-    trunk: bound?.vcs?.trunk || DEFAULTS.trunk, releasePrefix: bound?.vcs?.release_prefix || DEFAULTS.releasePrefix,
-    delivery: bound?.product?.delivery || DEFAULTS.delivery, install: bound?.commands?.install || DEFAULTS.install, verify: bound?.commands?.verify || DEFAULTS.verify,
+    trunk: real(bound?.vcs?.trunk, DEFAULTS.trunk), releasePrefix: real(bound?.vcs?.release_prefix, DEFAULTS.releasePrefix),
+    delivery: real(bound?.product?.delivery, DEFAULTS.delivery), install: real(bound?.commands?.install, DEFAULTS.install), verify: real(bound?.commands?.verify, DEFAULTS.verify),
+    ci: real(bound?.forge?.ci_workflow, DEFAULTS.ci), deployFirst: real(bound?.forge?.deploy_workflows?.[0], DEFAULTS.deployFirst), deployLast: real(bound?.forge?.deploy_workflows?.at?.(-1), DEFAULTS.deployLast),
   };
   {
     const tdir = `templates/gates/${forge}`;
@@ -473,6 +500,8 @@ async function init(root: string, argv: string[], log: string[]) {
   inst.finish();
   const missing = missingKeysLine(missingBindingKeys(readFileSync(need(pkg, 'templates/binding.yml'), 'utf8'), readFileSync(bindingFile, 'utf8')));
   if (missing) log.push(missing);
+  const open = unresolved(parse(readFileSync(bindingFile, 'utf8')));
+  if (open.length) log.push(`next: ${open.length} binding value${open.length === 1 ? ' is' : 's are'} unresolved (${open.map((u) => u.key).join(', ')}); run the setup skill, or read agentic-sdlc validate --json`);
   const c = inst.counts;
   log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept (differ from every released version), ${c.stale} stale${c.removed ? `, ${c.removed} removed` : ''}`);
   const changed = c.wrote + c.updated + c.removed > 0 || agentsChanged;
@@ -654,7 +683,7 @@ export function cliPin(root: string): string[] {
 export function pathWarnings(root: string, b: Binding): string[] {
   const paths = ((b as any)?.paths ?? {}) as Record<string, unknown>;
   return Object.entries(paths)
-    .filter(([k, v]) => !['factory', 'light_verify', 'lane_areas', 'no_proof'].includes(k) && typeof v === 'string' && v && !existsSync(join(root, v)))
+    .filter(([k, v]) => !['factory', 'lane_areas', 'no_proof'].includes(k) && typeof v === 'string' && v && !existsSync(join(root, v)))
     .map(([k, v]) => `paths.${k} names ${v}, which does not exist in the project; the skills will read nothing there`);
 }
 
@@ -670,10 +699,19 @@ export const cli: PortCli = async (argv, ctx) => {
       return 0;
     }
     if (verb === 'validate' || verb === 'doctor') {
+      const json = rest[0] === '--json' && verb === 'validate';
+      if (rest.length && !json) { console.error(`usage: agentic-sdlc ${verb}${verb === 'validate' ? ' [--json]' : ''}`); return 2; }
       const warnings: string[] = [];
       const problems = validate(ctx.root, warnings);
-      problems.forEach((p) => console.error(`problem: ${p}`));
       try { { const lb = loadBinding(ctx.root); warnings.push(...bindingWarnings(lb), ...pathWarnings(ctx.root, lb)); } } catch { /* reported as a problem */ }
+      if (json) {
+        // One machine-readable call for the setup skill: what is wrong, what is doubtful, what init could not know.
+        let open: { key: string; hint: string }[] = [];
+        try { open = unresolved(loadBinding(ctx.root)); } catch { /* no binding: a problem */ }
+        out(JSON.stringify({ ok: !problems.length, problems: problems.filter((p) => !/ is unresolved: /.test(p)), warnings, unresolved: open }, null, 2));
+        return problems.length ? 1 : 0;
+      }
+      problems.forEach((p) => console.error(`problem: ${p}`));
       warnings.forEach((m) => console.error(`warn: ${m}`));
       try {
         const info = missingKeysLine(missingBindingKeys(readFileSync(join(packageRoot(), 'templates/binding.yml'), 'utf8'), readFileSync(join(ctx.root, BINDING_PATH), 'utf8')));
@@ -709,7 +747,7 @@ export const cli: PortCli = async (argv, ctx) => {
       }
       return bad ? 1 : 0;
     }
-    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness claude] [--profile individual|organization] [--no-plugin] [--upgrade] [--force] | validate | doctor');
+    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness claude] [--profile individual|organization] [--no-plugin] [--upgrade] [--force] | validate [--json] | doctor');
     return 2;
   } catch (e) {
     console.error(redact((e as Error).message, ctx.env));

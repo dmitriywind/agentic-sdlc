@@ -1,6 +1,6 @@
 ---
 name: learn
-description: The learning loop - grade one finished run with the scorers the ledger plans, on an independent model, and propose exactly one factory change with bench proof from the worst repeated failure. Off unless learning.enabled is true. Use when ledger summary shows learning.judge or learning.due, or when the Factory owner asks for a proposal.
+description: Use when ledger summary shows learning.judge or learning.due, or when the Factory owner asks for a factory change proposal.
 disable-model-invocation: true
 metadata:
   steps:

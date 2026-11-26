@@ -1,6 +1,6 @@
 ---
 name: sdlc
-description: The navigator of the agentic SDLC - which step acts next on a ticket or a change request, and one unattended cycle. Load first to run a cycle, to find the next step for a ticket, or before editing a skill.
+description: Use when running one factory cycle, when asked for the next step on a ticket or change request, or before editing a skill of this pack.
 metadata:
   tier: fast
 ---

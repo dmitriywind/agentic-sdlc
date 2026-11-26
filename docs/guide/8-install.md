@@ -37,10 +37,12 @@ install it.
    `.agents/bin/agentic-sdlc`, adds `.cli/` and `work/` to `.agents/.gitignore`, and lists every file it writes.
    It writes nothing into `package.json` or `.npmrc`; a product that is not a Node project needs
    neither. npm older than 12 does not know `--allow-git`: drop the flag there.
-2. **Fill in `.agents/binding.yml`**. The file documents every key. Set at least the owners, the board
-   options (`init` reads the repo from `git remote origin`), `commands.*`, `product.environments`,
-   `product.delivery` and `models`. `.agents/bin/agentic-sdlc validate` names every key still missing.
-   It also warns, per `paths.*` file key, when the named file is missing: the skills then read nothing there.
+2. **Resolve `.agents/binding.yml`**. With the plugin, ask Claude Code to set up the factory: the `setup`
+   skill runs `init`, reads the project and writes the real values, creates the board's labels and the
+   heartbeat ticket (`agentic-sdlc board bootstrap`), loops `validate` and `doctor`, and ends with the
+   steps only you can take. By hand: every value `init` could not know reads `unresolved: <hint>`, and
+   `.agents/bin/agentic-sdlc validate --json` lists them ([the validate feature](../../features/install/validate.feature)).
+   `init` keeps a `paths.*` file key only when its file exists; `validate` warns when a named file is missing.
    `init` writes `product.delivery: continuous`: every merge ships, with no release line and no `ship`
    step. Set `release-line` to opt in to releases the Product owner approves.
    The Claude Code plugin also brings a subagent per tier, a `sdlc-reviewer` that can only read files and
@@ -51,9 +53,11 @@ install it.
 4. **Run `.agents/bin/agentic-sdlc doctor`** until every port is ok. It also checks that the pin
    parses and the launcher runs. Import `.github/rulesets/trunk.json` in the repo settings. A private
    repo on GitHub Free cannot enforce a ruleset; `doctor` warns.
-5. **Create the heartbeat ticket** and put its id in `heartbeat.ticket`. Keep it off every route: on
-   `github-issues`, an issue with no `status:` label is off the board, and comments still work; on the
-   local board, status Cancelled (`init` does this); on other boards, a Cancelled status.
+5. **Create the heartbeat ticket** with `agentic-sdlc board bootstrap` and put the id it prints in
+   `heartbeat.ticket` (setup does both). It is off every route: on `github-issues`, an issue with no
+   `status:` label; on the local board, status Cancelled (`init` does this). A second run creates nothing
+   ([the bootstrap feature](../../features/board/bootstrap.feature)). Later, `agentic-sdlc status` says
+   what waits on you and what the next cycle does ([the status feature](../../features/cycle/status.feature)).
 6. **Run one cycle by hand** with two or three real tickets in Backlog. Read every comment it writes.
    Repeat until three cycles in a row need no correction.
 7. **Schedule the cycle** from [`templates/runner/`](../../templates/runner/routine.md), and the
@@ -95,7 +99,7 @@ names each copy `sdlc-<skill>` (`sdlc` stays `sdlc`). A scheduled run loads the 
 `claude --plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc`, where `<ref>` is the `ref` in
 `.agents/cli.json`. A Claude cloud routine loads `.claude/skills/`: install with `init --no-plugin`.
 Without the plugin, `init` also writes the plugin's reviewer as `.claude/agents/sdlc-reviewer.md` and
-registers the plugin's guard hook in `.claude/settings.json` (the script at `.agents/hooks/guard.mjs`),
+registers the plugin's guard and session-start hooks in `.claude/settings.json` (the scripts in `.agents/hooks/`),
 keeping every setting you have there, so the review still never runs the pull request's code. A second
 run changes nothing. The behaviour is in [the init feature](../../features/install/init.feature) and
 [the upgrade feature](../../features/install/upgrade.feature).

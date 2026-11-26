@@ -31,6 +31,7 @@ export const VERBS: Record<string, VerbSpec> = {
   approve: {}, approvals: {},
   runs: { value: ['ref'], bool: ['failed'] },
   run: {},
+  whoami: {},
 };
 
 export const cli: PortCli = (argv, ctx) =>
@@ -104,6 +105,7 @@ export const cli: PortCli = (argv, ctx) =>
       case 'approve': await f.approve(n()); return {};
       case 'approvals': return f.approvals(n());
       case 'run': return f.run(n());
+      case 'whoami': if (!f.whoami) throw new Error('forge whoami: this forge adapter cannot say who it acts as'); return f.whoami();
       case 'runs': return f.runs({ ref: a.get('ref'), failed: a.has('failed') });
       default: throw new UsageError(`unknown forge verb: ${verb}`);
     }

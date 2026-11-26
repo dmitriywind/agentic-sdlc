@@ -44,11 +44,25 @@ const EVIDENCE = ['sbom', 'provenance', 'signature'];
 const TIERS = ['fast', 'balanced', 'deep'];
 const STATUSES = ['Ideas', 'Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done', 'Cancelled'];
 
+/** A value init could not know: the string `unresolved: <hint>`. Setup (or the person) replaces it with a real one. */
+export const UNRESOLVED = 'unresolved:';
+export const unresolvedValue = (hint: string) => `${UNRESOLVED} ${hint}`;
+const hintOf = (v: unknown) => (typeof v === 'string' && v.startsWith(UNRESOLVED) ? v.slice(UNRESOLVED.length).trim() : undefined);
+
+/** Every unresolved value in the binding, by dotted key (a list entry by its index), with its hint. */
+export function unresolved(b: unknown, at = ''): { key: string; hint: string }[] {
+  const h = hintOf(b);
+  if (h !== undefined) return [{ key: at, hint: h }];
+  if (!b || typeof b !== 'object') return [];
+  return Object.entries(b).flatMap(([k, v]) => unresolved(v, at ? `${at}.${k}` : k));
+}
+
 /** Returns the problems found; empty means valid. */
 export function validateBinding(b: Binding): string[] {
   const p: string[] = [];
   const x = b as any;
   if (!x || typeof x !== 'object') return ['binding is empty'];
+  for (const u of unresolved(x)) p.push(`${u.key} is unresolved: ${u.hint}`);
   if (x.version !== 2) p.push('version must be 2');
   if (!PROFILES.includes(x.profile)) p.push(`profile '${x.profile}' must be one of ${PROFILES.join('|')}`);
   const who = (w: any) => (typeof w === 'string' && !!w) || (!!w && typeof w === 'object' && typeof w.board === 'string' && !!w.board && typeof w.forge === 'string' && !!w.forge);
@@ -145,6 +159,11 @@ export function validateBinding(b: Binding): string[] {
       p.push(`board.scope.repos must list every repo label, this repo's included, each starting '${pre}:'`);
     else if (!sc.home && sc.repos !== undefined) p.push('board.scope.repos is for the home repo only (board.scope.home: true)');
   }
+  // Init writes these names into a shell line and a workflow expression of the delivery workflow: plain names only.
+  const wfName = (v: unknown) => typeof v === 'string' && (v.startsWith(UNRESOLVED) || /^[\w .&()+,/:#-]+$/.test(v));
+  if (x.forge?.ci_workflow !== undefined && !wfName(x.forge.ci_workflow)) p.push("forge.ci_workflow must be a workflow name (letters, digits, spaces and . & ( ) + , / : # - _)");
+  const dw = x.forge?.deploy_workflows;
+  if (dw !== undefined && !(Array.isArray(dw) && dw.length <= 2 && dw.every(wfName))) p.push('forge.deploy_workflows must list at most two workflow names: the first environment\'s deploy, then the last\'s');
   const ha = x.forge?.human_approval;
   if (ha !== undefined && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join('|')}`);
   const al = x.forge?.approval_label;
@@ -193,7 +212,7 @@ export function bindingWarnings(b: Binding): string[] {
     if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved (by a review or forge.approval_label); take your own account out of owners.bots (owners are trusted without it), or add a second account to owners.product`);
   }
   const hb = String(x?.heartbeat?.ticket ?? '');
-  if (['github-issues', 'local'].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
+  if (['github-issues', 'local'].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb) && hintOf(hb) === undefined) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
   const envs: string[] = x?.product?.environments ?? [];
   for (const l of x?.board?.env_labels ?? []) if (String(l).startsWith('env:') && !envs.includes(String(l).slice(4))) w.push(`board.env_labels '${l}' names no product.environments entry`);
   if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push('product.evidence is set but commands.evidence_check is unset: no release can show its evidence');

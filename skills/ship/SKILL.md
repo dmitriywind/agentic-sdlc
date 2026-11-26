@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Decide whether the trunk is ready for the last environment, choose what ships, set Release Version and cut the release line, with the Product owner's go-ahead. Only for product.delivery release-line. Use on a release request (a Backlog ticket labelled board.labels.release) or a Done P0 fix that is On the environment before the last.
+description: Use when a release request (a Backlog ticket with board.labels.release) or a Done P0 fix awaits the last environment, under product.delivery release-line only.
 disable-model-invocation: true
 metadata:
   tier: balanced

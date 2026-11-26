@@ -102,7 +102,7 @@ Feature: Init upgrades an install
       When I run the install command "init --upgrade"
       Then the installed file ".claude/settings.json" is as noted
       And the installed file ".claude/settings.json" contains "guard.mjs" exactly 2 times
-      And the output has the line "kept .claude/settings.json (the guard hook is registered)"
+      And the output has the line "kept .claude/settings.json (the guard and session-start hooks are registered)"
 
   Rule: An upgrade writes only under paths.factory and reports a root file it would change
 

@@ -78,6 +78,13 @@ export function createLocalBoard(ctx: AdapterContext): Board {
     close(id, reason) {
       return edit(id, (it) => setStatus(it, reason === 'completed' ? 'Done' : 'Cancelled'));
     },
+    async bootstrap(_labels, hb) {
+      // Labels on a local board are free text: nothing to create. The heartbeat is Cancelled, so no route reads it.
+      if (!hb) return { created: [] };
+      const had = load().items.find((i) => i.title === hb.title && i.status === 'Cancelled');
+      if (had) return { created: [], heartbeat: { id: had.id, created: false } };
+      return { created: [], heartbeat: { id: (await this.create({ title: hb.title, body: hb.body, status: 'Cancelled' })).id, created: true } };
+    },
     child(parent, child) {
       return edit(parent, (p, db) => {
         const c = find(db, child);

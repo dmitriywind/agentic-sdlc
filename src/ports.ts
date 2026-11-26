@@ -39,6 +39,12 @@ export interface Board {
   comments(id: string, q?: { last?: number; marker?: string }): Promise<Comment[]>;
   close(id: string, reason: 'completed' | 'not_planned'): Promise<Item>;
   child(parent: string, child: string): Promise<Item>;
+  /**
+   * Creates what the board needs once (`board bootstrap`), idempotent: the labels (the adapter adds its own status and
+   * field labels) and, when `heartbeat` is given, the heartbeat ticket kept off every route (found again by its title).
+   * Optional: a board without it needs nothing created.
+   */
+  bootstrap?(labels: string[], heartbeat?: { title: string; body: string }): Promise<{ created: string[]; heartbeat?: { id: string; created: boolean } }>;
 }
 
 export interface Check { name: string; state: 'pending' | 'success' | 'failure' | 'missing' }
@@ -110,6 +116,8 @@ export interface Forge {
   runs(q?: { ref?: string; failed?: boolean }): Promise<Run[]>;
   /** One CI run by id; throws when it does not exist. */
   run(id: string): Promise<Run>;
+  /** The account the forge acts as, and the repo and its default branch when readable (`forge whoami`). Optional. */
+  whoami?(): Promise<{ login: string; loginFrom: 'user' | 'repo-owner'; repo?: string; defaultBranch?: string }>;
 }
 
 /** `forge verdict`: status is `posted` when the review identity posted the status (and approval), `ci` when CI's review gate reads the report. */
@@ -256,6 +264,9 @@ export interface Binding {
     verify_check_name: string;
     required_checks: string[];
     planned_checks: string[];
+    /** The trunk CI workflow and the deploy workflows (first, last environment) the delivery workflow watches; init writes them there. */
+    ci_workflow?: string;
+    deploy_workflows?: string[];
   };
   vcs: {
     adapter: 'git';
@@ -273,7 +284,7 @@ export interface Binding {
   models: { fast: string; balanced: string; deep: string };
   agent_command?: string;
   commands: {
-    setup?: string; install: string; fast_check: string; verify: string; light_verify?: string; rollback?: string;
+    setup?: string; install: string; fast_check: string; verify: string; rollback?: string;
     /** Deploys a CR head for review/verify (run by that step, not by the CLI). */
     preview?: string;
     /** Runs proof files on the merge base; {files} is filled. Without it, gate proofs-on-base fails closed. */

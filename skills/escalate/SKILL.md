@@ -1,6 +1,6 @@
 ---
 name: escalate
-description: Decide whether a person must act before work continues and, if so, hold the ticket with one structured ask. Run inside any step that is unsure of its authority, meets a trigger below, or needs a product ruling, a sign-off, a credential or a device.
+description: Use when a step is unsure of its authority, meets an escalation trigger, or needs a product ruling, a sign-off, a credential or a device.
 user-invocable: false
 metadata:
   tier: fast

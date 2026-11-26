@@ -84,7 +84,8 @@ Given('the installed binding is complete and names an executor for no step', (w)
 });
 Given('the installed binding is the shipped template on a local board with the heartbeat ticket {string}', (w, ticket: string) => {
   w.write('.agents/binding.yml', readFileSync(join(REPO, 'templates/binding.yml'), 'utf8')
-    .replace(/^(\s*adapter:\s*)github-issues(\s*#.*)?$/m, '$1local').replace(/^(\s*ticket:\s*)""/m, `$1"${ticket}"`));
+    .replace(/^(\s*adapter:\s*)github-issues(\s*#.*)?$/m, '$1local').replace(/^(\s*ticket:\s*)"[^"]*"/m, `$1"${ticket}"`)
+    .replace(/"unresolved: [^"]*"/g, '"set"'));
 });
 Given('I note the installed file {string}', (w, rel: string) => { (w.state.noted ??= {})[rel] = w.read(rel); });
 
@@ -268,3 +269,18 @@ When('doctor runs against the fake forge', async (w) => { await capture(w, () =>
 Then('doctor line {int} matches {string}', (w, n: number, re: string) => assert.match(doc(w).lines[n - 1] ?? '', new RegExp(re), doc(w).lines.join('\n')));
 Then('doctor line {int} is {string}', (w, n: number, text: string) => assert.equal(doc(w).lines[n - 1], text));
 Then('the forge was asked for check runs', (w) => assert.ok(doc(w).calls.some((c) => /check-runs/.test(c)), doc(w).calls.join('\n')));
+
+// ---- validate --json: the unresolved values ----
+Given('the installed binding leaves {string} unresolved: {string}', (w, key: string, hint: string) => {
+  const b = parseYaml(w.read('.agents/binding.yml'));
+  const parts = key.split('.');
+  let o = b;
+  for (const k of parts.slice(0, -1)) o = (o[k] ??= {});
+  o[parts.at(-1)!] = `unresolved: ${hint}`;
+  w.write('.agents/binding.yml', stringify(b));
+});
+Then('the validate report lists {string} unresolved with the hint {string}', (w, key: string, hint: string) => {
+  const r = w.last.json();
+  assert.deepEqual(r.unresolved.find((u: Obj) => u.key === key), { key, hint }, JSON.stringify(r.unresolved));
+  assert.equal(r.ok, false);
+});

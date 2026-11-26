@@ -1,4 +1,4 @@
-# Source: src/install.ts "validate", "pathWarnings" and "missingBindingKeys"
+# Source: src/install.ts "validate", "pathWarnings" and "missingBindingKeys"; src/binding.ts "unresolved"
 @cli:validate
 Feature: Validate checks the installed skills and the binding
   `agentic-sdlc validate` prints a `problem:` line for each broken rule and exits 1, prints a `warn:` line for each
@@ -50,3 +50,12 @@ Feature: Validate checks the installed skills and the binding
     Scenario: The binding is not touched
       When I run the install command "init"
       Then the installed file ".agents/binding.yml" does not match "slo|trunk: main"
+
+  Rule: A value init could not know is unresolved until it is replaced, and validate --json lists each one
+
+    Scenario: An unresolved value fails validate, and the report names its key and hint
+      Given the installed binding is complete and names an executor for no step
+      And the installed binding leaves "commands.verify" unresolved: "the full test command"
+      When I run the install command "validate --json"
+      Then the exit code is 1
+      And the validate report lists "commands.verify" unresolved with the hint "the full test command"
