@@ -73,7 +73,7 @@ src/
   ledger.ts                  read heartbeats and scores, aggregate runs, measures and learning
   bench.ts                   build and run bench cases
   mcp.ts                     the port verbs as MCP tools
-scripts/                     the guide build (guide.mjs), the release hash step (known-hashes.mjs) and the feature pruner
+scripts/                     the guide build (guide.mjs), the hash list step (known-hashes.mjs) and the feature pruner
 references/architecture.md   this contract
 docs/                        guides and diagrams; never normative
 features/                    the behaviour as executable Gherkin features (`<area>/*.feature`), their steps (`steps/`) and the runner (`support/`), on node:test; fake exec only (no network)
@@ -536,7 +536,7 @@ scorers, workflows, rulesets as patched, the pre-push hook, runner files, genera
 is the same run) updates a file still at its recorded hash, keeps an edited one and names the package file
 with the new version, writes files new in the package, and reports as `stale` any recorded file the package no
 longer ships, deleting none. A file with no lock entry, or a lock entry that does not match, counts as edited unless it equals the package's or its
-hash is one a released version had (`templates/known-hashes.json`, appended by `npm run hashes` before each tag;
+hash is one a released version had (`templates/known-hashes.json`, appended by `npm run build`;
 the delivery and verify workflows are compared with their binding values normalised, and `init` writes those values
 from `vcs.trunk`, `vcs.release_prefix`, `product.delivery`, `commands.install` and `commands.verify`).
 `--force` overwrites locally edited template files only. No flag rewrites `.agents/binding.yml` (to

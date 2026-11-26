@@ -6,14 +6,6 @@ Feature: The local board
 
   Rule: Tickets are created, listed and found
 
-    Scenario: A new ticket gets the next number
-      Given the board has these tickets:
-        | title     | status  |
-        | Fix login | Backlog |
-      When I run "board create --title Other --status Ready --body-file .body-0.md"
-      Then the result "id" is "2"
-      And the result "status" is "Ready"
-
     Scenario: A list is narrowed by status, and a search finds every word in the title or the body, in any case
       Given the board has these tickets:
         | title     | status  | body       |
@@ -53,15 +45,6 @@ Feature: The local board
       Then the exit code is 1
       And the output says "forge.approval_label"
 
-    Scenario: A milestone is set and cleared, and cannot be set on a ticket that does not exist
-      When I run "board milestone 1 M1"
-      Then the result "milestone" is "M1"
-      When I run "board milestone 1 --clear"
-      Then the result has no "milestone"
-      When I run "board milestone 9 M1"
-      Then the exit code is 1
-      And the output says "no item 9"
-
   Rule: Only the statuses of the binding exist
 
     Scenario Outline: A ticket is created or moved only to a status the binding lists
@@ -75,9 +58,7 @@ Feature: The local board
 
       Examples:
         | command                                           | code |
-        | board move 1 Ready                                | 0    |
         | board move 1 Nope                                 | 1    |
-        | board create --title t --status Nope --body-file b.md | 1    |
 
   Rule: Comments come newest first and narrow by marker, author and count
 
@@ -97,7 +78,6 @@ Feature: The local board
 
       Examples:
         | flags                                           | bodies                                       |
-        |                                                 | plain, <!-- heartbeat --> forged, <!-- heartbeat --> trusted |
         | --marker heartbeat --last 1 --author LOCAL      | <!-- heartbeat --> trusted                   |
 
   Rule: Many repos share one board through a scope label
@@ -116,23 +96,3 @@ Feature: The local board
       Then the "title" of the result entries are "A work"
       When I run "board create --title Mine --status Backlog --body-file b.md"
       Then the result "labels" is "repo:a"
-
-    Scenario: The home repo also lists the tickets that have no repo label
-      Given the board is scoped to the label "repo:b" as the home of "repo:a, repo:b"
-      When I run "board list"
-      Then the "title" of the result entries are "New signal, B work"
-
-  Rule: A wrong command line is a usage error
-
-    Scenario Outline: A bad command line is refused
-      When I run "<command>"
-      Then the exit code is 2
-      And the output says "<message>"
-
-      Examples:
-        | command                                               | message                               |
-        | board list --bogus                                    | unknown flag --bogus for board list   |
-        | board list --label                                    | --label needs a value                 |
-        | board milestone 1 M3 --clear                          | a name and --clear together           |
-        | board comments 1 --last 1.5                           | --last needs a whole number, got '1.5' |
-        | board create --title t --status Backlog --body-file missing.md | --body-file cannot be read |

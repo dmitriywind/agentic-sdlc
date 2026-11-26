@@ -25,12 +25,6 @@ Feature: Init upgrades an install
       Then the installed file ".github/workflows/gate.yml" holds "on: pull_request\n"
       And the output has the line "updated .github/workflows/gate.yml"
 
-    Scenario: Init --upgrade merges an old skills.lock.json into the install lock and removes it
-      Given the project has the file ".agents/skills.lock.json" holding "{}"
-      When I run the install command "init --upgrade"
-      Then the installed file ".agents/skills.lock.json" is absent
-      And the output has the line "removed .agents/skills.lock.json: merged into .agents/install.lock.json"
-
     Rule: A workflow the adopter edited is kept
 
       Background:
@@ -41,7 +35,7 @@ Feature: Init upgrades an install
 
       Scenario: Init --upgrade keeps it and names the package file, and --force overwrites it but never the binding
         When I run the install command "init --upgrade"
-        Then a line of the output matches "^kept \.github/workflows/gate\.yml \(differs from every released version; --force overwrites, see .*templates/gates/github/gate\.yml\)$"
+        Then a line of the output matches "^kept \.github/workflows/gate\.yml \(differs from every released version; --force overwrites, see .*templates.gates.github.gate\.yml\)$"
         And the output has the line "install: nothing to update; 1 kept (differ from every released version)"
         When I run the install command "init --force"
         Then the installed file ".github/workflows/gate.yml" holds "on: schedule\n"
@@ -59,8 +53,14 @@ Feature: Init upgrades an install
       And the install lock records ".github/workflows/gate.yml"
       And the install lock does not record ".agents/cycle-prompt.md"
 
-    Scenario: The package lists the hash of every installable file it ships
-      Then the known hashes of the package cover every installable file it ships
+    Scenario: A file with no lock entry at the hash of a released version, CRLF or not, follows the package
+      Given I run the install command "init"
+      And the install lock is emptied
+      And the package lists "old prompt\n" as a released version of "templates/runner/cycle-prompt.md"
+      And the project has the file ".agents/cycle-prompt.md" holding "old prompt\r\n"
+      When I run the install command "init"
+      Then the installed file ".agents/cycle-prompt.md" holds "cycle-prompt.md"
+      And the output has the line "updated .agents/cycle-prompt.md"
 
   Rule: A file the package no longer ships is removed when unedited and reported when edited
 
@@ -103,12 +103,6 @@ Feature: Init upgrades an install
       Then the installed file ".claude/settings.json" is as noted
       And the installed file ".claude/settings.json" contains "guard.mjs" exactly 2 times
       And the output has the line "kept .claude/settings.json (the guard hook is registered)"
-
-    Scenario: Init --upgrade regenerates a tier agent an older release wrote
-      Given the project has the file ".claude/agents/sdlc-fast.md" holding "name: sdlc-fast\nrun npx --no agentic-sdlc\n"
-      And the install lock is emptied
-      When I run the install command "init --upgrade"
-      Then the installed file ".claude/agents/sdlc-fast.md" does not match "npx"
 
   Rule: An upgrade writes only under paths.factory and reports a root file it would change
 

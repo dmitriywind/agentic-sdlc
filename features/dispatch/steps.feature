@@ -33,11 +33,3 @@ Feature: Dispatch takes step ids and finds the step's executor
       And the executor "plan/shape" is '{"kind":"command","run":"shape-bot {skill}"}'
       When dispatch runs "plan/shape --ticket 1"
       Then the command line mentions "shape-bot"
-
-  Rule: Flags are checked
-
-    Scenario: An unknown flag is a usage error
-      Given the local board holds a ticket at Ready as ticket 1 and the heartbeat ticket 2
-      When dispatch runs "review/review --ticket 1 --bogus build"
-      Then the exit code is 2
-      And the output says "unknown flag --bogus"

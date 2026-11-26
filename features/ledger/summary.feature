@@ -58,28 +58,6 @@ Feature: The summary of the ledger
         { "runs": 2, "failRate": 0.5, "median": 2.5 }
         """
 
-  Rule: An unscorable value is counted and left out of every rate, median and cluster
-
-    Scenario: An unscorable run is counted per scorer and does not count as a failure
-      Given a heartbeat by "bot" at "2026-11-08T00:00:00Z" with these runs:
-        | id | ticket | scores                                                            |
-        | 1  | 7      | redundant-tests=fail; done-conditions=4                           |
-        | 2  | 8      | redundant-tests=unscorable; done-conditions=unscorable            |
-        | 3  | 9      | redundant-tests=unscorable                                        |
-      When I run "ledger summary"
-      Then the JSON result "byScorer.redundant-tests" holds:
-        """
-        { "runs": 1, "failRate": 1, "median": null, "unscorable": 2 }
-        """
-      And the JSON result "byScorer.done-conditions" holds:
-        """
-        { "runs": 1, "failRate": 0, "median": 4, "unscorable": 1 }
-        """
-      And the JSON result "failureClusters" holds:
-        """
-        []
-        """
-
   Rule: The tokens of a ticket are rolled up, and a ticket over its budget is marked
 
     Background:

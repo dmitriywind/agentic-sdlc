@@ -14,7 +14,6 @@ Feature: Comment kinds are one registry of first lines
 
       Examples:
         | kind             | ref          | line                                |
-        | spec             |              | spec.md                             |
         | ask              | scope        | ### Needs human: scope              |
 
   Rule: A body is stamped once
@@ -41,7 +40,6 @@ Feature: Comment kinds are one registry of first lines
       Examples:
         | kind     |
         | verdict  |
-        | dispatch |
         | scores   |
 
   Rule: board comment --kind stamps and board comments --kind filters

@@ -51,7 +51,7 @@ Feature: Running the bench
     Scenario: The commands are printed with placeholders for the trees
       When the bench runs 1 cases with the options:
         | dry-run | true |
-      Then the output matches "--cwd .<workdir>."
+      Then the output matches "--cwd [^ ]*<workdir>"
       And the bench started no command
 
   Rule: The agent command comes from the executor

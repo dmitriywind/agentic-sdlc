@@ -22,11 +22,10 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup && node scripts/guide.mjs",
+    "build": "tsup && node scripts/guide.mjs && node scripts/known-hashes.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test features/support/run.ts",
-    "test:features": "node --test features/support/run.ts",
-    "hashes": "node scripts/known-hashes.mjs"
+    "test:features": "node --test features/support/run.ts"
   },
   "keywords": [
     "software-factory",

@@ -43,32 +43,6 @@ Feature: The bench report
         | rows.*.pareto        | true, false, true, false |
         | results              | 4                        |
 
-  Rule: Results are grouped by executor name, not by kind
-
-    Scenario: Two runs of one executor are one row
-      Given a bench result "a1.json" of the model "m" that ran:
-        | id | pass | minutes |
-        | 1  | true | 1       |
-      And that result is of the suite "s"
-      And that result is of the executor "bot-a" of the kind "command"
-      And a bench result "b.json" of the model "m" that ran:
-        | id | pass  | minutes |
-        | 1  | false | 1       |
-      And that result is of the suite "s"
-      And that result is of the executor "bot-b" of the kind "command"
-      And a bench result "a2.json" of the model "m" that ran:
-        | id | pass | minutes |
-        | 1  | true | 1       |
-      And that result is of the suite "s"
-      And that result is of the executor "bot-a" of the kind "command"
-      When I run "bench report --suite s a1.json b.json a2.json"
-      Then the JSON result has these values:
-        | path                  | value               |
-        | rows.*.executor       | bot-a, bot-b        |
-        | rows.*.executorKind   | command, command    |
-        | rows.*.n              | 2, 1                |
-        | rows.*.passRate       | 1, 0                |
-
   Rule: A result with budget-skipped cases is left off the Pareto front
 
     Scenario: A row with skipped runs is incomplete

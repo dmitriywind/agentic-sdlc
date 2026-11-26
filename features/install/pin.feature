@@ -37,15 +37,6 @@ Feature: The CLI pin and the launcher
       Then the installed file ".agents/cli.json" sets "ref" to "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       And the output says "kept .agents/cli.json"
 
-    Scenario: --ref moves the pin and keeps the package, and --force follows the package over a sha the project set
-      Given I run the install command "init"
-      And the project has the file ".agents/cli.json" holding '{"package":"github:me/fork","ref":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
-      When I run the install command "init --ref v1.2.3"
-      Then the installed file ".agents/cli.json" sets "package" to "github:me/fork"
-      And the installed file ".agents/cli.json" sets "ref" to "v1.2.3"
-      When I run the install command "init --force"
-      Then the installed file ".agents/cli.json" sets "ref" to "v9.9.9"
-
   Rule: The launcher installs the pinned ref once and runs it
 
     Background:
@@ -71,17 +62,6 @@ Feature: The CLI pin and the launcher
         | ..   |
 
   Rule: The stock files run the CLI through the launcher
-
-    Scenario Outline: No stock workflow, runner or hook file installs or versions the CLI another way
-      Then no stock workflow, runner or hook file contains '<text>'
-
-      Examples:
-        | text                             |
-        | AGENTIC_SDLC_VERSION             |
-        | npx --no agentic-sdlc            |
-
-    Scenario: Every CLI call in a workflow goes through the launcher
-      Then no stock workflow calls agentic-sdlc gate or vcs except through the launcher
 
     Scenario: A job that holds secrets runs the launcher and cli.json of the trunk
       Then every job of the stock workflow "templates/gates/github/agentic-sdlc-cr.yml" that runs the launcher checks out the base

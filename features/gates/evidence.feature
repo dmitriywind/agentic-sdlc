@@ -11,17 +11,16 @@ Feature: Gate evidence
     Then the exit code is 0
     And the output says "product.evidence is empty"
 
-  Scenario: The command receives the revision and the gate passes when it exits 0
+  Scenario Outline: The command receives the revision, and its exit code is the gate's
     Given the binding sets "product.evidence" to the list "report"
-    And the binding sets "commands.evidence_check" to "test {sha} = abc123"
+    And the binding sets "commands.evidence_check" to 'node -e "process.exit(process.argv[1]===process.argv[2]?0:1)" {sha} <expected>'
     When I run "gate evidence --sha abc123"
-    Then the exit code is 0
+    Then the exit code is <code>
 
-  Scenario: A command that exits non-zero fails the gate
-    Given the binding sets "product.evidence" to the list "report"
-    And the binding sets "commands.evidence_check" to "test {sha} = other"
-    When I run "gate evidence --sha abc123"
-    Then the exit code is 1
+    Examples:
+      | expected | code |
+      | abc123   | 0    |
+      | other    | 1    |
 
   Scenario: Evidence with no command to check it is a failure, not a pass
     Given the binding sets "product.evidence" to the list "report"

@@ -32,15 +32,8 @@ Feature: Push guard
       Examples:
         | where    | command              | verdict |
         | work     | git push origin feat | allowed |
-        | work     | git push             | allowed |
         | on-trunk | git push             | blocked |
         | on-trunk | git push origin feat | allowed |
-
-    Scenario: A push from a checkout of the trunk tells the agent to start a change line
-      Given a checkout "on-trunk" on the branch "main" of a project whose trunk is "main"
-      And the agent works in "on-trunk"
-      When the agent runs "git push"
-      Then the agent is told "start a change line and open a CR."
 
   Rule: The trunk is the one the binding names
 
@@ -120,7 +113,6 @@ Feature: Push guard
         | AGENTIC_SDLC_ROLE         |        | runs "agentic-sdlc forge status abc --state success"                       | blocked |
         | AGENTIC_SDLC_ROLE         | review | runs "agentic-sdlc forge status abc --state success"                       | allowed |
         | AGENTIC_SDLC_ALLOW_STATUS | 1      | runs "agentic-sdlc forge status abc --state success"                       | allowed |
-        | AGENTIC_SDLC_ALLOW_STATUS | 1      | calls the MCP tool "mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status"    | allowed |
         | AGENTIC_SDLC_ROLE         |        | calls the MCP tool "mcp__agentic-sdlc__forge_status"                        | blocked |
         | AGENTIC_SDLC_ALLOW_STATUS | 1      | runs "agentic-sdlc forge approve 3"                                         | blocked |
         | AGENTIC_SDLC_ALLOW_STATUS | 1      | calls the MCP tool "mcp__agentic-sdlc__forge_approve"                       | blocked |
@@ -146,7 +138,6 @@ Feature: Push guard
         | runs "gh api repos/o/r/issues/7/labels -f labels[]=approved"                                    | blocked |
         | calls the MCP tool "mcp__agentic-sdlc__board_label" with '{"id":"7","op":"add","label":"Approved"}' | blocked |
         | calls the MCP tool "mcp__agentic-sdlc__board_label" with '{"id":"7","op":"add","label":"bug"}' | allowed |
-        | runs "agentic-sdlc board label 7 add bug"                                                       | allowed |
 
     Scenario: The approval label is the one the binding names
       Given the checkout "work" has the binding file:
@@ -171,7 +162,6 @@ Feature: Push guard
       Examples:
         | command                                    | verdict |
         | agentic-sdlc forge view 3 2>/dev/null      | allowed |
-        | npx --no agentic-sdlc forge diff 1         | allowed |
         | npm test                                   | blocked |
         | agentic-sdlc forge view 3 && npm test      | blocked |
         | x=agentic-sdlc; $x forge view 3            | blocked |

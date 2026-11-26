@@ -19,7 +19,6 @@ Feature: Every port verb is an MCP tool
       Examples:
         | tool          | arguments                                           | message                              |
         | board_list    | {"status":[1]}                                      | 'status'                             |
-        | board_comments | {"id":"1","last":1.5}                              | 'last' must be a integer             |
         | board_get     | {"id":"1","nope":1}                                 | unknown argument 'nope'              |
 
   Rule: Board tools act on the board

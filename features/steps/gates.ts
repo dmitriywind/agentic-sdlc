@@ -66,7 +66,6 @@ Then('the CR no longer carries the approval label', (w) => {
 
 // ---- Given: the reviews of the CR ----
 Given('{string} with the association {string} approved the head', (w, user: string, assoc: string) => review(w, user, 'approved', `h${CR}`, assoc));
-Given('{string} approved the head without an author association', (w, user: string) => review(w, user, 'approved', `h${CR}`));
 Given('these reviews are on the CR:', (w, t: DataTable) => {
   for (const r of t.hashes()) review(w, r.user, r.state, r.commit === 'head' ? `h${CR}` : r.commit, r.association || undefined);
 });
@@ -145,11 +144,9 @@ Given('every merge is an ancestor of the deployed revision', (w) => { w.gate.anc
 Given('the ancestry of the merges in the deployed revision is:', (w, t: DataTable) => {
   w.gate.ancestry = { known: new Map(t.hashes().map((r) => [r.merge, r.ancestor === 'yes' ? true : r.ancestor === 'no' ? false : undefined])), others: false };
 });
-Given('no merge is an ancestor of the deployed revision', (w) => { w.gate.ancestry = { known: new Map(), others: false }; });
-Given('the tag {string} already exists', (w, name: string) => { w.gate.tags.push(name); });
-Given('the push of the release tag is rejected', (w) => { w.gate.tagError = new Error('push rejected'); });
 Given('the forge can search merged CRs by the ticket they close', (w) => { w.gate.searchByTicket = true; });
 Given('the forge search index does not show the merge yet', (w) => { w.gate.indexTrails = true; });
+Given('the push of the release tag is rejected', (w) => { w.gate.tagError = new Error('push rejected'); });
 Given('a deploy of a later environment sets Shipped of the ticket {string} to {string} while the gate runs', (w, id: string, value: string) => { w.gate.meanwhile.set(id, value); });
 
 // ---- When ----
@@ -210,8 +207,8 @@ Then('one Signal is opened with the labels {string}', (w, labels: string) => {
 });
 Then('the Signal {string} is commented with {string}', (w, id: string, text: string) => { const c = w.gate.commented.filter((x) => x.id === id); assert.equal(c.length, 1, JSON.stringify(w.gate.commented)); assert.ok(c[0].body.includes(text), c[0].body); });
 Then('the Signal body mentions {string}', (w, text: string) => assert.ok(w.gate.created.at(-1)?.body.includes(text), String(w.gate.created.at(-1)?.body)));
-Then('the Signal body does not mention {string}', (w, text: string) => { assert.ok(w.gate.created.length, 'no Signal was opened'); assert.ok(!w.gate.created.at(-1)!.body.includes(text), w.gate.created.at(-1)!.body); });
 Then('the forge was asked about the tickets {string} only', (w, ids: string) => { assert.deepEqual(w.gate.asked, list(ids)); assert.equal(w.gate.listed, 0); });
+Then('the Signal body does not mention {string}', (w, text: string) => { assert.ok(w.gate.created.length, 'no Signal was opened'); assert.ok(!w.gate.created.at(-1)!.body.includes(text), w.gate.created.at(-1)!.body); });
 
 // ---- Then: branch-names and proofs ----
 Then('the change line is allowed', (w) => assert.deepEqual(w.state.refused, []));
@@ -269,7 +266,6 @@ Given('a CR that changes the skill {string}', (w, name: string) => { assert.equa
 Given('the skill {string} has the tier {string} at the base and {string} at the head', (w, _n: string, base: string, head: string) => writeSkill(w, { ...skill(w), base, head }));
 Given('the step {string} of the skill {string} has the tier {string} at the base and {string} at the head', (w, _step: string, _n: string, base: string, head: string) => writeSkill(w, { ...skill(w), steps: [base, head] }));
 Given('the text of the skill {string} differs at the head', (w, _n: string) => writeSkill(w, { ...skill(w), text: true }));
-Given('the frontmatter of the skill {string} has one more key at the head', (w, _n: string) => writeSkill(w, { ...skill(w), extra: true }));
 Given('the CR deletes the skill {string}', (w, _n: string) => { w.gate.diffs.set(CR, (w.gate.diffs.get(CR) as string) + 'deleted file mode 100644\n'); });
 
 // ---- Given: the installed skill pack (skill-regression) ----

@@ -1,5 +1,5 @@
 // Append the hashes of every released version of every installable file to templates/known-hashes.json.
-// Run before tagging a release: `npm run hashes`. It reads the git history and the working tree, never the network.
+// `npm run build` runs it; CI fails when the committed list is stale. It reads git and the working tree, never the network.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,7 +14,8 @@ const before = found.size;
 
 // Every blob in every commit, with the path it had.
 const blobs = new Map();
-for (const l of git(['rev-list', '--all', '--objects']).toString().split('\n')) {
+// The trunk's history and the release tags: what a pin (a tag or a commit sha) can install. Other branches are drafts.
+for (const l of git(['rev-list', '--objects', 'HEAD', '--tags']).toString().split('\n')) {
   const i = l.indexOf(' ');
   if (i > 0 && isInstallable(l.slice(i + 1))) blobs.set(l.slice(0, i), l.slice(i + 1));
 }
@@ -24,10 +25,11 @@ if (ids.length) {
   let at = 0;
   for (const id of ids) {
     const nl = out.indexOf(10, at);
-    const size = Number(out.subarray(at, nl).toString().split(' ')[2]);
-    const body = out.subarray(nl + 1, nl + 1 + size);
-    at = nl + 1 + size + 1;
-    for (const h of shippedHashes(blobs.get(id), body)) found.add(h);
+    const [, type, size] = out.subarray(at, nl).toString().split(' ');
+    const body = out.subarray(nl + 1, nl + 1 + Number(size));
+    at = nl + 1 + Number(size) + 1;
+    if (type === 'blob') for (const h of shippedHashes(blobs.get(id), body)) found.add(h); // a folder (tree) matches the path test too
+
   }
 }
 

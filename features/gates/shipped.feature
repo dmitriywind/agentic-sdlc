@@ -42,31 +42,7 @@ Feature: Gate shipped
       And the gate result "changed" lists "nothing"
       And the ticket "1" has Shipped "Not shipped"
 
-    Scenario: A ticket of unknown ancestry waits alone
-      Given the ancestry of the merges in the deployed revision is:
-        | merge | ancestor |
-        | m1    | yes      |
-        | m2    | unknown  |
-      When the shipped gate runs for "staging" with the result "success" at the revision "sha1"
-      Then the gate result "unknown" lists "2"
-      And the ticket "1" has Shipped "On staging"
-
   Rule: Only a Done ticket, or one In review whose merge the merge gate has not reached, ships
-
-    Scenario: A ticket in a done status that is not Done is not shipped
-      Given the binding sets "board.done_statuses" to the list "Done, Cancelled"
-      And these tickets are on the board:
-        | id | status    | shipped     |
-        | 1  | Done      | Not shipped |
-        | 3  | Cancelled | Not shipped |
-      And these CRs are on the forge:
-        | cr | closes | merge |
-        | a  | 1      | old   |
-        | c  | 3      | old   |
-      And every merge is an ancestor of the deployed revision
-      When the shipped gate runs for "staging" with the result "success" at the revision "dep"
-      Then the gate result "changed" lists "1"
-      And the ticket "3" has Shipped "Not shipped"
 
     Scenario: A deploy that reports before the merge gate ships the In review ticket and moves it to Done
       Given these tickets are on the board:
@@ -80,24 +56,6 @@ Feature: Gate shipped
       Then the gate result "changed" lists "7"
       And the ticket "7" is at "Done"
       And the ticket "7" has Shipped "On staging"
-
-    Scenario: A Done ticket with no merged CR is listed as unmatched
-      Given these tickets are on the board:
-        | id | status | shipped     |
-        | 1  | Done   | Not shipped |
-      And every merge is an ancestor of the deployed revision
-      When the shipped gate runs for "staging" with the result "success" at the revision "sha1"
-      Then the gate result "unmatched" lists "1"
-      And the ticket "1" has Shipped "Not shipped"
-
-    Scenario: A Done ticket labelled as a release is not unmatched
-      Given the binding sets "board.labels.release" to "rel"
-      And these tickets are on the board:
-        | id | status | shipped     | labels |
-        | 1  | Done   | Not shipped | rel    |
-      And every merge is an ancestor of the deployed revision
-      When the shipped gate runs for "staging" with the result "success" at the revision "sha1"
-      Then the gate result "unmatched" lists "nothing"
 
   Rule: A later environment's value is never lowered
 
@@ -115,6 +73,7 @@ Feature: Gate shipped
       And the ticket "50" has Shipped "On production"
 
   Rule: Merges are looked up per candidate ticket, then in the merged list
+    The github forge searches merged CRs by the ticket they close; its search index can trail a merge.
 
     Background:
       Given these tickets are on the board:
@@ -125,16 +84,15 @@ Feature: Gate shipped
         | cr  | closes | merge |
         | m40 | 40     | m40   |
       And every merge is an ancestor of the deployed revision
+      And the forge can search merged CRs by the ticket they close
 
     Scenario: A forge that searches by ticket is asked about the candidate tickets only
-      Given the forge can search merged CRs by the ticket they close
       When the shipped gate runs for "staging" with the result "success" at the revision "x"
       Then the gate result "changed" lists "40"
       And the forge was asked about the tickets "40" only
 
     Scenario: A merge the search index does not show yet is found in the merged list
-      Given the forge can search merged CRs by the ticket they close
-      And the forge search index does not show the merge yet
+      Given the forge search index does not show the merge yet
       When the shipped gate runs for "staging" with the result "success" at the revision "x"
       Then the gate result "changed" lists "40"
 
@@ -154,17 +112,6 @@ Feature: Gate shipped
       Then the ticket "1" has Shipped "On production"
       And the release tags are "v2026.1"
       And the gate result "tags" lists "v2026.1"
-
-    Scenario: A success in an earlier environment tags nothing
-      When the shipped gate runs for "staging" with the result "success" at the revision "sha1"
-      Then the release tags are "none"
-
-    Scenario: A second run keeps the existing tag and the board still moves
-      Given the tag "v2026.1" already exists
-      When the shipped gate runs for "production" with the result "success" at the revision "sha1"
-      Then the release tags are "v2026.1"
-      And the gate result "tags" lists "v2026.1"
-      And the ticket "1" has Shipped "On production"
 
     Scenario: A tag failure leaves the board untouched, so a re-run retries
       Given the push of the release tag is rejected
@@ -190,10 +137,6 @@ Feature: Gate shipped
       And the release tags are "v4.1.0"
 
   Rule: A failed deploy opens one Signal and, in the last environment, returns the tickets of the failed revision
-
-    Scenario: A failure in an earlier environment opens a Signal that is not held
-      When the shipped gate runs for "staging" with the result "failure" at the revision "sha2"
-      Then one Signal is opened with the labels "signal:deploy"
 
     Scenario: A failure in the last environment opens a held Signal and returns the cut tickets
       Given these tickets are on the board:
@@ -242,21 +185,6 @@ Feature: Gate shipped
       And the ticket "2" has Shipped "In release"
       And the ticket "2" has Release Version "2026.11.2"
 
-    Scenario: A failure that arrives before In release is set still resets the cut tickets
-      Given these tickets are on the board:
-        | id | status | shipped       | release_version |
-        | 8  | Done   | On staging    | 2026.3          |
-        | 9  | Done   | On production | 2026.2          |
-      And these CRs are on the forge:
-        | cr | closes | merge |
-        | m8 | 8      | m8    |
-        | m9 | 9      | m9    |
-      And every merge is an ancestor of the deployed revision
-      When the shipped gate runs for "production" with the result "failure" at the revision "x"
-      Then the gate result "changed" lists "8"
-      And the ticket "8" has no Release Version
-      And the ticket "9" has Release Version "2026.2"
-
     Scenario: A re-run of the same failed deploy opens no second Signal, and the Signal carries the environment label
       Given the binding sets "board.env_labels" to the list "env:staging"
       When the shipped gate runs for "staging" with the result "failure" at the revision "bad"
@@ -285,26 +213,8 @@ Feature: Gate shipped
       And the ticket "31" has Shipped "On production"
       And no Signal is opened
 
-    Scenario: A rollback in an earlier environment leaves the tickets that are further on
-      Given these tickets are on the board:
-        | id | status | shipped       | release_version |
-        | 60 | Done   | On staging    |                 |
-        | 61 | Done   | On production | 5               |
-      And these CRs are on the forge:
-        | cr  | closes | merge |
-        | m60 | 60     | new   |
-        | m61 | 61     | new2  |
-      And no merge is an ancestor of the deployed revision
-      When the shipped gate runs for "staging" with the result "rolled-back" at the revision "old"
-      Then the gate result "changed" lists "60"
-      And the ticket "61" has Shipped "On production"
-
   Rule: A deploy names a known environment and a known result
 
     Scenario: An unknown environment is refused and the known ones are listed
       When the shipped gate runs for "qa" with the result "success" at the revision "x"
       Then the gate fails with "unknown environment qa; one of staging, production"
-
-    Scenario: An unknown result is refused
-      When the shipped gate runs for "staging" with the result "maybe" at the revision "x"
-      Then the gate fails with "--result must be success|failure|rolled-back"

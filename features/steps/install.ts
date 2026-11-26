@@ -7,17 +7,17 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { parse as parseYaml, stringify } from 'yaml';
 import { skillRegression } from '../../src/gates.ts';
 import { cli, cliPin, deliveryWorkflow, implementerToken, issueFields, probeFailure, selfHostedRunner, trunkProtection, unpinnedActions, validate } from '../../src/install.ts';
-import { isInstallable, shippedHashes } from '../../src/pristine.ts';
+import { shippedHashes } from '../../src/pristine.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import { BIN, Outcome, REPO, merge, splitArgs, type World } from '../support/world.ts';
 import { capture } from './ledger.ts';
 
 type Obj = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-const nl = (s: string) => s.replace(/\\n/g, '\n');
+const nl = (s: string) => s.replace(/\\r/g, '\r').replace(/\\n/g, '\n');
 const put = (dir: string, rel: string, text: string) => { mkdirSync(dirname(join(dir, rel)), { recursive: true }); writeFileSync(join(dir, rel), text); };
 const pkgOf = (w: World): string => w.state.pkg;
 
@@ -58,7 +58,6 @@ Given('an installable package at version {string}', (w, version: string) => {
   w.state.pkg = pkg;
   w.env.AGENTIC_SDLC_PACKAGE = pkg;
 });
-Given('the package has no templates', (w) => { w.env.AGENTIC_SDLC_PACKAGE = w.path('nowhere'); });
 Given('the package file {string} holds {string}', (w, rel: string, text: string) => put(pkgOf(w), rel, nl(text)));
 Given('the package ships the stock file {string}', (w, rel: string) => { mkdirSync(dirname(join(pkgOf(w), rel)), { recursive: true }); cpSync(join(REPO, rel), join(pkgOf(w), rel)); });
 Given('the package no longer ships {string}', (w, rel: string) => rmSync(join(pkgOf(w), rel), { recursive: true, force: true }));
@@ -72,11 +71,6 @@ Given('the package binding template also sets vcs.trunk and slo', (w) => {
 Given('the project has the file {string} holding {string}', (w, rel: string, text: string) => w.write(rel, nl(text)));
 Given('the adopter appends {string} to the installed file {string}', (w, text: string, rel: string) => w.write(rel, w.read(rel) + nl(text)));
 Given('the project is a git repository with the origin {string}', (w, url: string) => { w.git(['init', '-q']); w.git(['remote', 'add', 'origin', url]); });
-Given('the installed binding also runs the executors {string}', (w, names: string) => {
-  const b = parseYaml(w.read('.agents/binding.yml'));
-  for (const n of names.split(',').map((s) => s.trim())) b.executors[n] = { kind: 'harness' };
-  w.write('.agents/binding.yml', JSON.stringify(b));
-});
 Given('the installed binding is complete and names an executor for no step', (w) => {
   w.write('.agents/binding.yml', stringify({
     version: 2, profile: 'individual', owners: { product: 'a', factory: 'b', bots: ['bot'] },
@@ -111,7 +105,8 @@ Then('the installed file {string} contains {string}', (w, rel: string, text: str
 Then('the installed file {string} contains {string} exactly {int} times', (w, rel: string, text: string, n: number) => assert.equal(w.read(rel).split(nl(text)).length - 1, n, w.read(rel)));
 Then('the installed file {string} matches {string}', (w, rel: string, re: string) => assert.match(w.read(rel), new RegExp(re, 'm')));
 Then('the installed file {string} does not match {string}', (w, rel: string, re: string) => assert.doesNotMatch(w.read(rel), new RegExp(re, 'm')));
-Then('the installed file {string} is executable', (w, rel: string) => assert.ok(statSync(w.path(rel)).mode & 0o100, `${rel} is not executable`));
+// Windows has no exec bit (git there runs a hook through sh whatever its mode): the mode is checked where it exists.
+Then('the installed file {string} is executable', (w, rel: string) => assert.ok(process.platform === 'win32' || statSync(w.path(rel)).mode & 0o100, `${rel} is not executable`));
 Then('the installed folder {string} holds exactly {string}', (w, rel: string, names: string) =>
   assert.deepEqual(readdirSync(w.path(rel)).sort(), names.split(',').map((s) => s.trim()).sort()));
 
@@ -148,14 +143,11 @@ Then('a line of the output matches {string}', (w, re: string) => assert.ok(lines
 Then('the installed skill pack has no skill problems', (w) => assert.deepEqual(validate(w.root).filter((m) => m.startsWith('skill ')), []));
 Then('the skill regression gate finds no errors', (w) => assert.deepEqual(skillRegression(w.root).errors, []));
 
-// ---- the packaged files ----
-const walkDir = (rel: string): string[] => readdirSync(join(REPO, rel)).flatMap((n) =>
-  statSync(join(REPO, rel, n)).isDirectory() ? walkDir(`${rel}/${n}`) : [`${rel}/${n}`]);
-Then('the known hashes of the package cover every installable file it ships', () => {
-  const have = new Set(JSON.parse(readFileSync(join(REPO, 'templates/known-hashes.json'), 'utf8')) as string[]);
-  const missing = ['skills', 'scorers', 'templates'].flatMap(walkDir).filter(isInstallable)
-    .filter((p) => shippedHashes(p, readFileSync(join(REPO, p))).some((h) => !have.has(h)));
-  assert.deepEqual(missing, [], 'run npm run hashes before committing a change to these files');
+// ---- the package's known hashes (what scripts/known-hashes.mjs writes) ----
+Given('the package lists {string} as a released version of {string}', (w, text: string, rel: string) => {
+  const f = join(pkgOf(w), 'templates/known-hashes.json');
+  const have: string[] = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : [];
+  put(pkgOf(w), 'templates/known-hashes.json', JSON.stringify([...have, ...shippedHashes(rel, Buffer.from(nl(text)))]));
 });
 
 // ---- the launcher ----
@@ -178,33 +170,27 @@ mkdir -p "$prefix/node_modules/agentic-sdlc/dist"
 echo 'console.log(JSON.stringify(process.argv.slice(2)))' > "$prefix/node_modules/agentic-sdlc/dist/bin.js"
 `);
   chmodSync(join(fake, 'npm'), 0o755);
-  w.state.launch = { log, env: { PATH: `${fake}:${dirname(process.execPath)}:/usr/bin:/bin` } };
+  w.state.launch = { log, env: { PATH: [fake, dirname(process.execPath), ...SH_PATH].join(delimiter) } };
 });
+/** The launcher is a POSIX sh script: run by /bin/sh, or on Windows by the sh of Git for Windows (as Git Bash runs it). */
+const GIT_HOME = process.platform === 'win32' ? join(spawnSync('git', ['--exec-path'], { encoding: 'utf8' }).stdout.trim(), '..', '..', '..') : '';
+const SH = process.platform === 'win32' ? join(GIT_HOME, 'bin', 'sh.exe') : '/bin/sh';
+const SH_PATH = process.platform === 'win32' ? [join(GIT_HOME, 'usr', 'bin')] : ['/usr/bin', '/bin'];
+const sh = (w: World, args: string[]) => spawnSync(SH, args, { cwd: tmpdir(), env: { ...w.state.launch.env, ...(process.platform === 'win32' && { SYSTEMROOT: process.env.SYSTEMROOT }) }, encoding: 'utf8' });
 When('I run the launcher with {string}', (w, line: string) => {
-  const r = spawnSync(w.path('.agents/bin/agentic-sdlc'), splitArgs(line), { cwd: tmpdir(), env: w.state.launch.env, encoding: 'utf8' });
+  const r = sh(w, [w.path('.agents/bin/agentic-sdlc'), ...splitArgs(line)]);
   w.last = new Outcome(r.status ?? -1, r.stdout ?? '', r.stderr ?? '');
 });
 const npmCalls = (w: World): string[] => (existsSync(w.state.launch.log) ? readFileSync(w.state.launch.log, 'utf8').trim().split('\n').filter(Boolean) : []);
 Then('npm ran {int} times', (w, n: number) => assert.equal(npmCalls(w).length, n, npmCalls(w).join('\n')));
 Then('npm call {int} installed {string} at {string} beside the final folder, without scripts', (w, n: number, pkg: string, ref: string) => {
   const c = npmCalls(w)[n - 1];
-  assert.ok(c.startsWith(`i --prefix ${w.root}/.agents/.cli/${ref}.tmp`), c);
+  const root = sh(w, ['-c', 'cd "$1" && pwd', '_', w.root]).stdout.trim(); // the project as the shell names it
+  assert.ok(c.startsWith(`i --prefix ${root}/.agents/.cli/${ref}.tmp`), c);
   assert.ok(c.endsWith(`--ignore-scripts --allow-git=root --no-save --no-audit --no-fund ${pkg}#${ref}`), c);
 });
 
 // ---- the stock templates ----
-const stockFiles = () => {
-  const files = ['gates/github', 'runner'].flatMap((d) => readdirSync(join(REPO, 'templates', d)).filter((n) => /\.(yml|sh|md)$/.test(n)).map((n) => join(REPO, 'templates', d, n)));
-  return [...files, join(REPO, 'templates/gates/hooks/pre-push')];
-};
-Then('no stock workflow, runner or hook file contains {string}', (w, text: string) => {
-  for (const p of stockFiles()) assert.ok(!readFileSync(p, 'utf8').includes(text), p);
-});
-Then('no stock workflow calls agentic-sdlc gate or vcs except through the launcher', () => {
-  const dir = join(REPO, 'templates/gates/github');
-  const calls = readdirSync(dir).filter((n) => n.endsWith('.yml')).map((n) => readFileSync(join(dir, n), 'utf8').match(/(?<![\w./-])agentic-sdlc (?:gate|vcs) /g) ?? []);
-  assert.deepEqual(calls.flat(), []);
-});
 Then('every job of the stock workflow {string} that runs the launcher checks out the base', (w, rel: string) => {
   const wf = parseYaml(readFileSync(join(REPO, rel), 'utf8'));
   const jobs = Object.entries<Obj>(wf.jobs).filter(([, j]) => j.steps.some((s: Obj) => /\.agents\/bin\/agentic-sdlc/.test(s.run ?? '')));
@@ -279,7 +265,6 @@ When('doctor checks the workflow actions', (w) => shown(w, unpinnedActions(w.roo
 When('a probe fails with the message {string}', (w, msg: string) => shown(w, probeFailure(nl(msg), doc(w).env, bound(w))));
 When('doctor runs against the fake forge', async (w) => { await capture(w, () => cli(['doctor'], ctxOf(w))); });
 
-Then('doctor prints no line', (w) => assert.deepEqual(doc(w).lines, []));
 Then('doctor line {int} matches {string}', (w, n: number, re: string) => assert.match(doc(w).lines[n - 1] ?? '', new RegExp(re), doc(w).lines.join('\n')));
 Then('doctor line {int} is {string}', (w, n: number, text: string) => assert.equal(doc(w).lines[n - 1], text));
 Then('the forge was asked for check runs', (w) => assert.ok(doc(w).calls.some((c) => /check-runs/.test(c)), doc(w).calls.join('\n')));

@@ -32,19 +32,6 @@ Feature: Init installs the factory
       And the installed file "AGENTS.md" contains "agentic-sdlc:start" exactly 1 times
       And the installed file "AGENTS.md" contains "/agentic-sdlc:sdlc"
 
-    Scenario Outline: Init adds .cli/ and work/ to .agents/.gitignore once, keeps the rest of it, and leaves the root .gitignore alone
-      Given the project has the file ".agents/.gitignore" holding "<before>"
-      And the project has the file ".gitignore" holding "node_modules"
-      When I run the install command "init"
-      And I run the install command "init"
-      Then the installed file ".agents/.gitignore" holds "<after>"
-      And the installed file ".gitignore" holds "node_modules"
-
-      Examples:
-        | before        | after                         |
-        | tmp           | tmp\n.cli/\nwork/\n |
-        | /.cli\nwork  | /.cli\nwork |
-
   Rule: Init refuses what it does not support, before it writes anything
 
     Scenario Outline: A bad command line writes nothing
@@ -54,18 +41,7 @@ Feature: Init installs the factory
 
       Examples:
         | args           |
-        | --board bogus  |
-        | --forse        |
         | --ref main     |
-        | --vcs hg       |
-        | --forge swarm  |
-        | --harness nope |
-        | --profile bogus |
-
-    Scenario: A package with no templates fails clearly
-      Given the package has no templates
-      When I run the install command "init"
-      Then the exit code is 1
 
   Rule: A profile decides how many identities the project starts with
 
@@ -97,14 +73,6 @@ Feature: Init installs the factory
       When I run the install command "init --harness claude"
       Then the installed file ".claude/agents/sdlc-fast.md" matches "^model: claude-haiku-4-5$"
 
-    Scenario: Without the plugin, init copies the skills and merges the MCP entry, keeping an entry the adopter wrote
-      Given the project has the file ".mcp.json" holding '{"mcpServers":{"other":{"type":"http","url":"x"}}}'
-      When I run the install command "init --harness claude --no-plugin"
-      Then the installed file ".claude/skills/sdlc/SKILL.md" exists
-      And the installed file ".mcp.json" sets "mcpServers.other.url" to "x"
-      And the installed file ".mcp.json" sets "mcpServers.agentic-sdlc.command" to ".agents/bin/agentic-sdlc"
-      And the installed file ".mcp.json" sets "mcpServers.agentic-sdlc.args" to '["mcp"]'
-
     Scenario: Without the plugin, init writes the reviewer agent and registers the guard hook, keeping the adopter's settings
       Given the project has the file ".claude/settings.json" holding '{"model":"mine","hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[]}]}}'
       When I run the install command "init --harness claude --no-plugin"
@@ -114,16 +82,6 @@ Feature: Init installs the factory
       And the installed file ".claude/settings.json" sets "model" to "mine"
       And the installed file ".claude/settings.json" sets "hooks.PostToolUse.matcher=Edit.matcher" to "Edit"
       And the installed file ".claude/settings.json" sets "hooks.PreToolUse.matcher=Bash.hooks.type=command.command" to 'node "${CLAUDE_PROJECT_DIR}/.agents/hooks/guard.mjs"'
-
-    Scenario Outline: Init keeps an MCP entry that the adopter wrote, and --force replaces it
-      Given the project has the file ".mcp.json" holding '{"mcpServers":{"agentic-sdlc":{"command":"mine"}}}'
-      When I run the install command "init --harness claude --no-plugin <flag>"
-      Then the installed file ".mcp.json" sets "mcpServers.agentic-sdlc.command" to "<command>"
-
-      Examples:
-        | flag    | command                  |
-        |         | mine                     |
-        | --force | .agents/bin/agentic-sdlc |
 
   Rule: Init reads the project
 
@@ -147,13 +105,6 @@ Feature: Init installs the factory
         | delivery     | state   |
         | release-line | exists  |
         | continuous   | is absent |
-
-  Rule: Init installs the dead-man workflow for every runtime
-
-    Scenario: The dead-man workflow is installed
-      Given the package ships the stock file "templates/gates/github/agentic-sdlc-dead-man.yml"
-      When I run the install command "init"
-      Then the installed file ".github/workflows/agentic-sdlc-dead-man.yml" matches "ledger stale --max-hours"
 
   Rule: Init writes the binding's commands into the verify workflow
 

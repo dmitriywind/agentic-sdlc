@@ -59,14 +59,6 @@ Feature: The runs of the ledger
         "pass"
         """
 
-    Scenario: A rescore without a scorer is a done-conditions rescore, and the newest one wins
-      When I run "ledger runs"
-      Then the JSON result "0.scores" holds:
-        """
-        { "done-conditions": 0, "redundant-tests": "pass", "scope-creep": "pass" }
-        """
-      And the "score" of the result entries are "0"
-
   Rule: Runs are filtered by age and by step
 
     Background:

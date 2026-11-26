@@ -8,7 +8,7 @@ import type { World } from './world.ts';
 export type StepFn = (world: World, ...args: any[]) => unknown;
 export type { DataTable };
 
-export type StepDef = { source: string | RegExp; re: RegExp; casts: ((v: string) => unknown)[]; fn: StepFn; where: string; used: boolean };
+export type StepDef = { source: string | RegExp; re: RegExp; casts: ((v: string) => unknown)[]; fn: StepFn; where: string };
 
 export const defs: StepDef[] = [];
 
@@ -33,7 +33,7 @@ function compile(pattern: string | RegExp): { re: RegExp; casts: ((v: string) =>
 function register(pattern: string | RegExp, fn: StepFn) {
   const stack = new Error().stack?.split('\n').find((l) => /features\/steps\//.test(l)) ?? '';
   const where = /(features\/steps\/[^:)]+:\d+)/.exec(stack)?.[1] ?? 'unknown';
-  defs.push({ source: pattern, ...compile(pattern), fn, where, used: false });
+  defs.push({ source: pattern, ...compile(pattern), fn, where });
 }
 
 export const Given = register;

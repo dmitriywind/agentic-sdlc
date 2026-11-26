@@ -38,10 +38,6 @@ Given('the local board holds a ticket at Ready as ticket 1 and the heartbeat tic
   await b.create({ title: 't', body: '', status: 'Ready' });
   await b.create({ title: 'heartbeat', body: '', status: 'Backlog' });
 });
-Given('the forge is GitHub and shows the change request {int} on the head {string}', (w, n: number, sha: string) => {
-  w.binding({ forge: { adapter: 'github', options: {} } });
-  w.answer(new RegExp(`pulls/${n}`), { number: n, head: { ref: 'factory/x', sha }, base: { ref: 'main', sha: 'b' } });
-});
 
 // ---- the comments on the local board ----
 Given('the comments of the ticket {string} are {int} minutes old', (w, id: string, minutes: number) => {

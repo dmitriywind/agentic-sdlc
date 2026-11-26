@@ -11291,9 +11291,10 @@ function renameSkill(rel, text, dir, names) {
   return out;
 }
 function releasedHash(name, data, rel) {
-  if (name === "agentic-sdlc-delivery.yml" || name === "agentic-sdlc-verify.yml") return sha(bindWorkflow(name, data.toString("utf8"), DEFAULTS));
+  const text = data.toString("utf8").replaceAll("\r\n", "\n");
+  if (name === "agentic-sdlc-delivery.yml" || name === "agentic-sdlc-verify.yml") return sha(bindWorkflow(name, text, DEFAULTS));
   const m = rel && name.endsWith(".md") ? SKILL_ROOT.exec(rel.replaceAll("\\", "/")) : null;
-  return sha(m ? renameSkill(m[2], data.toString("utf8"), "from", /* @__PURE__ */ new Set()) : data);
+  return sha(m ? renameSkill(m[2], text, "from", /* @__PURE__ */ new Set()) : text);
 }
 function oneIdentityRuleset(text) {
   const rs = JSON.parse(text);
@@ -11880,7 +11881,7 @@ ${END}`;
       /** Install the package file `src` (relative to the package) at `rel`. */
       copy(src, rel, quiet = false) {
         const data = readFileSync9(join10(this.pkg, src));
-        return this.put(rel, rel.startsWith(".github/workflows/") ? bindWorkflow(basename(rel), data.toString("utf8"), this.bound) : data, src, quiet);
+        return this.put(rel, posix2(rel).startsWith(".github/workflows/") ? bindWorkflow(basename(rel), data.toString("utf8"), this.bound) : data, src, quiet);
       }
       /** Name a file this run does not install (by choice of binding or harness) so it is not reported as stale. */
       skip(rel) {

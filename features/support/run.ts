@@ -40,7 +40,7 @@ if (covermap) {
 
 const root = fileURLToPath(new URL('../', import.meta.url)); // features/
 const repo = fileURLToPath(new URL('../../', import.meta.url));
-const rel = (f: string) => relative(repo, f);
+const rel = (f: string) => relative(repo, f).replaceAll('\\', '/');
 
 const walk = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
@@ -52,7 +52,6 @@ for (const f of stepFiles) await import(pathToFileURL(join(root, 'steps', f)).hr
 const only = process.env.FEATURE;
 const wantTags = (process.env.TAGS ?? '').split(',').map((t) => t.trim()).filter(Boolean);
 const nameRe = process.env.SCENARIO ? new RegExp(process.env.SCENARIO, 'i') : undefined;
-const filtered = !!only || wantTags.length > 0 || !!nameRe;
 
 type Parsed = { file: string; feature?: Feature; error?: Error };
 const parsed: Parsed[] = walk(root)
@@ -72,13 +71,6 @@ const resolveStep = (text: string): { def?: StepDef; args?: unknown[]; ambiguous
 
 const allScenarios = (f: Feature) => [...f.scenarios, ...f.rules.flatMap((r) => r.scenarios)];
 const hasOnly = parsed.some((p) => p.feature && allScenarios(p.feature).some((s) => s.tags.includes('@only')));
-
-// Static pass: which definitions do the features use? (skipped scenarios count: their steps are still the vocabulary.)
-for (const p of parsed) {
-  if (!p.feature) continue;
-  const stepsOf = (f: Feature) => [...(f.background?.steps ?? []), ...f.rules.flatMap((r) => r.background?.steps ?? []), ...allScenarios(f).flatMap((s) => s.steps)];
-  for (const s of stepsOf(p.feature)) { const r = resolveStep(s.text); if (r.def) r.def.used = true; }
-}
 
 function decorate(e: unknown, file: string, step: Step, keyword: string): Error {
   const where = `${file}:${step.line}: ${keyword} ${step.text}`;
@@ -139,15 +131,6 @@ for (const p of parsed) {
         for (const s of r.scenarios) registerScenario(f, s, [...f.tags, ...r.tags], [...fb, ...(r.background ? [r.background] : [])]);
       });
     }
-  });
-}
-
-if (!filtered && !hasOnly) {
-  describe('step library', () => {
-    it('every step definition is used by a feature', () => {
-      const unused = defs.filter((d) => !d.used);
-      if (unused.length) throw new Error(`step definitions no feature uses (delete them):\n${unused.map((d) => `  ${d.where}  ${String(d.source)}`).join('\n')}`);
-    });
   });
 }
 

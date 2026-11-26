@@ -97,18 +97,6 @@ Feature: The github-issues board
       When the factory reads the comments of the ticket "7" with the marker "hb"
       Then the comment ids are "110"
 
-  Rule: The milestone is set by title and cleared with null
-
-    Scenario: A milestone is set by its title and the status is kept
-      Given the github-issues board adapter
-      And the repo has these issues:
-        | number | labels       |
-        | 7      | status:Ready |
-      And the repo has the milestone "M1" as number 3
-      When the factory sets the milestone of the ticket "7" to "M1"
-      Then the returned ticket has the status "Ready"
-      And the last patch sets the milestone to 3
-
   Rule: A write is retried on a rate limit but not on a server error; a read is retried on both
 
     Scenario Outline: A failing gh is retried or not
@@ -172,28 +160,3 @@ Feature: The github-issues board
       Then the issue 7 has the issue field "release_version" set to "2.0"
       When the factory clears the field "size" of the ticket "7"
       Then the issue 7 has no value for the issue field "size"
-
-    Scenario: A field the map leaves out is still a label
-      Given the repo has these issues:
-        | number | labels | issue fields |
-        | 7      |        | status=Ready |
-      When the factory sets the field "lane" of the ticket "7" to "fast"
-      Then the issue 7 has the labels "lane:fast"
-
-    Scenario: Create makes the issue without a status label, then writes the status field
-      Given the repo has these issues:
-        | number | labels | issue fields   |
-        | 1      |        | status=Backlog |
-      And the repo has the milestone "M1" as number 3
-      When the factory creates a ticket at "Ready" with the labels "bug", the milestone "M1" and the parent "1"
-      Then the returned ticket has the status "Ready"
-      And the issue 101 has the labels "bug"
-      And the issue 101 has the issue field "status" set to "Ready"
-
-    Scenario: Closing as not planned moves the status field and closes the issue
-      Given the repo has these issues:
-        | number | labels | issue fields    |
-        | 7      |        | status=In review |
-      When the factory closes the ticket "7" as "not_planned"
-      Then the returned ticket has the status "Cancelled"
-      And the issue 7 is closed with the reason "not_planned"

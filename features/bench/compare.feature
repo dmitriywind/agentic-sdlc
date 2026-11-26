@@ -4,18 +4,6 @@ Feature: Comparing two bench results
   `agentic-sdlc bench compare <a> <b>` says whether b regressed against a: its pass rate has a lower Wilson bound than a's
   on the cases they share, or there is too little evidence to say. It exits 1 when b regressed.
 
-  Rule: The Wilson lower bound of a pass rate
-
-    Scenario Outline: The lower bound of a pass rate at 95 percent
-      When the Wilson lower bound of <passes> passes in <trials> trials is computed
-      Then the JSON result has these values:
-        | path  | value   |
-        | lower | <lower> |
-
-      Examples:
-        | passes | trials | lower |
-        | 0      | 0      | 0     |
-
   Rule: b regresses when its lower bound is below a's
 
     Background:

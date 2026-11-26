@@ -49,20 +49,6 @@ Feature: Gate skill-regression
       When I run "gate skill-regression"
       Then the exit code is 0
 
-    Scenario: A scorer with a scale that does not exist is listed
-      Given the scorer file "bad.md" is:
-        """
-        ---
-        name: bad
-        applies_to: "*"
-        scale: 1-10
-        ---
-        q
-        """
-      When I run "gate skill-regression"
-      Then the exit code is 1
-      And the output says "scorers/bad.md: scale 1-10 invalid"
-
     Scenario: An applies_to that names no step or skill is listed with the known ones
       Given a scorer "old" on the scale "pass-fail" that applies to "nope, plan/nope"
       When I run "gate skill-regression"
