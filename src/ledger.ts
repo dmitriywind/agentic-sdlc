@@ -8,6 +8,7 @@ import type { Binding, Board, Comment, CR, Forge, Item, PortCli } from './ports.
 import { ownersFor } from './ports.ts';
 import { isMarked, stamp } from './comments.ts';
 import { findStep, hashSkill, readSkills, skillOf } from './skills.ts';
+import { executorFor } from './dispatch.ts';
 export { hashSkill };
 
 export const HEARTBEAT_MARKER = stamp('heartbeat');
@@ -346,6 +347,52 @@ export function changeFailures(items: Item[], b: Binding, days: number, now: num
   return { changes, failures, rate: changes.length ? failures.length / changes.length : null };
 }
 
+/** The error budget of `product.slo` over every ticket (`board list --state all`); undefined when no SLO is set. */
+export function errorBudget(items: Item[], b: Binding, now: number) {
+  const slo = b.product?.slo;
+  if (!slo) return undefined;
+  const w = changeFailures(items, b, slo.window_days, now);
+  // Failures with no change shipped have no rate: the budget is spent, not unknown.
+  return { max: slo.change_failure_rate_max, windowDays: slo.window_days, actual: w.rate === null ? null : Math.round(w.rate * 100) / 100, exhausted: w.rate !== null ? w.rate > slo.change_failure_rate_max : w.failures.length > 0,
+    ...(w.rate === null && w.failures.length ? { why: 'change failures in the window and no change shipped to the last environment' } : {}) };
+}
+
+/** One cycle's report as the navigator gives it: what its runs reported, its failed steps, one line per result. */
+export interface CycleReport { runs?: Partial<LedgerRun>[]; errors?: { step: string; id?: string; msg: string }[]; did?: string[] }
+
+/**
+ * `ledger heartbeat`: the cycle's `kind: cycle` heartbeat, then its done line (section 11.2). A run row gets what the pack
+ * and the binding know (skillHash, tier, model, executor) where the run left it out; `next` adds its errors and budget;
+ * `learning` is copied forward from the newest heartbeat holding one when learning.enabled.
+ */
+export async function writeHeartbeat(o: {
+  board: Board; b: Binding; root: string; comments: Comment[]; factory?: string; report?: CycleReport;
+  next?: { errors?: CycleReport['errors']; budget?: string }; key?: string; now?: number;
+}) {
+  const { b } = o;
+  const ticket = b.heartbeat.ticket;
+  const pack = readSkills(join(o.root, '.agents', 'skills'));
+  const runs = (o.report?.runs ?? []).map((r) => {
+    const step = r.skill ? findStep(pack, r.skill) : undefined;
+    const tier = r.tier || step?.tier;
+    const filled: Record<string, unknown> = { ...r, skillHash: r.skillHash || step?.hash, tier, model: r.model || (tier ? (b.models as Record<string, string> | undefined)?.[tier] : undefined), executor: r.executor || (r.skill ? executorFor(b, r.skill)?.kind : undefined) };
+    return Object.fromEntries(Object.entries(filled).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  });
+  const errors = [...(o.next?.errors ?? []), ...(o.report?.errors ?? [])];
+  if (!o.factory) errors.push({ step: 'heartbeat', msg: 'vcs head gave no sha: factory left out' });
+  const learning = b.learning?.enabled ? o.comments.map((c) => parseHeartbeat(c.body)).find((hb) => hb?.learning)?.learning : undefined;
+  const did = o.report?.did ?? [];
+  const hb = {
+    kind: 'cycle', at: new Date(o.now ?? Date.now()).toISOString(), ...(o.factory ? { factory: o.factory } : {}), runs, errors,
+    ...(did.length ? { did } : {}), ...(learning ? { learning } : {}), ...(o.next?.budget === 'exhausted' ? { budget: 'exhausted' } : {}),
+  };
+  const beat = await o.board.comment(ticket, `${HEARTBEAT_MARKER}\n${JSON.stringify(hb, null, 2)}\n`);
+  // The claim key `dispatch sdlc --ticket <heartbeat.ticket>` gives: `<heartbeat.ticket>-sdlc`.
+  const key = o.key ?? `${ticket}-sdlc`;
+  const done = await o.board.comment(ticket, `${stamp('done', key)}\nagentic-sdlc: cycle done: ${runs.length} run(s), ${errors.length} error(s)\n`);
+  return { heartbeat: beat.id, done: done.id, key, ...hb };
+}
+
 /** DORA-style measures from the board and the forge, never from run memory. A measure the data cannot give is `null` with a `why`. */
 export async function measures(o: { board: Board; forge?: Forge; binding: Binding; days?: number; now?: number }) {
   const b = o.binding;
@@ -378,14 +425,7 @@ export async function measures(o: { board: Board; forge?: Forge; binding: Bindin
     } catch (e) { reworkRate = none(`the forge could not be read: ${(e as Error).message}`); }
   } else if (o.forge) reworkRate = none('no ticket reached Done in the window');
 
-  const slo = b.product.slo;
-  let errorBudget: { max: number; windowDays: number; actual: number | null; exhausted: boolean; why?: string } | undefined;
-  if (slo) {
-    const w = changeFailures(items, b, slo.window_days, now);
-    // Failures with no change shipped have no rate: the budget is spent, not unknown.
-    errorBudget = { max: slo.change_failure_rate_max, windowDays: slo.window_days, actual: round(w.rate), exhausted: w.rate !== null ? w.rate > slo.change_failure_rate_max : w.failures.length > 0,
-      ...(w.rate === null && w.failures.length ? { why: 'change failures in the window and no change shipped to the last environment' } : {}) };
-  }
+  const budget = errorBudget(items, b, now);
   return {
     window: { days, from: new Date(from).toISOString(), to: new Date(now).toISOString() },
     // Tickets at Done with Shipped on the last environment whose last board write is in the window, per week.
@@ -396,17 +436,23 @@ export async function measures(o: { board: Board; forge?: Forge; binding: Bindin
     timeToRestoreHours: restore.length ? { value: round(median(restore)), failures: restore.length } : none('no change failure in the window reached Done'),
     // Share of merged CRs closing a ticket that reached Done in the window with a trusted REMEDIATION REQUIRED verdict report.
     reworkRate,
-    ...(errorBudget ? { errorBudget } : {}),
+    ...(budget ? { errorBudget: budget } : {}),
   };
 }
 
 const USAGE = [
   'usage: ledger runs [--since <days>] [--skill <s>] | ledger summary [--since <days>] | ledger measures [--days <n>] | ledger hash <skill-dir>',
   '       ledger plan --run <id> | ledger record --run <id> --file <scores.json> | ledger stale --max-hours <h>',
+  '       ledger heartbeat [--file <report.json>] [--next <next.json>] [--key <claim key>]',
 ].join('\n');
 
 /** The flags `ledger` takes (a verb reads the ones it needs). */
-export const OPTIONS = { since: { type: 'string' }, skill: { type: 'string' }, run: { type: 'string' }, file: { type: 'string' }, days: { type: 'string' }, 'max-hours': { type: 'string' } } as const;
+export const OPTIONS = { since: { type: 'string' }, skill: { type: 'string' }, run: { type: 'string' }, file: { type: 'string' }, days: { type: 'string' }, 'max-hours': { type: 'string' }, next: { type: 'string' }, key: { type: 'string' } } as const;
+
+/** The sha of `vcs head`, or undefined when the VCS cannot say. */
+export async function headSha(ctx: Parameters<PortCli>[1]): Promise<string | undefined> {
+  try { const { createVcs } = await import('./vcs/index.ts'); return (await createVcs({ ...ctx, options: ctx.binding.vcs?.options ?? {} }).head()).sha; } catch { return undefined; }
+}
 
 export const cli: PortCli = async (argv, ctx) => {
   const [verb, ...rest] = argv;
@@ -431,7 +477,7 @@ export const cli: PortCli = async (argv, ctx) => {
       console.log(JSON.stringify({ skill: a.positionals[0], hash: hashSkill(resolve(ctx.root, a.positionals[0])) }));
       return 0;
     }
-    if (!['runs', 'summary', 'plan', 'record', 'stale', 'measures'].includes(verb)) return (console.error(USAGE), 2);
+    if (!['runs', 'summary', 'plan', 'record', 'stale', 'measures', 'heartbeat'].includes(verb)) return (console.error(USAGE), 2);
     const b = ctx.binding;
     const { createBoard } = await import('./board/index.ts');
     const board: Board = await createBoard({ ...ctx, options: b.board.options });
@@ -446,6 +492,12 @@ export const cli: PortCli = async (argv, ctx) => {
       try { const { createForge } = await import('./forge/index.ts'); return createForge({ ...ctx, options: b.forge.options }); }
       catch { return undefined; }
     };
+    if (verb === 'heartbeat') {
+      const json = (f?: string) => (f ? JSON.parse(readFileSync(resolve(ctx.root, f), 'utf8')) : undefined);
+      const out = await writeHeartbeat({ board, b, root: ctx.root, comments, factory: await headSha(ctx), report: json(a.values.file), next: json(a.values.next), key: a.values.key });
+      console.log(JSON.stringify(out, null, 2));
+      return 0;
+    }
     if (verb === 'stale') {
       const newest = comments.find((c) => parseHeartbeat(c.body));
       const ageHours = newest ? Math.round(((Date.now() - Date.parse(newest.createdAt)) / 36e5) * 10) / 10 : null;

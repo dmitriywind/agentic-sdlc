@@ -36,7 +36,8 @@ bin/agentic-sdlc             plugin shim: the CLI on the Bash PATH (the project'
 evals/                       plugin evals for skill triggering (`claude plugin eval`)
 hooks/                       plugin hooks (hooks.json, guard.mjs) and the plugin's MCP launcher (mcp.mjs)
 skills/                      the skill pack: seven skills, one per phase (section 5)
-  sdlc/                      navigator: routing table and one cycle
+  sdlc/                      navigator: one cycle
+    routes.yml               the routing rules as data, read by `next` (section 11.3)
     references/contract.md   words, roles, trust, waits and the rules every step follows
     references/statuses.md   statuses and Shipped
     references/board.md      board fields, lanes, sub-issues
@@ -68,6 +69,7 @@ src/
   skills.ts                  the skill pack reader: steps, tiers, hashes
   pristine.ts                which installed files are unedited package files (init --upgrade)
   dispatch.ts                start a step on its executor
+  next.ts                    the cycle's work in order: evaluates skills/sdlc/routes.yml
   ledger.ts                  read heartbeats and scores, aggregate runs, measures and learning
   bench.ts                   build and run bench cases
   mcp.ts                     the port verbs as MCP tools
@@ -299,6 +301,8 @@ a scorer's `applies_to`, the `executors` keys and the `Agent-Skill` trailer all 
   tier, what it ends with) and the rules common to them. A step points to
   `sdlc/references/contract.md`, lists numbered steps each ending on a checkable **Done when** (a
   status, a comment kind, a field or a CLI output a later run can verify), then Rules.
+- **Routes**: the navigator's routing is data in `skills/sdlc/routes.yml`, which `next` evaluates
+  (section 11.3); a skill file never restates a route.
 - **One home**: every process rule lives once in the skills; the words, roles, trust table and waits
   table live in the contract. This file defines mechanism only.
 - **Forbidden content**: a skill names only `agentic-sdlc <group> <verb>` calls and binding keys.
@@ -382,7 +386,7 @@ needs `agent_command`.
    `null` with a `why`. With `product.slo` set it adds `errorBudget: { max, windowDays, actual,
    exhausted }`, where `actual` is the change failure rate over `slo.window_days` and `exhausted` is `actual > max`,
    or true when the window has failures and no shipped change (`actual` is `null`, with a `why`); the cycle starts
-   no new `feature` ticket while `exhausted` (skills/sdlc, Run one cycle step 1).
+   no new `feature` ticket while `exhausted` (`next` applies `skip_when_budget_exhausted` of skills/sdlc/routes.yml).
 
 ## 7. Executors: who runs each step
 
@@ -652,7 +656,7 @@ binding's `spec_marker`.
 | `verify` | `review/verify` | CR | the head sha |
 | `manual-check` | `review/review` | ticket | the head sha |
 | `ask` | `board hold` (from `escalate`); `escalate` for a CR with no ticket (on the CR and on `heartbeat.ticket`); the navigator for a step with no ticket past `cycle.failure_limit` | ticket, CR, heartbeat ticket | the trigger, via `board hold --kind` |
-| `heartbeat` | the navigator (`kind: cycle`), the review runtime (`kind: review`), `learn/improve` (`kind: learn`) | heartbeat ticket | none |
+| `heartbeat` | `ledger heartbeat` for the navigator (`kind: cycle`), the review runtime (`kind: review`), `learn/improve` (`kind: learn`) | heartbeat ticket | none |
 | `scores` | `ledger record` (`learn/judge`) | heartbeat ticket | none (the run id is in the JSON body) |
 | `release-proposal` | `ship` | release request | the revision |
 | `release-cut` | `ship` | release request | the version |
@@ -704,7 +708,58 @@ out and named in `errors`.
 ids, and `open`, `merged`, `rejected` or `closed`. `benchBaseline`: the results file, factory
 revision, model, executor, case count, pass rate and minutes of the trunk's last bench.
 
-### 11.3 Checks and approval
+`ledger heartbeat [--file <report.json>] [--next <next.json>] [--key <key>]` writes the cycle's heartbeat and
+ends its claim. `report.json` is `{ runs, errors, did }` as the navigator collected them; `next.json` is the
+output of `next`, whose `errors` come first and whose `budget` is copied. The verb sets `kind: cycle`, `at`
+(now), `factory` (the `sha` of `vcs head`; left out, with an error, when the VCS cannot say) and, when
+`learning.enabled`, `learning` from the newest heartbeat holding one. A run row gets `skillHash` and `tier`
+from the installed pack, `model` from `models[tier]` and `executor` from the binding where the row left
+them out; empty values are dropped. It posts the heartbeat on `heartbeat.ticket`, then the done line of
+`--key` (default `<heartbeat.ticket>-sdlc`, the key `dispatch sdlc --ticket <heartbeat.ticket>` gives), and
+prints `{ heartbeat, done, key, ...the heartbeat }`.
+
+### 11.3 Next: the cycle's work
+
+`next [--ticket <id>] [--idle-exit]` reads the open tickets (`board get` for a ticket at a status a row
+reads children or blockers of, and for each child or blocker not listed), `board holds`, the open CRs
+and their `forge queue` rows, the heartbeat ticket's ledger, and with `product.slo` the error budget.
+It applies `skills/sdlc/routes.yml` from `.agents/skills/sdlc/` (the package's copy when the install has
+none) and prints:
+
+```json
+{ "idle": false, "holds": ["7"], "work": [{ "step": "build", "ticket": "7", "reason": "Ready" }],
+  "later": [], "errors": [{ "step": "next", "msg": "forge queue: ..." }], "budget": "exhausted" }
+```
+
+- `holds`: every `board holds` id with `replied: true` and every ticket of a queue row with
+  `release: true`; a held ticket routes only when it is listed here.
+- `work` then `later`: one entry per ticket or CR, `{ step, ticket?, cr?, head?, run?, runModel?, trigger?, reason }`,
+  in the order of the routes' `groups`. An entry whose step is in `navigator` always goes in `work`; of
+  the others the first `parallel_agents` go in `work`, the rest in `later`. `head` comes with a `note`
+  entry; `run` and `runModel` with a `learn/judge` entry; `trigger` with a guard's entry.
+- `errors`: what could not be read, one `{ step: "next", msg }` each; the rest is still routed.
+- `idle`: no entry, no hold to release and no error. With `--idle-exit` an idle `next` also writes the
+  heartbeat and done line as `ledger heartbeat` does, and prints them as `heartbeat`.
+- `--ticket <id>` keeps only that ticket's entries and hold.
+
+The routes file holds four lists. `tickets`: the first row whose conditions all hold routes a
+ticket; held tickets and `heartbeat.ticket` match none. Conditions: `status` (one or a list), `label`,
+`children` (`none`, `some`, `all-closed`), `blocked` (an open `Blocked by <id>` body line), `cr`
+(`none`, `open`, `by-person`), `no_open_title`, `not`, and any field or `milestone` (`set`, `unset`, or a
+value). `step: queue` routes by the queue row of the CR that closes the ticket. `crs`: per queue action,
+its step and group (`no_ticket: false` skips a CR with no ticket; `by_person` names the step for a CR a
+person opened, once per head: a trusted comment of that kind for the head suppresses it). `groups`: the
+order, each with optional `sort` (`{ label }`, `priority`, `unblocks`, `oldest`), `cap`, `fill`
+(`{ status, to }`: until the tickets at that status plus the group's entries reach `to`) and
+`skip_when_budget_exhausted` (a label); `from: unscored-runs` lists `learn/judge` per run with no
+`done-conditions` score in the heartbeats since the newest one holding a `learn/judge` run, `from:
+learning-due` lists the step once when `learning.due`. `guards`: `over_budget` replaces a dispatch for a
+ticket `ledger summary` marks `overBudget`; `repeat` replaces a dispatch whose step and subject failed (an
+`errors` entry, or a run whose outcome is not `done`) in each of the last `cycle.failure_limit` cycle
+heartbeats, all with the `factory` of `vcs head`. A value `{$a.b}` is a binding key (a negative list
+index counts from the end), `{id}` the ticket's id; a condition whose binding value is unset fails.
+
+### 11.4 Checks and approval
 
 - No merge until every `forge.required_checks` entry is green on the head; the forge's branch
   protection enforces it, `doctor` reports it, and `forge land` waits for it. The `review` status

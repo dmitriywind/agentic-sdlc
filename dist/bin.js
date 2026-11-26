@@ -1068,8 +1068,8 @@ var require_foldFlowLines = __commonJS({
           split = void 0;
         } else {
           if (ch === " " && prev && prev !== " " && prev !== "\n" && prev !== "	") {
-            const next = text[i + 1];
-            if (next && next !== " " && next !== "\n" && next !== "	")
+            const next2 = text[i + 1];
+            if (next2 && next2 !== " " && next2 !== "\n" && next2 !== "	")
               split = i;
           }
           if (i >= end) {
@@ -3786,7 +3786,7 @@ ${pointer}
 var require_resolve_props = __commonJS({
   "node_modules/yaml/dist/compose/resolve-props.js"(exports) {
     "use strict";
-    function resolveProps(tokens, { flow, indicator, next, offset, onError, parentIndent, startOnNewline }) {
+    function resolveProps(tokens, { flow, indicator, next: next2, offset, onError, parentIndent, startOnNewline }) {
       let spaceBefore = false;
       let atNewline = startOnNewline;
       let hasSpace = startOnNewline;
@@ -3815,7 +3815,7 @@ var require_resolve_props = __commonJS({
         }
         switch (token.type) {
           case "space":
-            if (!flow && (indicator !== "doc-start" || next?.type !== "flow-collection") && token.source.includes("	")) {
+            if (!flow && (indicator !== "doc-start" || next2?.type !== "flow-collection") && token.source.includes("	")) {
               tab = token;
             }
             hasSpace = true;
@@ -3894,10 +3894,10 @@ var require_resolve_props = __commonJS({
       }
       const last = tokens[tokens.length - 1];
       const end = last ? last.offset + last.source.length : offset;
-      if (reqSpace && next && next.type !== "space" && next.type !== "newline" && next.type !== "comma" && (next.type !== "scalar" || next.source !== "")) {
-        onError(next.offset, "MISSING_CHAR", "Tags and anchors must be separated from the next token by white space");
+      if (reqSpace && next2 && next2.type !== "space" && next2.type !== "newline" && next2.type !== "comma" && (next2.type !== "scalar" || next2.source !== "")) {
+        onError(next2.offset, "MISSING_CHAR", "Tags and anchors must be separated from the next token by white space");
       }
-      if (tab && (atNewline && tab.indent <= parentIndent || next?.type === "block-map" || next?.type === "block-seq"))
+      if (tab && (atNewline && tab.indent <= parentIndent || next2?.type === "block-map" || next2?.type === "block-seq"))
         onError(tab, "TAB_AS_INDENT", "Tabs are not allowed as indentation");
       return {
         comma,
@@ -4757,20 +4757,20 @@ var require_resolve_flow_scalar = __commonJS({
           res += fold;
           i = offset;
         } else if (ch === "\\") {
-          let next = source[++i];
-          const cc = escapeCodes[next];
+          let next2 = source[++i];
+          const cc = escapeCodes[next2];
           if (cc)
             res += cc;
-          else if (next === "\n") {
-            next = source[i + 1];
-            while (next === " " || next === "	")
-              next = source[++i + 1];
-          } else if (next === "\r" && source[i + 1] === "\n") {
-            next = source[++i + 1];
-            while (next === " " || next === "	")
-              next = source[++i + 1];
-          } else if (next === "x" || next === "u" || next === "U") {
-            const length = next === "x" ? 2 : next === "u" ? 4 : 8;
+          else if (next2 === "\n") {
+            next2 = source[i + 1];
+            while (next2 === " " || next2 === "	")
+              next2 = source[++i + 1];
+          } else if (next2 === "\r" && source[i + 1] === "\n") {
+            next2 = source[++i + 1];
+            while (next2 === " " || next2 === "	")
+              next2 = source[++i + 1];
+          } else if (next2 === "x" || next2 === "u" || next2 === "U") {
+            const length = next2 === "x" ? 2 : next2 === "u" ? 4 : 8;
             res += parseCharCode(source, i + 1, length, onError);
             i += length;
           } else {
@@ -4780,10 +4780,10 @@ var require_resolve_flow_scalar = __commonJS({
           }
         } else if (ch === " " || ch === "	") {
           const wsStart = i;
-          let next = source[i + 1];
-          while (next === " " || next === "	")
-            next = source[++i + 1];
-          if (next !== "\n" && !(next === "\r" && source[i + 2] === "\n"))
+          let next2 = source[i + 1];
+          while (next2 === " " || next2 === "	")
+            next2 = source[++i + 1];
+          if (next2 !== "\n" && !(next2 === "\r" && source[i + 2] === "\n"))
             res += i > wsStart ? source.slice(wsStart, i + 1) : ch;
         } else {
           res += ch;
@@ -5785,9 +5785,9 @@ var require_lexer = __commonJS({
           this.lineEndPos = null;
         }
         this.atEnd = !incomplete;
-        let next = this.next ?? "stream";
-        while (next && (incomplete || this.hasChars(1)))
-          next = yield* this.parseNext(next);
+        let next2 = this.next ?? "stream";
+        while (next2 && (incomplete || this.hasChars(1)))
+          next2 = yield* this.parseNext(next2);
       }
       atLineEnd() {
         let i = this.pos;
@@ -5810,8 +5810,8 @@ var require_lexer = __commonJS({
           while (ch === " ")
             ch = this.buffer[++indent + offset];
           if (ch === "\r") {
-            const next = this.buffer[indent + offset + 1];
-            if (next === "\n" || !next && !this.atEnd)
+            const next2 = this.buffer[indent + offset + 1];
+            if (next2 === "\n" || !next2 && !this.atEnd)
               return offset + indent + 1;
           }
           return ch === "\n" || indent >= this.indentNext || !ch && !this.atEnd ? offset + indent : -1;
@@ -5848,8 +5848,8 @@ var require_lexer = __commonJS({
       peek(n) {
         return this.buffer.substr(this.pos, n);
       }
-      *parseNext(next) {
-        switch (next) {
+      *parseNext(next2) {
+        switch (next2) {
           case "stream":
             return yield* this.parseStream();
           case "line-start":
@@ -6038,8 +6038,8 @@ var require_lexer = __commonJS({
             this.flowKey = true;
             return yield* this.parseQuotedScalar();
           case ":": {
-            const next = this.charAt(1);
-            if (this.flowKey || isEmpty(next) || next === ",") {
+            const next2 = this.charAt(1);
+            if (this.flowKey || isEmpty(next2) || next2 === ",") {
               this.flowKey = false;
               yield* this.pushCount(1);
               yield* this.pushSpaces(true);
@@ -6118,10 +6118,10 @@ var require_lexer = __commonJS({
               indent = 0;
               break;
             case "\r": {
-              const next = this.buffer[i2 + 1];
-              if (!next && !this.atEnd)
+              const next2 = this.buffer[i2 + 1];
+              if (!next2 && !this.atEnd)
                 return this.setNext("block-scalar");
-              if (next === "\n")
+              if (next2 === "\n")
                 break;
             }
             // fallthrough
@@ -6183,21 +6183,21 @@ var require_lexer = __commonJS({
         let ch;
         while (ch = this.buffer[++i]) {
           if (ch === ":") {
-            const next = this.buffer[i + 1];
-            if (isEmpty(next) || inFlow && flowIndicatorChars.has(next))
+            const next2 = this.buffer[i + 1];
+            if (isEmpty(next2) || inFlow && flowIndicatorChars.has(next2))
               break;
             end = i;
           } else if (isEmpty(ch)) {
-            let next = this.buffer[i + 1];
+            let next2 = this.buffer[i + 1];
             if (ch === "\r") {
-              if (next === "\n") {
+              if (next2 === "\n") {
                 i += 1;
                 ch = "\n";
-                next = this.buffer[i + 1];
+                next2 = this.buffer[i + 1];
               } else
                 end = i;
             }
-            if (next === "#" || inFlow && flowIndicatorChars.has(next))
+            if (next2 === "#" || inFlow && flowIndicatorChars.has(next2))
               break;
             if (ch === "\n") {
               const cs = this.continueScalar(i + 1);
@@ -7278,7 +7278,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse6(src, reviver, options) {
+    function parse7(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -7319,7 +7319,7 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports.parse = parse6;
+    exports.parse = parse7;
     exports.parseAllDocuments = parseAllDocuments;
     exports.parseDocument = parseDocument2;
     exports.stringify = stringify;
@@ -8490,9 +8490,9 @@ var init_board = __esm({
 });
 
 // src/forge/flow.ts
-function buildReport(body, headSha, pass) {
+function buildReport(body, headSha2, pass) {
   const verdict2 = pass ? "PASS" : "REMEDIATION REQUIRED";
-  const mark = stamp("verdict", headSha);
+  const mark = stamp("verdict", headSha2);
   const lines = body.replace(/\r\n/g, "\n").split("\n");
   if (lines[0]?.trim() === mark) lines.shift();
   const kept = [];
@@ -8591,7 +8591,7 @@ async function queue(f, b, classOf, now = Date.now(), signalOpen = async () => f
   for (const cr of await f.list({ state: "open", checks: true })) {
     const comments = await f.comments(cr.n);
     const sig = signalOfHead(cr, comments, b);
-    const next = nextAction(cr, comments, b, now, sig ? await signalOpen(sig).catch(() => false) : false);
+    const next2 = nextAction(cr, comments, b, now, sig ? await signalOpen(sig).catch(() => false) : false);
     const who = await classOf(cr).catch(() => ({ class: "guardrail", who: [] }));
     const held = cr.closes[0] ? await heldOf(cr.closes[0]).catch(() => false) : false;
     const approved = who.who.length > 0 && (b.forge.required_checks ?? []).includes(HUMAN) && cr.checks.some((c) => c.name === HUMAN && c.state === "success");
@@ -8599,12 +8599,12 @@ async function queue(f, b, classOf, now = Date.now(), signalOpen = async () => f
       n: cr.n,
       ...cr.closes[0] ? { ticket: cr.closes[0] } : {},
       class: who.class,
-      action: next.action,
-      reason: next.reason,
-      reworks: next.reworks,
-      ...next.since ? { since: next.since } : {},
+      action: next2.action,
+      reason: next2.reason,
+      reworks: next2.reworks,
+      ...next2.since ? { since: next2.since } : {},
       held,
-      ...held && next.action === "land" && approved ? { release: true } : {}
+      ...held && next2.action === "land" && approved ? { release: true } : {}
     });
   }
   return rows;
@@ -8997,6 +8997,487 @@ var init_skills = __esm({
   }
 });
 
+// src/dispatch.ts
+var dispatch_exports = {};
+__export(dispatch_exports, {
+  FLAGS: () => FLAGS,
+  REVIEW_FIRE_ENV: () => REVIEW_FIRE_ENV,
+  REVIEW_STEP: () => REVIEW_STEP,
+  childEnv: () => childEnv,
+  cli: () => cli2,
+  executorFor: () => executorFor,
+  judgeTier: () => judgeTier,
+  limitsText: () => limitsText,
+  passEnv: () => passEnv,
+  resolveStage: () => resolveStage,
+  setSpawn: () => setSpawn
+});
+import { spawn } from "child_process";
+import { chmodSync, closeSync, lstatSync, mkdirSync as mkdirSync2, mkdtempSync, openSync, writeFileSync as writeFileSync2 } from "fs";
+import { tmpdir } from "os";
+import { join as join4, relative as relative2 } from "path";
+function judgeTier(b, runModel) {
+  if (!runModel) return { skip: true, reason: "the judged run reported no model, so independence cannot be shown" };
+  const want = b.learning?.judge_tier ?? "fast";
+  const i = TIERS2.indexOf(want);
+  const order = [want, ...TIERS2.slice(i + 1), ...TIERS2.slice(0, i).reverse()];
+  const tier = order.find((t) => b.models[t] !== runModel);
+  if (!tier) return { skip: true, reason: `every model tier is ${runModel}, the judged run's model; a model never grades its own run` };
+  return { tier, model: b.models[tier] };
+}
+function resolveStage(b, ex, skillTier, judgeModel) {
+  const mcps = {};
+  for (const n of ex.mcps ?? []) {
+    const m = b.mcps?.[n];
+    if (!m) throw new Error(`mcp '${n}' is not in the binding's mcps`);
+    mcps[n] = { ...m.url ? { url: m.url } : {}, ...m.command ? { command: m.command } : {}, ...m.token_env ? { token_env: m.token_env } : {} };
+  }
+  const tier = ex.model?.tier ?? skillTier;
+  const model = judgeModel ?? ex.model?.id ?? (tier ? b.models?.[tier] : void 0);
+  return { mcps, secrets: ex.secrets ?? [], sandbox: ex.sandbox ?? b.executors.default?.sandbox, model };
+}
+function passEnv(env) {
+  const out = { ...env };
+  delete out.AGENTIC_REVIEW_TOKEN;
+  return out;
+}
+function childEnv(env, secrets) {
+  const out = {};
+  for (const k of [...BASE_ENV, ...secrets]) {
+    if (env[k] === void 0 && secrets.includes(k)) throw new Error(`set the ${k} environment variable`);
+    if (env[k] !== void 0) out[k] = env[k];
+  }
+  return out;
+}
+function executorFor(b, id) {
+  const by = /* @__PURE__ */ new Map();
+  const keys = Object.keys(b.executors).filter((k) => k !== "default");
+  for (const k of keys) by.set(k, b.executors[k]);
+  return by.get(id) ?? by.get(skillOf(id)) ?? b.executors.default;
+}
+var TIERS2, BASE_ENV, spawnChild, setSpawn, subject, limitsText, taskText, REVIEW_STEP, REVIEW_FIRE_ENV, FLAGS, cli2;
+var init_dispatch = __esm({
+  "src/dispatch.ts"() {
+    "use strict";
+    init_board();
+    init_bench();
+    init_ports();
+    init_comments();
+    init_skills();
+    TIERS2 = ["fast", "balanced", "deep"];
+    BASE_ENV = ["PATH", "HOME", "USERPROFILE", "SystemRoot", "TEMP", "TMP", "APPDATA", "LOCALAPPDATA", "ComSpec", "PATHEXT", "SystemDrive"];
+    spawnChild = spawn;
+    setSpawn = (f) => {
+      const prev = spawnChild;
+      spawnChild = f;
+      return prev;
+    };
+    subject = (t) => t.ticket ? `ticket ${t.ticket}${t.cr ? ` (change request ${t.cr})` : ""}` : `change request ${t.cr}`;
+    limitsText = (l = {}) => {
+      const parts = [l.max_turns && `${l.max_turns} turns`, l.max_tokens && `${l.max_tokens} tokens`, l.max_minutes && `${l.max_minutes} minutes`].filter(Boolean);
+      return parts.length ? ` Limits for this run: at most ${parts.join(", ")}; stop at the first one you reach.` : "";
+    };
+    taskText = (t) => `Run step ${t.skill} on ${subject(t)}. Load ${t.file ?? `.agents/skills/${t.skill}/SKILL.md`} first and follow it.${limitsText(t.limits)}${t.done ? ` Put the line ${t.done} in your closing comment.` : ""}${t.run ? ` Your run id is ${t.run}: end every commit you make with the trailer Agent-Run: ${t.run}.` : ""}`;
+    REVIEW_STEP = "review/review";
+    REVIEW_FIRE_ENV = "AGENTIC_REVIEW_FIRE_CMD";
+    FLAGS = ["ticket", "cr", "workdir", "run", "run-model", "unattended"];
+    cli2 = async (argv, ctx) => {
+      let onFail;
+      let sent = false;
+      try {
+        const f = {};
+        const pos = [];
+        const KNOWN = FLAGS;
+        for (let i = 0; i < argv.length; i++) {
+          if (!argv[i].startsWith("--")) {
+            pos.push(argv[i]);
+            continue;
+          }
+          const [name, inline] = argv[i].slice(2).split(/=(.*)/s, 2);
+          if (!KNOWN.includes(name)) {
+            console.error(`unknown flag --${name}`);
+            return 2;
+          }
+          if (name === "unattended") {
+            f.unattended = "1";
+            continue;
+          }
+          const v = inline ?? argv[++i];
+          if (v === void 0 || inline === void 0 && v.startsWith("--")) {
+            console.error(`--${name} needs a value`);
+            return 2;
+          }
+          f[name] = v;
+        }
+        const [arg] = pos;
+        const usage = "usage: agentic-sdlc dispatch <skill>[/<step>] [--ticket <id>] [--cr <n>] (at least one; none for learn/improve) [--run <id>] [--workdir <d>] [--run-model <id>] [--unattended]";
+        if (!arg) {
+          console.error(usage);
+          return 2;
+        }
+        const pack = readSkills(join4(ctx.root, ".agents", "skills"));
+        const step = findStep(pack, arg);
+        if (!step) {
+          console.error(`unknown step '${arg}'; ${pack.steps.length ? `valid ids: ${pack.steps.map((x) => x.id).join(", ")}` : ".agents/skills holds no steps: run agentic-sdlc init"}
+${usage}`);
+          return 2;
+        }
+        const skill = step.id;
+        if (!f.ticket && !f.cr && skill !== "learn/improve") {
+          console.error(usage);
+          return 2;
+        }
+        const ticket = f.ticket ?? "", cr = f.cr ?? "", workdir = f.workdir ?? ctx.root;
+        const b = ctx.binding;
+        const file = relative2(ctx.root, step.file).replaceAll("\\", "/");
+        const outside = skill === REVIEW_STEP && !!b.forge?.review_identity && ctx.env.AGENTIC_SDLC_ROLE !== "review" && !Object.keys(b.executors).some((k) => k !== "default" && k === skill);
+        const fire = outside ? ctx.env[REVIEW_FIRE_ENV] || void 0 : void 0;
+        const ex = fire ? { kind: "command", run: fire } : executorFor(b, skill);
+        const via = skill === REVIEW_STEP ? outside ? fire ? "review-runtime" : "job-dependency" : "executor" : void 0;
+        const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+        const judge = skill === "learn/judge" ? judgeTier(b, f["run-model"]) : void 0;
+        if (judge && "skip" in judge) {
+          console.log(JSON.stringify(judge));
+          return 0;
+        }
+        let board;
+        const boardOf = () => board ??= createBoard({ ...ctx, options: b.board.options });
+        const target = (skill === "learn/judge" ? "" : ticket) || b.heartbeat?.ticket;
+        const window = Number(b.cycle?.dedupe_minutes) || 0;
+        let key = [ticket || cr || "factory", skill, f.run].filter(Boolean).join("-");
+        let locked = false;
+        let isBot;
+        if (window > 0 && target) {
+          let head = "";
+          if (cr) {
+            try {
+              const { createForge: createForge2 } = await Promise.resolve().then(() => (init_forge(), forge_exports));
+              head = (await createForge2({ ...ctx, options: b.forge.options }).view(cr)).headSha;
+            } catch {
+            }
+          }
+          key = [ticket || cr || "factory", skill, f.run, head].filter(Boolean).join("-");
+          locked = true;
+          const trusted = ownersFor(b.owners, "board").bots.map((a) => a.toLowerCase());
+          const bot = isBot = (c) => trusted.includes(String(c.author).toLowerCase());
+          const all = (await boardOf().comments(target)).filter(bot);
+          const mine = all.filter((c) => c.body.trimStart().startsWith(matches("dispatch", key))).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
+          const at = mine ? Date.parse(mine.createdAt) : NaN;
+          const later = (c) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
+          const ends = (c) => c.body.includes(stamp("done", key)) || skill === "sdlc" && isMarked(c.body, "heartbeat") && /"kind"\s*:\s*"cycle"/.test(c.body);
+          const finished = mine && all.some((c) => later(c) && ends(c));
+          const stall = skill === "sdlc" ? Number(b.cycle?.time_budget_minutes) || Number(b.stall_minutes) || 0 : Number(b.stall_minutes) || 0;
+          const age = Number.isNaN(at) ? 0 : (Date.now() - at) / 6e4;
+          if (mine && !finished && (age < window || age < stall)) {
+            console.log(JSON.stringify({ skipped: true, key, since: mine.createdAt, comment: mine.id, reason: age < window ? "double fire" : "the previous run has not finished" }));
+            return 0;
+          }
+        }
+        let marker;
+        const done = async (kind, ref, extra = {}) => {
+          console.log(JSON.stringify({ kind, ref, startedAt, ...run ? { run } : {}, key, done: stamp("done", key), ...via ? { via } : {}, ...extra }));
+          return 0;
+        };
+        const doneLine = stamp("done", key);
+        const run = (b.forge?.provenance ?? "off") === "off" ? void 0 : locked ? key : [ticket || (cr ? `cr${cr}` : "factory"), skill, startedAt.replace(/\D/g, "")].join("-");
+        if (skill === "sdlc") {
+          if (locked) await boardOf().comment(target, `${stamp("dispatch", key)}
+agentic-sdlc: cycle claimed`);
+          return await done("claim", null);
+        }
+        if (outside && !fire) return await done("fire", null);
+        const skillTier = step.tier;
+        const stage = resolveStage(b, ex, judge?.tier ?? skillTier, judge?.model);
+        const local = !fire && (stage.sandbox === "local" || !stage.sandbox && (ex.kind === "command" || ex.kind === "harness"));
+        const localOk = stage.sandbox === "local" && ctx.env.AGENTIC_SDLC_LOCAL === "1";
+        if (local && !localOk && (f.unattended || ctx.env.AGENTIC_SDLC_UNATTENDED === "1")) {
+          throw new Error(`executor for ${skill} uses sandbox ${stage.sandbox ?? "local (unset)"}; unattended runs refuse it (local execution: sandbox local and AGENTIC_SDLC_LOCAL=1)`);
+        }
+        const limits = limitsOf(b, ex);
+        const hasLimits = Object.keys(limits).length > 0;
+        const info = { ...judge ?? {}, model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox, ...hasLimits ? { limits } : {} };
+        if (locked) {
+          marker = (await boardOf().comment(target, `${stamp("dispatch", key)}
+agentic-sdlc: run step ${skill} (${ex.kind})${limitsText(limits)}; close with ${stamp("done", key)}`)).id;
+          const k = key;
+          if (locked && isBot) {
+            const all = (await boardOf().comments(target)).filter(isBot);
+            const markers = all.filter((c) => c.body.trimStart().startsWith(matches("dispatch", key)));
+            const order = (x, y) => Date.parse(x.createdAt) - Date.parse(y.createdAt) || String(x.id).localeCompare(String(y.id), void 0, { numeric: true });
+            const me = markers.find((c) => c.id === marker);
+            const owner = me && markers.find((c) => {
+              const age = (Date.now() - Date.parse(c.createdAt)) / 6e4;
+              const finished = all.some((d) => !markers.includes(d) && d.body.includes(stamp("done", key)) && Date.parse(d.createdAt) >= Date.parse(c.createdAt));
+              return c !== me && order(c, me) < 0 && !finished && !(age >= window);
+            });
+            if (owner) {
+              console.log(JSON.stringify({ skipped: true, key, since: owner.createdAt, comment: owner.id, reason: "double fire" }));
+              return 0;
+            }
+          }
+          onFail = () => sent ? Promise.resolve() : boardOf().comment(target, `${stamp("done", k)}
+agentic-sdlc: ${skill} did not start`);
+        }
+        if (ex.kind === "harness") {
+          return await done("harness", null, { instruction: `load ${file} in a subagent at tier ${judge?.tier ?? skillTier}${hasLimits ? `; ${limitsText(limits).trim()}` : ""}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ""}; its dispatch key is ${key}${run ? `; its run id is ${run}` : ""}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
+        }
+        if (ex.kind === "command") {
+          const dir = mkdtempSync(join4(tmpdir(), "agentic-sdlc-"));
+          const promptFile = join4(dir, "prompt.md");
+          writeFileSync2(promptFile, `${taskText({ skill, ticket, cr, file, done: doneLine, run, limits })}
+`);
+          const mcpsFile = join4(dir, "mcps.json");
+          writeFileSync2(mcpsFile, JSON.stringify(stage.mcps, null, 2));
+          const vars = { skill, ticket, cr, workdir, prompt_file: promptFile, mcps_file: mcpsFile, max_turns: String(limits.max_turns ?? ""), max_tokens: String(limits.max_tokens ?? ""), max_minutes: String(limits.max_minutes ?? ""), ...stage.model ? { model: stage.model } : {} };
+          const line = fill(ex.run, vars);
+          const env = { ...fire ? passEnv(ctx.env) : childEnv(ctx.env, stage.secrets), ...limits.max_turns ? { AGENTIC_SDLC_MAX_TURNS: String(limits.max_turns) } : {}, ...limits.max_tokens ? { AGENTIC_SDLC_MAX_TOKENS: String(limits.max_tokens) } : {}, ...limits.max_minutes ? { AGENTIC_SDLC_MAX_MINUTES: String(limits.max_minutes) } : {} };
+          const logDir = join4(tmpdir(), "agentic-sdlc-runs");
+          mkdirSync2(logDir, { recursive: true, mode: 448 });
+          const st = lstatSync(logDir);
+          if (!st.isDirectory() || st.isSymbolicLink() || process.getuid && st.uid !== process.getuid()) throw new Error(`${logDir} is not a folder of yours; remove it and retry`);
+          if (process.platform !== "win32") chmodSync(logDir, 448);
+          const log = join4(logDir, `${startedAt}-${skill}-${ticket || `cr${cr}`}`.replace(/[^\w.-]/g, "_") + ".log");
+          const fd = openSync(log, "a", 384);
+          try {
+            const [cmd, args, childVars] = process.platform === "win32" ? ["cmd", ["/d", "/v:off", "/c", "%AGENTIC_SDLC_CMD%"], { ...env, AGENTIC_SDLC_CMD: line }] : ["sh", ["-c", line], env];
+            const child = spawnChild(cmd, args, { cwd: workdir, env: childVars, detached: true, stdio: ["ignore", fd, fd], windowsHide: true });
+            child.on("error", () => {
+            });
+            child.unref();
+            if (!child.pid) throw new Error(`could not start the command executor for ${skill}; see ${log}`);
+            sent = true;
+            return await done(fire ? "fire" : "command", String(child.pid), { log, ...info });
+          } finally {
+            closeSync(fd);
+          }
+        }
+        throw new Error(`unknown executor kind '${ex.kind}' for ${skill}`);
+      } catch (e) {
+        if (onFail) await onFail().catch(() => void 0);
+        console.error(e.message);
+        return 1;
+      }
+    };
+  }
+});
+
+// src/vcs/git.ts
+import { existsSync as existsSync3, mkdtempSync as mkdtempSync2, rmSync } from "fs";
+import { tmpdir as tmpdir2 } from "os";
+import { join as join5 } from "path";
+function git(ctx) {
+  const { trunk, release_prefix } = ctx.binding.vcs;
+  const g = (...a) => ctx.exec("git", a, { cwd: ctx.root }).trim();
+  const lines = (s) => s.split("\n").map((l) => l.trim()).filter(Boolean);
+  const plain = (what, v) => {
+    if (typeof v !== "string" || !v || v.startsWith("-")) throw new Error(`vcs: ${what} not allowed: ${v}`);
+    return v;
+  };
+  const NAMES = ["-c", "core.quotepath=off"];
+  const base = () => g("merge-base", "HEAD", `origin/${trunk}`);
+  const safeName = (name) => {
+    if (!name || name.startsWith("-") || name.includes("..") || /[\s\\~^:?*[]/.test(name)) throw new Error(`change line name not allowed: ${name}`);
+    g("check-ref-format", "--branch", name);
+  };
+  return {
+    async start(name) {
+      safeName(name);
+      if (!isChangeLine(ctx.binding, name)) throw new Error(`vcs start: name not allowed: ${name} fits neither vcs.change_pattern (${ctx.binding.vcs.change_pattern}) nor vcs.factory_change_pattern (${ctx.binding.vcs.factory_change_pattern}): pass the full name`);
+      g("fetch", "origin", trunk);
+      const workdir = join5(ctx.root, ".agents", "work", name);
+      const fetchBranch = () => {
+        try {
+          g("fetch", "origin", name);
+          return true;
+        } catch (e) {
+          if (/couldn't find remote ref|could not find remote ref/i.test(String(e.message) + String(e.stderr ?? ""))) return false;
+          throw e;
+        }
+      };
+      const catchUp = () => {
+        if (!fetchBranch()) return;
+        try {
+          ctx.exec("git", ["merge", "--ff-only", `origin/${name}`], { cwd: workdir });
+        } catch {
+        }
+      };
+      if (existsSync3(workdir)) {
+        catchUp();
+        return { workdir, ref: name };
+      }
+      g("worktree", "prune");
+      const has = (ref) => {
+        try {
+          g("rev-parse", "--verify", "--quiet", ref);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      if (has(`refs/heads/${name}`)) {
+        g("worktree", "add", workdir, name);
+        catchUp();
+      } else {
+        const remote = fetchBranch();
+        if (remote) g("worktree", "add", "-b", name, workdir, `origin/${name}`);
+        else g("worktree", "add", "-b", name, workdir, `origin/${trunk}`);
+      }
+      return { workdir, ref: name };
+    },
+    async head() {
+      return { ref: g("rev-parse", "--abbrev-ref", "HEAD"), sha: g("rev-parse", "HEAD") };
+    },
+    async changed(since) {
+      if (since !== void 0) plain("revision", since);
+      return lines(g(...NAMES, "diff", "--name-only", "--end-of-options", `${since ?? `origin/${trunk}`}...HEAD`));
+    },
+    async base() {
+      return { sha: base() };
+    },
+    async push() {
+      const ref = g("rev-parse", "--abbrev-ref", "HEAD");
+      if (ref === trunk || ref === "HEAD") throw new Error(`vcs push: refusing to push ${ref === "HEAD" ? "a detached HEAD" : `the trunk '${trunk}'`}: start a change line`);
+      g("push", "-u", "origin", ref);
+      return { ref, sha: g("rev-parse", "HEAD") };
+    },
+    async cut(rev, release) {
+      plain("revision", rev);
+      plain("release", release);
+      const ref = `refs/heads/${release_prefix}${release}`;
+      g("push", "origin", `${rev}:${ref}`);
+      return { ref };
+    },
+    async tag(name, rev) {
+      plain("tag name", name);
+      plain("revision", rev);
+      g("tag", "-a", "-m", name, "--end-of-options", name, rev);
+      g("push", "origin", `refs/tags/${name}`);
+    },
+    async tags(prefix) {
+      const out = g("tag", "--sort=-creatordate", "--format=%(refname:short) %(*objectname) %(objectname)", "-l", `${prefix ?? ""}*`);
+      return out.split("\n").filter(Boolean).map((l) => {
+        const [name, a, b] = l.split(" ");
+        return { name, sha: a || b };
+      });
+    },
+    async drop(name) {
+      safeName(name);
+      g("worktree", "remove", "--force", join5(ctx.root, ".agents", "work", name));
+      try {
+        g("branch", "-D", name);
+      } catch {
+      }
+    },
+    async checkoutTests(rev, paths) {
+      plain("revision", rev);
+      paths.forEach((p) => plain("path", p));
+      g("read-tree", "-u", "--reset", "--end-of-options", rev);
+      if (paths.length) g("checkout", "HEAD", "--", ...paths);
+    },
+    async snapshot(rev) {
+      plain("revision", rev);
+      const workdir = mkdtempSync2(join5(tmpdir2(), "agentic-bench-"));
+      g("worktree", "add", "--detach", workdir, rev);
+      const w = (...a) => ctx.exec("git", a, { cwd: workdir });
+      return {
+        workdir,
+        async changed() {
+          w("add", "-A");
+          return lines(w(...NAMES, "diff", "--cached", "--name-only", "--no-renames", "--end-of-options", rev));
+        },
+        async drop() {
+          try {
+            g("worktree", "remove", "--force", workdir);
+          } catch {
+          }
+          rmSync(workdir, { recursive: true, force: true });
+          try {
+            g("worktree", "prune");
+          } catch {
+          }
+        }
+      };
+    }
+  };
+}
+var init_git = __esm({
+  "src/vcs/git.ts"() {
+    "use strict";
+    init_ports();
+  }
+});
+
+// src/vcs/index.ts
+var vcs_exports = {};
+__export(vcs_exports, {
+  VERBS: () => VERBS2,
+  cli: () => cli3,
+  createVcs: () => createVcs
+});
+function createVcs(ctx) {
+  const make = adapters[ctx.binding.vcs.adapter];
+  if (!make) throw new Error(`unknown vcs adapter: ${ctx.binding.vcs.adapter}`);
+  return make(ctx);
+}
+var adapters, VERBS2, cli3;
+var init_vcs = __esm({
+  "src/vcs/index.ts"() {
+    "use strict";
+    init_util();
+    init_git();
+    adapters = { git };
+    VERBS2 = {
+      start: {},
+      head: {},
+      base: {},
+      push: {},
+      cut: {},
+      tag: {},
+      drop: {},
+      "checkout-tests": {},
+      changed: { value: ["since"] },
+      tags: { value: ["prefix"] }
+    };
+    cli3 = (argv, ctx) => guard(async () => {
+      const [verb, ...rest] = argv;
+      if (!verb || !Object.hasOwn(VERBS2, verb)) throw new UsageError(`unknown vcs verb: ${verb ?? ""}`);
+      const a = parseStrict("vcs", verb, rest, VERBS2[verb]);
+      const v = createVcs({ ...ctx, options: ctx.binding.vcs.options ?? {} });
+      const need2 = (i) => {
+        if (!a.pos[i]) throw new UsageError(`vcs ${verb}: missing argument`);
+        return a.pos[i];
+      };
+      switch (verb) {
+        case "start":
+          return v.start(need2(0));
+        case "head":
+          return v.head();
+        case "changed":
+          return v.changed(a.get("since"));
+        case "base":
+          return v.base();
+        case "push":
+          return v.push();
+        case "cut":
+          return v.cut(need2(0), need2(1));
+        case "tag":
+          await v.tag(need2(0), need2(1));
+          return {};
+        case "drop":
+          await v.drop(need2(0));
+          return {};
+        case "tags":
+          return v.tags(a.get("prefix"));
+        case "checkout-tests":
+          await v.checkoutTests(need2(0), a.pos.slice(1));
+          return {};
+        default:
+          throw new UsageError(`unknown vcs verb: ${verb ?? ""}`);
+      }
+    });
+  }
+});
+
 // src/ledger.ts
 var ledger_exports = {};
 __export(ledger_exports, {
@@ -9007,11 +9488,13 @@ __export(ledger_exports, {
   SCORE_SCORER: () => SCORE_SCORER,
   byScorer: () => byScorer,
   changeFailures: () => changeFailures,
-  cli: () => cli2,
+  cli: () => cli4,
   clusters: () => clusters,
+  errorBudget: () => errorBudget,
   flattenRuns: () => flattenRuns,
   hardFacts: () => hardFacts,
   hashSkill: () => hashSkill,
+  headSha: () => headSha,
   isFail: () => isFail,
   learningState: () => learningState,
   measures: () => measures,
@@ -9028,10 +9511,11 @@ __export(ledger_exports, {
   scoresComment: () => scoresComment,
   stats: () => stats,
   summarise: () => summarise,
-  ticketUse: () => ticketUse
+  ticketUse: () => ticketUse,
+  writeHeartbeat: () => writeHeartbeat
 });
-import { existsSync as existsSync3, readdirSync as readdirSync2, readFileSync as readFileSync5 } from "fs";
-import { join as join4, relative as relative2, resolve } from "path";
+import { existsSync as existsSync4, readdirSync as readdirSync2, readFileSync as readFileSync5 } from "fs";
+import { join as join6, relative as relative3, resolve } from "path";
 import { parseArgs as parseArgs2 } from "util";
 function parseHeartbeat(body) {
   const lines = body.trimStart().split(/\r?\n/);
@@ -9171,12 +9655,12 @@ function learningState(comments, everyCycles, enabled = false) {
 }
 function scorersFor(root, id) {
   const ids = [id, skillOf(id)];
-  const dir = join4(root, ".agents", "scorers");
+  const dir = join6(root, ".agents", "scorers");
   const out = [];
-  for (const f of existsSync3(dir) ? readdirSync2(dir).filter((n) => n.endsWith(".md")) : []) {
+  for (const f of existsSync4(dir) ? readdirSync2(dir).filter((n) => n.endsWith(".md")) : []) {
     let fm;
     try {
-      fm = (0, import_yaml3.parse)(/^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync5(join4(dir, f), "utf8"))?.[1] ?? "");
+      fm = (0, import_yaml3.parse)(/^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync5(join6(dir, f), "utf8"))?.[1] ?? "");
     } catch {
       continue;
     }
@@ -9195,8 +9679,8 @@ function hardFacts(run, cr, required = []) {
   return { score: Math.min(...facts.map(([s]) => s)), facts: facts.map(([, f]) => f) };
 }
 function stepFile(root, id) {
-  const step = findStep(readSkills(join4(root, ".agents", "skills")), id);
-  return step ? relative2(root, step.file).replaceAll("\\", "/") : `.agents/skills/${id}`;
+  const step = findStep(readSkills(join6(root, ".agents", "skills")), id);
+  return step ? relative3(root, step.file).replaceAll("\\", "/") : `.agents/skills/${id}`;
 }
 async function plan(run, o) {
   let cr;
@@ -9253,6 +9737,51 @@ function changeFailures(items, b, days, now) {
   const failures = items.filter((x) => inWin(x.createdAt) && (x.labels.includes("signal:deploy") || x.fields.priority === "P0" && (x.labels.includes(b.board.labels?.bug ?? "bug") || x.labels.some((l) => l.startsWith("signal:")))));
   return { changes, failures, rate: changes.length ? failures.length / changes.length : null };
 }
+function errorBudget(items, b, now) {
+  const slo = b.product?.slo;
+  if (!slo) return void 0;
+  const w = changeFailures(items, b, slo.window_days, now);
+  return {
+    max: slo.change_failure_rate_max,
+    windowDays: slo.window_days,
+    actual: w.rate === null ? null : Math.round(w.rate * 100) / 100,
+    exhausted: w.rate !== null ? w.rate > slo.change_failure_rate_max : w.failures.length > 0,
+    ...w.rate === null && w.failures.length ? { why: "change failures in the window and no change shipped to the last environment" } : {}
+  };
+}
+async function writeHeartbeat(o) {
+  const { b } = o;
+  const ticket = b.heartbeat.ticket;
+  const pack = readSkills(join6(o.root, ".agents", "skills"));
+  const runs = (o.report?.runs ?? []).map((r) => {
+    const step = r.skill ? findStep(pack, r.skill) : void 0;
+    const tier = r.tier || step?.tier;
+    const filled = { ...r, skillHash: r.skillHash || step?.hash, tier, model: r.model || (tier ? b.models?.[tier] : void 0), executor: r.executor || (r.skill ? executorFor(b, r.skill)?.kind : void 0) };
+    return Object.fromEntries(Object.entries(filled).filter(([, v]) => v !== void 0 && v !== null && v !== ""));
+  });
+  const errors = [...o.next?.errors ?? [], ...o.report?.errors ?? []];
+  if (!o.factory) errors.push({ step: "heartbeat", msg: "vcs head gave no sha: factory left out" });
+  const learning = b.learning?.enabled ? o.comments.map((c) => parseHeartbeat(c.body)).find((hb2) => hb2?.learning)?.learning : void 0;
+  const did = o.report?.did ?? [];
+  const hb = {
+    kind: "cycle",
+    at: new Date(o.now ?? Date.now()).toISOString(),
+    ...o.factory ? { factory: o.factory } : {},
+    runs,
+    errors,
+    ...did.length ? { did } : {},
+    ...learning ? { learning } : {},
+    ...o.next?.budget === "exhausted" ? { budget: "exhausted" } : {}
+  };
+  const beat = await o.board.comment(ticket, `${HEARTBEAT_MARKER}
+${JSON.stringify(hb, null, 2)}
+`);
+  const key = o.key ?? `${ticket}-sdlc`;
+  const done = await o.board.comment(ticket, `${stamp("done", key)}
+agentic-sdlc: cycle done: ${runs.length} run(s), ${errors.length} error(s)
+`);
+  return { heartbeat: beat.id, done: done.id, key, ...hb };
+}
 async function measures(o) {
   const b = o.binding;
   const days = o.days ?? 30;
@@ -9284,18 +9813,7 @@ async function measures(o) {
       reworkRate = none(`the forge could not be read: ${e.message}`);
     }
   } else if (o.forge) reworkRate = none("no ticket reached Done in the window");
-  const slo = b.product.slo;
-  let errorBudget;
-  if (slo) {
-    const w = changeFailures(items, b, slo.window_days, now);
-    errorBudget = {
-      max: slo.change_failure_rate_max,
-      windowDays: slo.window_days,
-      actual: round(w.rate),
-      exhausted: w.rate !== null ? w.rate > slo.change_failure_rate_max : w.failures.length > 0,
-      ...w.rate === null && w.failures.length ? { why: "change failures in the window and no change shipped to the last environment" } : {}
-    };
-  }
+  const budget = errorBudget(items, b, now);
   return {
     window: { days, from: new Date(from).toISOString(), to: new Date(now).toISOString() },
     // Tickets at Done with Shipped on the last environment whose last board write is in the window, per week.
@@ -9306,10 +9824,18 @@ async function measures(o) {
     timeToRestoreHours: restore.length ? { value: round(median(restore)), failures: restore.length } : none("no change failure in the window reached Done"),
     // Share of merged CRs closing a ticket that reached Done in the window with a trusted REMEDIATION REQUIRED verdict report.
     reworkRate,
-    ...errorBudget ? { errorBudget } : {}
+    ...budget ? { errorBudget: budget } : {}
   };
 }
-var import_yaml3, HEARTBEAT_MARKER, SCORE_SCORER, isFail, SCORES_MARKER, GRADE_MARKER, parseGrades, normaliseError, summarise, isScores, USAGE2, OPTIONS2, cli2;
+async function headSha(ctx) {
+  try {
+    const { createVcs: createVcs2 } = await Promise.resolve().then(() => (init_vcs(), vcs_exports));
+    return (await createVcs2({ ...ctx, options: ctx.binding.vcs?.options ?? {} }).head()).sha;
+  } catch {
+    return void 0;
+  }
+}
+var import_yaml3, HEARTBEAT_MARKER, SCORE_SCORER, isFail, SCORES_MARKER, GRADE_MARKER, parseGrades, normaliseError, summarise, isScores, USAGE2, OPTIONS2, cli4;
 var init_ledger = __esm({
   "src/ledger.ts"() {
     "use strict";
@@ -9318,6 +9844,7 @@ var init_ledger = __esm({
     init_ports();
     init_comments();
     init_skills();
+    init_dispatch();
     HEARTBEAT_MARKER = stamp("heartbeat");
     SCORE_SCORER = "done-conditions";
     isFail = (v) => v === "fail" || typeof v === "number" && v <= 1;
@@ -9341,10 +9868,11 @@ var init_ledger = __esm({
     isScores = (c) => c.body.trimStart().startsWith(SCORES_MARKER);
     USAGE2 = [
       "usage: ledger runs [--since <days>] [--skill <s>] | ledger summary [--since <days>] | ledger measures [--days <n>] | ledger hash <skill-dir>",
-      "       ledger plan --run <id> | ledger record --run <id> --file <scores.json> | ledger stale --max-hours <h>"
+      "       ledger plan --run <id> | ledger record --run <id> --file <scores.json> | ledger stale --max-hours <h>",
+      "       ledger heartbeat [--file <report.json>] [--next <next.json>] [--key <claim key>]"
     ].join("\n");
-    OPTIONS2 = { since: { type: "string" }, skill: { type: "string" }, run: { type: "string" }, file: { type: "string" }, days: { type: "string" }, "max-hours": { type: "string" } };
-    cli2 = async (argv, ctx) => {
+    OPTIONS2 = { since: { type: "string" }, skill: { type: "string" }, run: { type: "string" }, file: { type: "string" }, days: { type: "string" }, "max-hours": { type: "string" }, next: { type: "string" }, key: { type: "string" } };
+    cli4 = async (argv, ctx) => {
       const [verb, ...rest] = argv;
       let a;
       try {
@@ -9367,7 +9895,7 @@ var init_ledger = __esm({
           console.log(JSON.stringify({ skill: a.positionals[0], hash: hashSkill(resolve(ctx.root, a.positionals[0])) }));
           return 0;
         }
-        if (!["runs", "summary", "plan", "record", "stale", "measures"].includes(verb)) return console.error(USAGE2), 2;
+        if (!["runs", "summary", "plan", "record", "stale", "measures", "heartbeat"].includes(verb)) return console.error(USAGE2), 2;
         const b = ctx.binding;
         const { createBoard: createBoard2 } = await Promise.resolve().then(() => (init_board(), board_exports));
         const board = await createBoard2({ ...ctx, options: b.board.options });
@@ -9390,6 +9918,12 @@ var init_ledger = __esm({
             return void 0;
           }
         };
+        if (verb === "heartbeat") {
+          const json = (f) => f ? JSON.parse(readFileSync5(resolve(ctx.root, f), "utf8")) : void 0;
+          const out = await writeHeartbeat({ board, b, root: ctx.root, comments, factory: await headSha(ctx), report: json(a.values.file), next: json(a.values.next), key: a.values.key });
+          console.log(JSON.stringify(out, null, 2));
+          return 0;
+        }
         if (verb === "stale") {
           const newest = comments.find((c) => parseHeartbeat(c.body));
           const ageHours = newest ? Math.round((Date.now() - Date.parse(newest.createdAt)) / 36e5 * 10) / 10 : null;
@@ -9419,223 +9953,6 @@ var init_ledger = __esm({
   }
 });
 
-// src/vcs/git.ts
-import { existsSync as existsSync4, mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join as join5 } from "path";
-function git(ctx) {
-  const { trunk, release_prefix } = ctx.binding.vcs;
-  const g = (...a) => ctx.exec("git", a, { cwd: ctx.root }).trim();
-  const lines = (s) => s.split("\n").map((l) => l.trim()).filter(Boolean);
-  const plain = (what, v) => {
-    if (typeof v !== "string" || !v || v.startsWith("-")) throw new Error(`vcs: ${what} not allowed: ${v}`);
-    return v;
-  };
-  const NAMES = ["-c", "core.quotepath=off"];
-  const base = () => g("merge-base", "HEAD", `origin/${trunk}`);
-  const safeName = (name) => {
-    if (!name || name.startsWith("-") || name.includes("..") || /[\s\\~^:?*[]/.test(name)) throw new Error(`change line name not allowed: ${name}`);
-    g("check-ref-format", "--branch", name);
-  };
-  return {
-    async start(name) {
-      safeName(name);
-      if (!isChangeLine(ctx.binding, name)) throw new Error(`vcs start: name not allowed: ${name} fits neither vcs.change_pattern (${ctx.binding.vcs.change_pattern}) nor vcs.factory_change_pattern (${ctx.binding.vcs.factory_change_pattern}): pass the full name`);
-      g("fetch", "origin", trunk);
-      const workdir = join5(ctx.root, ".agents", "work", name);
-      const fetchBranch = () => {
-        try {
-          g("fetch", "origin", name);
-          return true;
-        } catch (e) {
-          if (/couldn't find remote ref|could not find remote ref/i.test(String(e.message) + String(e.stderr ?? ""))) return false;
-          throw e;
-        }
-      };
-      const catchUp = () => {
-        if (!fetchBranch()) return;
-        try {
-          ctx.exec("git", ["merge", "--ff-only", `origin/${name}`], { cwd: workdir });
-        } catch {
-        }
-      };
-      if (existsSync4(workdir)) {
-        catchUp();
-        return { workdir, ref: name };
-      }
-      g("worktree", "prune");
-      const has = (ref) => {
-        try {
-          g("rev-parse", "--verify", "--quiet", ref);
-          return true;
-        } catch {
-          return false;
-        }
-      };
-      if (has(`refs/heads/${name}`)) {
-        g("worktree", "add", workdir, name);
-        catchUp();
-      } else {
-        const remote = fetchBranch();
-        if (remote) g("worktree", "add", "-b", name, workdir, `origin/${name}`);
-        else g("worktree", "add", "-b", name, workdir, `origin/${trunk}`);
-      }
-      return { workdir, ref: name };
-    },
-    async head() {
-      return { ref: g("rev-parse", "--abbrev-ref", "HEAD"), sha: g("rev-parse", "HEAD") };
-    },
-    async changed(since) {
-      if (since !== void 0) plain("revision", since);
-      return lines(g(...NAMES, "diff", "--name-only", "--end-of-options", `${since ?? `origin/${trunk}`}...HEAD`));
-    },
-    async base() {
-      return { sha: base() };
-    },
-    async push() {
-      const ref = g("rev-parse", "--abbrev-ref", "HEAD");
-      if (ref === trunk || ref === "HEAD") throw new Error(`vcs push: refusing to push ${ref === "HEAD" ? "a detached HEAD" : `the trunk '${trunk}'`}: start a change line`);
-      g("push", "-u", "origin", ref);
-      return { ref, sha: g("rev-parse", "HEAD") };
-    },
-    async cut(rev, release) {
-      plain("revision", rev);
-      plain("release", release);
-      const ref = `refs/heads/${release_prefix}${release}`;
-      g("push", "origin", `${rev}:${ref}`);
-      return { ref };
-    },
-    async tag(name, rev) {
-      plain("tag name", name);
-      plain("revision", rev);
-      g("tag", "-a", "-m", name, "--end-of-options", name, rev);
-      g("push", "origin", `refs/tags/${name}`);
-    },
-    async tags(prefix) {
-      const out = g("tag", "--sort=-creatordate", "--format=%(refname:short) %(*objectname) %(objectname)", "-l", `${prefix ?? ""}*`);
-      return out.split("\n").filter(Boolean).map((l) => {
-        const [name, a, b] = l.split(" ");
-        return { name, sha: a || b };
-      });
-    },
-    async drop(name) {
-      safeName(name);
-      g("worktree", "remove", "--force", join5(ctx.root, ".agents", "work", name));
-      try {
-        g("branch", "-D", name);
-      } catch {
-      }
-    },
-    async checkoutTests(rev, paths) {
-      plain("revision", rev);
-      paths.forEach((p) => plain("path", p));
-      g("read-tree", "-u", "--reset", "--end-of-options", rev);
-      if (paths.length) g("checkout", "HEAD", "--", ...paths);
-    },
-    async snapshot(rev) {
-      plain("revision", rev);
-      const workdir = mkdtempSync(join5(tmpdir(), "agentic-bench-"));
-      g("worktree", "add", "--detach", workdir, rev);
-      const w = (...a) => ctx.exec("git", a, { cwd: workdir });
-      return {
-        workdir,
-        async changed() {
-          w("add", "-A");
-          return lines(w(...NAMES, "diff", "--cached", "--name-only", "--no-renames", "--end-of-options", rev));
-        },
-        async drop() {
-          try {
-            g("worktree", "remove", "--force", workdir);
-          } catch {
-          }
-          rmSync(workdir, { recursive: true, force: true });
-          try {
-            g("worktree", "prune");
-          } catch {
-          }
-        }
-      };
-    }
-  };
-}
-var init_git = __esm({
-  "src/vcs/git.ts"() {
-    "use strict";
-    init_ports();
-  }
-});
-
-// src/vcs/index.ts
-var vcs_exports = {};
-__export(vcs_exports, {
-  VERBS: () => VERBS2,
-  cli: () => cli3,
-  createVcs: () => createVcs
-});
-function createVcs(ctx) {
-  const make = adapters[ctx.binding.vcs.adapter];
-  if (!make) throw new Error(`unknown vcs adapter: ${ctx.binding.vcs.adapter}`);
-  return make(ctx);
-}
-var adapters, VERBS2, cli3;
-var init_vcs = __esm({
-  "src/vcs/index.ts"() {
-    "use strict";
-    init_util();
-    init_git();
-    adapters = { git };
-    VERBS2 = {
-      start: {},
-      head: {},
-      base: {},
-      push: {},
-      cut: {},
-      tag: {},
-      drop: {},
-      "checkout-tests": {},
-      changed: { value: ["since"] },
-      tags: { value: ["prefix"] }
-    };
-    cli3 = (argv, ctx) => guard(async () => {
-      const [verb, ...rest] = argv;
-      if (!verb || !Object.hasOwn(VERBS2, verb)) throw new UsageError(`unknown vcs verb: ${verb ?? ""}`);
-      const a = parseStrict("vcs", verb, rest, VERBS2[verb]);
-      const v = createVcs({ ...ctx, options: ctx.binding.vcs.options ?? {} });
-      const need2 = (i) => {
-        if (!a.pos[i]) throw new UsageError(`vcs ${verb}: missing argument`);
-        return a.pos[i];
-      };
-      switch (verb) {
-        case "start":
-          return v.start(need2(0));
-        case "head":
-          return v.head();
-        case "changed":
-          return v.changed(a.get("since"));
-        case "base":
-          return v.base();
-        case "push":
-          return v.push();
-        case "cut":
-          return v.cut(need2(0), need2(1));
-        case "tag":
-          await v.tag(need2(0), need2(1));
-          return {};
-        case "drop":
-          await v.drop(need2(0));
-          return {};
-        case "tags":
-          return v.tags(a.get("prefix"));
-        case "checkout-tests":
-          await v.checkoutTests(need2(0), a.pos.slice(1));
-          return {};
-        default:
-          throw new UsageError(`unknown vcs verb: ${verb ?? ""}`);
-      }
-    });
-  }
-});
-
 // src/bench.ts
 var bench_exports = {};
 __export(bench_exports, {
@@ -9651,7 +9968,7 @@ __export(bench_exports, {
   area: () => area,
   benchStepFile: () => benchStepFile,
   buildCases: () => buildCases,
-  cli: () => cli4,
+  cli: () => cli5,
   compare: () => compare,
   diverse: () => diverse,
   fill: () => fill,
@@ -9667,9 +9984,9 @@ __export(bench_exports, {
   suiteFile: () => suiteFile,
   wilsonLower: () => wilsonLower
 });
-import { cpSync, existsSync as existsSync5, mkdirSync as mkdirSync2, mkdtempSync as mkdtempSync2, readdirSync as readdirSync3, readFileSync as readFileSync6, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
-import { tmpdir as tmpdir2 } from "os";
-import { dirname as dirname2, join as join6, relative as relative3, resolve as resolve2 } from "path";
+import { cpSync, existsSync as existsSync5, mkdirSync as mkdirSync3, mkdtempSync as mkdtempSync3, readdirSync as readdirSync3, readFileSync as readFileSync6, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "fs";
+import { tmpdir as tmpdir3 } from "os";
+import { dirname as dirname2, join as join7, relative as relative4, resolve as resolve2 } from "path";
 import { parseArgs as parseArgs3 } from "util";
 function resolveExecutor(arg, binding) {
   if (arg.trim().startsWith("{")) return JSON.parse(arg);
@@ -9762,15 +10079,15 @@ function prompt(c, skillPath, workdir, fastCheck) {
   ].join("\n");
 }
 function carry(from, to, p) {
-  const src = join6(from, p), dst = join6(to, p);
+  const src = join7(from, p), dst = join7(to, p);
   if (!existsSync5(src)) return rmSync2(dst, { recursive: true, force: true });
-  mkdirSync2(dirname2(dst), { recursive: true });
+  mkdirSync3(dirname2(dst), { recursive: true });
   cpSync(src, dst, { recursive: true });
 }
 async function runBench(cases, o, deps) {
   const executor = o.executor ?? { kind: "harness" };
   const now = deps.now ?? Date.now;
-  const promptFile = (scratch, c) => join6(scratch, `${c.id}.md`);
+  const promptFile = (scratch, c) => join7(scratch, `${c.id}.md`);
   const command = (b, c, scratch, workdir) => agentCommand(executor, b, { model: o.model, ticket: c.ticket, prompt_file: promptFile(scratch, c), workdir });
   if (o.dryRun) return { dryRun: cases.map((c) => ({ id: c.id, command: command(o.binding, c, "<scratch>", "<workdir>") })) };
   const budget = o.binding.learning?.bench_budget ?? {};
@@ -9788,7 +10105,7 @@ async function runBench(cases, o, deps) {
     const skillPath = benchStepFile(factory?.workdir ?? o.root);
     const isProof = rule(binding, "proof_pattern", PROOF_FILE);
     const isConfig = rule(binding, "verify_config_pattern", VERIFY_CONFIG);
-    const scratch = mkdtempSync2(join6(tmpdir2(), "agentic-bench-prompts-"));
+    const scratch = mkdtempSync3(join7(tmpdir3(), "agentic-bench-prompts-"));
     const began = now();
     const spent = () => !!budget.max_minutes && (now() - began) / 6e4 >= budget.max_minutes;
     for (const c of cases) for (let trial = 1; trial <= trials; trial++) {
@@ -9800,7 +10117,7 @@ async function runBench(cases, o, deps) {
       try {
         const agent = await snap(c.baseSha);
         trees.push(agent);
-        writeFileSync2(promptFile(scratch, c), prompt(c, skillPath, agent.workdir, binding.commands.fast_check));
+        writeFileSync3(promptFile(scratch, c), prompt(c, skillPath, agent.workdir, binding.commands.fast_check));
         const t0 = now();
         let error;
         try {
@@ -9851,17 +10168,17 @@ async function runBench(cases, o, deps) {
 }
 function writeScorerInput(dir, root, c, trial, promptText, touched, base, after) {
   const read = (d, p) => {
-    if (!existsSync5(join6(d, p))) return "(absent)";
-    const t = readFileSync6(join6(d, p), "utf8");
+    if (!existsSync5(join7(d, p))) return "(absent)";
+    const t = readFileSync6(join7(d, p), "utf8");
     return t.length > MAX_FILE_CHARS ? `${t.slice(0, MAX_FILE_CHARS)}
 \u2026 cut` : t;
   };
   const fence = "````";
   const parts = [promptText, "## Changed files", ...touched.flatMap((p) => [`### ${p}`, "Before:", fence, read(base, p), fence, "After:", fence, read(after, p), fence])];
-  const file = join6(dir, `${c.id.replace(/[^\w.-]/g, "_")}${trial ? `-t${trial}` : ""}.md`);
-  mkdirSync2(dir, { recursive: true });
-  writeFileSync2(file, parts.join("\n\n") + "\n");
-  return relative3(root, file).replaceAll("\\", "/");
+  const file = join7(dir, `${c.id.replace(/[^\w.-]/g, "_")}${trial ? `-t${trial}` : ""}.md`);
+  mkdirSync3(dir, { recursive: true });
+  writeFileSync3(file, parts.join("\n\n") + "\n");
+  return relative4(root, file).replaceAll("\\", "/");
 }
 function report(results) {
   const g = /* @__PURE__ */ new Map();
@@ -9923,7 +10240,7 @@ function compare(a0, b0, o = {}) {
     regressed: short.length > 0 || sb.lower < sa.lower
   };
 }
-var BENCH_STEP, benchStepFile, CASES_FILE, SUITES_DIR, RESULTS_DIR, suiteFile, PROOF_FILE, addedFiles, VERIFY_CONFIG, rule, fill, shell, specAuthors, dropAll, MAX_FILE_CHARS, USAGE3, readJson, OPTIONS3, cli4;
+var BENCH_STEP, benchStepFile, CASES_FILE, SUITES_DIR, RESULTS_DIR, suiteFile, PROOF_FILE, addedFiles, VERIFY_CONFIG, rule, fill, shell, specAuthors, dropAll, MAX_FILE_CHARS, USAGE3, readJson, OPTIONS3, cli5;
 var init_bench = __esm({
   "src/bench.ts"() {
     "use strict";
@@ -9934,7 +10251,7 @@ var init_bench = __esm({
     init_ports();
     init_skills();
     BENCH_STEP = "build";
-    benchStepFile = (root) => findStep(readSkills(join6(root, ".agents", "skills")), BENCH_STEP)?.file ?? join6(root, ".agents/skills/sdlc-build/SKILL.md");
+    benchStepFile = (root) => findStep(readSkills(join7(root, ".agents", "skills")), BENCH_STEP)?.file ?? join7(root, ".agents/skills/sdlc-build/SKILL.md");
     CASES_FILE = ".agents/bench/cases.json";
     SUITES_DIR = ".agents/bench/suites";
     RESULTS_DIR = ".agents/bench/results";
@@ -9983,7 +10300,7 @@ var init_bench = __esm({
       trials: { type: "string" },
       "allow-over-budget": { type: "boolean" }
     };
-    cli4 = async (argv, ctx) => {
+    cli5 = async (argv, ctx) => {
       const [verb, ...rest] = argv;
       let a;
       try {
@@ -10005,7 +10322,7 @@ var init_bench = __esm({
         const suite = a.values.suite;
         const mergedLimit = a.values["merged-limit"] ? Number(a.values["merged-limit"]) : void 0;
         if (mergedLimit !== void 0 && !(mergedLimit > 0) || a.values.since !== void 0 && Number.isNaN(Date.parse(a.values.since))) return console.error(USAGE3), 2;
-        const suiteCases = (s) => readJson(join6(root, suiteFile(s))).cases;
+        const suiteCases = (s) => readJson(join7(root, suiteFile(s))).cases;
         const allCases = async (limit, o) => {
           const { createBoard: createBoard2 } = await Promise.resolve().then(() => (init_board(), board_exports));
           const { createForge: createForge2 } = await Promise.resolve().then(() => (init_forge(), forge_exports));
@@ -10013,8 +10330,8 @@ var init_bench = __esm({
         };
         if (verb === "report") {
           if (!suite) return console.error(USAGE3), 2;
-          const dir = join6(root, RESULTS_DIR);
-          const files = a.positionals.length ? a.positionals.map((p) => resolve2(root, p)) : existsSync5(dir) ? readdirSync3(dir).filter((f) => f.endsWith(".json")).map((f) => join6(dir, f)) : [];
+          const dir = join7(root, RESULTS_DIR);
+          const files = a.positionals.length ? a.positionals.map((p) => resolve2(root, p)) : existsSync5(dir) ? readdirSync3(dir).filter((f) => f.endsWith(".json")).map((f) => join7(dir, f)) : [];
           const results = files.map((f) => readJson(f)).filter((r) => r.suite === suite);
           console.log(JSON.stringify({ suite, results: results.length, rows: report(results) }, null, 2));
           return 0;
@@ -10023,8 +10340,8 @@ var init_bench = __esm({
           if (!suite) return console.error(USAGE3), 2;
           const n = a.values.n ? Number(a.values.n) : binding.learning.bench_size;
           if (!(n > 0)) return console.error(USAGE3), 2;
-          const sdir = join6(root, SUITES_DIR);
-          const used = new Set((existsSync5(sdir) ? readdirSync3(sdir).filter((f) => f.endsWith(".json")) : []).flatMap((f) => readJson(join6(sdir, f)).cases.map((c) => c.id)));
+          const sdir = join7(root, SUITES_DIR);
+          const used = new Set((existsSync5(sdir) ? readdirSync3(sdir).filter((f) => f.endsWith(".json")) : []).flatMap((f) => readJson(join7(sdir, f)).cases.map((c) => c.id)));
           const fresh = (await allCases(Infinity, { perSize: Infinity })).filter((c) => !used.has(c.id));
           console.log(JSON.stringify({ suite, cases: diverse(fresh, n) }, null, 2));
           return 0;
@@ -10035,9 +10352,9 @@ var init_bench = __esm({
           if (!(limit > 0) || perSize !== void 0 && !(perSize > 0)) return console.error(USAGE3), 2;
           const cases = await allCases(limit, { paths: a.values.paths, perSize });
           const rel = suite ? suiteFile(suite) : CASES_FILE;
-          const file = join6(root, rel);
-          mkdirSync2(dirname2(file), { recursive: true });
-          writeFileSync2(file, JSON.stringify(suite ? { name: suite, cases } : cases, null, 2) + "\n");
+          const file = join7(root, rel);
+          mkdirSync3(dirname2(file), { recursive: true });
+          writeFileSync3(file, JSON.stringify(suite ? { name: suite, cases } : cases, null, 2) + "\n");
           console.log(JSON.stringify({ file: rel, cases: cases.length }));
           return 0;
         }
@@ -10049,18 +10366,18 @@ var init_bench = __esm({
           const executorName = a.values.executor ? a.values.executor.trim().startsWith("{") ? "inline" : a.values.executor : void 0;
           const label = a.values.model ?? executorName;
           const want = a.values.cases?.split(",").map((s) => s.trim());
-          const cases = (suite ? suiteCases(suite) : readJson(join6(root, CASES_FILE))).filter((c) => !want || want.includes(c.id));
+          const cases = (suite ? suiteCases(suite) : readJson(join7(root, CASES_FILE))).filter((c) => !want || want.includes(c.id));
           const stem = `${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}-${label.replace(/[^\w.-]/g, "_")}`;
           const { createVcs: createVcs2 } = await Promise.resolve().then(() => (init_vcs(), vcs_exports));
           const r = await runBench(
             cases,
-            { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values["dry-run"], scorerDir: join6(root, RESULTS_DIR, stem), trials, allowOverBudget: a.values["allow-over-budget"] },
+            { model, executor, executorName, factory: a.values.factory, suite, root, binding, dryRun: a.values["dry-run"], scorerDir: join7(root, RESULTS_DIR, stem), trials, allowOverBudget: a.values["allow-over-budget"] },
             { exec: ctx.exec, vcs: await createVcs2(with_(binding.vcs.options)) }
           );
           if ("cases" in r) {
             const file = `${RESULTS_DIR}/${stem}.json`;
-            mkdirSync2(join6(root, RESULTS_DIR), { recursive: true });
-            writeFileSync2(join6(root, file), JSON.stringify(r, null, 2) + "\n");
+            mkdirSync3(join7(root, RESULTS_DIR), { recursive: true });
+            writeFileSync3(join7(root, file), JSON.stringify(r, null, 2) + "\n");
             const skipped = r.cases.filter((c) => c.skipped).length;
             console.log(JSON.stringify({ file, passRate: r.passRate, minutes: r.minutes, ...skipped ? { skipped, incomplete: true } : {} }));
           } else console.log(JSON.stringify(r, null, 2));
@@ -10069,270 +10386,6 @@ var init_bench = __esm({
         console.error(USAGE3);
         return 2;
       } catch (e) {
-        console.error(e.message);
-        return 1;
-      }
-    };
-  }
-});
-
-// src/dispatch.ts
-var dispatch_exports = {};
-__export(dispatch_exports, {
-  FLAGS: () => FLAGS,
-  REVIEW_FIRE_ENV: () => REVIEW_FIRE_ENV,
-  REVIEW_STEP: () => REVIEW_STEP,
-  childEnv: () => childEnv,
-  cli: () => cli5,
-  executorFor: () => executorFor,
-  judgeTier: () => judgeTier,
-  limitsText: () => limitsText,
-  passEnv: () => passEnv,
-  resolveStage: () => resolveStage,
-  setSpawn: () => setSpawn
-});
-import { spawn } from "child_process";
-import { chmodSync, closeSync, lstatSync, mkdirSync as mkdirSync3, mkdtempSync as mkdtempSync3, openSync, writeFileSync as writeFileSync3 } from "fs";
-import { tmpdir as tmpdir3 } from "os";
-import { join as join7, relative as relative4 } from "path";
-function judgeTier(b, runModel) {
-  if (!runModel) return { skip: true, reason: "the judged run reported no model, so independence cannot be shown" };
-  const want = b.learning?.judge_tier ?? "fast";
-  const i = TIERS2.indexOf(want);
-  const order = [want, ...TIERS2.slice(i + 1), ...TIERS2.slice(0, i).reverse()];
-  const tier = order.find((t) => b.models[t] !== runModel);
-  if (!tier) return { skip: true, reason: `every model tier is ${runModel}, the judged run's model; a model never grades its own run` };
-  return { tier, model: b.models[tier] };
-}
-function resolveStage(b, ex, skillTier, judgeModel) {
-  const mcps = {};
-  for (const n of ex.mcps ?? []) {
-    const m = b.mcps?.[n];
-    if (!m) throw new Error(`mcp '${n}' is not in the binding's mcps`);
-    mcps[n] = { ...m.url ? { url: m.url } : {}, ...m.command ? { command: m.command } : {}, ...m.token_env ? { token_env: m.token_env } : {} };
-  }
-  const tier = ex.model?.tier ?? skillTier;
-  const model = judgeModel ?? ex.model?.id ?? (tier ? b.models?.[tier] : void 0);
-  return { mcps, secrets: ex.secrets ?? [], sandbox: ex.sandbox ?? b.executors.default?.sandbox, model };
-}
-function passEnv(env) {
-  const out = { ...env };
-  delete out.AGENTIC_REVIEW_TOKEN;
-  return out;
-}
-function childEnv(env, secrets) {
-  const out = {};
-  for (const k of [...BASE_ENV, ...secrets]) {
-    if (env[k] === void 0 && secrets.includes(k)) throw new Error(`set the ${k} environment variable`);
-    if (env[k] !== void 0) out[k] = env[k];
-  }
-  return out;
-}
-function executorFor(b, id) {
-  const by = /* @__PURE__ */ new Map();
-  const keys = Object.keys(b.executors).filter((k) => k !== "default");
-  for (const k of keys) by.set(k, b.executors[k]);
-  return by.get(id) ?? by.get(skillOf(id)) ?? b.executors.default;
-}
-var TIERS2, BASE_ENV, spawnChild, setSpawn, subject, limitsText, taskText, REVIEW_STEP, REVIEW_FIRE_ENV, FLAGS, cli5;
-var init_dispatch = __esm({
-  "src/dispatch.ts"() {
-    "use strict";
-    init_board();
-    init_bench();
-    init_ports();
-    init_comments();
-    init_skills();
-    TIERS2 = ["fast", "balanced", "deep"];
-    BASE_ENV = ["PATH", "HOME", "USERPROFILE", "SystemRoot", "TEMP", "TMP", "APPDATA", "LOCALAPPDATA", "ComSpec", "PATHEXT", "SystemDrive"];
-    spawnChild = spawn;
-    setSpawn = (f) => {
-      const prev = spawnChild;
-      spawnChild = f;
-      return prev;
-    };
-    subject = (t) => t.ticket ? `ticket ${t.ticket}${t.cr ? ` (change request ${t.cr})` : ""}` : `change request ${t.cr}`;
-    limitsText = (l = {}) => {
-      const parts = [l.max_turns && `${l.max_turns} turns`, l.max_tokens && `${l.max_tokens} tokens`, l.max_minutes && `${l.max_minutes} minutes`].filter(Boolean);
-      return parts.length ? ` Limits for this run: at most ${parts.join(", ")}; stop at the first one you reach.` : "";
-    };
-    taskText = (t) => `Run step ${t.skill} on ${subject(t)}. Load ${t.file ?? `.agents/skills/${t.skill}/SKILL.md`} first and follow it.${limitsText(t.limits)}${t.done ? ` Put the line ${t.done} in your closing comment.` : ""}${t.run ? ` Your run id is ${t.run}: end every commit you make with the trailer Agent-Run: ${t.run}.` : ""}`;
-    REVIEW_STEP = "review/review";
-    REVIEW_FIRE_ENV = "AGENTIC_REVIEW_FIRE_CMD";
-    FLAGS = ["ticket", "cr", "workdir", "run", "run-model", "unattended"];
-    cli5 = async (argv, ctx) => {
-      let onFail;
-      let sent = false;
-      try {
-        const f = {};
-        const pos = [];
-        const KNOWN = FLAGS;
-        for (let i = 0; i < argv.length; i++) {
-          if (!argv[i].startsWith("--")) {
-            pos.push(argv[i]);
-            continue;
-          }
-          const [name, inline] = argv[i].slice(2).split(/=(.*)/s, 2);
-          if (!KNOWN.includes(name)) {
-            console.error(`unknown flag --${name}`);
-            return 2;
-          }
-          if (name === "unattended") {
-            f.unattended = "1";
-            continue;
-          }
-          const v = inline ?? argv[++i];
-          if (v === void 0 || inline === void 0 && v.startsWith("--")) {
-            console.error(`--${name} needs a value`);
-            return 2;
-          }
-          f[name] = v;
-        }
-        const [arg] = pos;
-        const usage = "usage: agentic-sdlc dispatch <skill>[/<step>] [--ticket <id>] [--cr <n>] (at least one; none for learn/improve) [--run <id>] [--workdir <d>] [--run-model <id>] [--unattended]";
-        if (!arg) {
-          console.error(usage);
-          return 2;
-        }
-        const pack = readSkills(join7(ctx.root, ".agents", "skills"));
-        const step = findStep(pack, arg);
-        if (!step) {
-          console.error(`unknown step '${arg}'; ${pack.steps.length ? `valid ids: ${pack.steps.map((x) => x.id).join(", ")}` : ".agents/skills holds no steps: run agentic-sdlc init"}
-${usage}`);
-          return 2;
-        }
-        const skill = step.id;
-        if (!f.ticket && !f.cr && skill !== "learn/improve") {
-          console.error(usage);
-          return 2;
-        }
-        const ticket = f.ticket ?? "", cr = f.cr ?? "", workdir = f.workdir ?? ctx.root;
-        const b = ctx.binding;
-        const file = relative4(ctx.root, step.file).replaceAll("\\", "/");
-        const outside = skill === REVIEW_STEP && !!b.forge?.review_identity && ctx.env.AGENTIC_SDLC_ROLE !== "review" && !Object.keys(b.executors).some((k) => k !== "default" && k === skill);
-        const fire = outside ? ctx.env[REVIEW_FIRE_ENV] || void 0 : void 0;
-        const ex = fire ? { kind: "command", run: fire } : executorFor(b, skill);
-        const via = skill === REVIEW_STEP ? outside ? fire ? "review-runtime" : "job-dependency" : "executor" : void 0;
-        const startedAt = (/* @__PURE__ */ new Date()).toISOString();
-        const judge = skill === "learn/judge" ? judgeTier(b, f["run-model"]) : void 0;
-        if (judge && "skip" in judge) {
-          console.log(JSON.stringify(judge));
-          return 0;
-        }
-        let board;
-        const boardOf = () => board ??= createBoard({ ...ctx, options: b.board.options });
-        const target = (skill === "learn/judge" ? "" : ticket) || b.heartbeat?.ticket;
-        const window = Number(b.cycle?.dedupe_minutes) || 0;
-        let key = [ticket || cr || "factory", skill, f.run].filter(Boolean).join("-");
-        let locked = false;
-        let isBot;
-        if (window > 0 && target) {
-          let head = "";
-          if (cr) {
-            try {
-              const { createForge: createForge2 } = await Promise.resolve().then(() => (init_forge(), forge_exports));
-              head = (await createForge2({ ...ctx, options: b.forge.options }).view(cr)).headSha;
-            } catch {
-            }
-          }
-          key = [ticket || cr || "factory", skill, f.run, head].filter(Boolean).join("-");
-          locked = true;
-          const trusted = ownersFor(b.owners, "board").bots.map((a) => a.toLowerCase());
-          const bot = isBot = (c) => trusted.includes(String(c.author).toLowerCase());
-          const all = (await boardOf().comments(target)).filter(bot);
-          const mine = all.filter((c) => c.body.trimStart().startsWith(matches("dispatch", key))).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
-          const at = mine ? Date.parse(mine.createdAt) : NaN;
-          const later = (c) => c.id !== mine?.id && Date.parse(c.createdAt) >= at;
-          const ends = (c) => c.body.includes(stamp("done", key)) || skill === "sdlc" && isMarked(c.body, "heartbeat") && /"kind"\s*:\s*"cycle"/.test(c.body);
-          const finished = mine && all.some((c) => later(c) && ends(c));
-          const stall = skill === "sdlc" ? Number(b.cycle?.time_budget_minutes) || Number(b.stall_minutes) || 0 : Number(b.stall_minutes) || 0;
-          const age = Number.isNaN(at) ? 0 : (Date.now() - at) / 6e4;
-          if (mine && !finished && (age < window || age < stall)) {
-            console.log(JSON.stringify({ skipped: true, key, since: mine.createdAt, comment: mine.id, reason: age < window ? "double fire" : "the previous run has not finished" }));
-            return 0;
-          }
-        }
-        let marker;
-        const done = async (kind, ref, extra = {}) => {
-          console.log(JSON.stringify({ kind, ref, startedAt, ...run ? { run } : {}, key, done: stamp("done", key), ...via ? { via } : {}, ...extra }));
-          return 0;
-        };
-        const doneLine = stamp("done", key);
-        const run = (b.forge?.provenance ?? "off") === "off" ? void 0 : locked ? key : [ticket || (cr ? `cr${cr}` : "factory"), skill, startedAt.replace(/\D/g, "")].join("-");
-        if (skill === "sdlc") {
-          if (locked) await boardOf().comment(target, `${stamp("dispatch", key)}
-agentic-sdlc: cycle claimed`);
-          return await done("claim", null);
-        }
-        if (outside && !fire) return await done("fire", null);
-        const skillTier = step.tier;
-        const stage = resolveStage(b, ex, judge?.tier ?? skillTier, judge?.model);
-        const local = !fire && (stage.sandbox === "local" || !stage.sandbox && (ex.kind === "command" || ex.kind === "harness"));
-        const localOk = stage.sandbox === "local" && ctx.env.AGENTIC_SDLC_LOCAL === "1";
-        if (local && !localOk && (f.unattended || ctx.env.AGENTIC_SDLC_UNATTENDED === "1")) {
-          throw new Error(`executor for ${skill} uses sandbox ${stage.sandbox ?? "local (unset)"}; unattended runs refuse it (local execution: sandbox local and AGENTIC_SDLC_LOCAL=1)`);
-        }
-        const limits = limitsOf(b, ex);
-        const hasLimits = Object.keys(limits).length > 0;
-        const info = { ...judge ?? {}, model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox, ...hasLimits ? { limits } : {} };
-        if (locked) {
-          marker = (await boardOf().comment(target, `${stamp("dispatch", key)}
-agentic-sdlc: run step ${skill} (${ex.kind})${limitsText(limits)}; close with ${stamp("done", key)}`)).id;
-          const k = key;
-          if (locked && isBot) {
-            const all = (await boardOf().comments(target)).filter(isBot);
-            const markers = all.filter((c) => c.body.trimStart().startsWith(matches("dispatch", key)));
-            const order = (x, y) => Date.parse(x.createdAt) - Date.parse(y.createdAt) || String(x.id).localeCompare(String(y.id), void 0, { numeric: true });
-            const me = markers.find((c) => c.id === marker);
-            const owner = me && markers.find((c) => {
-              const age = (Date.now() - Date.parse(c.createdAt)) / 6e4;
-              const finished = all.some((d) => !markers.includes(d) && d.body.includes(stamp("done", key)) && Date.parse(d.createdAt) >= Date.parse(c.createdAt));
-              return c !== me && order(c, me) < 0 && !finished && !(age >= window);
-            });
-            if (owner) {
-              console.log(JSON.stringify({ skipped: true, key, since: owner.createdAt, comment: owner.id, reason: "double fire" }));
-              return 0;
-            }
-          }
-          onFail = () => sent ? Promise.resolve() : boardOf().comment(target, `${stamp("done", k)}
-agentic-sdlc: ${skill} did not start`);
-        }
-        if (ex.kind === "harness") {
-          return await done("harness", null, { instruction: `load ${file} in a subagent at tier ${judge?.tier ?? skillTier}${hasLimits ? `; ${limitsText(limits).trim()}` : ""}${doneLine ? `; the subagent puts the line ${doneLine} in its closing comment` : ""}; its dispatch key is ${key}${run ? `; its run id is ${run}` : ""}`, tier: judge?.tier ?? skillTier, ...info, secrets: stage.secrets });
-        }
-        if (ex.kind === "command") {
-          const dir = mkdtempSync3(join7(tmpdir3(), "agentic-sdlc-"));
-          const promptFile = join7(dir, "prompt.md");
-          writeFileSync3(promptFile, `${taskText({ skill, ticket, cr, file, done: doneLine, run, limits })}
-`);
-          const mcpsFile = join7(dir, "mcps.json");
-          writeFileSync3(mcpsFile, JSON.stringify(stage.mcps, null, 2));
-          const vars = { skill, ticket, cr, workdir, prompt_file: promptFile, mcps_file: mcpsFile, max_turns: String(limits.max_turns ?? ""), max_tokens: String(limits.max_tokens ?? ""), max_minutes: String(limits.max_minutes ?? ""), ...stage.model ? { model: stage.model } : {} };
-          const line = fill(ex.run, vars);
-          const env = { ...fire ? passEnv(ctx.env) : childEnv(ctx.env, stage.secrets), ...limits.max_turns ? { AGENTIC_SDLC_MAX_TURNS: String(limits.max_turns) } : {}, ...limits.max_tokens ? { AGENTIC_SDLC_MAX_TOKENS: String(limits.max_tokens) } : {}, ...limits.max_minutes ? { AGENTIC_SDLC_MAX_MINUTES: String(limits.max_minutes) } : {} };
-          const logDir = join7(tmpdir3(), "agentic-sdlc-runs");
-          mkdirSync3(logDir, { recursive: true, mode: 448 });
-          const st = lstatSync(logDir);
-          if (!st.isDirectory() || st.isSymbolicLink() || process.getuid && st.uid !== process.getuid()) throw new Error(`${logDir} is not a folder of yours; remove it and retry`);
-          if (process.platform !== "win32") chmodSync(logDir, 448);
-          const log = join7(logDir, `${startedAt}-${skill}-${ticket || `cr${cr}`}`.replace(/[^\w.-]/g, "_") + ".log");
-          const fd = openSync(log, "a", 384);
-          try {
-            const [cmd, args, childVars] = process.platform === "win32" ? ["cmd", ["/d", "/v:off", "/c", "%AGENTIC_SDLC_CMD%"], { ...env, AGENTIC_SDLC_CMD: line }] : ["sh", ["-c", line], env];
-            const child = spawnChild(cmd, args, { cwd: workdir, env: childVars, detached: true, stdio: ["ignore", fd, fd], windowsHide: true });
-            child.on("error", () => {
-            });
-            child.unref();
-            if (!child.pid) throw new Error(`could not start the command executor for ${skill}; see ${log}`);
-            sent = true;
-            return await done(fire ? "fire" : "command", String(child.pid), { log, ...info });
-          } finally {
-            closeSync(fd);
-          }
-        }
-        throw new Error(`unknown executor kind '${ex.kind}' for ${skill}`);
-      } catch (e) {
-        if (onFail) await onFail().catch(() => void 0);
         console.error(e.message);
         return 1;
       }
@@ -10761,15 +10814,15 @@ environment: ${env}`,
     const back = i > 0 ? `On ${envs[i - 1]}` : opts[0];
     const isAnc = d.isAncestor;
     if (!isAnc) return { env, result, changed, unknown: true };
-    const next = i + 1 < envs.length ? rank(`On ${envs[i + 1]}`) : Infinity;
-    const back_ = done.filter((x) => x.status === "Done" && rank(x.fields.shipped) >= rank(target) && rank(x.fields.shipped) < next);
+    const next2 = i + 1 < envs.length ? rank(`On ${envs[i + 1]}`) : Infinity;
+    const back_ = done.filter((x) => x.status === "Done" && rank(x.fields.shipped) >= rank(target) && rank(x.fields.shipped) < next2);
     const byId = await mergeShas(d, back_.map((x) => x.id));
     for (const x of back_) {
       const shas = byId.get(x.id) ?? [];
       const anc = shas.map((s) => s ? isAnc(s, sha2) : void 0);
       if (!shas.length || anc.includes(void 0) || anc.every(Boolean)) continue;
       const now = rank((await d.board.get(x.id)).fields.shipped);
-      if (now < rank(target) || now >= next) continue;
+      if (now < rank(target) || now >= next2) continue;
       await d.board.set(x.id, "shipped", back);
       changed.push(x.id);
     }
@@ -11274,8 +11327,8 @@ function packageRoot(env = process.env) {
   }
   return d;
 }
-function missingBindingKeys(template, binding) {
-  const t = (0, import_yaml5.parse)(template), b = (0, import_yaml5.parse)(binding);
+function missingBindingKeys(template2, binding) {
+  const t = (0, import_yaml5.parse)(template2), b = (0, import_yaml5.parse)(binding);
   const isMap = (x) => !!x && typeof x === "object" && !Array.isArray(x);
   if (!isMap(t) || !isMap(b)) return [];
   const out = [];
@@ -11304,9 +11357,9 @@ function registerMcp(pkg, root, force, log, upgrade) {
     return;
   }
   doc.mcpServers = { ...doc.mcpServers, ...want.mcpServers };
-  const next = JSON.stringify(doc, null, 2) + "\n";
+  const next2 = JSON.stringify(doc, null, 2) + "\n";
   mkdirSync4(dirname4(file), { recursive: true });
-  writeFileSync4(file, next);
+  writeFileSync4(file, next2);
   log.push(`wrote ${rel}`);
 }
 function pinCli(inst, version3, ref, force) {
@@ -11508,12 +11561,12 @@ async function init(root, argv, log) {
   const agents = join10(root, "AGENTS.md");
   const cur = existsSync8(agents) ? readFileSync9(agents, "utf8") : "";
   const s = cur.indexOf(START), e = cur.indexOf(END);
-  const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, "\n\n") : "") + POINTER + "\n";
-  const agentsChanged = next !== cur && !upgrade;
+  const next2 = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, "\n\n") : "") + POINTER + "\n";
+  const agentsChanged = next2 !== cur && !upgrade;
   if (agentsChanged) {
-    writeFileSync4(agents, next);
+    writeFileSync4(agents, next2);
     log.push("updated AGENTS.md");
-  } else if (next !== cur) log.push("kept AGENTS.md: its agentic-sdlc block differs from this release; update it in a product change");
+  } else if (next2 !== cur) log.push("kept AGENTS.md: its agentic-sdlc block differs from this release; update it in a product change");
   claudeSetup(root, inst, log, noPlugin, upgrade);
   inst.finish();
   const missing = missingKeysLine(missingBindingKeys(readFileSync9(need(pkg, "templates/binding.yml"), "utf8"), readFileSync9(bindingFile, "utf8")));
@@ -11962,6 +12015,285 @@ ${END}`;
   }
 });
 
+// src/next.ts
+var next_exports = {};
+__export(next_exports, {
+  cli: () => cli9,
+  holdsFor: () => holdsFor,
+  next: () => next,
+  readRoutes: () => readRoutes,
+  template: () => template
+});
+import { existsSync as existsSync9, readFileSync as readFileSync10 } from "fs";
+import { join as join11 } from "path";
+import { parseArgs as parseArgs4 } from "util";
+function readRoutes(root) {
+  const installed = join11(root, ".agents", "skills", "sdlc", "routes.yml");
+  const file = existsSync9(installed) ? installed : new URL("../skills/sdlc/routes.yml", import.meta.url);
+  return (0, import_yaml6.parse)(readFileSync10(file, "utf8"));
+}
+function template(s, b, id = "") {
+  if (s === void 0 || s === null) return void 0;
+  let missing = false;
+  const out = String(s).replace(/\{\$([\w.-]+)\}|\{id\}/g, (_m, p) => {
+    if (!p) return id;
+    const v = valueAt(b, p);
+    if (v === void 0 || v === null || v === "") missing = true;
+    return String(v);
+  });
+  return missing ? void 0 : out;
+}
+function holdsFor(c, t, s) {
+  return Object.entries(c).every(([k, v]) => {
+    switch (k) {
+      case "step":
+      case "group":
+        return true;
+      case "status":
+        return [v].flat().includes(t.status);
+      case "label": {
+        const l = template(v, s.b, t.id);
+        return l !== void 0 && t.labels.includes(l);
+      }
+      case "children":
+        return v === "none" ? !t.children.length : v === "some" ? t.children.length > 0 : v === "all-closed" ? t.children.length > 0 && t.children.every((x) => closed(s, x)) : false;
+      case "blocked":
+        return blockers(t.body).some((x) => !closed(s, x)) === v;
+      case "cr": {
+        const crs = s.crsOf.get(t.id) ?? [];
+        return v === "none" ? !crs.length : v === "open" ? crs.length > 0 : v === "by-person" ? crs.some((x) => byPerson(s, x)) : false;
+      }
+      case "no_open_title": {
+        const title = template(v, s.b, t.id);
+        return title !== void 0 && !s.items.some((i) => i.title === title);
+      }
+      case "not":
+        return !holdsFor(v, t, s);
+      default: {
+        const f = t.fields[k] ?? t[k];
+        return v === "set" ? !!f : v === "unset" ? !f : f !== void 0 && f === template(v, s.b, t.id);
+      }
+    }
+  });
+}
+async function next(d) {
+  const { b, board } = d;
+  const now = d.now ?? Date.now();
+  const routes = d.routes ?? readRoutes(d.root);
+  const errors = [];
+  const hbTicket = b.heartbeat?.ticket;
+  const human = b.board.labels?.human;
+  const read = async (what, f) => {
+    try {
+      return await f();
+    } catch (e) {
+      errors.push({ step: "next", msg: `${what}: ${e.message}` });
+      return void 0;
+    }
+  };
+  const items = (await board.list({})).filter((i) => i.id !== hbTicket);
+  const statusOf = new Map(items.map((i) => [i.id, i.status]));
+  const deep = new Set(routes.tickets.filter((r) => r.children !== void 0 || r.blocked !== void 0).flatMap((r) => [r.status].flat()));
+  for (const [n, t] of items.entries()) if (deep.has(t.status)) items[n] = await read(`board get ${t.id}`, () => board.get(t.id)) ?? t;
+  for (const id of new Set(items.flatMap((t) => [...t.children, ...blockers(t.body)]))) {
+    if (!statusOf.has(id)) {
+      const got = await read(`board get ${id}`, () => board.get(id));
+      if (got) statusOf.set(id, got.status);
+    }
+  }
+  const holds2 = await read("board holds", async () => (await Promise.resolve().then(() => (init_board(), board_exports))).holds(board, b)) ?? [];
+  const released = new Set(holds2.filter((h) => h.replied).map((h) => h.id));
+  const crsOf = /* @__PURE__ */ new Map();
+  let rows = [];
+  const crs = [];
+  const said = /* @__PURE__ */ new Map();
+  if (d.forge) {
+    const f = d.forge;
+    const listed = await read("forge list", () => f.list({ state: "open", checks: true }));
+    if (listed) {
+      crs.push(...listed);
+      for (const cr of listed) for (const id of cr.closes) crsOf.set(id, [...crsOf.get(id) ?? [], cr]);
+      const port = { ...f, list: async () => listed, comments: (n) => {
+        if (!said.has(n)) said.set(n, f.comments(n));
+        return said.get(n);
+      } };
+      const ticket = async (id) => items.find((i) => i.id === id) ?? board.get(id);
+      rows = await read("forge queue", () => queue(
+        port,
+        b,
+        d.classOf ?? (async () => ({ class: "guardrail", who: [] })),
+        now,
+        async (id) => !(b.board.done_statuses ?? []).includes((await ticket(id)).status),
+        async (id) => !!human && (await ticket(id)).labels.includes(human)
+      )) ?? [];
+      for (const r of rows) if (r.release && r.ticket) released.add(r.ticket);
+    }
+  }
+  const o = ownersFor(b.owners, "board");
+  const comments = hbTicket ? await read("ledger", () => readLedger(board, hbTicket, o.bots, [...o.product, ...o.factory])) : void 0;
+  const all = comments ? flattenRuns(comments) : [];
+  const learning = comments ? learningState(comments, b.learning?.every_cycles, b.learning?.enabled === true) : { due: false, judge: false };
+  const spend = new Map(ticketUse(all, b.cycle?.max_tokens_per_ticket).tickets.filter((t) => t.overBudget).map((t) => [t.ticket, t]));
+  const exhausted = b.product?.slo ? (await read("ledger measures", async () => errorBudget(await board.list({ state: "all" }), b, now)))?.exhausted === true : false;
+  const s = { b, items, statusOf, crsOf, bots: new Set(ownersFor(b.owners, "forge").bots.map((x) => x.toLowerCase())) };
+  const trusted = new Set(Object.values(ownersFor(b.owners, "forge")).flat().map((x) => x.toLowerCase()));
+  const groups = /* @__PURE__ */ new Map();
+  const push = (g, w) => {
+    if (g) groups.set(g, [...groups.get(g) ?? [], w]);
+  };
+  const fromQueue = async (q, ticket) => {
+    const act = routes.crs[q.action];
+    const cr = crs.find((c) => c.n === q.n);
+    if (!act?.step || !ticket && act.no_ticket === false) return;
+    let step = act.step, head2;
+    if (act.by_person && cr && byPerson(s, cr)) {
+      step = act.by_person;
+      head2 = cr.headSha;
+      const cs = await read(`forge comments ${q.n}`, () => said.get(q.n) ?? d.forge.comments(q.n)) ?? [];
+      if (cs.some((c) => trusted.has(String(c.author).toLowerCase()) && isMarked(c.body, step, head2))) return;
+    }
+    push(act.group, { step, ...ticket ? { ticket } : {}, cr: q.n, ...head2 ? { head: head2 } : {}, reason: `CR ${q.n}: ${q.action}: ${q.reason}${q.action === "escalate" ? `; reworks ${q.reworks}` : ""}` });
+  };
+  for (const t of items) {
+    if (human && t.labels.includes(human) && !released.has(t.id)) continue;
+    const row = routes.tickets.find((r) => holdsFor(r, t, s));
+    if (!row?.step) continue;
+    if (row.step === "queue") {
+      const q = rows.find((r) => r.n === (crsOf.get(t.id) ?? [])[0]?.n);
+      if (q) await fromQueue(q, t.id);
+    } else push(row.group, { step: row.step, ticket: t.id, reason: describe(t, row) });
+  }
+  for (const q of rows) if (!q.ticket) await fromQueue(q);
+  const judged = () => {
+    if (!learning.judge || !comments) return [];
+    const beats = comments.filter((c) => parseHeartbeat(c.body));
+    const last = beats.findIndex((c) => (parseHeartbeat(c.body).runs ?? []).some((r) => r.skill === "learn/judge"));
+    const window = new Set(last < 0 ? beats : beats.slice(0, last + 1));
+    return flattenRuns(comments.filter((c) => !parseHeartbeat(c.body) || window.has(c))).filter((r) => r.skill !== "learn/judge" && r.score === void 0 && r.scores?.["done-conditions"] === void 0);
+  };
+  const item = (id) => items.find((i) => i.id === id);
+  const unblocks = new Set(items.flatMap((t) => blockers(t.body)));
+  const rank = (w, k) => {
+    const t = item(w.ticket);
+    if (!t) return 0;
+    if (typeof k === "object") {
+      const l = template(k.label, b, t.id);
+      return l !== void 0 && t.labels.includes(l) ? 0 : 1;
+    }
+    if (k === "priority") {
+      const i = (b.priorities ?? []).indexOf(t.fields.priority ?? "");
+      return i < 0 ? Infinity : i;
+    }
+    if (k === "unblocks") return unblocks.has(t.id) ? 0 : 1;
+    if (k === "oldest") return Date.parse(t.createdAt) || 0;
+    return 0;
+  };
+  const ordered = [];
+  for (const g of routes.groups) {
+    let list = g.from === "unscored-runs" ? judged().map((r) => ({ step: g.step, ticket: r.ticket || hbTicket, ...r.cr ? { cr: r.cr } : {}, run: r.id, runModel: r.model, reason: `run ${r.id} has no score` })) : g.from === "learning-due" ? learning.due ? [{ step: g.step, reason: "learning.due" }] : [] : [...groups.get(g.name) ?? []];
+    if (g.sort) {
+      const keys = g.sort;
+      list = list.map((w, i) => ({ w, i })).sort((x, y) => {
+        for (const k of keys) {
+          const c = rank(x.w, k) - rank(y.w, k);
+          if (c) return c;
+        }
+        return x.i - y.i;
+      }).map((x) => x.w);
+    }
+    const skip = exhausted && g.skip_when_budget_exhausted ? template(g.skip_when_budget_exhausted, b) : void 0;
+    if (skip) list = list.filter((w) => !item(w.ticket)?.labels.includes(skip));
+    if (g.cap !== void 0) list = list.slice(0, Math.max(0, Number(template(g.cap, b) ?? Infinity)));
+    if (g.fill) list = list.slice(0, Math.max(0, Number(template(g.fill.to, b) ?? 0) - items.filter((i) => i.status === g.fill.status).length));
+    ordered.push(...list);
+  }
+  const navigator = new Set(routes.navigator ?? []);
+  const limit = Number(b.cycle?.failure_limit) || 0;
+  const cycles = (comments ?? []).map((c) => parseHeartbeat(c.body)).filter((hb) => hb && (hb.kind ?? "cycle") === "cycle").slice(0, limit);
+  const head = limit && cycles.length === limit && routes.guards?.repeat ? await read("vcs head", async () => d.head ? d.head() : void 0) : void 0;
+  const failed = (hb) => /* @__PURE__ */ new Set([...(hb.errors ?? []).map((e) => `${e.step}\0${e.id ?? ""}`), ...(hb.runs ?? []).filter((r) => r.outcome !== "done").map((r) => `${r.skill}\0${r.ticket || r.cr || ""}`)]);
+  const repeats = (w) => !!head && cycles.every((hb) => hb.factory === head && failed(hb).has(`${w.step}\0${w.ticket ?? w.cr ?? ""}`));
+  const guarded = ordered.map((w) => {
+    if (navigator.has(w.step)) return w;
+    const money = routes.guards?.over_budget, repeat = routes.guards?.repeat;
+    const use = w.ticket ? spend.get(w.ticket) : void 0;
+    if (money && use) return { step: money.step, ticket: w.ticket, trigger: money.trigger, reason: `${w.step} held back: ${use.tokens} tokens in ${use.runs} runs, over cycle.max_tokens_per_ticket` };
+    if (repeat && repeats(w)) return { step: w.ticket ? repeat.step : repeat.no_ticket ?? repeat.step, ...w.ticket ? { ticket: w.ticket } : {}, ...w.cr ? { cr: w.cr } : {}, trigger: repeat.trigger, reason: `${w.step} failed in each of the last ${limit} heartbeats on this factory` };
+    return w;
+  });
+  const cap = Number(b.parallel_agents) > 0 ? Number(b.parallel_agents) : Infinity;
+  const work = [], later = [];
+  for (const w of guarded) (navigator.has(w.step) || work.filter((x) => !navigator.has(x.step)).length < cap ? work : later).push(w);
+  const release = [...released];
+  return { idle: !work.length && !later.length && !release.length && !errors.length, holds: release, work, later, errors, ...exhausted ? { budget: "exhausted" } : {} };
+}
+var import_yaml6, valueAt, blockers, closed, byPerson, describe, USAGE4, cli9;
+var init_next = __esm({
+  "src/next.ts"() {
+    "use strict";
+    import_yaml6 = __toESM(require_dist(), 1);
+    init_ports();
+    init_comments();
+    init_util();
+    init_flow();
+    init_ledger();
+    valueAt = (b, path) => path.split(".").reduce((v, k) => Array.isArray(v) && /^-?\d+$/.test(k) ? v.at(Number(k)) : v?.[k], b);
+    blockers = (body = "") => [...body.matchAll(/^Blocked by #?(\S+)\s*$/gim)].map((m) => m[1]);
+    closed = (s, id) => (s.b.board.done_statuses ?? []).includes(s.statusOf.get(id) ?? "");
+    byPerson = (s, cr) => !s.bots.has(String(cr.author).toLowerCase());
+    describe = (t, r) => [t.status, ...Object.entries(r).filter(([k]) => !["status", "step", "group"].includes(k)).map(([k, v]) => `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`)].join("; ");
+    USAGE4 = "usage: agentic-sdlc next [--ticket <id>] [--idle-exit]";
+    cli9 = async (argv, ctx) => {
+      let a;
+      try {
+        a = parseArgs4({ args: argv, options: { ticket: { type: "string" }, "idle-exit": { type: "boolean" } } });
+      } catch (e) {
+        console.error(`${flagError(e)}
+${USAGE4}`);
+        return 2;
+      }
+      try {
+        const b = ctx.binding;
+        const { createBoard: createBoard2 } = await Promise.resolve().then(() => (init_board(), board_exports));
+        const board = createBoard2({ ...ctx, options: b.board.options });
+        let forge, classOf;
+        const errors = [];
+        try {
+          const { createForge: createForge2 } = await Promise.resolve().then(() => (init_forge(), forge_exports));
+          forge = createForge2({ ...ctx, options: b.forge.options });
+          const { depsOf: depsOf2, approvalWho: approvalWho2 } = await Promise.resolve().then(() => (init_gates(), gates_exports));
+          const gd = depsOf2(ctx);
+          classOf = (cr) => approvalWho2(gd, cr);
+        } catch (e) {
+          errors.push({ step: "next", msg: `forge: ${e.message}` });
+        }
+        const out = await next({ b, root: ctx.root, board, forge, classOf, head: () => headSha(ctx) });
+        out.errors.unshift(...errors);
+        out.idle &&= !errors.length;
+        const one = a.values.ticket;
+        if (one) {
+          const mine = (w) => w.ticket === one;
+          const res = { ...out, work: out.work.filter(mine), later: out.later.filter(mine), holds: out.holds.filter((h) => h === one) };
+          console.log(JSON.stringify(res, null, 2));
+          return 0;
+        }
+        if (a.values["idle-exit"] && out.idle) {
+          const o = ownersFor(b.owners, "board");
+          const comments = await readLedger(board, b.heartbeat.ticket, o.bots, [...o.product, ...o.factory]);
+          const heartbeat = await writeHeartbeat({ board, b, root: ctx.root, comments, factory: await headSha(ctx), next: out });
+          console.log(JSON.stringify({ ...out, heartbeat }, null, 2));
+          return 0;
+        }
+        console.log(JSON.stringify(out, null, 2));
+        return 0;
+      } catch (e) {
+        console.error(e.message);
+        return 1;
+      }
+    };
+  }
+});
+
 // src/mcp.ts
 var mcp_exports = {};
 __export(mcp_exports, {
@@ -11969,12 +12301,12 @@ __export(mcp_exports, {
   MODERN_VERSIONS: () => MODERN_VERSIONS,
   PROTOCOL_VERSIONS: () => PROTOCOL_VERSIONS,
   allowList: () => allowList,
-  cli: () => cli9,
+  cli: () => cli10,
   handle: () => handle
 });
-import { mkdtempSync as mkdtempSync4, readFileSync as readFileSync10, rmSync as rmSync4, writeFileSync as writeFileSync5 } from "fs";
+import { mkdtempSync as mkdtempSync4, readFileSync as readFileSync11, rmSync as rmSync4, writeFileSync as writeFileSync5 } from "fs";
 import { tmpdir as tmpdir4 } from "os";
-import { join as join11 } from "path";
+import { join as join12 } from "path";
 import { createInterface } from "readline";
 function allowList(arg) {
   const out = /* @__PURE__ */ new Set();
@@ -12038,13 +12370,13 @@ async function callTool(name, args, ctx, allow) {
   }
   let dir;
   if (s.body) {
-    dir = mkdtempSync4(join11(tmpdir4(), "agentic-sdlc-mcp-"));
-    writeFileSync5(join11(dir, "body.md"), String(args.body));
-    argv.push("--body-file", join11(dir, "body.md"));
+    dir = mkdtempSync4(join12(tmpdir4(), "agentic-sdlc-mcp-"));
+    writeFileSync5(join12(dir, "body.md"), String(args.body));
+    argv.push("--body-file", join12(dir, "body.md"));
   }
   try {
-    const { cli: cli10 } = await MODULES[s.group]();
-    const r = await capture(() => cli10(argv, ctx));
+    const { cli: cli11 } = await MODULES[s.group]();
+    const r = await capture(() => cli11(argv, ctx));
     if (r.code === 0) {
       let structured;
       try {
@@ -12110,7 +12442,7 @@ async function handle(msg, ctx, allow = /* @__PURE__ */ new Set()) {
       return err(-32601, `method not found: ${msg.method}`);
   }
 }
-var MODULES, S, TOOLS, GUARDED, served, PROTOCOL_VERSIONS, MODERN_VERSIONS, META, SERVER_INFO, READ, DESTRUCTIVE, IDEMPOTENT, LOCAL, annotations, schema, wire, queue2, realWrite, version, isModern, cli9;
+var MODULES, S, TOOLS, GUARDED, served, PROTOCOL_VERSIONS, MODERN_VERSIONS, META, SERVER_INFO, READ, DESTRUCTIVE, IDEMPOTENT, LOCAL, annotations, schema, wire, queue2, realWrite, version, isModern, cli10;
 var init_mcp = __esm({
   "src/mcp.ts"() {
     "use strict";
@@ -12242,12 +12574,12 @@ var init_mcp = __esm({
     wire = (k) => "--" + k.replace(/_/g, "-");
     queue2 = Promise.resolve();
     realWrite = process.stdout.write.bind(process.stdout);
-    version = () => JSON.parse(readFileSync10(new URL("../package.json", import.meta.url), "utf8")).version;
+    version = () => JSON.parse(readFileSync11(new URL("../package.json", import.meta.url), "utf8")).version;
     isModern = (msg) => {
       const m = msg.params?._meta;
       return m !== null && typeof m === "object" && (`${META}protocolVersion` in m || `${META}clientCapabilities` in m);
     };
-    cli9 = async (argv, ctx) => {
+    cli10 = async (argv, ctx) => {
       if (argv.includes("--help") || argv.includes("-h")) {
         console.log(`usage: agentic-sdlc mcp [--allow approve,status]
   JSON-RPC over stdio, one message per line.
@@ -12287,7 +12619,7 @@ var init_mcp = __esm({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync11 } from "fs";
+import { readFileSync as readFileSync12 } from "fs";
 async function main(argv, env = process.env) {
   let root = process.cwd();
   const args = [...argv];
@@ -12320,14 +12652,14 @@ ${help()}`);
     return 2;
   }
   const entry = GROUPS[group];
-  const usage = `usage: agentic-sdlc ${group} ${group === "init" ? INIT_FLAGS2 : entry[1] ? "<verb> ..." : ""}
+  const usage = `usage: agentic-sdlc ${group} ${group === "init" ? INIT_FLAGS2 : entry[1] && group !== "next" ? "<verb> ..." : ""}
   ${entry[2]}`;
   const isHelp = (a) => a === "--help" || a === "-h";
   if (isHelp(rest[0]) || entry[1] && isHelp(rest[1])) {
     console.log(usage);
     return 0;
   }
-  if (!rest.length && entry[1] && group !== "mcp") {
+  if (!rest.length && entry[1] && group !== "mcp" && group !== "next") {
     console.error(usage);
     return 2;
   }
@@ -12337,8 +12669,8 @@ ${help()}`);
     Object.defineProperty(ctx, "binding", { enumerable: true, get: () => b ??= loadBinding(root) });
   }
   try {
-    const { cli: cli10 } = await entry[0]();
-    return await cli10(entry[1] ? rest : [group, ...rest], ctx);
+    const { cli: cli11 } = await entry[0]();
+    return await cli11(entry[1] ? rest : [group, ...rest], ctx);
   } catch (e) {
     console.error(e.message);
     return 1;
@@ -12359,14 +12691,15 @@ var init_cli = __esm({
       vcs: [() => Promise.resolve().then(() => (init_vcs(), vcs_exports)), true, "start head changed base push cut tag tags drop checkout-tests"],
       dispatch: [() => Promise.resolve().then(() => (init_dispatch(), dispatch_exports)), true, "dispatch <skill>[/<step>] --ticket <id> | --cr <n> [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]: start the step on its executor"],
       gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red signal skill-regression review provenance"],
-      ledger: [() => Promise.resolve().then(() => (init_ledger(), ledger_exports)), true, "runs summary plan record stale hash measures: the run ledger from heartbeats"],
+      next: [() => Promise.resolve().then(() => (init_next(), next_exports)), true, "[--ticket <id>] [--idle-exit]: the cycle's work in order, from the board, holds, forge queue and ledger"],
+      ledger: [() => Promise.resolve().then(() => (init_ledger(), ledger_exports)), true, "runs summary plan record stale hash measures heartbeat: the run ledger from heartbeats"],
       bench: [() => Promise.resolve().then(() => (init_bench(), bench_exports)), true, "build propose run report compare"],
       mcp: [() => Promise.resolve().then(() => (init_mcp(), mcp_exports)), true, "serve the port verbs as MCP tools over stdio; --allow approve,status"]
     };
     INIT_FLAGS2 = "[--profile individual|organization] [--harness claude] [--board github-issues|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]";
     version2 = () => {
       try {
-        return JSON.parse(readFileSync11(new URL("../package.json", import.meta.url), "utf8")).version;
+        return JSON.parse(readFileSync12(new URL("../package.json", import.meta.url), "utf8")).version;
       } catch {
         return "unknown";
       }
