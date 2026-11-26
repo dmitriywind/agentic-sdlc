@@ -12,9 +12,8 @@ You can change every answer later.
 
 | `profile` | Pick it when | Agents run on | Identities |
 |---|---|---|---|
-| `individual` | One person or a small team on agent subscriptions. | Subscriptions only. No API key. | One (default) |
-| `individual-api` | As individual, plus some stages on managed agents or bots. | Subscriptions, plus API keys for those stages. | One (default), or two |
-| `organization` | A team that pays per use and wants runs owned by service accounts. | API keys and managed agents. | Two (required) |
+| `individual` | One person on a Claude subscription. | Claude Code on the subscription. No API key. | One (default) |
+| `organization` | You want a separate review account that no implementer holds. | Claude Code on the subscription. No API key. | Two (required) |
 
 </details>
 
@@ -38,10 +37,8 @@ You can change every answer later.
 | Runtime | Pick it when | Limits |
 |---|---|---|
 | Claude cloud routine | No machine of your own; subscription usage. | Board: GitHub issues (a GitHub Project can show them through org issue fields). Docker available; `commands.verify` still runs in CI as the gate. At most hourly. |
-| Codex or Cursor cloud task | You use Codex or Cursor. | See [docs/ecosystems](../ecosystems/codex.md). |
-| GitHub Actions | You want the cycle in your repo's CI. | A subscription token or an API key in a secret. Hosted runners: $12 of compute a month on Free (about 2,000 minutes); a self-hosted runner is free. A `setup-token` lasts one year. |
+| GitHub Actions | You want the cycle in your repo's CI. | A subscription token (`CLAUDE_CODE_OAUTH_TOKEN`) in a secret. Hosted runners: $12 of compute a month on Free (about 2,000 minutes); a self-hosted runner is free. A `setup-token` lasts one year. |
 | Your own machine | Code, tools or a network only your machine reaches. | No sandbox: opt in with `sandbox: local` and `AGENTIC_SDLC_LOCAL=1`. The machine must be on. |
-| Managed agents | `individual-api` or `organization`. | API billing. |
 
 </details>
 

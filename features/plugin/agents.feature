@@ -54,4 +54,3 @@ Feature: The Claude Code plugin ships a subagent per tier and a reviewer
         | agents         |
         | hooks          |
         | .claude-plugin |
-        | mcp.json       |

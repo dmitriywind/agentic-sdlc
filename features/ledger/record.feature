@@ -144,6 +144,4 @@ Feature: Planning and recording the scores of a run
       Examples:
         | command                       | message                           |
         | ledger runs --since           | --since needs a value             |
-        | ledger export --format xml    | --format must be otlp or cdevents |
-        | ledger export                 | --format must be otlp or cdevents |
         | ledger runs --bogus x         | unknown flag --bogus              |

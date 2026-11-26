@@ -9,7 +9,7 @@ The `local` board is a file, `.agents/board.json`. No board account and no forge
 
 ```bash
 mkdir try-agentic && cd try-agentic && git init -b main
-npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --board local --forge github --harness generic
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --board local --forge github --no-plugin
 printf 'Show a greeting on the home page.\n' > body.md
 .agents/bin/agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog
 .agents/bin/agentic-sdlc dispatch plan/shape --ticket 2
@@ -42,8 +42,7 @@ install it.
    `product.delivery` and `models`. `.agents/bin/agentic-sdlc validate` names every key still missing.
    It also warns, per `paths.*` file key, when the named file is missing: the skills then read nothing there.
    The Claude Code plugin also brings a subagent per tier, a `sdlc-reviewer` that can only read files and
-   run `agentic-sdlc` commands, and `agentic-sdlc` itself on the Bash path. Codex and Cursor can install
-   the package as a plugin for the skills and the MCP server.
+   run `agentic-sdlc` commands, and `agentic-sdlc` itself on the Bash path.
 3. **Write the two docs** the skills judge every ticket against: `paths.importance_doc` (what
    matters) and `paths.guiding_narrative` (where the product goes). Without them, product questions
    become holds.

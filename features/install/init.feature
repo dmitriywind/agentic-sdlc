@@ -90,7 +90,6 @@ Feature: Init installs the factory
       Examples:
         | profile        |
         | individual     |
-        | individual-api |
 
   Rule: Init for Claude Code writes tier subagents and one import of AGENTS.md
 
@@ -115,18 +114,6 @@ Feature: Init installs the factory
         | flag    | command                  |
         |         | mine                     |
         | --force | .agents/bin/agentic-sdlc |
-
-  Rule: Init for other harnesses writes their MCP file
-
-    Scenario: Init for Cursor writes .cursor/mcp.json; init for Codex appends the TOML table once and keeps the file's other settings
-      Given the project has the file ".codex/config.toml" holding "model = \"x\"\n"
-      And I run the install command "init --harness cursor"
-      And I run the install command "init --harness codex"
-      When I run the install command "init --harness codex"
-      Then the installed file ".codex/config.toml" matches "^model = \"x\""
-      And the installed file ".codex/config.toml" contains "[mcp_servers.agentic-sdlc]" exactly 1 times
-      And the installed file ".codex/config.toml" contains "command = \".agents/bin/agentic-sdlc\"\nargs = [\"mcp\"]"
-      And the installed file ".cursor/mcp.json" sets "mcpServers.agentic-sdlc.command" to ".agents/bin/agentic-sdlc"
 
   Rule: Init reads the project
 
@@ -153,9 +140,9 @@ Feature: Init installs the factory
 
   Rule: Init installs the dead-man workflow for every runtime
 
-    Scenario: The dead-man workflow is installed whatever the harness
+    Scenario: The dead-man workflow is installed
       Given the package ships the stock file "templates/gates/github/agentic-sdlc-dead-man.yml"
-      When I run the install command "init --harness codex"
+      When I run the install command "init"
       Then the installed file ".github/workflows/agentic-sdlc-dead-man.yml" matches "ledger stale --max-hours"
 
   Rule: Init writes the binding's commands into the verify workflow

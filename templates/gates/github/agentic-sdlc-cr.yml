@@ -49,10 +49,9 @@ jobs:
       checks: read
       statuses: write
     env:
-      # Secret names the binding's options point at: board token_env. The forge token is this job's own GITHUB_TOKEN. No review token here.
+      # The forge token is this job's own GITHUB_TOKEN. No review token here.
       GH_TOKEN: ${{ github.token }}
       AGENTIC_FORGE_TOKEN: ${{ github.token }}
-      AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
       CR: ${{ github.event.pull_request.number }}
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
     steps:
@@ -104,7 +103,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
       AGENTIC_FORGE_TOKEN: ${{ github.token }}   # one identity posts human-approval with this job's token (pinned to Actions)
-      AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
       # Empty on a fork PR's review event: every step after checkout is then skipped.
       CR: ${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number }}
     steps:

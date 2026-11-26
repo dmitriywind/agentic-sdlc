@@ -1,10 +1,7 @@
-# Profile: individual or individual-api (subscription token) or organization (API key).
+# Profile: individual or organization, on the Claude subscription.
 # Install at: .github/workflows/factory-cycle-claude.yml
-# Secrets (set ONE auth secret; the API key outranks the token, so never set both — setup.sh refuses
-# ANTHROPIC_API_KEY when the binding's profile is individual or individual-api):
-#   individual, individual-api: CLAUDE_CODE_OAUTH_TOKEN  (create with `claude setup-token`)
-#   organization: ANTHROPIC_API_KEY
-# Also: AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN, and AGENTIC_REVIEW_TOKEN with two identities (the names your binding uses).
+# Secrets: CLAUDE_CODE_OAUTH_TOKEN (create with `claude setup-token`; never set ANTHROPIC_API_KEY: setup.sh refuses it),
+# AGENTIC_FORGE_TOKEN, and AGENTIC_REVIEW_TOKEN with two identities (the names your binding uses).
 # One identity (forge.review_identity empty): the cycle runs review/review itself; delete the `review` job.
 # Repo variable: AGENTIC_AGENT_CLI_VERSION (an exact Claude Code version); a job fails when it is unset.
 # The agentic-sdlc CLI is the pin in .agents/cli.json, run through .agents/bin/agentic-sdlc (it installs itself on first use).
@@ -52,18 +49,14 @@ jobs:
         run: |
           case "$AGENTIC_AGENT_CLI_VERSION" in ""|-*) echo "::error::set the repo variable AGENTIC_AGENT_CLI_VERSION to an exact Claude Code version"; exit 1 ;; esac
           npm i -g "@anthropic-ai/claude-code@$AGENTIC_AGENT_CLI_VERSION"
-      - name: Set up the runner   # also the ANTHROPIC_API_KEY guard for the individual profiles
+      - name: Set up the runner   # also the ANTHROPIC_API_KEY guard
         run: sh .agents/runner-setup.sh
         env:
-          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
           AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}              # organization; empty unless the secret exists
       - name: Run one cycle
         env:
-          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
           AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}  # individual
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}              # organization; empty unless the secret exists
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: >-
           claude -p "$(sed '1,/^---$/d' .agents/cycle-prompt.md)"
           --plugin-dir ".agents/.cli/$(node -p "require('./.agents/cli.json').ref")/node_modules/agentic-sdlc"
@@ -95,17 +88,13 @@ jobs:
       - name: Set up the runner
         run: sh .agents/runner-setup.sh
         env:
-          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
           AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
           AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}              # organization; empty unless the secret exists
       - name: Review open CRs
         env:
-          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
           AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN }}
           AGENTIC_REVIEW_TOKEN: ${{ secrets.AGENTIC_REVIEW_TOKEN }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}  # individual
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}              # organization; empty unless the secret exists
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: >-
           claude -p "$(sed '1,/^---$/d' .agents/review-prompt.md)"
           --plugin-dir ".agents/.cli/$(node -p "require('./.agents/cli.json').ref")/node_modules/agentic-sdlc"

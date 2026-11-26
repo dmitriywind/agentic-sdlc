@@ -1,13 +1,12 @@
-/* ---------- Choose your setup: eight answers in; the init command, the binding and the runner template out ---------- */
+/* ---------- Choose your setup: seven answers in; the init command, the binding and the runner template out ---------- */
 VIZ.setup = (el) => {
   const RUNNER = 'https://github.com/dmitriywind/agentic-sdlc/blob/master/templates/runner/';
   const KEY = 'agentic-sdlc-guide-setup';
   // [key, legend, hint, [[value, label, pick it when / limits]]]
   const Q = [
-    ['pays', 'Who pays for the agents?', 'Sets profile: the defaults init writes and what validate checks.', [
-      ['sub', 'Subscriptions only', 'Pick it when you or a small team run agents on subscriptions. Limits: no API key anywhere.'],
-      ['mix', 'Subscriptions + API keys for some stages', 'Pick it when most stages run on subscriptions and a few on managed agents or bots. Limits: each key is named in its executor.'],
-      ['api', 'API keys', 'Pick it when a team pays per use and runs belong to service accounts. Limits: a separate review app is required.']]],
+    ['pays', 'Profile', 'Sets profile: the defaults init writes and what validate checks. Both run Claude Code on your Claude subscription, never on an API key.', [
+      ['sub', 'Individual', 'Pick it when you run the factory as yourself. Limits: one identity by default.'],
+      ['api', 'Organization', 'Pick it when the review must come from an account no implementer holds. Limits: a separate review app is required.']]],
     ['ids', 'Forge identities', 'Sets forge.review_identity: whether the account that writes a change can also approve it.', [
       ['one', 'One (yours)', 'Pick it when you work alone or a collaborator can approve. Limits: the review is a separate agent context, not a separate account.'],
       ['two', 'Two (plus a review app)', 'Pick it when no implementer may approve its own change. Limits: a second scheduled run holds the review token.']]],
@@ -16,18 +15,11 @@ VIZ.setup = (el) => {
       ['many', 'Many repos, one board', 'Pick it when several repos share one backlog. Limits: each repo scopes the board; one home repo triages new work.']]],
     ['runs', 'Where the cycle runs', 'Picks the runner template. The gates run in CI whatever you pick.', [
       ['claude', 'Claude cloud routine', 'Pick it when you want no machine of your own, on subscription usage. Limits: no Docker (verify runs in CI), at most hourly.'],
-      ['vendor', 'Codex or Cursor cloud task', 'Pick it when your agent is Codex or Cursor and you want no machine of your own. Limits: the vendor\'s schedule and network rules.'],
-      ['actions', 'GitHub Actions', 'Pick it when you want the cycle in your repo\'s CI. Limits: a subscription token or an API key in a repo secret.'],
-      ['local', 'Your own machine', 'Pick it when the code, tools or network are reachable only from your machine. Limits: no sandbox; the machine must be on.'],
-      ['managed', 'Managed agents', 'Pick it when stages run as hosted agents. Limits: API billing.']]],
+      ['actions', 'GitHub Actions', 'Pick it when you want the cycle in your repo\'s CI. Limits: a subscription token (CLAUDE_CODE_OAUTH_TOKEN) in a repo secret.'],
+      ['local', 'Your own machine', 'Pick it when the code, tools or network are reachable only from your machine. Limits: no sandbox; the machine must be on.']]],
     ['board', 'Where tickets live', 'Sets board.adapter and its options. The process statuses are the same on every board.', [
       ['issues', 'GitHub issues', 'Pick it when the repo\'s issues are enough. Limits: status and fields are labels.'],
       ['local', 'A local file', 'Pick it to try the factory. Limits: one file, .agents/board.json; no scheduler, no shared board.']]],
-    ['agent', 'Which agent', 'Sets --harness: which agent\'s files init writes.', [
-      ['claude', 'Claude Code', 'Pick it when you run Claude Code. The plugin carries the skills, except on a Claude cloud routine.'],
-      ['codex', 'Codex', 'Pick it when you run Codex. It reads AGENTS.md and .agents/skills/.'],
-      ['cursor', 'Cursor', 'Pick it when you run Cursor. It reads AGENTS.md and .agents/skills/.'],
-      ['other', 'Another agent', 'Pick it when your agent reads AGENTS.md and .agents/skills/. Limits: no vendor cloud here.']]],
     ['team', 'Team shape', 'Sets owners and forge.human_approval.', [
       ['solo', 'Solo', 'You are product, factory and bot. Limits: with one identity you merge Full-lane changes as admin.'],
       ['small', 'Small team', 'The lead owns the product, a second engineer the factory. A second person approves Full-lane changes.'],
@@ -41,16 +33,13 @@ VIZ.setup = (el) => {
       ['data', 'Data or ML pipeline', 'Every merge deploys; proofs are evals and data checks.'],
       ['docs', 'Docs site', 'Every merge publishes; proofs are visual and manual checks.']]],
   ];
-  const DEF = { pays: 'sub', ids: 'one', repos: 'one', runs: 'claude', board: 'issues', agent: 'claude', team: 'solo', ship: 'webcd' };
+  const DEF = { pays: 'sub', ids: 'one', repos: 'one', runs: 'claude', board: 'issues', team: 'solo', ship: 'webcd' };
   const label = (k, v) => Q.find((q) => q[0] === k)[3].find((o) => o[0] === v)[1];
-  const profileOf = (p) => ({ sub: 'individual', mix: 'individual-api', api: 'organization' })[p.pays];
+  const profileOf = (p) => ({ sub: 'individual', api: 'organization' })[p.pays];
   // Why an option cannot be picked with the other answers, or '' when it can.
   function why(k, v, p) {
     const prof = profileOf(p);
     if (k === 'ids' && v === 'one' && prof === 'organization') return 'organization needs a separate review app';
-    if (k === 'runs' && v === 'managed' && prof === 'individual') return 'needs API keys (individual-api or organization)';
-    if (k === 'runs' && v === 'claude' && p.agent !== 'claude') return 'needs agent Claude Code';
-    if (k === 'runs' && v === 'vendor' && !['codex', 'cursor'].includes(p.agent)) return 'needs agent Codex or Cursor';
     if (k === 'board' && v === 'local' && p.repos === 'many') return 'a file in one repo cannot be shared';
     return '';
   }
@@ -145,10 +134,9 @@ VIZ.setup = (el) => {
 
   function output(prof) {
     const p = pick;
-    const harness = { claude: 'claude', codex: 'codex', cursor: 'cursor', other: 'generic' }[p.agent];
     const board = { issues: 'github-issues', local: 'local' }[p.board];
-    const cmd = ['npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init', '--profile ' + prof, '--harness ' + harness, '--board ' + board, '--forge github']
-      .concat(p.agent === 'claude' && p.runs === 'claude' ? ['--no-plugin'] : []);
+    const cmd = ['npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init', '--profile ' + prof, '--board ' + board, '--forge github']
+      .concat(p.runs === 'claude' ? ['--no-plugin'] : []);
 
     const owners = {
       solo: ['your-login', 'your-login', 'your-login'],
@@ -167,7 +155,7 @@ VIZ.setup = (el) => {
     }[p.ship];
     const y = ['profile: ' + prof, 'owners:', '  product: ' + owners[0], '  factory: ' + owners[1], '  bots: [' + owners[2] + ']'];
     // forge: token_env only where gh has no login of its own, or to keep the implementer off commit statuses.
-    const forgeToken = p.ids === 'two' || ['vendor', 'actions', 'managed'].includes(p.runs);
+    const forgeToken = p.ids === 'two' || p.runs === 'actions';
     y.push('forge:', '  adapter: github', '  options:', '    repo: your-org/your-repo');
     if (forgeToken) y.push('    token_env: AGENTIC_FORGE_TOKEN' + (p.ids === 'two' ? '   # Commit statuses: no access' : ''));
     if (p.ids === 'two') y.push('    review_token_env: AGENTIC_REVIEW_TOKEN', '  review_identity: your-review-app[bot]');
@@ -183,18 +171,14 @@ VIZ.setup = (el) => {
     y.push('  env_labels: [' + ship[0].slice(1, -1).split(', ').map((e) => 'env:' + e).join(', ') + ']   # one per product.environments');
     y.push('product:', '  environments: ' + ship[0], '  delivery: ' + ship[1], '  proofs: ' + ship[2]);
     y.push('executors:', '  default:', '    kind: harness', '    sandbox: ' + (p.runs === 'local' ? 'local' : prof === 'organization' ? 'container' : 'cloud'));
-    if (prof === 'organization') y.push('  # validate warns until one stage runs on a managed agent, for example:', '  # build: { kind: managed, api: claude, agent_env: IMPL_AGENT_ID, environment_env: IMPL_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }');
 
-    const tpl = p.runs === 'local' ? 'local.md' : p.runs === 'actions' ? (p.agent === 'codex' ? 'github-actions-codex.yml' : 'github-actions-claude.yml')
-      : p.runs === 'claude' ? 'claude-routine.md' : p.runs === 'vendor' && p.agent === 'cursor' ? 'cursor-automation.md' : 'routine.md';
+    const tpl = p.runs === 'local' ? 'local.md' : p.runs === 'actions' ? 'github-actions-claude.yml' : 'claude-routine.md';
 
     const warn = [], note = [], ok = [];
     note.push(...moved);
     if (p.board === 'local' && p.runs !== 'local') warn.push('The local board is a file for trying the factory, not for a scheduler or many repos. Pick a shared board before you schedule the cycle.');
     if (p.runs === 'local') note.push('On your own machine: run the cycle in a separate clone, with AGENTIC_SDLC_UNATTENDED=1 and AGENTIC_SDLC_LOCAL=1 in the scheduler\'s environment. Agents run with your account and files.');
-    if (p.runs === 'actions' && (p.agent === 'cursor' || p.agent === 'other')) note.push('The Actions template runs Claude Code. Replace its agent step with ' + (p.agent === 'cursor' ? 'Cursor\'s CLI' : 'your agent') + '.');
-    if (prof === 'individual') note.push('Under individual the runner refuses ANTHROPIC_API_KEY, so the cycle stays on the subscription.');
-    if (prof === 'individual-api') note.push('Under individual-api the runner refuses ANTHROPIC_API_KEY. Give a managed executor\'s key another name in its token_env.');
+    note.push('The runner refuses ANTHROPIC_API_KEY, so the cycle stays on the subscription.');
     if (p.ids === 'one') note.push('One identity: review/review runs in the cycle and CI posts the review status. A Full-lane change waits for a collaborator\'s approval or your admin merge.');
     else note.push('Two identities: schedule a second run with review-prompt.md. Only that run gets AGENTIC_REVIEW_TOKEN.');
     if (ship[1] === 'release-line') ok.push('Release-line delivery: the ship skill runs and you approve each release.');

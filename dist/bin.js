@@ -116,8 +116,8 @@ var require_visit = __commonJS({
     function visit(node, visitor) {
       const visitor_ = initVisitor(visitor);
       if (identity.isDocument(node)) {
-        const cd2 = visit_(null, node.contents, visitor_, Object.freeze([node]));
-        if (cd2 === REMOVE)
+        const cd = visit_(null, node.contents, visitor_, Object.freeze([node]));
+        if (cd === REMOVE)
           node.contents = null;
       } else
         visit_(null, node, visitor_, Object.freeze([]));
@@ -164,8 +164,8 @@ var require_visit = __commonJS({
     async function visitAsync(node, visitor) {
       const visitor_ = initVisitor(visitor);
       if (identity.isDocument(node)) {
-        const cd2 = await visitAsync_(null, node.contents, visitor_, Object.freeze([node]));
-        if (cd2 === REMOVE)
+        const cd = await visitAsync_(null, node.contents, visitor_, Object.freeze([node]));
+        if (cd === REMOVE)
           node.contents = null;
       } else
         await visitAsync_(null, node, visitor_, Object.freeze([]));
@@ -7494,7 +7494,6 @@ function validateBinding(b) {
   for (const [k, e] of Object.entries(x.executors ?? {})) {
     if (!EXECUTORS.includes(e?.kind)) p.push(`executors.${k}.kind '${e?.kind}' is not one of ${EXECUTORS.join("|")}`);
     for (const key of EXECUTOR_KEYS[e?.kind] ?? []) if (!e[key]) p.push(`executors.${k}.${key} is required for kind ${e.kind}`);
-    if (e?.kind === "managed" && e.api !== void 0 && !MANAGED_APIS.includes(e.api)) p.push(`executors.${k}.api '${e.api}' is not one of ${MANAGED_APIS.join("|")}`);
     for (const m of e?.mcps ?? []) if (!x.mcps?.[m]) p.push(`executors.${k}.mcps '${m}' is not in the binding's mcps`);
     for (const v of e?.secrets ?? []) if (!/^[A-Z_][A-Z0-9_]*$/.test(String(v))) p.push(`executors.${k}.secrets '${v}' is not an env var name`);
     for (const lk of ["max_turns", "max_tokens", "max_minutes"]) if (e?.[lk] !== void 0 && !(Number.isInteger(e[lk]) && e[lk] > 0)) p.push(`executors.${k}.${lk} must be a positive integer`);
@@ -7540,13 +7539,6 @@ function validateBinding(b) {
   if (x.learning?.enabled !== void 0 && typeof x.learning.enabled !== "boolean") p.push("learning.enabled must be true or false");
   for (const k of ["preview", "proofs_on_base", "evidence_check"]) if (x.commands?.[k] !== void 0 && typeof x.commands[k] !== "string") p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? "").includes("{run_id}")) p.push("traces.uri must contain {run_id}");
-  if (x.telemetry !== void 0) {
-    if (!x.telemetry || typeof x.telemetry !== "object" || Array.isArray(x.telemetry)) p.push("telemetry must be { otlp_endpoint_env, cdevents_sink_env, headers_env }");
-    else for (const [k, v] of Object.entries(x.telemetry)) {
-      if (!["otlp_endpoint_env", "cdevents_sink_env", "headers_env"].includes(k)) p.push(`telemetry.${k} is not a telemetry key (otlp_endpoint_env, cdevents_sink_env, headers_env)`);
-      else if (typeof v !== "string" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(v)) p.push(`telemetry.${k} must be the NAME of an env var, never a URL or a value`);
-    }
-  }
   if (x.executors && !x.executors.default) p.push("executors.default is missing");
   if (x.heartbeat && !String(x.heartbeat.ticket ?? "").trim()) p.push("heartbeat.ticket is empty: create the heartbeat ticket and put its id here");
   const lists = [["board.done_statuses", x.board?.done_statuses], ["board.env_labels", x.board?.env_labels], ["board.signal_streams", x.board?.signal_streams], ["forge.required_checks", x.forge?.required_checks]];
@@ -7556,12 +7548,6 @@ function validateBinding(b) {
   if (x.learning?.judge_tier !== void 0 && !TIERS.includes(x.learning.judge_tier)) p.push(`learning.judge_tier '${x.learning.judge_tier}' is not one of ${TIERS.join("|")}`);
   for (const c of x.learning?.auto_merge_classes ?? []) if (c !== "tuning") p.push(`learning.auto_merge_classes '${c}': only tuning may merge without the factory owner`);
   for (const [n, m] of Object.entries(x.mcps ?? {})) if (!m?.url === !m?.command) p.push(`mcps.${n} needs exactly one of url or command`);
-  for (const [k, e] of Object.entries(x.executors ?? {})) {
-    if (e?.kind !== "managed") continue;
-    const api = e.api ?? "generic";
-    const need3 = api === "claude" ? ["agent_env", "environment_env"] : api === "cursor" ? ["repo_url"] : api === "generic" ? ["endpoint_env"] : [];
-    for (const key of need3) if (!e[key]) p.push(`executors.${k}.${key} is required for a managed executor with api ${api}`);
-  }
   return p;
 }
 function bindingWarnings(b) {
@@ -7587,15 +7573,12 @@ function bindingWarnings(b) {
   if (x?.learning?.enabled === true && !x.agent_command) w.push("learning.enabled is true but agent_command is unset: bench cannot run");
   if (x?.learning?.budget_usd_per_week !== void 0) w.push("learning.budget_usd_per_week is unused; learning.enabled turns learning on; remove it");
   if (x?.profile === "individual") {
-    for (const [k, e] of Object.entries(x.executors ?? {}))
-      if (["managed", "webhook", "assign"].includes(e?.kind)) w.push(`executors.${k}: kind ${e.kind} needs an API or hosted agent; profile individual is subscriptions only: use individual-api`);
     const uri = x.traces?.uri;
     if (uri !== void 0 && !["./", ".agents/", "/"].some((q) => String(uri).startsWith(q)) && !/^[A-Za-z]:[\\/]/.test(String(uri))) w.push(`traces.uri '${uri}' is not a local path (./, .agents/ or absolute); individual profile has no org storage`);
   } else if (x?.profile === "organization") {
     const sb = x.executors?.default?.sandbox;
     if (!sb || sb === "local") w.push("executors.default.sandbox is local or unset: organization expects cloud or container");
     if (!x.traces) w.push("traces is unset: organization expects traces.uri on org storage");
-    if (!Object.values(x.executors ?? {}).some((e) => e?.kind === "managed")) w.push("no executor is kind managed: organization runs its stages on managed agents");
   }
   return w;
 }
@@ -7603,7 +7586,7 @@ function shippedOptions(envs, delivery = "release-line") {
   const inRelease = delivery === "release-line" && envs.length > 1;
   return ["Not shipped", ...envs.slice(0, -1).map((e) => `On ${e}`), ...inRelease ? ["In release"] : [], `On ${envs[envs.length - 1]}`];
 }
-var import_yaml, BINDING_PATH, ADAPTERS, OPTIONS, REQUIRED, PROOFS, EXECUTORS, EXECUTOR_KEYS, MANAGED_APIS, HUMAN_APPROVAL, SANDBOXES, PROFILES, DELIVERY, PROVENANCE, EVIDENCE, TIERS, STATUSES;
+var import_yaml, BINDING_PATH, ADAPTERS, OPTIONS, REQUIRED, PROOFS, EXECUTORS, EXECUTOR_KEYS, HUMAN_APPROVAL, SANDBOXES, PROFILES, DELIVERY, PROVENANCE, EVIDENCE, TIERS, STATUSES;
 var init_binding = __esm({
   "src/binding.ts"() {
     "use strict";
@@ -7649,12 +7632,11 @@ var init_binding = __esm({
       "executors"
     ];
     PROOFS = ["test", "eval", "visual", "data-check", "computer-use", "manual"];
-    EXECUTORS = ["harness", "command", "webhook", "managed", "assign"];
-    EXECUTOR_KEYS = { command: ["run"], webhook: ["url_env"], managed: ["token_env"], assign: ["user"] };
-    MANAGED_APIS = ["claude", "cursor", "antigravity", "generic"];
+    EXECUTORS = ["harness", "command"];
+    EXECUTOR_KEYS = { command: ["run"] };
     HUMAN_APPROVAL = ["full-lane", "always", "never"];
     SANDBOXES = ["cloud", "container", "local"];
-    PROFILES = ["individual", "individual-api", "organization"];
+    PROFILES = ["individual", "organization"];
     DELIVERY = ["release-line", "continuous"];
     PROVENANCE = ["off", "warn", "require"];
     EVIDENCE = ["sbom", "provenance", "signature"];
@@ -8390,7 +8372,7 @@ var init_board = __esm({
         }
         if (!Object.hasOwn(VERBS, verb)) throw new Usage(`unknown board verb '${verb}'`);
         const a = parseStrict("board", verb, rest, VERBS[verb]);
-        const need3 = (n) => {
+        const need2 = (n) => {
           if (a.pos.length < n) throw new Usage(`board ${verb}: missing argument`);
         };
         const req = (k) => a.need(k);
@@ -8403,7 +8385,7 @@ var init_board = __esm({
             out = await board.list({ status: a.all("status"), label: a.get("label"), search: a.get("search") });
             break;
           case "get":
-            need3(1);
+            need2(1);
             out = await board.get(id);
             break;
           case "create":
@@ -8417,24 +8399,24 @@ var init_board = __esm({
             });
             break;
           case "move":
-            need3(2);
+            need2(2);
             out = await board.move(id, a.pos[1], a.get("only-from"));
             break;
           case "set":
-            need3(a.has("clear") ? 2 : 3);
+            need2(a.has("clear") ? 2 : 3);
             out = await board.set(id, a.pos[1], a.has("clear") ? null : a.pos[2]);
             break;
           case "label":
-            need3(3);
+            need2(3);
             if (a.pos[1] !== "add" && a.pos[1] !== "remove") throw new Usage("label: add or remove");
             out = await board.label(id, a.pos[1], a.pos[2]);
             break;
           case "assign":
-            need3(a.has("none") ? 1 : 2);
+            need2(a.has("none") ? 1 : 2);
             out = await board.assign(id, a.has("none") ? null : a.pos[1]);
             break;
           case "comment": {
-            need3(1);
+            need2(1);
             if (a.has("ref") && !a.has("kind")) throw new Usage("board comment: --ref needs --kind");
             if (a.get("kind") === "heartbeat") {
               let f;
@@ -8448,18 +8430,18 @@ var init_board = __esm({
             break;
           }
           case "hold":
-            need3(1);
+            need2(1);
             out = await hold(board, base.binding, id, req("kind"), body());
             break;
           case "holds":
             out = await holds(board, base.binding);
             break;
           case "release":
-            need3(1);
+            need2(1);
             out = await board.label(id, "remove", base.binding.board.labels.human);
             break;
           case "comments": {
-            need3(1);
+            need2(1);
             if (a.has("kind") && a.has("marker")) throw new Usage("board comments: --kind and --marker together");
             if (a.has("ref") && !a.has("kind")) throw new Usage("board comments: --ref needs --kind");
             const marker = a.has("kind") ? matches(parseKind(a.get("kind")), a.get("ref"), { specMarker: base.binding.spec_marker }) : a.get("marker");
@@ -8473,19 +8455,19 @@ var init_board = __esm({
             break;
           }
           case "close": {
-            need3(1);
+            need2(1);
             const r = req("reason");
             if (r !== "completed" && r !== "not_planned") throw new Usage("--reason completed|not_planned");
             out = await board.close(id, r);
             break;
           }
           case "milestone":
-            need3(a.has("clear") ? 1 : 2);
+            need2(a.has("clear") ? 1 : 2);
             if (a.has("clear") && a.pos.length > 1) throw new Usage("board milestone: a name and --clear together");
             out = await board.milestone(id, a.has("clear") ? null : a.pos[1]);
             break;
           case "child":
-            need3(2);
+            need2(2);
             out = await board.child(id, a.pos[1]);
             break;
           default:
@@ -9009,236 +8991,6 @@ var init_skills = __esm({
   }
 });
 
-// src/telemetry.ts
-import { createHash as createHash2 } from "crypto";
-function otlpTraces(rows, meta, o) {
-  const cycles = /* @__PURE__ */ new Map();
-  for (const r of rows) {
-    const m = meta.get(r.id) ?? { key: r.at, at: r.at, kind: "cycle" };
-    const c = cycles.get(m.key) ?? { m, rows: [] };
-    c.rows.push(r);
-    cycles.set(m.key, c);
-  }
-  const spans = [...cycles.values()].sort((a, b) => a.m.at < b.m.at ? -1 : a.m.at > b.m.at ? 1 : a.m.key < b.m.key ? -1 : 1).flatMap(({ m, rows: rs }) => {
-    const trace = traceId(m.key);
-    const root = spanId(`cycle:${m.key}`);
-    rs = [...rs].sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : 1);
-    const times = rs.map((r) => {
-      const end = Date.parse(r.at);
-      return { start: end - (r.minutes ?? 0) * 6e4, end };
-    });
-    const cycleEnd = Math.max(Date.parse(m.at), ...times.map((t) => t.end));
-    const cycleStart = Math.min(cycleEnd, ...times.map((t) => t.start));
-    const out = [{
-      traceId: trace,
-      spanId: root,
-      name: `${GENAI.op.workflow} sdlc`,
-      kind: SPAN_KIND_INTERNAL,
-      startTimeUnixNano: nano(cycleStart),
-      endTimeUnixNano: nano(cycleEnd),
-      attributes: attrs({ [GENAI.attr.operation]: GENAI.op.workflow, [GENAI.attr.agentName]: "sdlc", [`${NS}.cycle.kind`]: m.kind, [`${NS}.factory`]: m.factory })
-    }];
-    rs.forEach((r, i) => {
-      const { start, end } = times[i];
-      const failed = r.outcome !== "done";
-      const scores = Object.entries(r.scores ?? {});
-      out.push({
-        traceId: trace,
-        spanId: spanId(`run:${r.id}`),
-        parentSpanId: root,
-        name: `${GENAI.op.agent} ${r.skill}`,
-        kind: SPAN_KIND_INTERNAL,
-        startTimeUnixNano: nano(start),
-        endTimeUnixNano: nano(end),
-        attributes: attrs({
-          [GENAI.attr.operation]: GENAI.op.agent,
-          [GENAI.attr.agentName]: r.skill,
-          [GENAI.attr.agentVersion]: r.skillHash,
-          [GENAI.attr.requestModel]: r.model,
-          ...failed ? { [GENAI.attr.errorType]: r.outcome } : {},
-          [`${NS}.run.id`]: r.id,
-          [`${NS}.ticket`]: r.ticket,
-          [`${NS}.cr`]: r.cr,
-          [`${NS}.tier`]: r.tier,
-          [`${NS}.executor`]: r.executor ?? "harness",
-          [`${NS}.ref`]: r.ref,
-          [`${NS}.tokens`]: r.tokens,
-          [`${NS}.minutes`]: r.minutes,
-          [`${NS}.outcome`]: r.outcome,
-          [`${NS}.score`]: r.score,
-          [`${NS}.trace`]: r.trace
-        }),
-        ...scores.length ? { events: scores.map(([name, v]) => ({
-          timeUnixNano: nano(end),
-          name: GENAI.event.evaluation,
-          attributes: attrs({ [GENAI.evalAttr.name]: name, ...typeof v === "number" ? { [GENAI.evalAttr.value]: v } : { [GENAI.evalAttr.label]: v } })
-        })) } : {},
-        ...failed ? { status: { code: STATUS_ERROR, ...r.error ? { message: r.error.slice(0, 200) } : {} } } : {}
-      });
-    });
-    return out;
-  });
-  return {
-    resourceSpans: [{
-      resource: { attributes: attrs({ "service.name": SCOPE_NAME, "service.version": o.version, [`${NS}.repo`]: o.repo }) },
-      scopeSpans: [{ scope: { name: SCOPE_NAME, version: o.version }, schemaUrl: GENAI.schemaUrl, spans }]
-    }]
-  };
-}
-function cdEventsFromRuns(rows, meta, b) {
-  const repo = repoRef(b);
-  const sorted = [...rows].sort((a, z) => a.at < z.at ? -1 : a.at > z.at ? 1 : a.id < z.id ? -1 : 1);
-  const out = [];
-  const created = /* @__PURE__ */ new Set();
-  for (const r of sorted) {
-    const cycle = meta.get(r.id)?.key;
-    out.push(cd(b, CDEVENTS.type.taskrunFinished, r.id, r.at, r.id, {
-      taskName: r.skill,
-      outcome: cdOutcome(r.outcome),
-      ...r.outcome !== "done" && r.error ? { errors: r.error } : {},
-      ...cycle ? { pipelineRun: { id: cycle } } : {}
-    }));
-    if (!r.cr) continue;
-    if (r.skill === "build" && !created.has(r.cr)) {
-      created.add(r.cr);
-      out.push(cd(b, CDEVENTS.type.changeCreated, r.cr, r.at, r.id, { ...repo ? { repository: repo } : {} }));
-    }
-    if (r.skill === "review/review" && r.outcome === "done") out.push(cd(b, CDEVENTS.type.changeReviewed, r.cr, r.at, r.id, { ...repo ? { repository: repo } : {} }));
-  }
-  return out;
-}
-function deployEvent(b, o) {
-  if (o.result !== "success" && o.result !== "rolled-back") return { skip: `a ${o.result} deploy has no CDEvents event` };
-  const repo = repoOf(b);
-  if (!repo) return { skip: "forge.options.repo is unset: the deployed service and artifact have no name" };
-  const type = o.result === "success" ? CDEVENTS.type.serviceDeployed : CDEVENTS.type.serviceRolledback;
-  return cd(b, type, `service/${repo.split("/").pop()}`, o.at ?? Date.now(), `${o.env}\0${o.sha}\0${o.version ?? ""}`, {
-    environment: { id: o.env },
-    artifactId: `pkg:generic/${repo}@${encodeURIComponent(o.version ?? o.sha)}`
-  });
-}
-function parseHeaders(s) {
-  const out = {};
-  for (const part of s.split(",")) {
-    const i = part.indexOf("=");
-    if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim();
-  }
-  return out;
-}
-function sinkOf(b, env, kind) {
-  const t = b.telemetry;
-  const name = kind === "otlp" ? t?.otlp_endpoint_env : t?.cdevents_sink_env;
-  if (!name) return void 0;
-  const url = env[name];
-  if (!url) throw new Error(`telemetry: env var ${name} is empty`);
-  let u;
-  try {
-    u = new URL(url);
-  } catch {
-    throw new Error(`telemetry: env var ${name} is not a valid http(s) URL`);
-  }
-  if (!/^https?:$/.test(u.protocol)) throw new Error(`telemetry: env var ${name} is not a valid http(s) URL`);
-  if (u.username || u.password) throw new Error(`telemetry: env var ${name} must not hold credentials in the URL: use the headers variable`);
-  const h = t?.headers_env ? env[t.headers_env] : void 0;
-  return { url: kind === "otlp" ? `${url.replace(/\/+$/, "")}/v1/traces` : url, headers: h ? parseHeaders(h) : {} };
-}
-async function sendOtlp(ctx, doc) {
-  const s = sinkOf(ctx.binding, ctx.env, "otlp");
-  if (!s) throw new Error("telemetry.otlp_endpoint_env is unset in the binding: nothing to send to");
-  const r = await ctx.http("POST", s.url, { headers: s.headers, body: doc });
-  const n = Number(r?.partialSuccess?.rejectedSpans ?? 0);
-  if (n > 0) throw new Error(`the OTLP endpoint rejected ${n} span(s): ${String(r.partialSuccess.errorMessage ?? "").slice(0, 200)}`);
-}
-async function sendCdEvent(ctx, ev, send = {}) {
-  const s = sinkOf(ctx.binding, ctx.env, "cdevents");
-  if (!s) throw new Error("telemetry.cdevents_sink_env is unset in the binding: nothing to send to");
-  const c = ev.context;
-  const headers = { "ce-specversion": "1.0", "ce-id": c.id, "ce-source": c.source, "ce-type": c.type, "ce-time": c.timestamp, "ce-subject": ev.subject.id, ...s.headers };
-  await ctx.http("POST", s.url, { headers, body: ev, ...send });
-}
-async function emitGateEvent(ctx, ev, warn = (l) => process.stderr.write(`${l}
-`), deadlineMs = GATE_TELEMETRY_DEADLINE_MS) {
-  let timer;
-  try {
-    const name = ctx.binding.telemetry?.cdevents_sink_env;
-    if (!name) return false;
-    if ("skip" in ev) {
-      warn(`telemetry: CDEvent not sent: ${ev.skip}`);
-      return false;
-    }
-    const late = new Promise((_, rej) => {
-      timer = setTimeout(() => rej(new Error(`no answer within ${deadlineMs} ms`)), deadlineMs);
-    });
-    await Promise.race([sendCdEvent(ctx, ev, { tries: 1, timeoutMs: deadlineMs }), late]);
-    return true;
-  } catch (e) {
-    const name = ctx.binding.telemetry?.cdevents_sink_env;
-    warn(`telemetry: CDEvent not sent: ${scrubUrl(e.message.split("\n")[0], name ? ctx.env[name] : void 0).slice(0, 200)}`);
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-var GENAI, NS, SCOPE_NAME, SPAN_KIND_INTERNAL, STATUS_ERROR, CDEVENTS, sha256, traceId, spanId, anyValue, attrs, nano, repoOf, repoRef, sourceOf, iso, cd, cdOutcome, changeMergedEvent, GATE_TELEMETRY_DEADLINE_MS;
-var init_telemetry = __esm({
-  "src/telemetry.ts"() {
-    "use strict";
-    init_exec();
-    GENAI = {
-      schemaUrl: "https://opentelemetry.io/schemas/gen-ai-dev/1.42.0-dev",
-      stability: "development",
-      attr: {
-        operation: "gen_ai.operation.name",
-        agentName: "gen_ai.agent.name",
-        agentVersion: "gen_ai.agent.version",
-        requestModel: "gen_ai.request.model",
-        errorType: "error.type"
-      },
-      op: { agent: "invoke_agent", workflow: "invoke_workflow" },
-      event: { evaluation: "gen_ai.evaluation.result" },
-      evalAttr: { name: "gen_ai.evaluation.name", value: "gen_ai.evaluation.score.value", label: "gen_ai.evaluation.score.label" }
-    };
-    NS = "agentic_sdlc";
-    SCOPE_NAME = "agentic-sdlc";
-    SPAN_KIND_INTERNAL = 1;
-    STATUS_ERROR = 2;
-    CDEVENTS = {
-      specversion: "0.5.1",
-      type: {
-        changeCreated: "dev.cdevents.change.created.0.4.0",
-        changeReviewed: "dev.cdevents.change.reviewed.0.3.0",
-        changeMerged: "dev.cdevents.change.merged.0.3.0",
-        serviceDeployed: "dev.cdevents.service.deployed.0.3.0",
-        serviceRolledback: "dev.cdevents.service.rolledback.0.3.0",
-        taskrunFinished: "dev.cdevents.taskrun.finished.0.3.0"
-      }
-    };
-    sha256 = (s) => createHash2("sha256").update(s).digest("hex");
-    traceId = (cycleKey) => sha256(`${NS}:trace:${cycleKey}`).slice(0, 32);
-    spanId = (key) => sha256(`${NS}:span:${key}`).slice(0, 16);
-    anyValue = (v) => typeof v === "string" ? { stringValue: v } : typeof v === "boolean" ? { boolValue: v } : Number.isInteger(v) ? { intValue: String(v) } : { doubleValue: v };
-    attrs = (o) => Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "").map(([key, v]) => ({ key, value: anyValue(v) }));
-    nano = (ms) => `${BigInt(Math.round(ms)) * 1000000n}`;
-    repoOf = (b) => {
-      const r = b.forge?.options?.repo;
-      return typeof r === "string" && r ? r : void 0;
-    };
-    repoRef = (b) => {
-      const id = repoOf(b);
-      return id ? { id, ...b.forge?.adapter === "github" ? { source: `https://github.com/${id}` } : {} } : void 0;
-    };
-    sourceOf = (b) => repoRef(b)?.source ?? repoOf(b) ?? SCOPE_NAME;
-    iso = (t) => new Date(t).toISOString();
-    cd = (b, type, subject2, at, discriminator, content) => ({
-      context: { specversion: CDEVENTS.specversion, id: sha256(`${type}\0${subject2}\0${discriminator}`).slice(0, 32), source: sourceOf(b), type, timestamp: iso(at) },
-      subject: { id: subject2, content }
-    });
-    cdOutcome = (o) => o === "done" ? "success" : o === "timeout" || o === "capped" ? "cancel" : "failure";
-    changeMergedEvent = (b, o) => cd(b, CDEVENTS.type.changeMerged, o.cr, o.at ?? Date.now(), o.sha, { ...repoRef(b) ? { repository: repoRef(b) } : {} });
-    GATE_TELEMETRY_DEADLINE_MS = 5e3;
-  }
-});
-
 // src/ledger.ts
 var ledger_exports = {};
 __export(ledger_exports, {
@@ -9251,8 +9003,6 @@ __export(ledger_exports, {
   changeFailures: () => changeFailures,
   cli: () => cli2,
   clusters: () => clusters,
-  cycleMeta: () => cycleMeta,
-  exportRows: () => exportRows,
   flattenRuns: () => flattenRuns,
   hardFacts: () => hardFacts,
   hashSkill: () => hashSkill,
@@ -9270,12 +9020,11 @@ __export(ledger_exports, {
   readRuns: () => readRuns,
   scorersFor: () => scorersFor,
   scoresComment: () => scoresComment,
-  sinceMs: () => sinceMs,
   stats: () => stats,
   summarise: () => summarise,
   ticketUse: () => ticketUse
 });
-import { existsSync as existsSync3, readdirSync as readdirSync2, readFileSync as readFileSync5, writeFileSync as writeFileSync2 } from "fs";
+import { existsSync as existsSync3, readdirSync as readdirSync2, readFileSync as readFileSync5 } from "fs";
 import { join as join4, relative as relative2, resolve } from "path";
 import { parseArgs as parseArgs2 } from "util";
 function parseHeartbeat(body) {
@@ -9554,21 +9303,7 @@ async function measures(o) {
     ...errorBudget ? { errorBudget } : {}
   };
 }
-function cycleMeta(comments) {
-  const m = /* @__PURE__ */ new Map();
-  for (const c of comments) {
-    const hb = parseHeartbeat(c.body);
-    for (const r of hb?.runs ?? []) m.set(r.id, { key: String(c.id), at: hb.at ?? c.createdAt, kind: hb.kind ?? "cycle", ...hb.factory ? { factory: String(hb.factory) } : {} });
-  }
-  return m;
-}
-function sinceMs(v, now = Date.now()) {
-  return /^\d+(\.\d+)?$/.test(v) ? now - Number(v) * 864e5 : Date.parse(v);
-}
-function exportRows(comments, q = {}) {
-  return flattenRuns(comments).filter((r) => (q.since === void 0 || Date.parse(r.at) >= q.since) && (!q.run || r.id === q.run)).sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : 1);
-}
-var import_yaml3, HEARTBEAT_MARKER, SCORE_SCORER, isFail, SCORES_MARKER, GRADE_MARKER, parseGrades, normaliseError, summarise, isScores, packageVersion, USAGE2, OPTIONS2, cli2;
+var import_yaml3, HEARTBEAT_MARKER, SCORE_SCORER, isFail, SCORES_MARKER, GRADE_MARKER, parseGrades, normaliseError, summarise, isScores, USAGE2, OPTIONS2, cli2;
 var init_ledger = __esm({
   "src/ledger.ts"() {
     "use strict";
@@ -9577,7 +9312,6 @@ var init_ledger = __esm({
     init_ports();
     init_comments();
     init_skills();
-    init_telemetry();
     HEARTBEAT_MARKER = stamp("heartbeat");
     SCORE_SCORER = "done-conditions";
     isFail = (v) => v === "fail" || typeof v === "number" && v <= 1;
@@ -9599,19 +9333,11 @@ var init_ledger = __esm({
       ...ticketUse(rows, o.maxTokensPerTicket)
     });
     isScores = (c) => c.body.trimStart().startsWith(SCORES_MARKER);
-    packageVersion = () => {
-      try {
-        return JSON.parse(readFileSync5(new URL("../package.json", import.meta.url), "utf8")).version;
-      } catch {
-        return "unknown";
-      }
-    };
     USAGE2 = [
       "usage: ledger runs [--since <days>] [--skill <s>] | ledger summary [--since <days>] | ledger measures [--days <n>] | ledger hash <skill-dir>",
-      "       ledger plan --run <id> | ledger record --run <id> --file <scores.json> | ledger stale --max-hours <h>",
-      "       ledger export --format otlp|cdevents [--since <days|iso>] [--run <id>] [--out <file>] [--send]"
+      "       ledger plan --run <id> | ledger record --run <id> --file <scores.json> | ledger stale --max-hours <h>"
     ].join("\n");
-    OPTIONS2 = { since: { type: "string" }, skill: { type: "string" }, run: { type: "string" }, file: { type: "string" }, days: { type: "string" }, "max-hours": { type: "string" }, format: { type: "string" }, out: { type: "string" }, send: { type: "boolean" } };
+    OPTIONS2 = { since: { type: "string" }, skill: { type: "string" }, run: { type: "string" }, file: { type: "string" }, days: { type: "string" }, "max-hours": { type: "string" } };
     cli2 = async (argv, ctx) => {
       const [verb, ...rest] = argv;
       let a;
@@ -9623,21 +9349,19 @@ var init_ledger = __esm({
       }
       const days = a.values.days === void 0 ? 30 : Number(a.values.days);
       if (verb === "measures" && !(days > 0)) return console.error(USAGE2), 2;
-      const sinceDays = a.values.since === void 0 || verb === "export" ? void 0 : Number(a.values.since);
+      const sinceDays = a.values.since === void 0 ? void 0 : Number(a.values.since);
       if (sinceDays !== void 0 && !(sinceDays >= 0)) return console.error(USAGE2), 2;
       const maxHours = Number(a.values["max-hours"]);
       if (verb === "stale" && !(maxHours > 0)) return console.error(USAGE2), 2;
       if ((verb === "plan" || verb === "record") && !a.values.run) return console.error(USAGE2), 2;
       if (verb === "record" && !a.values.file) return console.error(USAGE2), 2;
-      if (verb === "export" && !["otlp", "cdevents"].includes(a.values.format ?? "")) return console.error("--format must be otlp or cdevents"), 2;
-      if (verb === "export" && (a.values.since !== void 0 && !(sinceMs(a.values.since) >= 0) || a.values.send && a.values.out)) return console.error(USAGE2), 2;
       try {
         if (verb === "hash") {
           if (!a.positionals[0]) return console.error(USAGE2), 2;
           console.log(JSON.stringify({ skill: a.positionals[0], hash: hashSkill(resolve(ctx.root, a.positionals[0])) }));
           return 0;
         }
-        if (!["runs", "summary", "plan", "record", "stale", "measures", "export"].includes(verb)) return console.error(USAGE2), 2;
+        if (!["runs", "summary", "plan", "record", "stale", "measures"].includes(verb)) return console.error(USAGE2), 2;
         const b = ctx.binding;
         const { createBoard: createBoard2 } = await Promise.resolve().then(() => (init_board(), board_exports));
         const board = await createBoard2({ ...ctx, options: b.board.options });
@@ -9675,29 +9399,6 @@ var init_ledger = __esm({
           const body = scoresComment(p, JSON.parse(readFileSync5(resolve(ctx.root, a.values.file), "utf8")));
           const c = await board.comment(b.heartbeat.ticket, body);
           console.log(JSON.stringify({ run: run.id, comment: c.id, ...JSON.parse(body.split("\n")[2]) }));
-          return 0;
-        }
-        if (verb === "export") {
-          const rows2 = exportRows(comments, { since: a.values.since === void 0 ? void 0 : sinceMs(a.values.since), run: a.values.run });
-          const meta = cycleMeta(comments);
-          if (a.values.format === "otlp") {
-            const doc = otlpTraces(rows2, meta, { version: packageVersion(), repo: repoOf(b) });
-            if (a.values.send) {
-              await sendOtlp(ctx, doc);
-              console.log(JSON.stringify({ sent: "otlp", runs: rows2.length }));
-            } else if (a.values.out) writeFileSync2(resolve(ctx.root, a.values.out), `${JSON.stringify(doc)}
-`);
-            else console.log(JSON.stringify(doc));
-          } else {
-            const events = cdEventsFromRuns(rows2, meta, b);
-            if (a.values.send && !sinkOf(b, ctx.env, "cdevents")) throw new Error("telemetry.cdevents_sink_env is unset in the binding: nothing to send to");
-            if (a.values.send) {
-              for (const ev of events) await sendCdEvent(ctx, ev);
-              console.log(JSON.stringify({ sent: "cdevents", events: events.length }));
-            } else if (a.values.out) writeFileSync2(resolve(ctx.root, a.values.out), events.map((e) => `${JSON.stringify(e)}
-`).join(""));
-            else for (const ev of events) console.log(JSON.stringify(ev));
-          }
           return 0;
         }
         const rows = flattenRuns(comments, { sinceDays, skill: a.values.skill });
@@ -9894,13 +9595,13 @@ var init_vcs = __esm({
       if (!verb || !Object.hasOwn(VERBS2, verb)) throw new UsageError(`unknown vcs verb: ${verb ?? ""}`);
       const a = parseStrict("vcs", verb, rest, VERBS2[verb]);
       const v = createVcs({ ...ctx, options: ctx.binding.vcs.options ?? {} });
-      const need3 = (i) => {
+      const need2 = (i) => {
         if (!a.pos[i]) throw new UsageError(`vcs ${verb}: missing argument`);
         return a.pos[i];
       };
       switch (verb) {
         case "start":
-          return v.start(need3(0));
+          return v.start(need2(0));
         case "head":
           return v.head();
         case "changed":
@@ -9910,17 +9611,17 @@ var init_vcs = __esm({
         case "push":
           return v.push();
         case "cut":
-          return v.cut(need3(0), need3(1));
+          return v.cut(need2(0), need2(1));
         case "tag":
-          await v.tag(need3(0), need3(1));
+          await v.tag(need2(0), need2(1));
           return {};
         case "drop":
-          await v.drop(need3(0));
+          await v.drop(need2(0));
           return {};
         case "tags":
           return v.tags(a.get("prefix"));
         case "checkout-tests":
-          await v.checkoutTests(need3(0), a.pos.slice(1));
+          await v.checkoutTests(need2(0), a.pos.slice(1));
           return {};
         default:
           throw new UsageError(`unknown vcs verb: ${verb ?? ""}`);
@@ -9960,7 +9661,7 @@ __export(bench_exports, {
   suiteFile: () => suiteFile,
   wilsonLower: () => wilsonLower
 });
-import { cpSync, existsSync as existsSync5, mkdirSync as mkdirSync2, mkdtempSync as mkdtempSync2, readdirSync as readdirSync3, readFileSync as readFileSync6, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "fs";
+import { cpSync, existsSync as existsSync5, mkdirSync as mkdirSync2, mkdtempSync as mkdtempSync2, readdirSync as readdirSync3, readFileSync as readFileSync6, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
 import { tmpdir as tmpdir2 } from "os";
 import { dirname as dirname2, join as join6, relative as relative3, resolve as resolve2 } from "path";
 import { parseArgs as parseArgs3 } from "util";
@@ -10093,7 +9794,7 @@ async function runBench(cases, o, deps) {
       try {
         const agent = await snap(c.baseSha);
         trees.push(agent);
-        writeFileSync3(promptFile(scratch, c), prompt(c, skillPath, agent.workdir, binding.commands.fast_check));
+        writeFileSync2(promptFile(scratch, c), prompt(c, skillPath, agent.workdir, binding.commands.fast_check));
         const t0 = now();
         let error;
         try {
@@ -10153,7 +9854,7 @@ function writeScorerInput(dir, root, c, trial, promptText, touched, base, after)
   const parts = [promptText, "## Changed files", ...touched.flatMap((p) => [`### ${p}`, "Before:", fence, read(base, p), fence, "After:", fence, read(after, p), fence])];
   const file = join6(dir, `${c.id.replace(/[^\w.-]/g, "_")}${trial ? `-t${trial}` : ""}.md`);
   mkdirSync2(dir, { recursive: true });
-  writeFileSync3(file, parts.join("\n\n") + "\n");
+  writeFileSync2(file, parts.join("\n\n") + "\n");
   return relative3(root, file).replaceAll("\\", "/");
 }
 function report(results) {
@@ -10330,7 +10031,7 @@ var init_bench = __esm({
           const rel = suite ? suiteFile(suite) : CASES_FILE;
           const file = join6(root, rel);
           mkdirSync2(dirname2(file), { recursive: true });
-          writeFileSync3(file, JSON.stringify(suite ? { name: suite, cases } : cases, null, 2) + "\n");
+          writeFileSync2(file, JSON.stringify(suite ? { name: suite, cases } : cases, null, 2) + "\n");
           console.log(JSON.stringify({ file: rel, cases: cases.length }));
           return 0;
         }
@@ -10353,7 +10054,7 @@ var init_bench = __esm({
           if ("cases" in r) {
             const file = `${RESULTS_DIR}/${stem}.json`;
             mkdirSync2(join6(root, RESULTS_DIR), { recursive: true });
-            writeFileSync3(join6(root, file), JSON.stringify(r, null, 2) + "\n");
+            writeFileSync2(join6(root, file), JSON.stringify(r, null, 2) + "\n");
             const skipped = r.cases.filter((c) => c.skipped).length;
             console.log(JSON.stringify({ file, passRate: r.passRate, minutes: r.minutes, ...skipped ? { skipped, incomplete: true } : {} }));
           } else console.log(JSON.stringify(r, null, 2));
@@ -10380,13 +10081,12 @@ __export(dispatch_exports, {
   executorFor: () => executorFor,
   judgeTier: () => judgeTier,
   limitsText: () => limitsText,
-  managedRequest: () => managedRequest,
   passEnv: () => passEnv,
   resolveStage: () => resolveStage,
   setSpawn: () => setSpawn
 });
 import { spawn } from "child_process";
-import { chmodSync, closeSync, lstatSync, mkdirSync as mkdirSync3, mkdtempSync as mkdtempSync3, openSync, writeFileSync as writeFileSync4 } from "fs";
+import { chmodSync, closeSync, lstatSync, mkdirSync as mkdirSync3, mkdtempSync as mkdtempSync3, openSync, writeFileSync as writeFileSync3 } from "fs";
 import { tmpdir as tmpdir3 } from "os";
 import { join as join7, relative as relative4 } from "path";
 function judgeTier(b, runModel) {
@@ -10428,42 +10128,7 @@ function executorFor(b, id) {
   for (const k of keys) by.set(k, b.executors[k]);
   return by.get(id) ?? by.get(skillOf(id)) ?? b.executors.default;
 }
-function managedRequest(ex, env, t, model, stageBody) {
-  const token = envOf(env, ex.token_env);
-  const endpoint = (name, dflt) => (name ? envOf(env, name) : dflt).replace(/\/$/, "");
-  const text = taskText(t);
-  const api = ex.api ?? "generic";
-  if ((api === "claude" || api === "antigravity") && (t.skill === "learn/judge" || ex.model)) {
-    throw new Error(`managed api ${api} cannot pin a model; use harness, command or cursor for this stage`);
-  }
-  switch (api) {
-    case "claude":
-      return ["POST", `${endpoint(ex.endpoint_env, "https://api.anthropic.com")}/v1/sessions`, {
-        headers: { "x-api-key": token, "anthropic-version": "2026-10-21", "anthropic-beta": "managed-agents-2026-04-01" },
-        body: {
-          agent: envOf(env, need(ex.agent_env, "agent_env")),
-          environment_id: envOf(env, need(ex.environment_env, "environment_env")),
-          initial_events: [{ type: "user.message", content: [{ type: "text", text }] }]
-        }
-      }];
-    case "cursor":
-      return ["POST", `${endpoint(ex.endpoint_env, "https://api.cursor.com")}/v1/agents`, {
-        headers: { authorization: `Bearer ${token}` },
-        body: { prompt: { text }, repos: [{ url: need(ex.repo_url, "repo_url") }], autoCreatePR: false, ...model ? { model } : {} }
-      }];
-    case "antigravity":
-      return ["POST", `${endpoint(ex.endpoint_env, "https://generativelanguage.googleapis.com")}/v1beta/interactions`, {
-        headers: { "x-goog-api-key": token },
-        body: { agent: ex.agent_env ? envOf(env, ex.agent_env) : "antigravity-preview-09-2026", environment: "remote", input: text, background: true }
-      }];
-    default:
-      return ["POST", `${endpoint(need(ex.endpoint_env, "endpoint_env"), "")}/sessions`, {
-        headers: { authorization: `Bearer ${token}` },
-        body: { agent: envOf(env, need(ex.agent_env, "agent_env")), task: t, ...stageBody }
-      }];
-  }
-}
-var envOf, TIERS2, BASE_ENV, spawnChild, setSpawn, subject, limitsText, taskText, REVIEW_STEP, REVIEW_FIRE_ENV, need, FLAGS, cli5;
+var TIERS2, BASE_ENV, spawnChild, setSpawn, subject, limitsText, taskText, REVIEW_STEP, REVIEW_FIRE_ENV, FLAGS, cli5;
 var init_dispatch = __esm({
   "src/dispatch.ts"() {
     "use strict";
@@ -10472,11 +10137,6 @@ var init_dispatch = __esm({
     init_ports();
     init_comments();
     init_skills();
-    envOf = (env, name) => {
-      const v = env[name];
-      if (!v) throw new Error(`set the ${name} environment variable`);
-      return v;
-    };
     TIERS2 = ["fast", "balanced", "deep"];
     BASE_ENV = ["PATH", "HOME", "USERPROFILE", "SystemRoot", "TEMP", "TMP", "APPDATA", "LOCALAPPDATA", "ComSpec", "PATHEXT", "SystemDrive"];
     spawnChild = spawn;
@@ -10493,10 +10153,6 @@ var init_dispatch = __esm({
     taskText = (t) => `Run step ${t.skill} on ${subject(t)}. Load ${t.file ?? `.agents/skills/${t.skill}/SKILL.md`} first and follow it.${limitsText(t.limits)}${t.done ? ` Put the line ${t.done} in your closing comment.` : ""}${t.run ? ` Your run id is ${t.run}: end every commit you make with the trailer Agent-Run: ${t.run}.` : ""}`;
     REVIEW_STEP = "review/review";
     REVIEW_FIRE_ENV = "AGENTIC_REVIEW_FIRE_CMD";
-    need = (v, name) => {
-      if (v === void 0 || v === "") throw new Error(`managed executor needs ${name}`);
-      return v;
-    };
     FLAGS = ["ticket", "cr", "workdir", "run", "run-model", "unattended"];
     cli5 = async (argv, ctx) => {
       let onFail;
@@ -10576,8 +10232,7 @@ ${usage}`);
           key = [ticket || cr || "factory", skill, f.run, head].filter(Boolean).join("-");
           locked = true;
           const trusted = ownersFor(b.owners, "board").bots.map((a) => a.toLowerCase());
-          const closer = ex.kind === "assign" ? String(ex.user ?? "").toLowerCase() : "";
-          const bot = isBot = (c) => trusted.includes(String(c.author).toLowerCase()) || !!closer && String(c.author).toLowerCase() === closer;
+          const bot = isBot = (c) => trusted.includes(String(c.author).toLowerCase());
           const all = (await boardOf().comments(target)).filter(bot);
           const mine = all.filter((c) => c.body.trimStart().startsWith(matches("dispatch", key))).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
           const at = mine ? Date.parse(mine.createdAt) : NaN;
@@ -10593,7 +10248,7 @@ ${usage}`);
         }
         let marker;
         const done = async (kind, ref, extra = {}) => {
-          console.log(JSON.stringify({ kind, ref: ref ?? (kind === "assign" ? marker ?? null : null), startedAt, ...run ? { run } : {}, key, done: stamp("done", key), ...via ? { via } : {}, ...extra }));
+          console.log(JSON.stringify({ kind, ref, startedAt, ...run ? { run } : {}, key, done: stamp("done", key), ...via ? { via } : {}, ...extra }));
           return 0;
         };
         const doneLine = stamp("done", key);
@@ -10614,7 +10269,7 @@ agentic-sdlc: cycle claimed`);
         const limits = limitsOf(b, ex);
         const hasLimits = Object.keys(limits).length > 0;
         const info = { ...judge ?? {}, model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox, ...hasLimits ? { limits } : {} };
-        if (locked || ex.kind === "assign") {
+        if (locked) {
           marker = (await boardOf().comment(target, `${stamp("dispatch", key)}
 agentic-sdlc: run step ${skill} (${ex.kind})${limitsText(limits)}; close with ${stamp("done", key)}`)).id;
           const k = key;
@@ -10642,10 +10297,10 @@ agentic-sdlc: ${skill} did not start`);
         if (ex.kind === "command") {
           const dir = mkdtempSync3(join7(tmpdir3(), "agentic-sdlc-"));
           const promptFile = join7(dir, "prompt.md");
-          writeFileSync4(promptFile, `${taskText({ skill, ticket, cr, file, done: doneLine, run, limits })}
+          writeFileSync3(promptFile, `${taskText({ skill, ticket, cr, file, done: doneLine, run, limits })}
 `);
           const mcpsFile = join7(dir, "mcps.json");
-          writeFileSync4(mcpsFile, JSON.stringify(stage.mcps, null, 2));
+          writeFileSync3(mcpsFile, JSON.stringify(stage.mcps, null, 2));
           const vars = { skill, ticket, cr, workdir, prompt_file: promptFile, mcps_file: mcpsFile, max_turns: String(limits.max_turns ?? ""), max_tokens: String(limits.max_tokens ?? ""), max_minutes: String(limits.max_minutes ?? ""), ...stage.model ? { model: stage.model } : {} };
           const line = fill(ex.run, vars);
           const env = { ...fire ? passEnv(ctx.env) : childEnv(ctx.env, stage.secrets), ...limits.max_turns ? { AGENTIC_SDLC_MAX_TURNS: String(limits.max_turns) } : {}, ...limits.max_tokens ? { AGENTIC_SDLC_MAX_TOKENS: String(limits.max_tokens) } : {}, ...limits.max_minutes ? { AGENTIC_SDLC_MAX_MINUTES: String(limits.max_minutes) } : {} };
@@ -10669,26 +10324,8 @@ agentic-sdlc: ${skill} did not start`);
             closeSync(fd);
           }
         }
-        const stageBody = { model: stage.model, mcps: Object.entries(stage.mcps).map(([name, m]) => ({ name, url: m.url })), sandbox: stage.sandbox, ...hasLimits ? { limits } : {} };
-        if (ex.kind === "webhook") {
-          const headers = ex.token_env ? { authorization: `Bearer ${envOf(ctx.env, ex.token_env)}` } : {};
-          const url = envOf(ctx.env, ex.url_env);
-          sent = true;
-          const r = await ctx.http("POST", url, { headers, body: { skill, file, ticket, cr, callback: null, ...doneLine ? { done: doneLine } : {}, ...run ? { run } : {}, ...stageBody } });
-          return await done("webhook", r?.id ?? null);
-        }
-        if (ex.kind === "managed") {
-          const req = managedRequest(ex, ctx.env, { skill, ticket, cr, file, done: doneLine, run, ...hasLimits ? { limits } : {} }, stage.model, stageBody);
-          sent = true;
-          const r = await ctx.http(...req);
-          return await done("managed", r?.id ?? r?.name ?? null);
-        }
-        if (ex.kind !== "assign") throw new Error(`unknown executor kind '${ex.kind}' for ${skill}`);
-        if (!ticket) throw new Error("executor kind assign needs --ticket");
-        await boardOf().assign(ticket, ex.user);
-        return await done("assign", null);
+        throw new Error(`unknown executor kind '${ex.kind}' for ${skill}`);
       } catch (e) {
-        if (sent && (e instanceof TypeError || / -> 4\d\d:/.test(String(e.message)))) sent = false;
         if (onFail) await onFail().catch(() => void 0);
         console.error(e.message);
         return 1;
@@ -10880,9 +10517,9 @@ function approvalNeed(b, klass) {
 }
 async function approvalWho(d, cr) {
   const klass = await approvalClass(d, cr, await readDiff(d, cr.n));
-  const need3 = approvalNeed(d.binding, klass);
+  const need2 = approvalNeed(d.binding, klass);
   const o = ownersFor(d.binding.owners, "forge");
-  return { class: klass, who: need3 === "owner" ? o.factory : need3 === "human" ? o.product : [] };
+  return { class: klass, who: need2 === "owner" ? o.factory : need2 === "human" ? o.product : [] };
 }
 async function approval(d, n) {
   const b = d.binding;
@@ -10891,18 +10528,18 @@ async function approval(d, n) {
   const o = ownersFor(b.owners, "forge");
   const bots = [...o.bots, b.forge.review_identity].filter(Boolean).map((u) => u.toLowerCase());
   const owner = o.factory.map((u) => u.toLowerCase());
-  const need3 = approvalNeed(b, klass);
+  const need2 = approvalNeed(b, klass);
   let by;
-  if (need3 !== "none") {
+  if (need2 !== "none") {
     const reviews = await d.forge.approvals(n);
     const member = new Set(reviews.filter((r) => !!r.assoc && ["OWNER", "MEMBER", "COLLABORATOR"].includes(r.assoc)).map((r) => r.user.toLowerCase()));
     const ok = approvers(reviews, cr.headSha).filter((u) => member.has(u));
-    by = need3 === "owner" ? ok.find((u) => owner.includes(u)) : ok.find((u) => !bots.includes(u));
+    by = need2 === "owner" ? ok.find((u) => owner.includes(u)) : ok.find((u) => !bots.includes(u));
   }
-  const pass = need3 === "none" || !!by;
-  const description = need3 === "none" ? `${klass}: no human approval needed` : pass ? `${klass}: approved by ${by}` : `${klass}: waits for an approval of the head by ${need3 === "owner" ? "owners.factory" : "a human"}`;
+  const pass = need2 === "none" || !!by;
+  const description = need2 === "none" ? `${klass}: no human approval needed` : pass ? `${klass}: approved by ${by}` : `${klass}: waits for an approval of the head by ${need2 === "owner" ? "owners.factory" : "a human"}`;
   await d.forge.status(cr.headSha, { context: "human-approval", state: pass ? "success" : "pending", description });
-  return { cr: cr.n, class: klass, need: need3, state: pass ? "success" : "pending", ...by ? { by } : {} };
+  return { cr: cr.n, class: klass, need: need2, state: pass ? "success" : "pending", ...by ? { by } : {} };
 }
 async function review(d, n) {
   const b = d.binding;
@@ -11297,7 +10934,6 @@ var init_gates = __esm({
     init_bench();
     init_ledger();
     init_dispatch();
-    init_telemetry();
     matchesAny = (path, globs) => globs.some((g) => globToRegExp(g).test(path));
     factoryGlobs = (b) => b.paths.factory ?? [];
     TUNING_KEYS = ["models"];
@@ -11349,14 +10985,12 @@ var init_gates = __esm({
         case "merged": {
           const sha2 = a.need("sha");
           const r = await merged(deps(), sha2);
-          if (r.cr && !r.reason) await emitGateEvent(base, changeMergedEvent(base.binding, { cr: r.cr, sha: sha2 }));
           return r;
         }
         case "shipped": {
           if (!a.pos[0]) throw new UsageError("shipped <env> is required");
           const sha2 = a.need("sha"), result = a.need("result"), version3 = a.get("version");
           const r = await shipped(deps(), a.pos[0], sha2, result, version3);
-          await emitGateEvent(base, deployEvent(base.binding, { env: a.pos[0], sha: sha2, result, version: version3 }));
           return r;
         }
         case "approval": {
@@ -11534,7 +11168,7 @@ var init_forge = __esm({
 });
 
 // src/pristine.ts
-import { createHash as createHash3 } from "crypto";
+import { createHash as createHash2 } from "crypto";
 import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync8 } from "fs";
 import { posix } from "path";
 import { join as join9 } from "path";
@@ -11584,7 +11218,7 @@ var sha, DEFAULTS, yamlScalar, COPY_PREFIX, skillNames, SKILL_ROOT;
 var init_pristine = __esm({
   "src/pristine.ts"() {
     "use strict";
-    sha = (data) => createHash3("sha256").update(data).digest("hex");
+    sha = (data) => createHash2("sha256").update(data).digest("hex");
     DEFAULTS = { trunk: "main", releasePrefix: "release/", delivery: "release-line", install: "npm ci", verify: "npm test" };
     yamlScalar = (v) => /^[\w./ -]+$/.test(v) ? v : JSON.stringify(v);
     COPY_PREFIX = "sdlc-";
@@ -11612,7 +11246,7 @@ __export(install_exports, {
   validate: () => validate
 });
 import { execFileSync as execFileSync2 } from "child_process";
-import { chmodSync as chmodSync2, existsSync as existsSync8, mkdirSync as mkdirSync4, readFileSync as readFileSync9, readdirSync as readdirSync6, rmSync as rmSync3, rmdirSync, statSync, writeFileSync as writeFileSync5 } from "fs";
+import { chmodSync as chmodSync2, existsSync as existsSync8, mkdirSync as mkdirSync4, readFileSync as readFileSync9, readdirSync as readdirSync6, rmSync as rmSync3, rmdirSync, statSync, writeFileSync as writeFileSync4 } from "fs";
 import { basename, dirname as dirname4, join as join10, resolve as resolve4 } from "path";
 import { fileURLToPath } from "url";
 function packageRoot(env = process.env) {
@@ -11638,41 +11272,26 @@ function missingBindingKeys(template, binding) {
   }
   return out;
 }
-function registerMcp(pkg, root, harness, force, log, upgrade) {
-  const snippet = readFileSync9(need2(pkg, `templates/mcp/${harness === "codex" ? "codex.toml" : harness + ".json"}`), "utf8");
-  const rel = MCP_FILES.get(harness);
-  if (!rel) {
-    log.push(`add this MCP server to your harness config:
-${snippet.trim()}`);
-    return;
-  }
+function registerMcp(pkg, root, force, log, upgrade) {
+  const want = JSON.parse(readFileSync9(need(pkg, "templates/mcp/claude.json"), "utf8"));
+  const rel = ".mcp.json";
   const file = join10(root, rel);
   const cur = existsSync8(file) ? readFileSync9(file, "utf8") : "";
-  let next;
-  if (harness === "codex") {
-    if (/^\[mcp_servers\.("?)agentic-sdlc\1\]/m.test(cur)) {
-      log.push(`kept ${rel}`);
-      return;
-    }
-    next = (cur ? cur.replace(/\n*$/, "\n\n") : "") + snippet;
-  } else {
-    const want = JSON.parse(snippet);
-    const doc = cur.trim() ? parseJson(cur, rel) : {};
-    const had = doc.mcpServers?.["agentic-sdlc"];
-    const old = had?.command === "npx" && Array.isArray(had.args) && had.args.includes("agentic-sdlc");
-    if (had && !force && !old) {
-      log.push(`kept ${rel}`);
-      return;
-    }
-    if (upgrade && old) {
-      log.push(`kept ${rel}: its agentic-sdlc entry runs npx; change it in a product change to {"command":"${LAUNCHER}","args":["mcp"]}`);
-      return;
-    }
-    doc.mcpServers = { ...doc.mcpServers, ...want.mcpServers };
-    next = JSON.stringify(doc, null, 2) + "\n";
+  const doc = cur.trim() ? parseJson(cur, rel) : {};
+  const had = doc.mcpServers?.["agentic-sdlc"];
+  const old = had?.command === "npx" && Array.isArray(had.args) && had.args.includes("agentic-sdlc");
+  if (had && !force && !old) {
+    log.push(`kept ${rel}`);
+    return;
   }
+  if (upgrade && old) {
+    log.push(`kept ${rel}: its agentic-sdlc entry runs npx; change it in a product change to {"command":"${LAUNCHER}","args":["mcp"]}`);
+    return;
+  }
+  doc.mcpServers = { ...doc.mcpServers, ...want.mcpServers };
+  const next = JSON.stringify(doc, null, 2) + "\n";
   mkdirSync4(dirname4(file), { recursive: true });
-  writeFileSync5(file, next);
+  writeFileSync4(file, next);
   log.push(`wrote ${rel}`);
 }
 function pinCli(inst, version3, ref, force) {
@@ -11696,7 +11315,7 @@ function pinCli(inst, version3, ref, force) {
     return;
   }
   mkdirSync4(dirname4(file), { recursive: true });
-  writeFileSync5(file, data);
+  writeFileSync4(file, data);
   inst.lock[CLI_PIN] = sha(data);
   if (had) inst.counts.updated++;
   else inst.counts.wrote++;
@@ -11709,7 +11328,7 @@ function ignoreCliCache(root, log) {
   if (!add.length) return;
   text += (text && !text.endsWith("\n") ? "\n" : "") + add.map((e) => e + "\n").join("");
   mkdirSync4(dirname4(file), { recursive: true });
-  writeFileSync5(file, text);
+  writeFileSync4(file, text);
   log.push(`added ${add.join(", ")} to .agents/.gitignore`);
 }
 function oldPinHint(root, log) {
@@ -11746,7 +11365,7 @@ Do not start subagents.
   if (/^@AGENTS\.md\s*$/m.test(cur)) log.push("kept CLAUDE.md (imports @AGENTS.md)");
   else if (upgrade) log.push("kept CLAUDE.md: it does not import @AGENTS.md; add the line in a product change");
   else {
-    writeFileSync5(file, (cur ? cur.replace(/\n*$/, "\n\n") : "") + "@AGENTS.md\n");
+    writeFileSync4(file, (cur ? cur.replace(/\n*$/, "\n\n") : "") + "@AGENTS.md\n");
     log.push(cur ? "appended @AGENTS.md to CLAUDE.md" : "wrote CLAUDE.md (@AGENTS.md)");
   }
   if (noPlugin) return;
@@ -11764,24 +11383,23 @@ function originRepo(root) {
 async function init(root, argv, log) {
   const f = flagsOf(argv);
   const board = f.board ?? "github-issues", forge = f.forge ?? "github", vcs = f.vcs ?? "git";
-  const prior = f.upgrade === "true" && f.harness === void 0 && (existsSync8(join10(root, ".claude/skills")) || existsSync8(join10(root, ".claude/agents")) && readdirSync6(join10(root, ".claude/agents")).some((n) => /^sdlc-.*\.md$/.test(n)));
-  const harness = f.harness ?? (prior ? "claude" : "generic");
+  const harness = f.harness ?? "claude";
   const force = f.force === "true";
   const profile = f.profile ?? "individual";
   if (!ADAPTERS.board.includes(board)) throw new Error(`--board must be one of ${ADAPTERS.board.join("|")}, got '${board}'`);
-  if (!["individual", "individual-api", "organization"].includes(profile)) throw new Error(`--profile must be individual, individual-api or organization, got '${profile}'`);
+  if (!["individual", "organization"].includes(profile)) throw new Error(`--profile must be individual or organization, got '${profile}'`);
   const org = profile === "organization";
   if (vcs !== "git") throw new Error(`--vcs must be git (v2 supports git only), got '${vcs}'`);
   if (!FORGES.includes(forge)) throw new Error(`--forge must be one of ${FORGES.join("|")}, got '${forge}'`);
-  if (!MCP_FILES.has(harness)) throw new Error(`--harness must be one of ${[...MCP_FILES.keys()].join("|")}, got '${harness}'`);
+  if (harness !== "claude") throw new Error(`--harness must be claude, got '${harness}'`);
   const pkg = packageRoot();
   const pkgJson = join10(pkg, "package.json");
   const version3 = existsSync8(pkgJson) ? readJson2(pkgJson).version : "next";
   if (f.ref !== void 0 && !isSha(f.ref) && !isTag(f.ref)) throw new Error(`--ref must be a 40-hex commit sha or a version tag like v${version3}, got '${f.ref}'`);
-  const skills = need2(pkg, "skills");
+  const skills = need(pkg, "skills");
   const inst = new Installer(root, pkg, force, log);
   inst.skills("skills", ".agents/skills", true);
-  const noPlugin = harness === "claude" && (f["no-plugin"] === "true" || f.upgrade === "true" && existsSync8(join10(root, ".claude/skills")));
+  const noPlugin = f["no-plugin"] === "true" || f.upgrade === "true" && existsSync8(join10(root, ".claude/skills"));
   if (noPlugin) inst.skills("skills", ".claude/skills", true);
   else for (const n of filesUnder(skills)) inst.skip(join10(".claude/skills", inst.installedName(n)));
   pinCli(inst, version3, f.ref, force);
@@ -11789,7 +11407,7 @@ async function init(root, argv, log) {
   ignoreCliCache(root, log);
   const upgrade = existsSync8(join10(root, BINDING_PATH));
   oldPinHint(root, log);
-  if (harness !== "claude" || noPlugin) registerMcp(pkg, root, harness, force, log, upgrade);
+  if (noPlugin) registerMcp(pkg, root, force, log, upgrade);
   else log.push("MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)");
   const scorers = join10(pkg, "scorers");
   if (existsSync8(scorers)) {
@@ -11799,7 +11417,7 @@ async function init(root, argv, log) {
   const hadBinding = existsSync8(bindingFile);
   if (hadBinding) log.push(`kept ${BINDING_PATH}`);
   else {
-    const doc = (0, import_yaml5.parseDocument)(readFileSync9(need2(pkg, "templates/binding.yml"), "utf8"));
+    const doc = (0, import_yaml5.parseDocument)(readFileSync9(need(pkg, "templates/binding.yml"), "utf8"));
     doc.setIn(["board", "adapter"], board);
     doc.setIn(["forge", "adapter"], forge);
     doc.setIn(["vcs", "adapter"], vcs);
@@ -11823,11 +11441,11 @@ async function init(root, argv, log) {
       log.push(`created heartbeat ticket ${hb.id} on the local board`);
     } else log.push("create the heartbeat ticket on the board and put its id in heartbeat.ticket");
     mkdirSync4(dirname4(bindingFile), { recursive: true });
-    writeFileSync5(bindingFile, String(doc));
+    writeFileSync4(bindingFile, String(doc));
     log.push(`wrote ${BINDING_PATH}`);
   }
   const gates = join10(pkg, "templates", "gates");
-  const dir = need2(pkg, `templates/gates/${forge}`);
+  const dir = need(pkg, `templates/gates/${forge}`);
   const bound = (0, import_yaml5.parse)(readFileSync9(bindingFile, "utf8"));
   const continuous = bound?.product?.delivery === "continuous";
   const oneIdentity = !bound?.forge?.review_identity;
@@ -11877,13 +11495,12 @@ async function init(root, argv, log) {
   const next = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, "\n\n") : "") + POINTER + "\n";
   const agentsChanged = next !== cur && !upgrade;
   if (agentsChanged) {
-    writeFileSync5(agents, next);
+    writeFileSync4(agents, next);
     log.push("updated AGENTS.md");
   } else if (next !== cur) log.push("kept AGENTS.md: its agentic-sdlc block differs from this release; update it in a product change");
-  if (harness === "claude") claudeSetup(root, inst, log, noPlugin, upgrade);
-  else for (const tier of TIERS4) inst.skip(`.claude/agents/sdlc-${tier}.md`);
+  claudeSetup(root, inst, log, noPlugin, upgrade);
   inst.finish();
-  const missing = missingKeysLine(missingBindingKeys(readFileSync9(need2(pkg, "templates/binding.yml"), "utf8"), readFileSync9(bindingFile, "utf8")));
+  const missing = missingKeysLine(missingBindingKeys(readFileSync9(need(pkg, "templates/binding.yml"), "utf8"), readFileSync9(bindingFile, "utf8")));
   if (missing) log.push(missing);
   const c = inst.counts;
   log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept (differ from every released version), ${c.stale} stale${c.removed ? `, ${c.removed} removed` : ""}`);
@@ -12043,7 +11660,7 @@ function pathWarnings(root, b) {
   const paths = b?.paths ?? {};
   return Object.entries(paths).filter(([k, v]) => !["factory", "light_verify", "lane_areas", "no_proof"].includes(k) && typeof v === "string" && v && !existsSync8(join10(root, v))).map(([k, v]) => `paths.${k} names ${v}, which does not exist in the project; the skills will read nothing there`);
 }
-var import_yaml5, START, END, POINTER, INSTALL_LOCK, LEGACY_LOCK, TIERS4, FORGES, INIT_FLAGS, flagsOf, need2, parseJson, readJson2, filesUnder, posix2, Installer, missingKeysLine, MCP_FILES, CLI_PIN, CLI_PACKAGE, LAUNCHER, IGNORED, isSha, isTag, envNames, redact2, firstLines, probeFailure, cli8;
+var import_yaml5, START, END, POINTER, INSTALL_LOCK, LEGACY_LOCK, TIERS4, FORGES, INIT_FLAGS, flagsOf, need, parseJson, readJson2, filesUnder, posix2, Installer, missingKeysLine, CLI_PIN, CLI_PACKAGE, LAUNCHER, IGNORED, isSha, isTag, envNames, redact2, firstLines, probeFailure, cli8;
 var init_install = __esm({
   "src/install.ts"() {
     "use strict";
@@ -12078,7 +11695,7 @@ ${END}`;
       }
       return f;
     };
-    need2 = (pkg, rel) => {
+    need = (pkg, rel) => {
       const p = join10(pkg, rel);
       if (!existsSync8(p)) throw new Error(`package is missing ${rel} (looked in ${pkg})`);
       return p;
@@ -12136,7 +11753,7 @@ ${END}`;
           }
         }
         mkdirSync4(dirname4(to), { recursive: true });
-        writeFileSync5(to, data);
+        writeFileSync4(to, data);
         this.lock[rel] = want;
         if (how === "wrote") this.counts.wrote++;
         else this.counts.updated++;
@@ -12215,7 +11832,7 @@ ${END}`;
         }
         const file = join10(this.root, INSTALL_LOCK);
         mkdirSync4(dirname4(file), { recursive: true });
-        writeFileSync5(file, JSON.stringify(Object.fromEntries(Object.entries(this.lock).sort(([a], [b]) => a < b ? -1 : 1)), null, 2) + "\n");
+        writeFileSync4(file, JSON.stringify(Object.fromEntries(Object.entries(this.lock).sort(([a], [b]) => a < b ? -1 : 1)), null, 2) + "\n");
         const legacy = join10(this.root, LEGACY_LOCK);
         if (existsSync8(legacy)) {
           rmSync3(legacy);
@@ -12224,12 +11841,6 @@ ${END}`;
       }
     };
     missingKeysLine = (keys) => keys.length ? `info: binding keys in the template that this binding does not set: ${keys.join(", ")}` : void 0;
-    MCP_FILES = /* @__PURE__ */ new Map([
-      ["claude", ".mcp.json"],
-      ["cursor", ".cursor/mcp.json"],
-      ["codex", ".codex/config.toml"],
-      ["generic", null]
-    ]);
     CLI_PIN = ".agents/cli.json";
     CLI_PACKAGE = "github:dmitriywind/agentic-sdlc";
     LAUNCHER = ".agents/bin/agentic-sdlc";
@@ -12325,7 +11936,7 @@ ${END}`;
           }
           return bad ? 1 : 0;
         }
-        console.error("usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|individual-api|organization] [--no-plugin] [--upgrade] [--force] | validate | doctor");
+        console.error("usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness claude] [--profile individual|organization] [--no-plugin] [--upgrade] [--force] | validate | doctor");
         return 2;
       } catch (e) {
         console.error(redact2(e.message, ctx.env));
@@ -12345,7 +11956,7 @@ __export(mcp_exports, {
   cli: () => cli9,
   handle: () => handle
 });
-import { mkdtempSync as mkdtempSync4, readFileSync as readFileSync10, rmSync as rmSync4, writeFileSync as writeFileSync6 } from "fs";
+import { mkdtempSync as mkdtempSync4, readFileSync as readFileSync10, rmSync as rmSync4, writeFileSync as writeFileSync5 } from "fs";
 import { tmpdir as tmpdir4 } from "os";
 import { join as join11 } from "path";
 import { createInterface } from "readline";
@@ -12412,7 +12023,7 @@ async function callTool(name, args, ctx, allow) {
   let dir;
   if (s.body) {
     dir = mkdtempSync4(join11(tmpdir4(), "agentic-sdlc-mcp-"));
-    writeFileSync6(join11(dir, "body.md"), String(args.body));
+    writeFileSync5(join11(dir, "body.md"), String(args.body));
     argv.push("--body-file", join11(dir, "body.md"));
   }
   try {
@@ -12732,11 +12343,11 @@ var init_cli = __esm({
       vcs: [() => Promise.resolve().then(() => (init_vcs(), vcs_exports)), true, "start head changed base push cut tag tags drop checkout-tests"],
       dispatch: [() => Promise.resolve().then(() => (init_dispatch(), dispatch_exports)), true, "dispatch <skill>[/<step>] --ticket <id> | --cr <n> [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]: start the step on its executor"],
       gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red skill-regression review provenance"],
-      ledger: [() => Promise.resolve().then(() => (init_ledger(), ledger_exports)), true, "runs summary plan record stale hash measures export: the run ledger from heartbeats; export sends runs as OTLP or CDEvents"],
+      ledger: [() => Promise.resolve().then(() => (init_ledger(), ledger_exports)), true, "runs summary plan record stale hash measures: the run ledger from heartbeats"],
       bench: [() => Promise.resolve().then(() => (init_bench(), bench_exports)), true, "build propose run report compare"],
       mcp: [() => Promise.resolve().then(() => (init_mcp(), mcp_exports)), true, "serve the port verbs as MCP tools over stdio; --allow approve,status"]
     };
-    INIT_FLAGS2 = "[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github-issues|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]";
+    INIT_FLAGS2 = "[--profile individual|organization] [--harness claude] [--board github-issues|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]";
     version2 = () => {
       try {
         return JSON.parse(readFileSync11(new URL("../package.json", import.meta.url), "utf8")).version;

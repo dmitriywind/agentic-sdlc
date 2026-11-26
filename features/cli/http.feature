@@ -1,6 +1,6 @@
 # Owner: src/exec.ts, "http" and "retryWait". The HTTP helper the REST adapters share, against a stubbed fetch and a fake clock.
 Feature: The HTTP helper retries what is safe, gives up on time and keeps secrets out of errors
-  A webhook URL may hold a token and a POST that failed with a server error may have started something,
+  A URL may hold a token and a POST that failed with a server error may have started something,
   so the helper retries only what is safe and never prints a URL.
 
   Rule: A call is retried only when that is safe

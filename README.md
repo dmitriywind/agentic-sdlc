@@ -8,8 +8,8 @@ the cycle, shapes each ticket, builds it, reviews it and merges it. CI gates dec
 and no agent can skip them. You act only when the factory asks you.
 
 It is a skill pack (the process), a binding (your project's values) and the `agentic-sdlc` CLI (the
-board, forge and Git verbs, and the gates). It runs on Claude Code, Codex, Cursor or any agent with
-a shell, on your subscription or on API keys, in the cloud, in CI or on your own machine.
+board, forge and Git verbs, and the gates). It runs on Claude Code with
+your Claude subscription (no API key), in a cloud routine, in CI or on your own machine.
 
 **Read the guide online:** [dmitriywind.github.io/agentic-sdlc](https://dmitriywind.github.io/agentic-sdlc/guide.html):
 step through a ticket in six scenarios, and get your setup command.
@@ -17,7 +17,7 @@ step through a ticket in six scenarios, and get your setup command.
 ## Quick start
 
 ```bash
-npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --profile individual --harness claude --board github-issues
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --profile individual --board github-issues
 .agents/bin/agentic-sdlc doctor
 ```
 
@@ -54,7 +54,7 @@ On Claude Code, also install the plugin (skills, the guard hook, the MCP server)
 
 The same guide, with every diagram drawn, as one page: [docs/guide.html](docs/guide.html).
 Reference: [the contract](references/architecture.md), [the behaviour as executable features](features/) (`npm test`),
-[GitHub setup](docs/forges.md), per-vendor setup in [docs/ecosystems](docs/ecosystems/claude-code.md),
+[GitHub setup](docs/forges.md), Claude Code setup in [docs/ecosystems](docs/ecosystems/claude-code.md),
 [the binding template](templates/binding.yml), [the roadmap](docs/roadmap.md).
 
 ## This repository

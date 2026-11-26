@@ -62,16 +62,6 @@ Then('every eval case has graders of a known type', () => {
 });
 
 // ---- manifests ----
-const KEYS = ['name', 'displayName', 'description', 'version', 'minClientVersions', 'author', 'publisher', 'homepage', 'repository', 'license', 'logo', 'keywords', 'category', 'tags', 'commands', 'agents', 'skills', 'rules', 'hooks', 'variables', 'mcpServers'];
 const manifest = (dir: string) => JSON.parse(read(`${dir}/plugin.json`));
 Then('the manifest in {word} is named "agentic-sdlc"', (w, dir: string) => assert.equal(manifest(dir).name, 'agentic-sdlc'));
 Then('the manifest in {word} carries the package version', (w, dir: string) => assert.equal(manifest(dir).version, version()));
-Then('the Cursor manifest has only keys its schema allows', () => assert.deepEqual(Object.keys(manifest('.cursor-plugin')).filter((k) => !KEYS.includes(k)), []));
-Then('the Cursor manifest name is a lowercase slug', () => assert.match(manifest('.cursor-plugin').name, /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/));
-Then('the skills path of the manifest in {word} is a directory', (w, dir: string) => assert.ok(statSync(join(REPO, manifest(dir).skills)).isDirectory()));
-Then('the MCP path of the manifest in {word} starts the server with {string}', (w, dir: string, args: string) => {
-  const p = manifest(dir).mcpServers as string;
-  assert.match(p, /^\.\//);
-  const server = JSON.parse(read(p)).mcpServers['agentic-sdlc'];
-  assert.deepEqual([server.command, ...server.args], args.split(' '));
-});

@@ -1,6 +1,6 @@
 // The run ledger, driven through the CLI on the local board (heartbeats are comments of the heartbeat ticket "1").
 // The fixtures write comments straight into .agents/board.json so that author and time are the scenario's own.
-// Exports capture() and the JSON-result steps' helpers for the telemetry and bench steps.
+// Exports capture() and the JSON-result steps' helpers for the bench steps.
 // State on w.state: none. The JSON of the last run is w.last.json().
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -88,7 +88,6 @@ const editLast = (w: World, fn: (hb: Record<string, unknown>) => void) => {
 Given('the heartbeat ticket', (w) => ensureTicket(w));
 Given('a heartbeat by {string} at {string} with these runs:', (w, by: string, at: string, t: DataTable) => heartbeat(w, undefined, by, at, t.hashes()));
 Given('a heartbeat by {string} at {string} with no runs', (w, by: string, at: string) => heartbeat(w, undefined, by, at, []));
-Given('that heartbeat records the factory {string}', (w, sha: string) => editLast(w, (hb) => { hb.factory = sha; }));
 Given('that heartbeat rescores:', (w, t: DataTable) => editLast(w, (hb) => {
   hb.rescores = t.hashes().map((r) => ({ id: r.id, ...(r.scorer ? { scorer: r.scorer } : {}), score: /^\d+$/.test(r.score) ? Number(r.score) : r.score, ...(r.by ? { by: r.by } : {}) }));
 }));

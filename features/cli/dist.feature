@@ -6,7 +6,7 @@ Feature: The built CLI works
 
   Scenario: The built CLI installs a project, validates it and serves an MCP call
     Given the built CLI dist/bin.js and an empty project
-    When the built CLI runs "init --board local --harness generic"
+    When the built CLI runs "init --board local --no-plugin"
     And the built CLI runs "validate"
     Then the built CLI output says "ok"
     When an MCP client calls the tool "board_create" with the title "t", the body "b" and the status "Signals"

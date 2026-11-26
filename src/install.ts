@@ -194,33 +194,21 @@ export function missingBindingKeys(template: string, binding: string): string[] 
 }
 const missingKeysLine = (keys: string[]) => keys.length ? `info: binding keys in the template that this binding does not set: ${keys.join(', ')}` : undefined;
 
-const MCP_FILES = new Map<string, string | null>([
-  ['claude', '.mcp.json'], ['cursor', '.cursor/mcp.json'], ['codex', '.codex/config.toml'], ['generic', null],
-]);
-
-/** Register the agentic-sdlc stdio server (the launcher) in the harness's project MCP file, keeping other servers. */
-function registerMcp(pkg: string, root: string, harness: string, force: boolean, log: string[], upgrade: boolean) {
-  const snippet = readFileSync(need(pkg, `templates/mcp/${harness === 'codex' ? 'codex.toml' : harness + '.json'}`), 'utf8');
-  const rel = MCP_FILES.get(harness);
-  if (!rel) { log.push(`add this MCP server to your harness config:\n${snippet.trim()}`); return; }
+/** Register the agentic-sdlc stdio server (the launcher) in the project's .mcp.json, keeping other servers. */
+function registerMcp(pkg: string, root: string, force: boolean, log: string[], upgrade: boolean) {
+  const want = JSON.parse(readFileSync(need(pkg, 'templates/mcp/claude.json'), 'utf8'));
+  const rel = '.mcp.json';
   const file = join(root, rel);
   const cur = existsSync(file) ? readFileSync(file, 'utf8') : '';
-  let next: string;
-  if (harness === 'codex') {
-    if (/^\[mcp_servers\.("?)agentic-sdlc\1\]/m.test(cur)) { log.push(`kept ${rel}`); return; }
-    next = (cur ? cur.replace(/\n*$/, '\n\n') : '') + snippet;
-  } else {
-    const want = JSON.parse(snippet);
-    const doc = cur.trim() ? parseJson(cur, rel) : {};
-    // The project may have tuned its entry (args, env): keep it unless --force.
-    const had = doc.mcpServers?.['agentic-sdlc'];
-    const old = had?.command === 'npx' && Array.isArray(had.args) && had.args.includes('agentic-sdlc'); // written by an older release
-    if (had && !force && !old) { log.push(`kept ${rel}`); return; }
-    // An upgrade writes only under paths.factory, and .mcp.json is a root file: say the fix.
-    if (upgrade && old) { log.push(`kept ${rel}: its agentic-sdlc entry runs npx; change it in a product change to {"command":"${LAUNCHER}","args":["mcp"]}`); return; }
-    doc.mcpServers = { ...doc.mcpServers, ...want.mcpServers };
-    next = JSON.stringify(doc, null, 2) + '\n';
-  }
+  const doc = cur.trim() ? parseJson(cur, rel) : {};
+  // The project may have tuned its entry (args, env): keep it unless --force.
+  const had = doc.mcpServers?.['agentic-sdlc'];
+  const old = had?.command === 'npx' && Array.isArray(had.args) && had.args.includes('agentic-sdlc'); // written by an older release
+  if (had && !force && !old) { log.push(`kept ${rel}`); return; }
+  // An upgrade writes only under paths.factory, and .mcp.json is a root file: say the fix.
+  if (upgrade && old) { log.push(`kept ${rel}: its agentic-sdlc entry runs npx; change it in a product change to {"command":"${LAUNCHER}","args":["mcp"]}`); return; }
+  doc.mcpServers = { ...doc.mcpServers, ...want.mcpServers };
+  const next = JSON.stringify(doc, null, 2) + '\n';
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, next);
   log.push(`wrote ${rel}`);
@@ -325,17 +313,15 @@ function originRepo(root: string): string | undefined {
 async function init(root: string, argv: string[], log: string[]) {
   const f = flagsOf(argv);
   const board = f.board ?? 'github-issues', forge = f.forge ?? 'github', vcs = f.vcs ?? 'git';
-  // An upgrade without --harness reuses what the install has: tier agents or .claude/skills mean Claude Code.
-  const prior = f.upgrade === 'true' && f.harness === undefined && (existsSync(join(root, '.claude/skills')) || existsSync(join(root, '.claude/agents')) && readdirSync(join(root, '.claude/agents')).some((n) => /^sdlc-.*\.md$/.test(n)));
-  const harness = f.harness ?? (prior ? 'claude' : 'generic');
+  const harness = f.harness ?? 'claude';
   const force = f.force === 'true';
   const profile = f.profile ?? 'individual';
   if (!ADAPTERS.board.includes(board)) throw new Error(`--board must be one of ${ADAPTERS.board.join('|')}, got '${board}'`);
-  if (!['individual', 'individual-api', 'organization'].includes(profile)) throw new Error(`--profile must be individual, individual-api or organization, got '${profile}'`);
+  if (!['individual', 'organization'].includes(profile)) throw new Error(`--profile must be individual or organization, got '${profile}'`);
   const org = profile === 'organization';
   if (vcs !== 'git') throw new Error(`--vcs must be git (v2 supports git only), got '${vcs}'`);
   if (!FORGES.includes(forge)) throw new Error(`--forge must be one of ${FORGES.join('|')}, got '${forge}'`);
-  if (!MCP_FILES.has(harness)) throw new Error(`--harness must be one of ${[...MCP_FILES.keys()].join('|')}, got '${harness}'`);
+  if (harness !== 'claude') throw new Error(`--harness must be claude, got '${harness}'`);
   const pkg = packageRoot();
   const pkgJson = join(pkg, 'package.json');
   const version: string = existsSync(pkgJson) ? readJson(pkgJson).version : 'next';
@@ -346,7 +332,7 @@ async function init(root: string, argv: string[], log: string[]) {
   inst.skills('skills', '.agents/skills', true);
   // Claude Code gets skills and the MCP server from the plugin, unless --no-plugin
   // (a Claude cloud session loads no repo plugin, only .claude/skills).
-  const noPlugin = harness === 'claude' && (f['no-plugin'] === 'true' || (f.upgrade === 'true' && existsSync(join(root, '.claude/skills'))));
+  const noPlugin = (f['no-plugin'] === 'true' || (f.upgrade === 'true' && existsSync(join(root, '.claude/skills'))));
   if (noPlugin) inst.skills('skills', '.claude/skills', true);
   else for (const n of filesUnder(skills)) inst.skip(join('.claude/skills', inst.installedName(n)));
   pinCli(inst, version, f.ref, force);
@@ -355,7 +341,7 @@ async function init(root: string, argv: string[], log: string[]) {
   ignoreCliCache(root, log);
   const upgrade = existsSync(join(root, BINDING_PATH)); // a binding means paths.factory: an upgrade writes only there
   oldPinHint(root, log);
-  if (harness !== 'claude' || noPlugin) registerMcp(pkg, root, harness, force, log, upgrade);
+  if (noPlugin) registerMcp(pkg, root, force, log, upgrade);
   else log.push('MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)');
   const scorers = join(pkg, 'scorers');
   if (existsSync(scorers)) {
@@ -454,8 +440,7 @@ async function init(root: string, argv: string[], log: string[]) {
   const agentsChanged = next !== cur && !upgrade;
   if (agentsChanged) { writeFileSync(agents, next); log.push('updated AGENTS.md'); }
   else if (next !== cur) log.push('kept AGENTS.md: its agentic-sdlc block differs from this release; update it in a product change');
-  if (harness === 'claude') claudeSetup(root, inst, log, noPlugin, upgrade);
-  else for (const tier of TIERS) inst.skip(`.claude/agents/sdlc-${tier}.md`);
+  claudeSetup(root, inst, log, noPlugin, upgrade);
   inst.finish();
   const missing = missingKeysLine(missingBindingKeys(readFileSync(need(pkg, 'templates/binding.yml'), 'utf8'), readFileSync(bindingFile, 'utf8')));
   if (missing) log.push(missing);
@@ -695,7 +680,7 @@ export const cli: PortCli = async (argv, ctx) => {
       }
       return bad ? 1 : 0;
     }
-    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness ...] [--profile individual|individual-api|organization] [--no-plugin] [--upgrade] [--force] | validate | doctor');
+    console.error('usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness claude] [--profile individual|organization] [--no-plugin] [--upgrade] [--force] | validate | doctor');
     return 2;
   } catch (e) {
     console.error(redact((e as Error).message, ctx.env));

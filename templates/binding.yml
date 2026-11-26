@@ -2,10 +2,9 @@
 # Another project replaces this file and keeps .agents/skills/. Secrets never go here: name env vars.
 version: 2
 # profile picks the defaults init writes and what validate checks (architecture.md section 10):
-#   individual: subscriptions only; harness executors or a local subscription CLI via `command`; no API keys, no org storage.
-#   individual-api: individual plus API keys: every executor kind, managed agents included.
-#   organization: API keys and managed agents; a separate review identity (required), traces on org storage, full bench.
-profile: individual # individual | individual-api | organization
+#   individual: one identity; harness executors or a local Claude Code CLI via `command`, on the Claude subscription; no org storage.
+#   organization: a separate review identity (required), traces on org storage, full bench.
+profile: individual # individual | organization
 owners:
   product: your-product-owner   # rules the product: narrative, priorities, P0, releases, production approval
   factory: your-factory-owner   # rules the factory: skills, binding, gates, guardrail learning proposals
@@ -29,9 +28,6 @@ board:
     #          (gh api orgs/<org>/issue-fields); a mapped one is an issue field, not a label. Org repos only; docs/guide/8-install.md
     # local:   {}                 # always .agents/board.json
     {}
-  # mcp:                        # optional: drive the board through an MCP server instead of the CLI
-  #   server: my-board-connector
-  #   tools: { list: <tool>, get: <tool>, update: <tool> }
   statuses: [Ideas, Signals, Backlog, Ready, In progress, In review, Done, Cancelled] # the process statuses, in order
   # later_milestone: Later       # milestone for accepted nice-to-have work; plan/shape never routes it
   fields:                       # logical field -> the tracker's field name
@@ -94,10 +90,7 @@ product:
 
 executors:                      # who runs each step; lookup: executors.<skill>/<step>, then executors.<skill>, then default (a harness subagent, model by the step's tier)
   default: { kind: harness }
-  # build: { kind: assign, user: coding-bot }  # a hosted coding agent picked up by assignment
-  # review/review: { kind: webhook, url_env: REVIEW_BOT_URL, token_env: REVIEW_BOT_TOKEN }
-  # ship: { kind: command, run: "my-release-bot --ticket {ticket} --step {skill}", secrets: [AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN], sandbox: container }
-  # plan/triage: { kind: managed, api: claude, agent_env: TRIAGE_AGENT_ID, environment_env: TRIAGE_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }  # api: claude | cursor (repo_url) | antigravity | generic (endpoint_env)
+  # ship: { kind: command, run: "my-release-bot --ticket {ticket} --step {skill}", secrets: [AGENTIC_FORGE_TOKEN], sandbox: container }
   # Any executor may also declare its stage definition:
   # review/verify: { kind: harness, mcps: [browser], secrets: [TEST_USER_PASSWORD], sandbox: container, model: { tier: balanced } }
   #   mcps: names from `mcps` below | secrets: env var names only, nothing else is passed | sandbox: cloud | container | local (--unattended refuses local unless AGENTIC_SDLC_LOCAL=1; unset inherits executors.default.sandbox) | model: { tier } or { id }, not both
@@ -112,12 +105,7 @@ mcps:                           # tool servers executors may use; name -> { url 
 # traces:
 #   uri: "s3://my-bucket/agentic/{run_id}.jsonl" # where executors write run traces; must contain {run_id}
 
-# telemetry:                    # opt-in export of runs (OpenTelemetry GenAI spans) and deploys (CDEvents); default: unset, nothing is sent
-#   otlp_endpoint_env: OTEL_EXPORTER_OTLP_ENDPOINT # NAME of the env var holding the OTLP/HTTP base URL; `ledger export --format otlp --send` POSTs <url>/v1/traces
-#   cdevents_sink_env: CDEVENTS_SINK_URL           # NAME of the env var holding the CDEvents sink URL; the merged and shipped gates POST one event each, best effort (a failed send never fails a gate)
-#   headers_env: TELEMETRY_HEADERS                 # NAME of the env var holding request headers as name=value,name2=value2 (an auth token); URLs and headers are never written in this file
-
-models:                         # steps name a tier (frontmatter metadata.steps.<step>.tier, or metadata.tier), never a model; init --harness claude writes .claude/agents/sdlc-<tier>.md from this map
+models:                         # steps name a tier (frontmatter metadata.steps.<step>.tier, or metadata.tier), never a model; init writes .claude/agents/sdlc-<tier>.md from this map
   fast: your-fast-model-id      # the cycle routine runs on this tier
   balanced: your-balanced-model-id
   deep: your-deep-model-id      # plan/shape and learn/improve

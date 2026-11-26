@@ -57,7 +57,7 @@ export function agentCommand(e: Executor, binding: Binding, vars: { model: strin
     return fill(binding.agent_command, vars);
   }
   if (e.kind === 'command') { const l = limitsOf(binding, e); return fill(e.run, { ...vars, skill: BENCH_STEP, cr: '', max_turns: String(l.max_turns ?? ''), max_tokens: String(l.max_tokens ?? ''), max_minutes: String(l.max_minutes ?? '') }); }
-  throw new Error(`executor kind ${e.kind} cannot run on the bench; use harness or command`);
+  throw new Error(`executor kind ${(e as { kind: string }).kind} cannot run on the bench; use harness or command`);
 }
 
 /** Paths a unified diff adds (old side /dev/null). */

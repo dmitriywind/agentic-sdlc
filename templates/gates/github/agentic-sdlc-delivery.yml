@@ -26,7 +26,6 @@ permissions:
 env:
   GH_TOKEN: ${{ github.token }}
   AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
-  AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
   CONCLUSION: ${{ github.event.workflow_run.conclusion }}
   RUN_NAME: ${{ github.event.workflow_run.name }}
   RUN_ID: ${{ github.event.workflow_run.id }}

@@ -58,10 +58,9 @@ Feature: Running the bench
 
     Background:
       Given the executors:
-        | name    | kind    | run                                                        | url_env | max_turns |
-        | default | harness |                                                            |         | 40        |
-        | bot     | command | bot {skill} {ticket} {prompt_file} {workdir}               |         |           |
-        | hook    | webhook |                                                            | U       |           |
+        | name    | kind    | run                                                        | max_turns |
+        | default | harness |                                                            | 40        |
+        | bot     | command | bot {skill} {ticket} {prompt_file} {workdir}               |           |
 
     Scenario Outline: A harness uses binding.agent_command and a command executor its run template
       When the agent command is built for the executor '<executor>'

@@ -23,6 +23,6 @@ Start with the guide: twelve short chapters in four groups (Understand, Adopt, O
 | [Binding template](../templates/binding.yml) | Every project value, documented. |
 | [Behaviour](../features/) | Every gate, CLI and install rule, and the lint of the skill pack, as executable Gherkin features (`npm test`). |
 | [GitHub](forges.md) | Checks, approval, tokens, secrets and one-time setup on GitHub. |
-| [Claude](ecosystems/claude-code.md), [Codex](ecosystems/codex.md), [Cursor](ecosystems/cursor.md), [any other agent](ecosystems/generic.md) | Per-vendor setup and limits, each fact with its source. |
+| [Claude Code](ecosystems/claude-code.md) | Setup and limits, each fact with its source. |
 | [Runner templates](../templates/runner/routine.md) | One template per scheduler; [local.md](../templates/runner/local.md) for your own machine. |
 | [Roadmap](roadmap.md) | What comes next, in order. |

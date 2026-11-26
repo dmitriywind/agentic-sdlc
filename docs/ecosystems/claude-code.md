@@ -3,15 +3,14 @@
 ## What you get
 - Claude Code CLI: skills, MCP, headless `claude -p`.
 - Cloud sessions and scheduled tasks (routines) that run on Anthropic's cloud with your laptop closed.
-- Managed Agents API (API-key billed): hosted agents, cloud sandboxes, cron deployments.
-- A GitHub Action that runs the same prompt on your runners.
+- CI cron that runs the same prompt on your runners with a subscription token.
 
 ## Install
 The skills, hooks and MCP server ship as a Claude Code plugin named `agentic-sdlc`, so skills are
 `/agentic-sdlc:sdlc`, `/agentic-sdlc:ship` and so on ([plugins](https://code.claude.com/docs/en/plugins)).
 
 ```bash
-npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --harness claude --profile individual --board github-issues --forge github --vcs git
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --profile individual --board github-issues --forge github --vcs git
 claude --plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc
 ```
 `init` pins the CLI in `.agents/cli.json` and installs the launcher `.agents/bin/agentic-sdlc`, which fetches that ref
@@ -26,11 +25,11 @@ every session, the repo is also a plugin marketplace:
 The plugin's hook refuses a push to the trunk and allows `forge approve` and `forge status` only in the review runtime (two identities). A one-identity runner that serves `forge_status` over MCP sets `AGENTIC_SDLC_ALLOW_STATUS=1`; that never opens `forge approve`.
 
 The plugin also carries:
-- `agents/`: `agentic-sdlc:sdlc-fast`, `sdlc-balanced`, `sdlc-deep` (each runs on the session's model; `init --harness claude` writes project agents with the models from `binding.models`) and `agentic-sdlc:sdlc-reviewer` for `review/review`. The reviewer has Read, Grep, Glob, Skill, Bash and the plugin's MCP tools, no Edit or Write and a turn limit, and the guard hook refuses any Bash command from it that is not an `agentic-sdlc` call. Plugin agents are namespaced, so the project's `sdlc-<tier>` from `init` (below) does not clash with them; the `sdlc` skill uses the project's agent when it exists. Plugin agents ignore `hooks`, `mcpServers` and `permissionMode` ([sub-agents](https://code.claude.com/docs/en/sub-agents)).
+- `agents/`: `agentic-sdlc:sdlc-fast`, `sdlc-balanced`, `sdlc-deep` (each runs on the session's model; `init` writes project agents with the models from `binding.models`) and `agentic-sdlc:sdlc-reviewer` for `review/review`. The reviewer has Read, Grep, Glob, Skill, Bash and the plugin's MCP tools, no Edit or Write and a turn limit, and the guard hook refuses any Bash command from it that is not an `agentic-sdlc` call. Plugin agents are namespaced, so the project's `sdlc-<tier>` from `init` (below) does not clash with them; the `sdlc` skill uses the project's agent when it exists. Plugin agents ignore `hooks`, `mcpServers` and `permissionMode` ([sub-agents](https://code.claude.com/docs/en/sub-agents)).
 - `bin/agentic-sdlc`: on the Bash tool's PATH while the plugin is enabled ([plugins reference](https://code.claude.com/docs/en/plugins-reference)), it runs the project's `.agents/bin/agentic-sdlc`, else its `node_modules/agentic-sdlc`, else the plugin's own build. Without the plugin, call `.agents/bin/agentic-sdlc`.
 - `evals/`: skill-triggering cases for `claude plugin eval` (paid runs; not part of CI). The case layout comes from `claude plugin eval init --bare`; the grader fields from the CLI's own schema, as the public docs do not list them.
 
-What `init --harness claude` writes:
+What `init` writes:
 - `.agents/cli.json` (the CLI pin), `.agents/bin/agentic-sdlc` (the launcher), `.agents/binding.yml`, `.agents/scorers/`, the gate templates for your forge, the runner prompts.
 - The skills in `.agents/skills/`, named `sdlc-<skill>` (`sdlc` stays `sdlc`): the gates and `validate` read them. Claude Code itself takes the skills from the plugin.
 - One subagent per tier in `.claude/agents/`, with the model from `models`.
@@ -60,8 +59,8 @@ only that job gets `AGENTIC_REVIEW_TOKEN` and allows `forge approve`. With one i
 A scheduler on your machine runs the command above in a separate clone, with no sandbox. Opt in with
 `sandbox: local` and `AGENTIC_SDLC_LOCAL=1`: [`templates/runner/local.md`](../../templates/runner/local.md).
 
-## Run without your machine - Individual
-Subscription only.
+## Run without your machine
+Subscription only, for both profiles: no path bills a metered API key.
 
 | Option | How | Limits |
 |---|---|---|
@@ -73,37 +72,15 @@ built on the Agent SDK ([docs](https://code.claude.com/docs/en/agent-sdk/overvie
 not that case, but the legal page says the Pro and Max limits assume "ordinary, individual usage" of Claude Code and the Agent SDK, and `claude -p` on a plan draws subscription limits.
 Zero-Data-Retention, HIPAA and CMEK orgs cannot use cloud sessions ([docs](https://code.claude.com/docs/en/claude-code-on-the-web)).
 
-## Run without your machine - Organization
-Use API keys, not a person's login.
-
-| Path | How |
-|---|---|
-| GitHub Action | `anthropics/claude-code-action@v1` with `ANTHROPIC_API_KEY` (recommended for org-wide use). [`templates/runner/github-actions-claude.yml`](../../templates/runner/github-actions-claude.yml), [docs](https://code.claude.com/docs/en/github-actions) |
-| Managed Agents | Create an agent (model, system, tools, MCP servers, skills) and an environment. Start with `POST /v1/sessions`, or schedule with `POST /v1/deployments` (cron `schedule`, per-run `budget`). Beta header `anthropic-beta: managed-agents-2026-04-01`. Not ZDR or HIPAA eligible. Self-hosted sandboxes exist. [overview](https://platform.claude.com/docs/en/managed-agents/overview), [sessions](https://platform.claude.com/docs/en/managed-agents/sessions), [deployments](https://platform.claude.com/docs/en/managed-agents/scheduled-deployments). Template: [`templates/runner/claude-managed-deployment.json`](../../templates/runner/claude-managed-deployment.json) |
-
 How `executors` kinds map:
 
 | Binding kind | Claude |
 |---|---|
 | `harness` | The Claude session that runs the cycle spawns a subagent. |
-| `managed` | A Managed Agents session. `agent_env` holds the agent id, `environment_env` the environment id, `token_env` the key (`endpoint_env` optionally overrides the API URL). The session id goes in the ledger. |
-| `webhook` | Your service starts a session or fires a scheduled task (`POST .../v1/claude_code/routines/<trig_id>/fire`, per-task bearer token; claude.ai users only, not the Platform API: [docs](https://code.claude.com/docs/en/routines)). |
-| `assign` | Assigning an issue to Claude: not found. The closest is the scheduled-task Issue trigger, or an `@claude` comment through the GitHub Action ([docs](https://code.claude.com/docs/en/github-actions)). |
-| `command` | `claude -p ...` as `run`. |
-
-## Use it as a stage executor
-Give `build` to a Managed Agents agent and keep the rest on the harness:
-```yaml
-executors:
-  default: { kind: harness }
-  build: { kind: managed, api: claude, agent_env: IMPL_AGENT_ID, environment_env: IMPL_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY, sandbox: cloud }
-```
-The agent needs the skills (attach the plugin's `skills/`), the CLI or MCP server, and the listed secrets. A session can override model, tools, MCP servers
-and skills per run (`agent_with_overrides`). The reviewer is never the implementer of the same CR.
+| `command` | `claude -p ...` as `run`, logged in with the subscription. |
 
 ## Limits and unknowns
-- Scheduled tasks and Managed Agents are preview or beta; headers and limits change.
+- Scheduled tasks are a research preview; headers and limits change.
 - The GitHub trigger does not cover forks; auto-fix does not react to merge conflicts.
 - Anthropic-hosted sessions fail if your org uses IP allowlisting without an exemption.
-- Managed Agents GitHub resource, skills attach format and webhook signing: not verified here.
 - Claude Code does not read `.agents/skills`; it gets the skills from the plugin, or from `.claude/skills` (`--no-plugin`).

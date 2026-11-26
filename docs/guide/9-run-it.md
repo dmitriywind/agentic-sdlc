@@ -22,28 +22,6 @@ the data cannot give is `null` with a reason. Set `product.slo` (`change_failure
 no new feature ticket and works only bugs, Signals and reviews in flight, and the heartbeat says
 `budget: exhausted`.
 
-## Send it to your telemetry
-
-Nothing leaves the project unless the binding's `telemetry` block names where. Each key names an
-environment variable, never a URL or a token: `otlp_endpoint_env` (an OTLP/HTTP base URL),
-`cdevents_sink_env` (a CDEvents sink URL) and `headers_env` (request headers as `name=value,name2=value2`).
-
-```bash
-.agents/bin/agentic-sdlc ledger export --format otlp --since 7   # print one OTLP/HTTP JSON document
-.agents/bin/agentic-sdlc ledger export --format otlp --send      # post it to <endpoint>/v1/traces
-.agents/bin/agentic-sdlc ledger export --format cdevents --out events.jsonl
-```
-
-`--since` takes a number of days or an ISO time; `--run <id>` exports one run. OTLP has one trace
-per heartbeat: an `invoke_workflow` span for the cycle and an `invoke_agent` span per run, with the
-skill as `gen_ai.agent.name`, the model, the outcome as span status and `error.type`, and the ticket,
-CR, tier, executor, tokens and scores as `agentic_sdlc.*` attributes and evaluation events. Ids are
-hashes of the heartbeat and run ids, so exporting twice gives the same document. The GenAI
-conventions are still in `development`, so their names can change; they live in one table in
-`src/telemetry.ts`. With `cdevents_sink_env` set, the `merged` gate posts a `change.merged` event and
-the `shipped` gate a `service.deployed` or `service.rolledback` event. A failed send writes one line to
-stderr and never fails the gate.
-
 If the delivery workflow fails on a merge, start it by hand with the commit's sha: it runs the
 `merged` check again and moves the ticket to Done.
 

@@ -9,8 +9,8 @@ Preamble (scheduler setup, not part of the prompt):
 5. Set `AGENTIC_SDLC_UNATTENDED=1` in the run's environment.
 6. Run the session on the binding's `models.fast` model; each step takes its own tier.
 7. The first line works with and without the Claude Code plugin: it names the plugin skill, then the
-   `.claude/skills/` copy (`init --harness claude`), then the `.agents/skills/` copy that every harness has.
-8. With `forge.review_identity` set and a scheduler without job dependencies (routines, Managed Agents deployments):
+   `.claude/skills/` copy (`init --no-plugin`), then the `.agents/skills/` copy.
+8. With `forge.review_identity` set and a scheduler without job dependencies (routines):
    set `AGENTIC_REVIEW_FIRE_CMD` to the command that starts the review run (see `routine.md`). `dispatch review/review`
    runs it; the cycle itself never does.
 9. Copy everything below the line into the scheduler as the prompt (installed at `.agents/cycle-prompt.md`).

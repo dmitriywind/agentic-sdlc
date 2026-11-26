@@ -25,6 +25,4 @@ jobs:
           node-version: 22
       # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
       - name: Heartbeat is fresh
-        env:
-          AGENTIC_BOARD_TOKEN: ${{ secrets.AGENTIC_BOARD_TOKEN }}
         run: .agents/bin/agentic-sdlc ledger stale --max-hours 6   # set: above your cycle cadence plus one cycle's run time

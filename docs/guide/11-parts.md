@@ -8,7 +8,7 @@ How the factory is built. For the exact rules, read the contract,
 
 | Layer | Where | Holds |
 |---|---|---|
-| Skills | the plugin (Claude, Codex, Cursor) or `.agents/skills/` | The process: every rule. The same for every project. |
+| Skills | the Claude Code plugin or `.agents/skills/` | The process: every rule. The same for every project. |
 | Binding | `.agents/binding.yml` | Your project's values: board, owners, commands, environments, models. |
 | CLI | `agentic-sdlc` (and its MCP server) | The mechanism: board, forge and Git verbs, the checks, dispatch, the run ledger. The MCP server speaks both protocol eras: a client that opens with `initialize` gets the handshake (2025-11-25 and earlier), and a client that sends its version in each request's `_meta` (2026-07-28) is served without a handshake. |
 
@@ -48,9 +48,8 @@ Under the Claude Code plugin a skill is `agentic-sdlc:<skill>`. A copied install
 ## Who runs a step
 
 `executors.<step>.kind` picks who runs each step (a key `<skill>/<step>`, or a skill name for all
-its steps): `harness` (a fresh-context worker of the cycle), `command`
-(a local CLI), `webhook` (a bot over HTTP), `managed` (a managed agent) or `assign` (a hosted coding
-agent). Each entry may also name its MCP servers, its secrets (env var names only; nothing else is
+its steps): `harness` (a fresh-context worker of the cycle), or `command`
+(a local CLI, such as `claude -p` on the subscription). Each entry may also name its MCP servers, its secrets (env var names only; nothing else is
 passed), its sandbox (`cloud`, `container` or `local`) and its model. Results come back only as
 board and forge writes. The rules are in [the contract, section 7](../../references/architecture.md#7-executors-who-runs-each-step).
 

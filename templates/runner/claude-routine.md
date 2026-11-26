@@ -1,6 +1,6 @@
 # Claude cloud scheduled task (routine)
 
-Profile: individual or individual-api (also works on Team and Enterprise seats of the Claude plan). Research preview; needs a claude.ai login (not an API key, Bedrock or Vertex).
+Profile: individual or organization (also works on Team and Enterprise seats of the Claude plan). Research preview; needs a claude.ai login (not an API key, Bedrock or Vertex).
 Install at: claude.ai/code/routines, or `/schedule` in Claude Code. The task belongs to, and acts as, one claude.ai account.
 Usage: scheduled runs draw the same subscription usage as interactive work, and are rejected at the subscription usage limit unless usage credits are on. The shortest schedule interval is 1 hour; pick a minute off the hour (for example `7 */2 * * *`), since on-the-hour starts can be late.
 Silent stops: the task turns off after 72 h without a GitHub connection, and a run row that says "Succeeded" does not prove work was done. Neither writes a heartbeat, so install the dead-man workflow (`agentic-sdlc-dead-man.yml`, installed by `init`).

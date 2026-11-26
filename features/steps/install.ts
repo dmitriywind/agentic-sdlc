@@ -75,7 +75,7 @@ Given('the installed binding also runs the executors {string}', (w, names: strin
   for (const n of names.split(',').map((s) => s.trim())) b.executors[n] = { kind: 'harness' };
   w.write('.agents/binding.yml', JSON.stringify(b));
 });
-Given('the installed binding is complete and runs a bot that is assigned work', (w) => {
+Given('the installed binding is complete and names an executor for no step', (w) => {
   w.write('.agents/binding.yml', stringify({
     version: 2, profile: 'individual', owners: { product: 'a', factory: 'b', bots: ['bot'] },
     board: { adapter: 'local', options: {}, statuses: ['Ideas', 'Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done', 'Cancelled'] },
@@ -83,7 +83,7 @@ Given('the installed binding is complete and runs a bot that is assigned work', 
     models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: { factory: ['.agents/**'] }, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
     priorities: [], p0_setters: [], max_subissue_depth: 1, spec_marker: 'spec.md', stall_minutes: 60, parallel_agents: 1,
     cycle: {}, heartbeat: { ticket: '1' }, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
-    executors: { default: { kind: 'harness' }, bot: { kind: 'assign', user: 'coding-bot' } },
+    executors: { default: { kind: 'harness' }, bot: { kind: 'command', run: 'bot' } },
   }));
 });
 Given('the installed binding is the shipped template on a local board with the heartbeat ticket {string}', (w, ticket: string) => {

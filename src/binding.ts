@@ -33,12 +33,11 @@ const REQUIRED = [
   'priorities', 'p0_setters', 'max_subissue_depth', 'spec_marker', 'stall_minutes', 'parallel_agents', 'cycle', 'heartbeat', 'learning', 'product', 'executors',
 ];
 const PROOFS = ['test', 'eval', 'visual', 'data-check', 'computer-use', 'manual'];
-const EXECUTORS = ['harness', 'command', 'webhook', 'managed', 'assign'];
-const EXECUTOR_KEYS: Record<string, string[]> = { command: ['run'], webhook: ['url_env'], managed: ['token_env'], assign: ['user'] };
-const MANAGED_APIS = ['claude', 'cursor', 'antigravity', 'generic'];
+const EXECUTORS = ['harness', 'command'];
+const EXECUTOR_KEYS: Record<string, string[]> = { command: ['run'] };
 export const HUMAN_APPROVAL = ['full-lane', 'always', 'never'];
 const SANDBOXES =['cloud', 'container', 'local'];
-const PROFILES = ['individual', 'individual-api', 'organization'];
+const PROFILES = ['individual', 'organization'];
 export const DELIVERY = ['release-line', 'continuous'];
 export const PROVENANCE = ['off', 'warn', 'require'];
 const EVIDENCE = ['sbom', 'provenance', 'signature'];
@@ -121,7 +120,6 @@ export function validateBinding(b: Binding): string[] {
   for (const [k, e] of Object.entries<any>(x.executors ?? {})) {
     if (!EXECUTORS.includes(e?.kind)) p.push(`executors.${k}.kind '${e?.kind}' is not one of ${EXECUTORS.join('|')}`);
     for (const key of EXECUTOR_KEYS[e?.kind] ?? []) if (!e[key]) p.push(`executors.${k}.${key} is required for kind ${e.kind}`);
-    if (e?.kind === 'managed' && e.api !== undefined && !MANAGED_APIS.includes(e.api)) p.push(`executors.${k}.api '${e.api}' is not one of ${MANAGED_APIS.join('|')}`);
     for (const m of e?.mcps ?? []) if (!x.mcps?.[m]) p.push(`executors.${k}.mcps '${m}' is not in the binding's mcps`);
     for (const v of e?.secrets ?? []) if (!/^[A-Z_][A-Z0-9_]*$/.test(String(v))) p.push(`executors.${k}.secrets '${v}' is not an env var name`);
     for (const lk of ['max_turns', 'max_tokens', 'max_minutes']) if (e?.[lk] !== undefined && !(Number.isInteger(e[lk]) && e[lk] > 0)) p.push(`executors.${k}.${lk} must be a positive integer`);
@@ -167,13 +165,6 @@ export function validateBinding(b: Binding): string[] {
   if (x.learning?.enabled !== undefined && typeof x.learning.enabled !== 'boolean') p.push('learning.enabled must be true or false');
   for (const k of ['preview', 'proofs_on_base', 'evidence_check']) if (x.commands?.[k] !== undefined && typeof x.commands[k] !== 'string') p.push(`commands.${k} must be a command line`);
   if (x.traces && !String(x.traces.uri ?? '').includes('{run_id}')) p.push('traces.uri must contain {run_id}');
-  if (x.telemetry !== undefined) {
-    if (!x.telemetry || typeof x.telemetry !== 'object' || Array.isArray(x.telemetry)) p.push('telemetry must be { otlp_endpoint_env, cdevents_sink_env, headers_env }');
-    else for (const [k, v] of Object.entries<any>(x.telemetry)) {
-      if (!['otlp_endpoint_env', 'cdevents_sink_env', 'headers_env'].includes(k)) p.push(`telemetry.${k} is not a telemetry key (otlp_endpoint_env, cdevents_sink_env, headers_env)`);
-      else if (typeof v !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(v)) p.push(`telemetry.${k} must be the NAME of an env var, never a URL or a value`);
-    }
-  }
   if (x.executors && !x.executors.default) p.push('executors.default is missing');
   if (x.heartbeat && !String(x.heartbeat.ticket ?? '').trim()) p.push('heartbeat.ticket is empty: create the heartbeat ticket and put its id here');
   // Keys the gates and skills read without a guard.
@@ -184,12 +175,6 @@ export function validateBinding(b: Binding): string[] {
   if (x.learning?.judge_tier !== undefined && !TIERS.includes(x.learning.judge_tier)) p.push(`learning.judge_tier '${x.learning.judge_tier}' is not one of ${TIERS.join('|')}`);
   for (const c of x.learning?.auto_merge_classes ?? []) if (c !== 'tuning') p.push(`learning.auto_merge_classes '${c}': only tuning may merge without the factory owner`);
   for (const [n, m] of Object.entries<any>(x.mcps ?? {})) if (!m?.url === !m?.command) p.push(`mcps.${n} needs exactly one of url or command`);
-  for (const [k, e] of Object.entries<any>(x.executors ?? {})) {
-    if (e?.kind !== 'managed') continue;
-    const api = e.api ?? 'generic';
-    const need = api === 'claude' ? ['agent_env', 'environment_env'] : api === 'cursor' ? ['repo_url'] : api === 'generic' ? ['endpoint_env'] : [];
-    for (const key of need) if (!e[key]) p.push(`executors.${k}.${key} is required for a managed executor with api ${api}`);
-  }
   return p;
 }
 
@@ -217,15 +202,12 @@ export function bindingWarnings(b: Binding): string[] {
   if (x?.learning?.enabled === true && !x.agent_command) w.push('learning.enabled is true but agent_command is unset: bench cannot run');
   if (x?.learning?.budget_usd_per_week !== undefined) w.push('learning.budget_usd_per_week is unused; learning.enabled turns learning on; remove it');
   if (x?.profile === 'individual') {
-    for (const [k, e] of Object.entries<any>(x.executors ?? {}))
-      if (['managed', 'webhook', 'assign'].includes(e?.kind)) w.push(`executors.${k}: kind ${e.kind} needs an API or hosted agent; profile individual is subscriptions only: use individual-api`);
     const uri = x.traces?.uri;
     if (uri !== undefined && !['./', '.agents/', '/'].some((q) => String(uri).startsWith(q)) && !/^[A-Za-z]:[\\/]/.test(String(uri))) w.push(`traces.uri '${uri}' is not a local path (./, .agents/ or absolute); individual profile has no org storage`);
   } else if (x?.profile === 'organization') {
     const sb = x.executors?.default?.sandbox;
     if (!sb || sb === 'local') w.push('executors.default.sandbox is local or unset: organization expects cloud or container');
     if (!x.traces) w.push('traces is unset: organization expects traces.uri on org storage');
-    if (!Object.values<any>(x.executors ?? {}).some((e) => e?.kind === 'managed')) w.push('no executor is kind managed: organization runs its stages on managed agents');
   }
   return w;
 }

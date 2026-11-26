@@ -14,8 +14,7 @@ Feature: Executors, MCP servers and traces are checked
 
       Examples:
         | executor                                 | problem                      |
-        | {"kind":"managed","api":"openai"}        | executors.x.api 'openai'     |
-        | {"kind":"managed","api":"cursor"}        | executors.x.token_env is required |
+        | {"kind":"command"}                       | executors.x.run is required  |
 
   Rule: A stage may narrow its MCP servers, secrets, sandbox and model
 

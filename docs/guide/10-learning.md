@@ -27,7 +27,5 @@ flowchart TB
 5. The change goes through review and the checks like any other. A `guardrail` change needs the
    factory owner; a `tuning` change (the model map) may merge alone once a bench baseline exists.
 
-The run rows behind all of this can also go to your own telemetry stack as OpenTelemetry GenAI spans
-and CDEvents; see [Send it to your telemetry](9-run-it.md#send-it-to-your-telemetry).
 
 Next: [11. The parts](11-parts.md).
