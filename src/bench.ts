@@ -138,7 +138,7 @@ export async function buildCases(board: Board, forge: Forge, binding: Binding, l
   const read = await forge.list({ state: 'merged', limit: mergedLimit, since: o.since });
   if (read.length >= mergedLimit) console.error(`bench: read the newest ${mergedLimit} merged CRs; older CRs were not read. Raise the cap with --merged-limit <n> or narrow the window with --since <date>.`);
   const merged = read.filter((c) => c.state === 'merged');
-  const tickets = (await board.list({ status: binding.board.done_statuses })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const tickets = (await board.list({ status: binding.board.done_statuses, state: 'all' })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const cases: BenchCase[] = [];
   for (const t of tickets) {
     if (!o.perSize && cases.length >= limit) break;

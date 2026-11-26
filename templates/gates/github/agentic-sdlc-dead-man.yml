@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  issues: write   # a silent factory files a Signal
 defaults:
   run:
     shell: bash   # self-hosted Windows runners default to PowerShell
@@ -26,3 +27,11 @@ jobs:
       # Exit 1 when the newest heartbeat is older than this: a failed run, a stuck one, or a cycle that writes none.
       - name: Heartbeat is fresh
         run: .agents/bin/agentic-sdlc ledger stale --max-hours 6   # set: above your cycle cadence plus one cycle's run time
+      # One deduplicated Signal for a silent factory: a failure on every later tick comments on it.
+      - name: Signal a silent factory
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: .agents/bin/agentic-sdlc gate signal --source factory --title "Factory silent: no fresh heartbeat" --body "The dead-man check failed. run: $RUN_URL"

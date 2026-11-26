@@ -38,7 +38,10 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
     return v ? String(v.single_select_option?.name ?? v.value) : undefined;
   };
   const statusOf = (i: any) => fieldIds.status ? fieldOf(i, 'status') : names(i).find((l) => l.toLowerCase().startsWith(STATUS))?.slice(STATUS.length);
-  const toItem = (i: any): Item => {
+  /** An open issue with a signal:* label and no status: a signal nobody boarded yet (a phone, an issue form, an alert). */
+  const unboarded = (i: any) => i.state !== 'closed' && statusOf(i) === undefined && names(i).some((l) => l.toLowerCase().startsWith('signal:'));
+  const boarded = (i: any) => !i.pull_request && (statusOf(i) !== undefined || unboarded(i));
+  const toItem = (i: any, withBody = true): Item => {
     const fields: Item['fields'] = {}, labels: string[] = [];
     let status = '';
     for (const l of names(i)) {
@@ -50,9 +53,10 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
     }
     for (const f of LOGICAL) if (fieldIds[f]) { delete fields[f]; const v = fieldOf(i, f); if (v !== undefined) fields[f] = v; }
     if (fieldIds.status) status = statusOf(i) ?? '';
+    if (!status && unboarded(i)) status = 'Signals';
     return {
       id: String(i.number), title: i.title, url: i.html_url ?? '', status, labels, fields, milestone: i.milestone?.title ?? undefined,
-      children: [], assignees: (i.assignees ?? []).map((a: any) => a.login), createdAt: i.created_at ?? '', updatedAt: i.updated_at ?? '', body: i.body ?? '',
+      children: [], assignees: (i.assignees ?? []).map((a: any) => a.login), createdAt: i.created_at ?? '', updatedAt: i.updated_at ?? '', ...(withBody ? { body: i.body ?? '' } : {}),
       // The list carries no status change time: a closed issue at Done reached Done when it closed.
       ...(status === 'Done' && i.closed_at ? { statusChangedAt: i.closed_at as string } : {}),
     };
@@ -78,8 +82,8 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
   };
   const get = async (id: string): Promise<Item> => {
     const raw = await issue(id);
-    // A pull request, or an issue with no status label, is not a ticket on this board.
-    if (raw.pull_request || statusOf(raw) === undefined) throw new Error(`#${id} is not on the board`);
+    // A pull request, or an issue with no status label and no signal label, is not a ticket on this board.
+    if (!boarded(raw)) throw new Error(`#${id} is not on the board`);
     const out = toItem(raw);
     try {
       out.children = (await all(`issues/${id}/sub_issues`)).map((s) => String(s.number));
@@ -105,10 +109,11 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
   return {
     async list(q = {}) {
       const words = (q.search ?? '').toLowerCase().split(/\s+/).filter(Boolean);
-      return (await all('issues?state=all'))
-        .filter((i) => !i.pull_request && statusOf(i) !== undefined)
+      // Open issues only, with no body: the list is read every cycle. state 'all' adds the closed ones (Done, Cancelled).
+      return (await all(`issues?state=${q.state === 'all' ? 'all' : 'open'}`))
+        .filter(boarded)
         .filter((i) => words.every((w) => `${i.title}\n${i.body ?? ''}`.toLowerCase().includes(w)))
-        .map(toItem)
+        .map((i) => toItem(i, false))
         .filter((i) => (!q.status?.length || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label)));
     },
     get,

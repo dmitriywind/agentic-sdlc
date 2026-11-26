@@ -441,7 +441,7 @@ export async function shipped(d: Deps, env: string, sha: string, result: string,
   const target = `On ${env}`;
   const last = i === envs.length - 1;
   // A merged ticket the merge gate has not reached yet is still In review; it ships and moves to Done here.
-  const done = (await d.board.list({ status: ['Done', 'In review'] })).filter((x) => x.status === 'Done' || x.status === 'In review');
+  const done = (await d.board.list({ status: ['Done', 'In review'], state: 'all' })).filter((x) => x.status === 'Done' || x.status === 'In review');
   const changed: string[] = [];
   const signal = async (held: boolean) => {
     const title = `Deploy to ${env} failed at ${sha.slice(0, 12)}`;
@@ -547,15 +547,28 @@ export async function signalOnRed(d: Deps, id: string) {
   if (run.state !== 'failure') return { created: false, reason: `run ${redact(id, 40)} did not fail (${redact(run.state, 20)})` };
   const v = d.binding.vcs;
   if (run.ref !== v.trunk && !(v.release_prefix && run.ref.startsWith(v.release_prefix))) return { created: false, reason: `ref ${redact(run.ref, 100)} is not trunk or a release line` };
-  const title = redact(`CI red: ${run.name} @ ${run.ref} (run ${run.id})`, 1000).replace(/[^A-Za-z0-9 ._/:@()-]/g, '').slice(0, 100);
-  const existing = await d.board.list({ label: 'signal:ci' });
-  if (existing.some((x) => x.title === title)) return { created: false };
-  const item = await d.board.create({
-    title,
-    body: `run: ${redact(run.name)}\nref: ${redact(run.ref)}\nsha: ${redact(run.sha, 40)}\nurl: ${cleanUrl(run.url)}`,
-    status: 'Signals',
-    labels: ['signal:ci'],
-  });
+  // No run id in the title: the title is the dedupe key, so a red trunk stays one open Signal and each red run comments on it.
+  const title = redact(`CI red: ${run.name} @ ${run.ref}`, 1000).replace(/[^A-Za-z0-9 ._/:@()-]/g, '').slice(0, 100);
+  return signal(d, 'ci', title, `run: ${redact(run.id, 40)}\nsha: ${redact(run.sha, 40)}\nurl: ${cleanUrl(run.url)}`);
+}
+
+/**
+ * Files a Signal once: an open issue labelled signal:<source> with the same title (case and spaces aside) gets the new
+ * body as a comment; else a Signal is created at Signals. Source and title are the dedupe key. Text is redacted.
+ */
+export async function signal(d: Deps, source: string, title: string, body = '') {
+  if (!/^[a-z][a-z0-9-]*$/.test(source)) throw new UsageError('signal: --source is a lower-case word (a-z, 0-9, -)');
+  const t = redact(title, 200).trim();
+  if (!t) throw new UsageError('signal: --title is empty');
+  const text = String(body ?? '').split('\n').map((l) => redact(l, 500)).join('\n').slice(0, 4000);
+  const key = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const label = `signal:${source}`;
+  const open = (await d.board.list({ label })).find((x) => key(x.title) === key(t) && !d.binding.board.done_statuses.includes(x.status));
+  if (open) {
+    await d.board.comment(open.id, text || t);
+    return { created: false, id: open.id, commented: true };
+  }
+  const item = await d.board.create({ title: t, body: text, status: 'Signals', labels: [label] });
   return { created: true, id: item.id };
 }
 
@@ -720,6 +733,7 @@ export const cli: PortCli = (argv, base) =>
         return { ok: true, kinds, sha };
       }
       case 'signal-on-red': return signalOnRed(deps(), a.need('run'));
+      case 'signal': return signal(deps(), a.need('source'), a.need('title'), a.get('body'));
       case 'skill-regression': {
         const { errors, warnings } = skillRegression(base.root);
         for (const w of warnings) process.stderr.write(`warning: ${w}\n`);

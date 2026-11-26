@@ -96,7 +96,7 @@ Every verb takes only the flags it lists: an unknown flag, a value flag with no 
 
 | Verb | Effect | Output |
 |---|---|---|
-| `list [--status <s>]… [--label <l>] [--search <text>]` | Board items; `--search` matches title and body words | `Item[]` |
+| `list [--status <s>]… [--label <l>] [--search <text>] [--state all]` | Open board items without `body` (it is read every cycle: `get` returns the body); `--state all` adds the closed ones (Done, Cancelled), for a caller that needs them (`gate shipped`, `ledger measures`, `bench`); `--search` matches title and body words | `Item[]` |
 | `get <id>` | One item with fields and comments count | `Item` |
 | `create --title <t> --body-file <f> --status <s> [--label <l>]… [--parent <id>] [--milestone <m>]` | New ticket on the board | `Item` |
 | `move <id> <status> [--only-from <s>]` | Set Status. With `--only-from`, refuse (exit 1) unless the item is still there | `Item` |
@@ -119,7 +119,7 @@ the tracker's field name (a `github-issues` label prefix or org issue field, a l
 Adapters: `github-issues` (the default; the repo's issues through
 `gh api repos/{owner}/{repo}/…` REST only, so a Claude cloud session reaches it: Status and each logical
 field are labels `<name>:<value>`, `status:` and the lower-cased field name, e.g. `status:Ready`, `size:S`;
-an issue without a status label is off the board; `create` and every label write create missing labels;
+an issue without a status label is off the board, except an open one with a `signal:<stream>` label, which lists (and `get`s) as status `Signals` until triage moves it, so an issue made from a phone, an issue form or an alert is picked up; `create` and every label write create missing labels;
 `close` also closes the issue with its state reason; option `repo`), `local` (`.agents/board.json`, for tests and solo
 projects). Credentials only from env vars the binding names; never from a file in the repo.
 
@@ -196,7 +196,8 @@ change line `start` opens.
 | `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. A held ticket moves too, and Done drops its human label; a Cancelled ticket stays. A push with no CR changes nothing. No CR-pipeline gate writes the board; besides this gate only `shipped` moves a ticket (In review to Done, when a deploy reports first). |
 | `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
 | `provenance --cr <n>` | Off unless `forge.provenance` is `warn` or `require`. Reads the CR's commits through the forge API (no CR code runs) and posts status `agent-provenance`. A commit whose author or committer is in `owners.bots` (forge names) needs well-formed `Agent-Run` and `Agent-Model` trailers (the last paragraph of the message, one value each); other commits are `human`; a merge commit whose committer is the forge's own web identity (GitHub: login `web-flow`; a committer email does not count, since the committer sets it, the branch update) is `merge`, and any other merge commit is checked like a commit of its author. Prints `{ commits: [{ sha, by, run?, model?, ok }], agentCommits, humanCommits, missing }`. `warn` always succeeds; `require` fails on a missing or malformed trailer and on commits it cannot read. A squash merge drops the trailers, so the status and report on the CR are the record; `merged` is untouched. Not in `forge.required_checks` by default: with `require`, add it there and to the trunk ruleset (`validate` warns otherwise). |
-| `signal-on-red --run <id>` | Reads the run with `forge run <id>`; a red trunk or release-line run opens a Signal with a redacted evidence bundle. Other refs are ignored. A run that does not exist fails the gate. |
+| `signal --source <name> --title <text> [--body <text>]` | Files a Signal once: the key is the source and the title (case and spacing aside); an open issue with `signal:<source>` and that title gets the body as a comment, else a Signal is created at `Signals` with that label. Text is redacted. The dead-man workflow (source `factory`), the `repository_dispatch` `signal` workflow and `signal-on-red` call it. |
+| `signal-on-red --run <id>` | Reads the run with `forge run <id>`; a red trunk or release-line run files a Signal through `signal` (source `ci`, title `CI red: <workflow> @ <ref>` without the run id, so a red trunk is one open Signal and each later red run comments on it with its run id, sha and redacted url). Other refs are ignored. A run that does not exist fails the gate. |
 | `skill-regression` | A change under `paths.factory` keeps the skill pack valid: frontmatter, steps and their files, links, forbidden words (section 5), every CLI call a skill names (the verb exists, each `--flag` is one of its verb's, a `dispatch` names a step), scorers' `applies_to`. `test/skills-pack.test.ts` runs the same checks on `skills/`. |
 
 Checks:
@@ -211,7 +212,7 @@ Checks:
   source app (`integration_id`); with two identities `review` and `human-approval` post with the review token, so pin them
   to the review app when it is an App. `doctor` warns when a required check is not pinned. No CODEOWNERS file:
   the `approval` gate enforces owner approval by class, so `tuning` can auto-merge.
-- A dead-man job runs `ledger stale --max-hours <h>` on a schedule.
+- A dead-man job runs `ledger stale --max-hours <h>` on a schedule; when it fails it files a deduplicated Signal (`gate signal --source factory`). `init` also installs `agentic-sdlc-signal.yml` (`repository_dispatch` type `signal`: `client_payload.source/title/body` go through env vars to `gate signal`) and the issue form `.github/ISSUE_TEMPLATE/signal.yml` (labels `signal:owner` and `status:Signals`, which must exist in the repo to apply).
 
 CI loads the binding from the **target** branch, never from the CR, and never runs CR code with
 secrets. The trunk needs every required check green and, with two identities, the review identity's approving review.

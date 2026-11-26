@@ -400,6 +400,7 @@ async function init(root: string, argv: string[], log: string[]) {
       if (continuous && n === 'agentic-sdlc-release.yml') inst.skip(join('.github', 'workflows', n));
       else inst.copy(`${tdir}/${n}`, join('.github', 'workflows', n));
     }
+    if (existsSync(join(dir, 'ISSUE_TEMPLATE', 'signal.yml'))) inst.copy(`${tdir}/ISSUE_TEMPLATE/signal.yml`, '.github/ISSUE_TEMPLATE/signal.yml');
     if (existsSync(join(dir, 'pull_request_template.md'))) inst.copy(`${tdir}/pull_request_template.md`, '.github/pull_request_template.md');
     if (existsSync(join(dir, 'ruleset.trunk.json'))) {
       let text = readFileSync(join(dir, 'ruleset.trunk.json'), 'utf8');

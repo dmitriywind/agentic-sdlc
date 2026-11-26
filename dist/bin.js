@@ -7964,7 +7964,9 @@ function createGithubIssuesBoard(ctx) {
     return v ? String(v.single_select_option?.name ?? v.value) : void 0;
   };
   const statusOf = (i) => fieldIds.status ? fieldOf(i, "status") : names(i).find((l) => l.toLowerCase().startsWith(STATUS))?.slice(STATUS.length);
-  const toItem = (i) => {
+  const unboarded = (i) => i.state !== "closed" && statusOf(i) === void 0 && names(i).some((l) => l.toLowerCase().startsWith("signal:"));
+  const boarded = (i) => !i.pull_request && (statusOf(i) !== void 0 || unboarded(i));
+  const toItem = (i, withBody = true) => {
     const fields = {}, labels = [];
     let status = "";
     for (const l of names(i)) {
@@ -7980,6 +7982,7 @@ function createGithubIssuesBoard(ctx) {
       if (v !== void 0) fields[f] = v;
     }
     if (fieldIds.status) status = statusOf(i) ?? "";
+    if (!status && unboarded(i)) status = "Signals";
     return {
       id: String(i.number),
       title: i.title,
@@ -7992,7 +7995,7 @@ function createGithubIssuesBoard(ctx) {
       assignees: (i.assignees ?? []).map((a) => a.login),
       createdAt: i.created_at ?? "",
       updatedAt: i.updated_at ?? "",
-      body: i.body ?? "",
+      ...withBody ? { body: i.body ?? "" } : {},
       // The list carries no status change time: a closed issue at Done reached Done when it closed.
       ...status === "Done" && i.closed_at ? { statusChangedAt: i.closed_at } : {}
     };
@@ -8022,7 +8025,7 @@ function createGithubIssuesBoard(ctx) {
   };
   const get = async (id) => {
     const raw = await issue(id);
-    if (raw.pull_request || statusOf(raw) === void 0) throw new Error(`#${id} is not on the board`);
+    if (!boarded(raw)) throw new Error(`#${id} is not on the board`);
     const out = toItem(raw);
     try {
       out.children = (await all(`issues/${id}/sub_issues`)).map((s) => String(s.number));
@@ -8047,8 +8050,8 @@ function createGithubIssuesBoard(ctx) {
   return {
     async list(q = {}) {
       const words2 = (q.search ?? "").toLowerCase().split(/\s+/).filter(Boolean);
-      return (await all("issues?state=all")).filter((i) => !i.pull_request && statusOf(i) !== void 0).filter((i) => words2.every((w) => `${i.title}
-${i.body ?? ""}`.toLowerCase().includes(w))).map(toItem).filter((i) => (!q.status?.length || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label)));
+      return (await all(`issues?state=${q.state === "all" ? "all" : "open"}`)).filter(boarded).filter((i) => words2.every((w) => `${i.title}
+${i.body ?? ""}`.toLowerCase().includes(w))).map((i) => toItem(i, false)).filter((i) => (!q.status?.length || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label)));
     },
     get,
     async create(t) {
@@ -8337,7 +8340,7 @@ var init_board = __esm({
     asked = (c) => isMarked(c.body, "ask");
     byTime = (x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt);
     VERBS = {
-      list: { value: ["status", "label", "search"] },
+      list: { value: ["status", "label", "search", "state"] },
       get: {},
       create: { value: ["title", "body-file", "status", "label", "parent", "milestone"] },
       move: { value: ["only-from"] },
@@ -8354,7 +8357,7 @@ var init_board = __esm({
       child: {}
     };
     USAGE = `usage: agentic-sdlc board <verb>
-  list [--status <s>]... [--label <l>] [--search <text>]    get <id>
+  list [--status <s>]... [--label <l>] [--search <text>] [--state all]    get <id>
   create --title <t> --body-file <f> --status <s> [--label <l>]... [--parent <id>] [--milestone <m>]
   move <id> <status> [--only-from <s>]    set <id> <field> <value> | --clear
   milestone <id> <name> | --clear
@@ -8381,9 +8384,12 @@ var init_board = __esm({
         const [id] = a.pos;
         let out;
         switch (verb) {
-          case "list":
-            out = await board.list({ status: a.all("status"), label: a.get("label"), search: a.get("search") });
+          case "list": {
+            const state = a.get("state");
+            if (state !== void 0 && state !== "open" && state !== "all") throw new Usage("board list: --state is open or all");
+            out = await board.list({ status: a.all("status"), label: a.get("label"), search: a.get("search"), state });
             break;
+          }
           case "get":
             need2(1);
             out = await board.get(id);
@@ -9255,7 +9261,7 @@ async function measures(o) {
   const inWin = (t) => t !== void 0 && Date.parse(t) >= from && Date.parse(t) <= now;
   const hours = (a, z) => (Date.parse(z) - Date.parse(a)) / 36e5;
   const round = (n) => n === null ? null : Math.round(n * 100) / 100;
-  const items = await o.board.list();
+  const items = await o.board.list({ state: "all" });
   const { changes, failures, rate } = changeFailures(items, b, days, now);
   const doneIn = items.filter((x) => x.status === "Done" && x.statusChangedAt && inWin(x.statusChangedAt));
   const leads = doneIn.map((x) => hours(x.createdAt, x.statusChangedAt)).filter((h) => h >= 0);
@@ -9725,7 +9731,7 @@ async function buildCases(board, forge, binding, limit, o = {}) {
   const read = await forge.list({ state: "merged", limit: mergedLimit, since: o.since });
   if (read.length >= mergedLimit) console.error(`bench: read the newest ${mergedLimit} merged CRs; older CRs were not read. Raise the cap with --merged-limit <n> or narrow the window with --since <date>.`);
   const merged2 = read.filter((c) => c.state === "merged");
-  const tickets = (await board.list({ status: binding.board.done_statuses })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const tickets = (await board.list({ status: binding.board.done_statuses, state: "all" })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const cases = [];
   for (const t of tickets) {
     if (!o.perSize && cases.length >= limit) break;
@@ -10362,6 +10368,7 @@ __export(gates_exports, {
   provenance: () => provenance,
   review: () => review,
   shipped: () => shipped,
+  signal: () => signal,
   signalOnRed: () => signalOnRed,
   skillPackCheck: () => skillPackCheck,
   skillRegression: () => skillRegression,
@@ -10688,9 +10695,9 @@ async function shipped(d, env, sha2, result, version3) {
   const rank = (s) => opts.indexOf(s || opts[0]);
   const target = `On ${env}`;
   const last = i === envs.length - 1;
-  const done = (await d.board.list({ status: ["Done", "In review"] })).filter((x) => x.status === "Done" || x.status === "In review");
+  const done = (await d.board.list({ status: ["Done", "In review"], state: "all" })).filter((x) => x.status === "Done" || x.status === "In review");
   const changed = [];
-  const signal = async (held) => {
+  const signal2 = async (held) => {
     const title = `Deploy to ${env} failed at ${sha2.slice(0, 12)}`;
     if ((await d.board.list({ label: "signal:deploy" })).some((x) => x.title === title && !d.binding.board.done_statuses.includes(x.status))) return false;
     const envLabel = (d.binding.board.env_labels ?? []).find((l) => l === `env:${env}`);
@@ -10785,7 +10792,7 @@ environment: ${env}`,
       }
     }
   }
-  const opened = await signal(last);
+  const opened = await signal2(last);
   return { env, result, changed, signal: opened };
 }
 async function signalOnRed(d, id) {
@@ -10793,18 +10800,24 @@ async function signalOnRed(d, id) {
   if (run.state !== "failure") return { created: false, reason: `run ${redact(id, 40)} did not fail (${redact(run.state, 20)})` };
   const v = d.binding.vcs;
   if (run.ref !== v.trunk && !(v.release_prefix && run.ref.startsWith(v.release_prefix))) return { created: false, reason: `ref ${redact(run.ref, 100)} is not trunk or a release line` };
-  const title = redact(`CI red: ${run.name} @ ${run.ref} (run ${run.id})`, 1e3).replace(/[^A-Za-z0-9 ._/:@()-]/g, "").slice(0, 100);
-  const existing = await d.board.list({ label: "signal:ci" });
-  if (existing.some((x) => x.title === title)) return { created: false };
-  const item = await d.board.create({
-    title,
-    body: `run: ${redact(run.name)}
-ref: ${redact(run.ref)}
+  const title = redact(`CI red: ${run.name} @ ${run.ref}`, 1e3).replace(/[^A-Za-z0-9 ._/:@()-]/g, "").slice(0, 100);
+  return signal(d, "ci", title, `run: ${redact(run.id, 40)}
 sha: ${redact(run.sha, 40)}
-url: ${cleanUrl(run.url)}`,
-    status: "Signals",
-    labels: ["signal:ci"]
-  });
+url: ${cleanUrl(run.url)}`);
+}
+async function signal(d, source, title, body = "") {
+  if (!/^[a-z][a-z0-9-]*$/.test(source)) throw new UsageError("signal: --source is a lower-case word (a-z, 0-9, -)");
+  const t = redact(title, 200).trim();
+  if (!t) throw new UsageError("signal: --title is empty");
+  const text = String(body ?? "").split("\n").map((l) => redact(l, 500)).join("\n").slice(0, 4e3);
+  const key = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const label = `signal:${source}`;
+  const open = (await d.board.list({ label })).find((x) => key(x.title) === key(t) && !d.binding.board.done_statuses.includes(x.status));
+  if (open) {
+    await d.board.comment(open.id, text || t);
+    return { created: false, id: open.id, commented: true };
+  }
+  const item = await d.board.create({ title: t, body: text, status: "Signals", labels: [label] });
   return { created: true, id: item.id };
 }
 function cliVerbs() {
@@ -11017,6 +11030,8 @@ var init_gates = __esm({
         }
         case "signal-on-red":
           return signalOnRed(deps(), a.need("run"));
+        case "signal":
+          return signal(deps(), a.need("source"), a.need("title"), a.get("body"));
         case "skill-regression": {
           const { errors, warnings } = skillRegression(base.root);
           for (const w of warnings) process.stderr.write(`warning: ${w}
@@ -11462,6 +11477,7 @@ async function init(root, argv, log) {
       if (continuous && n === "agentic-sdlc-release.yml") inst.skip(join10(".github", "workflows", n));
       else inst.copy(`${tdir}/${n}`, join10(".github", "workflows", n));
     }
+    if (existsSync8(join10(dir, "ISSUE_TEMPLATE", "signal.yml"))) inst.copy(`${tdir}/ISSUE_TEMPLATE/signal.yml`, ".github/ISSUE_TEMPLATE/signal.yml");
     if (existsSync8(join10(dir, "pull_request_template.md"))) inst.copy(`${tdir}/pull_request_template.md`, ".github/pull_request_template.md");
     if (existsSync8(join10(dir, "ruleset.trunk.json"))) {
       let text = readFileSync9(join10(dir, "ruleset.trunk.json"), "utf8");
@@ -12107,7 +12123,7 @@ var init_mcp = __esm({
     };
     S = (group, verb, pos, flags, doc, req = [], body = false) => ({ group, verb, pos, flags, doc, body, req });
     TOOLS = {
-      board_list: S("board", "list", [], { status: "strings", label: "string", search: "string" }, "List board items."),
+      board_list: S("board", "list", [], { status: "strings", label: "string", search: "string", state: "string" }, 'List open board items without their body; state "all" adds the closed ones.'),
       board_get: S("board", "get", ["id"], {}, "Get one board item."),
       board_create: S("board", "create", [], { title: "string", status: "string", label: "strings", parent: "string", milestone: "string" }, "Create a board item; body is the description.", ["title", "status"], true),
       board_move: S("board", "move", ["id", "status"], { only_from: "string" }, "Move an item to a status; refuses when only_from is set and the item is elsewhere."),
@@ -12342,7 +12358,7 @@ var init_cli = __esm({
       forge: [() => Promise.resolve().then(() => (init_forge(), forge_exports)), true, "open view diff list ready draft sync automerge cut approve approvals comment comments verdict land queue status runs run"],
       vcs: [() => Promise.resolve().then(() => (init_vcs(), vcs_exports)), true, "start head changed base push cut tag tags drop checkout-tests"],
       dispatch: [() => Promise.resolve().then(() => (init_dispatch(), dispatch_exports)), true, "dispatch <skill>[/<step>] --ticket <id> | --cr <n> [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]: start the step on its executor"],
-      gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red skill-regression review provenance"],
+      gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red signal skill-regression review provenance"],
       ledger: [() => Promise.resolve().then(() => (init_ledger(), ledger_exports)), true, "runs summary plan record stale hash measures: the run ledger from heartbeats"],
       bench: [() => Promise.resolve().then(() => (init_bench(), bench_exports)), true, "build propose run report compare"],
       mcp: [() => Promise.resolve().then(() => (init_mcp(), mcp_exports)), true, "serve the port verbs as MCP tools over stdio; --allow approve,status"]

@@ -22,7 +22,7 @@ type Spec = { group: string; verb: string; pos: string[]; flags: Record<string, 
 const S = (group: string, verb: string, pos: string[], flags: Record<string, Kind>, doc: string, req: string[] = [], body = false): Spec =>
   ({ group, verb, pos, flags, doc, body, req });
 const TOOLS: Record<string, Spec> = {
-  board_list: S('board', 'list', [], { status: 'strings', label: 'string', search: 'string' }, 'List board items.'),
+  board_list: S('board', 'list', [], { status: 'strings', label: 'string', search: 'string', state: 'string' }, 'List open board items without their body; state "all" adds the closed ones.'),
   board_get: S('board', 'get', ['id'], {}, 'Get one board item.'),
   board_create: S('board', 'create', [], { title: 'string', status: 'string', label: 'strings', parent: 'string', milestone: 'string' }, 'Create a board item; body is the description.', ['title', 'status'], true),
   board_move: S('board', 'move', ['id', 'status'], { only_from: 'string' }, 'Move an item to a status; refuses when only_from is set and the item is elsewhere.'),

@@ -24,7 +24,8 @@ export interface Item {
 export interface Comment { id: string; author: string; createdAt: string; body: string; url?: string }
 
 export interface Board {
-  list(q?: { status?: string[]; label?: string; search?: string }): Promise<Item[]>;
+  /** Open items without their body; state 'all' adds the closed ones (Done, Cancelled). */
+  list(q?: { status?: string[]; label?: string; search?: string; state?: 'open' | 'all' }): Promise<Item[]>;
   get(id: string): Promise<Item>;
   create(t: { title: string; body: string; status: string; labels?: string[]; parent?: string; milestone?: string }): Promise<Item>;
   /** Refuses (throws MovedError) when onlyFrom is set and the item is not in that status. */

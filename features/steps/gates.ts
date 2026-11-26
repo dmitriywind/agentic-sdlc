@@ -2,7 +2,7 @@
 // A scenario's CRs are named by number; CR "n" has the head "h<n>" and the base "base". The approval scenarios use the one CR "1".
 // State kept on w.state: gate (the last gate result), error (what the last gate threw), skill (the skill files of a classify scenario).
 import assert from 'node:assert/strict';
-import { approval, approvalWho, branchNames, linkage, merged, proofsOnBase, provenance, proofRunner, review as reviewGate, shipped, signalOnRed, type Deps } from '../../src/gates.ts';
+import { approval, approvalWho, branchNames, linkage, merged, proofsOnBase, provenance, proofRunner, review as reviewGate, shipped, signal, signalOnRed, type Deps } from '../../src/gates.ts';
 import { diffOf, baseBinding } from '../support/fakes.ts';
 import { packFiles, writePack } from '../support/skillfix.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
@@ -103,8 +103,9 @@ const item = (w: World, id: string) => {
 // ---- Given: the board and the forge ----
 Given('these tickets are on the board:', (w, t: DataTable) => {
   for (const r of t.hashes()) {
-    const { id, status, labels, ...fields } = r;
+    const { id, status, labels, title, ...fields } = r;
     w.gate.ticket(id, status, Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== '')), list(labels ?? ''));
+    if (title) w.gate.items.at(-1)!.title = title;
   }
 });
 Given('these CRs are on the forge:', (w, t: DataTable) => {
@@ -149,6 +150,7 @@ When('the merged gate runs for the sha {string}', (w, sha: string) => run(w, (d)
 When('the shipped gate runs for {string} with the result {string} at the revision {string}', (w, env: string, res: string, sha: string) => run(w, (d) => shipped(d, env, sha, res)));
 When('the shipped gate runs for {string} with the result {string} at the revision {string} and the version {string}', (w, env: string, res: string, sha: string, v: string) => run(w, (d) => shipped(d, env, sha, res, v)));
 When('the signal-on-red gate runs for the run {string}', (w, id: string) => run(w, (d) => signalOnRed(d, id)));
+When('the signal gate runs for the source {string} with the title {string} and the body {string}', (w, source: string, title: string, body: string) => run(w, (d) => signal(d, source, title, body)));
 When('the proof runner runs a command that {string}', (w, how: string) => {
   const failure: Record<string, unknown> = {
     'exits 0': undefined,
@@ -193,6 +195,7 @@ Then('one Signal is opened with the labels {string}', (w, labels: string) => {
   assert.equal(w.gate.created.length, 1, JSON.stringify(w.gate.created));
   assert.deepEqual(w.gate.created[0].labels, list(labels));
 });
+Then('the Signal {string} is commented with {string}', (w, id: string, text: string) => { const c = w.gate.commented.filter((x) => x.id === id); assert.equal(c.length, 1, JSON.stringify(w.gate.commented)); assert.ok(c[0].body.includes(text), c[0].body); });
 Then('the Signal body mentions {string}', (w, text: string) => assert.ok(w.gate.created.at(-1)?.body.includes(text), String(w.gate.created.at(-1)?.body)));
 Then('the Signal body does not mention {string}', (w, text: string) => { assert.ok(w.gate.created.length, 'no Signal was opened'); assert.ok(!w.gate.created.at(-1)!.body.includes(text), w.gate.created.at(-1)!.body); });
 Then('the forge was asked about the tickets {string} only', (w, ids: string) => { assert.deepEqual(w.gate.asked, list(ids)); assert.equal(w.gate.listed, 0); });

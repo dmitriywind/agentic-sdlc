@@ -1,0 +1,16 @@
+name: Signal
+description: Report something the factory should look at: a bug, a request, feedback.
+# These labels must exist in the repo to be applied; the first Signal the factory files creates them. set: your board.statuses name for intake.
+labels: ["signal:owner", "status:Signals"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: What you saw or want. Keep secrets and personal data out.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters

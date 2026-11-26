@@ -87,7 +87,7 @@ const issuesExec = (w: World) => (cmd: string, args: string[], o?: { input?: str
   const issues: Any[] = (s.issues ??= []);
   const labels: string[] = (s.repoLabels ??= []);
   const it = issues.find((i) => i.number === Number(path.split('/')[1]));
-  if (path === 'issues' && method === 'GET') return pageOf(issues);
+  if (path === 'issues' && method === 'GET') return pageOf(new URLSearchParams(qs).get('state') === 'all' ? issues : issues.filter((i) => i.state !== 'closed'));
   if (path === 'issues') { const i = { number: 100 + issues.length, id: 9000, ...input, labels: names(input.labels) }; issues.push(i); return JSON.stringify(i); }
   if (path === 'labels') { if (method === 'POST') labels.push(input.name); return method === 'GET' ? pageOf(names(labels)) : '{}'; }
   if (path === 'milestones') return pageOf(s.milestones ?? []);
@@ -170,6 +170,7 @@ Given('gh fails {int} times with {string} before it answers', (w, times: number,
 // ---- When: one board verb ----
 When('the factory gets the ticket {string}', (w, id: string) => attempt(w, (b) => b.get(id)));
 When('the factory lists the tickets in the status {string}', (w, status: string) => attempt(w, (b) => b.list({ status: [status] })));
+When('the factory lists every ticket, closed ones too', (w) => attempt(w, (b) => b.list({ state: 'all' })));
 When('the factory moves the ticket {string} to {string} only from {string}', (w, id: string, status: string, from: string) => attempt(w, (b) => b.move(id, status, from)));
 When('the factory reads the comments of the ticket {string} with the marker {string}', (w, id: string, marker: string) => attempt(w, (b) => b.comments(id, { marker })));
 When('the factory assigns the ticket {string} to {string}', (w, id: string, login: string) => attempt(w, (b) => b.assign(id, login)));
@@ -187,6 +188,7 @@ Then('no call reaches the board', (w) => assert.equal(w.calls.length, 0, w.calls
 Then('a call includes {string}', (w, text: string) => assert.ok(w.calls.some((c) => c.includes(text)), `no call includes ${text}:\n${w.calls.join('\n')}`));
 Then('no call includes {string}', (w, text: string) => assert.ok(!w.calls.some((c) => c.includes(text)), `a call includes ${text}:\n${w.calls.join('\n')}`));
 Then('the listed ticket ids are {string}', (w, ids: string) => assert.equal(items(w).map((i) => i.id).join(', '), ids));
+Then('the listed tickets carry no body', (w) => assert.ok(items(w).every((i) => i.body === undefined)));
 Then('the listed ticket {string} has the status {string}', (w, id: string, status: string) => assert.equal(items(w).find((i) => i.id === id)?.status, status));
 Then('the listed ticket {string} has the fields {string}', (w, id: string, fields: string) =>
   assert.equal(Object.entries(items(w).find((i) => i.id === id)!.fields).map(([k, v]) => `${k}=${v}`).join(', '), fields));

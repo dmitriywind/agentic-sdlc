@@ -11,6 +11,7 @@ Feature: Gate signal-on-red
       | 3  | ci   | main           | pending |                                               |
       | 4  | ci   | undefined/x    | failure |                                               |
       | 987 | ci  | main           | failure | https://u:p@ci.example/run/987?token=SECRET   |
+      | 988 | ci  | main           | failure | https://ci.example/run/988                    |
 
   Rule: A run that is not red on the trunk or a release line opens no Signal
 
@@ -38,8 +39,9 @@ Feature: Gate signal-on-red
       And the Signal body does not mention "u:p"
 
 
-    Scenario: The same red run opens no second Signal
+    Scenario: A later red run of the same workflow and ref comments on the open Signal instead of opening a second
       When the signal-on-red gate runs for the run "987"
-      And the signal-on-red gate runs for the run "987"
+      And the signal-on-red gate runs for the run "988"
       Then the gate result "created" is "false"
       And one Signal is opened with the labels "signal:ci"
+      And the Signal "n1" is commented with "ci.example/run/988"

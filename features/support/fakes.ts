@@ -40,6 +40,8 @@ export class GateFakes {
   /** Merged CRs the search index does not show yet. */
   indexTrails = false;
   asked: string[] = [];
+  /** Comments written to tickets. */
+  commented: { id: string; body: string }[] = [];
   /** How many times the forge was asked for the whole merged list. */
   listed = 0;
   /** Ancestry: undefined means the VCS cannot tell at all; otherwise by merge sha (default for the others). */
@@ -73,6 +75,7 @@ export class GateFakes {
         return i;
       },
       list: async (q: { status?: string[]; label?: string } = {}) => this.items.filter((i) => (!q.status || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label))),
+      comment: async (id: string, body: string) => { this.commented.push({ id, body }); return { id: 'c', url: '' }; },
       move: async (id: string, s: string) => { get(id)!.status = s; return get(id)!; },
       label: async (id: string, op: 'add' | 'remove', l: string) => { const i = get(id)!; i.labels = op === 'add' ? [...i.labels, l] : i.labels.filter((x) => x !== l); return i; },
       set: async (id: string, f: string, v: string | null) => { if (v === null) delete (get(id)!.fields as any)[f]; else (get(id)!.fields as any)[f] = v; return get(id)!; }, // eslint-disable-line @typescript-eslint/no-explicit-any

@@ -355,7 +355,7 @@ export async function measures(o: { board: Board; forge?: Forge; binding: Bindin
   const inWin = (t?: string) => t !== undefined && Date.parse(t) >= from && Date.parse(t) <= now;
   const hours = (a: string, z: string) => (Date.parse(z) - Date.parse(a)) / 36e5;
   const round = (n: number | null) => (n === null ? null : Math.round(n * 100) / 100);
-  const items = await o.board.list();
+  const items = await o.board.list({ state: 'all' });
   const { changes, failures, rate } = changeFailures(items, b, days, now);
   const doneIn = items.filter((x) => x.status === 'Done' && x.statusChangedAt && inWin(x.statusChangedAt));
   const leads = doneIn.map((x) => hours(x.createdAt, x.statusChangedAt!)).filter((h) => h >= 0);
