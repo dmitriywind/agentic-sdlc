@@ -52,6 +52,18 @@ Given('a CR that changes only the models in the binding', (w) => {
   w.gate.files.set(`h${CR}:.agents/binding.yml`, JSON.stringify({ ...b, models: { ...b.models, fast: 'f2' } }));
 });
 
+// ---- Given: the approval label (times are hh:mm of one day) ----
+const at = (hm: string) => `2026-01-01T${hm}:00Z`;
+Given('the head reached the forge at {string}', (w, hm: string) => { w.gate.crs.get(CR)!.pushedAt = at(hm); });
+Given('{string} applied the approval label at {string}', (w, actor: string, hm: string) => {
+  const list = w.gate.labelEvents.get(CR) ?? [];
+  list.push({ label: 'approved', action: 'labeled', actor, bot: false, at: at(hm) });
+  w.gate.labelEvents.set(CR, list);
+});
+Then('the CR no longer carries the approval label', (w) => {
+  assert.equal(w.gate.labelEvents.get(CR)?.filter((e) => e.label === 'approved').at(-1)?.action, 'unlabeled');
+});
+
 // ---- Given: the reviews of the CR ----
 Given('{string} with the association {string} approved the head', (w, user: string, assoc: string) => review(w, user, 'approved', `h${CR}`, assoc));
 Given('{string} approved the head without an author association', (w, user: string) => review(w, user, 'approved', `h${CR}`));
@@ -61,6 +73,7 @@ Given('these reviews are on the CR:', (w, t: DataTable) => {
 
 // ---- When ----
 When('the approval gate runs', async (w) => { w.state.gate = await approval(w.gateDeps(), CR); });
+When('the approval gate runs on a push', async (w) => { w.state.gate = await approval(w.gateDeps(), CR, { pushed: true }); });
 
 // ---- Then ----
 const posted = (w: World) => {

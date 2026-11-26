@@ -34,11 +34,18 @@ what differs.
 | Accounts | Yours. | An implementer account and a separate review app. |
 | Where the review runs | In the cycle, as a fresh agent context. | In a separate review run, the only one that holds the review token. |
 | The `review` status | CI posts it from the report. | `forge verdict` posts it as the review app, with an approving review. |
-| A Full-lane approval | A collaborator approves the latest commit, or you merge as admin. | A human approves the latest commit. |
+| A Full-lane approval | You add the `approved` label (`forge.approval_label`) to the pull request, or a collaborator approves the latest commit. | A human approves the latest commit. |
 
 The trade-off is real. With one identity the review is a separate context, not a separate account,
 so the branch rules cannot prove that an agent did not post its own `review` status. With two, no
 implementer can post that status or approve its own change.
+
+With one account GitHub refuses your own review of a pull request your account opened, so you approve
+with the label instead, from the phone app too. It counts only when an owner the class asks for added it
+after the latest push, and every push takes it off again, so it approves exactly the commit you looked at.
+The agent and you are one login, so the label proves a deliberate act outside the agent's tools, not a
+second person: the guard hook and the CLI refuse the label to the agent. The behaviour is in
+[the approval feature](../../features/gates/approval.feature) and [the guard feature](../../features/guard/push-guard.feature).
 
 ## The six required checks
 
@@ -60,9 +67,9 @@ A seventh check, `agent-provenance`, is off until you set `forge.provenance`. Wh
 | Class | Is | Needs |
 |---|---|---|
 | `product-fast` | A product change in the Fast lane. | Nothing more. |
-| `product-full` | A product change in the Full lane, or one that touches `paths.lane_areas`. | A human approval (`forge.human_approval`) from someone outside `owners.bots`; with one account as both owner and bot, `validate` warns, and you merge as admin. |
+| `product-full` | A product change in the Full lane, or one that touches `paths.lane_areas`. | A human approval (`forge.human_approval`) from someone outside `owners.bots`, or the approval label from a Product owner; with one account as both owner and bot, `validate` warns: take your account out of `owners.bots`. |
 | `tuning` | A factory change to the model map or a benched skill's tier. | Nothing, when `learning.auto_merge_classes` lists it; else the factory owner. |
-| `guardrail` | Any other factory change. | The factory owner. |
+| `guardrail` | Any other factory change. | The factory owner's approval or approval label. |
 
 ## When review says no
 

@@ -43,6 +43,7 @@ Given('the environment sets {string} to {string}', (w, key: string, value: strin
 // ---- When ----
 When('the agent runs {string}', (w, command: string) => hook(w, 'Bash', { command: expand(w, command) }));
 When('the agent calls the MCP tool {string}', (w, tool: string) => hook(w, tool, {}));
+When('the agent calls the MCP tool {string} with {string}', (w, tool: string, input: string) => hook(w, tool, JSON.parse(input)));
 When('the hook receives the input {string}', (w, text: string) => { w.last = w.spawn([GUARD], text); });
 When('git hands the pre-push hook of the checkout {string} these lines:', (w, name: string, lines: string) => {
   const text = lines.replace(/SHA/g, 'a'.repeat(40)).replace(/ZERO/g, '0'.repeat(40)) + '\n';

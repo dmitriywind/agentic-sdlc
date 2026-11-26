@@ -52,6 +52,8 @@ Given('an installable package at version {string}', (w, version: string) => {
   for (const n of ['cycle-prompt.md', 'review-prompt.md']) put(pkg, `templates/runner/${n}`, n);
   cpSync(join(REPO, 'templates/mcp'), join(pkg, 'templates/mcp'), { recursive: true });
   cpSync(join(REPO, 'templates/bin'), join(pkg, 'templates/bin'), { recursive: true });
+  cpSync(join(REPO, 'hooks'), join(pkg, 'hooks'), { recursive: true }); // --no-plugin installs the plugin's guard and reviewer
+  cpSync(join(REPO, 'agents/sdlc-reviewer.md'), join(pkg, 'agents/sdlc-reviewer.md'));
   cpSync(join(REPO, 'templates/gates/github/ruleset.trunk.json'), join(pkg, 'templates/gates/github/ruleset.trunk.json'));
   w.state.pkg = pkg;
   w.env.AGENTIC_SDLC_PACKAGE = pkg;

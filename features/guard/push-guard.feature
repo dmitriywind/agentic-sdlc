@@ -128,6 +128,36 @@ Feature: Push guard
     Scenario: The hook entry for MCP tools covers the forge tools of the plugin and of a manual install
       Then the hook entry that matches MCP tools matches "mcp__plugin_agentic-sdlc_agentic-sdlc__forge_status"
       And the hook entry that matches MCP tools matches "mcp__agentic-sdlc__forge_approve"
+      And the hook entry that matches MCP tools matches "mcp__agentic-sdlc__board_label"
+
+  Rule: No agent writes the approval label
+    With one account the label forge.approval_label is the owner's approval of a CR head, so the agent's
+    own tools never apply it.
+
+    Scenario Outline: A write of the approval label is blocked however it is made; other labels pass
+      Given the environment sets "AGENTIC_SDLC_ROLE" to "review"
+      When the agent <call>
+      Then the command is <verdict>
+
+      Examples:
+        | call                                                                                            | verdict |
+        | runs "agentic-sdlc board label 7 add approved"                                                  | blocked |
+        | runs "gh pr edit 7 --add-label approved"                                                        | blocked |
+        | runs "gh api repos/o/r/issues/7/labels -f labels[]=approved"                                    | blocked |
+        | calls the MCP tool "mcp__agentic-sdlc__board_label" with '{"id":"7","op":"add","label":"Approved"}' | blocked |
+        | calls the MCP tool "mcp__agentic-sdlc__board_label" with '{"id":"7","op":"add","label":"bug"}' | allowed |
+        | runs "agentic-sdlc board label 7 add bug"                                                       | allowed |
+
+    Scenario: The approval label is the one the binding names
+      Given the checkout "work" has the binding file:
+        """
+        vcs:
+          trunk: main
+        forge:
+          approval_label: "ship it" # the owner's label
+        """
+      When the agent runs "gh pr edit 7 --add-label 'ship it'"
+      Then the command is blocked
 
   Rule: The sdlc-reviewer agent runs only the agentic-sdlc CLI in Bash
 

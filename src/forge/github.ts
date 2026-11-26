@@ -189,6 +189,16 @@ export function github(ctx: AdapterContext): Forge {
       const out = await gh(['api', '--paginate', `${api}/pulls/${n}/reviews`, '--jq', '.[] | {user: .user.login, state: (.state | ascii_downcase), sha: .commit_id, assoc: .author_association}']);
       return out.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
     },
+    async labelEvents(n) {
+      n = num(n);
+      const out = await gh(['api', '--paginate', `${api}/issues/${n}/events?per_page=100`, '--jq', '.[] | select(.event == "labeled" or .event == "unlabeled") | {label: .label.name, action: .event, actor: (.actor.login // ""), bot: (.actor.type == "Bot"), at: .created_at}']);
+      return lines(out);
+    },
+    async unlabel(n, label) {
+      n = num(n);
+      try { await gh(['api', '-X', 'DELETE', `${api}/issues/${n}/labels/${encodeURIComponent(label)}`]); }
+      catch (e) { if (!/404|Label does not exist/.test(String((e as Error).message))) throw e; }
+    },
     async commits(n) {
       n = num(n);
       const out = await gh(['api', '--paginate', `${api}/pulls/${n}/commits?per_page=100`, '--jq', '.[] | {sha: .sha, message: .commit.message, author: (.author.login // ""), committer: (.committer.login // ""), authorName: (.commit.author.name // ""), committerName: (.commit.committer.name // ""), committerEmail: (.commit.committer.email // ""), parents: (.parents | length)}']);

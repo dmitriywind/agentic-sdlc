@@ -97,6 +97,13 @@ Feature: Init upgrades an install
       When I run the install command "init --upgrade"
       Then the installed file ".claude/skills/sdlc-plan/steps/triage.md" holds "new triage\n"
 
+    Scenario: Init --upgrade registers the guard hook once and leaves the settings as they are
+      Given I note the installed file ".claude/settings.json"
+      When I run the install command "init --upgrade"
+      Then the installed file ".claude/settings.json" is as noted
+      And the installed file ".claude/settings.json" contains "guard.mjs" exactly 2 times
+      And the output has the line "kept .claude/settings.json (the guard hook is registered)"
+
     Scenario: Init --upgrade regenerates a tier agent an older release wrote
       Given the project has the file ".claude/agents/sdlc-fast.md" holding "name: sdlc-fast\nrun npx --no agentic-sdlc\n"
       And the install lock is emptied

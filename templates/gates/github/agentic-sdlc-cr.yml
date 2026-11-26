@@ -15,7 +15,7 @@ name: agentic-sdlc CR gate
 # .github/** takes effect there. Keep `.github/**` in paths.factory (the guardrail class: factory-owner approval).
 on:
   pull_request_target:
-    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, edited]
+    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, edited, labeled, unlabeled] # labeled, unlabeled: forge.approval_label
   workflow_run:
     workflows: ["agentic-sdlc review event"]
     types: [completed]
@@ -28,8 +28,9 @@ permissions: {}
 concurrency:
   # No job here moves the board (skills and the trunk-push merged gate do), so a newer event replaces an older run.
   # A fork's workflow_run has no PR number: its run id keeps fork review events apart. An issue_comment run is
-  # never cancelled and has its own group (any commenter could otherwise cancel a review gate).
-  group: agentic-cr-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.id || github.event.merge_group.head_sha }}-${{ github.event_name }}${{ github.event.comment.id && format('-{0}', github.event.comment.id) || '' }}
+  # never cancelled and has its own group (any commenter could otherwise cancel a review gate). A push has its own group
+  # too, so a label event cannot cancel the run that removes forge.approval_label.
+  group: agentic-cr-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.id || github.event.merge_group.head_sha }}-${{ github.event_name }}${{ github.event.action == 'synchronize' && '-push' || '' }}${{ github.event.comment.id && format('-{0}', github.event.comment.id) || '' }}
   cancel-in-progress: ${{ github.event_name != 'issue_comment' }}
 
 defaults:
@@ -87,7 +88,9 @@ jobs:
   human-approval:
     # Posts status human-approval on the head (with the review identity's token; with one identity, no
     # forge.review_identity, with this job's token): computes the class and checks the approving reviews
-    # the class needs. Runs on a PR event and, via workflow_run, on a review event.
+    # or the owner's forge.approval_label the class needs. Runs on a PR event (labeled and unlabeled too) and,
+    # via workflow_run, on a review event. On a push (synchronize) it first removes the approval label with this
+    # job's token: this file runs from the base branch, so no CR can skip that, and a label never outlives its head.
     name: approval-gate
     if: github.event_name == 'pull_request_target' || github.event_name == 'workflow_run'
     environment: agentic-review
@@ -95,7 +98,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write   # a push removes forge.approval_label
       issues: read      # the closing ticket's Lane
       checks: read      # forge view reads the head's check runs
       statuses: write   # one identity: the gate posts with this job's token
@@ -126,7 +129,9 @@ jobs:
           node-version: 22
       - name: Human approval
         if: env.CR != ''
-        run: .agents/bin/agentic-sdlc gate approval --cr "$CR"
+        env:
+          PUSHED: ${{ github.event.action == 'synchronize' && '--pushed' || '' }}
+        run: .agents/bin/agentic-sdlc gate approval --cr "$CR" $PUSHED
 
   review-gate:
     # One identity: posts status review on the head from the newest trusted verdict report for it,

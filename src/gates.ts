@@ -227,9 +227,14 @@ export async function approvalWho(d: Deps, cr: CR): Promise<{ class: ApprovalCla
  * tuning passes when auto-mergeable, else waits for any owners.factory like guardrail. A human is
  * an owner, member or collaborator of the repo outside owners.bots and forge.review_identity. The lane is the closing ticket's Lane
  * field; anything but Fast (unset, unreadable, several tickets) counts as Full.
+ * A second proof (one identity: GitHub refuses a review by the CR's author): forge.approval_label on the CR, applied by an
+ * account approvalWho names (not a forge bot, not owners.bots, not the review identity) after the head reached the forge.
+ * `pushed` (CI on a push) first removes the label, so a push always withdraws it.
  */
-export async function approval(d: Deps, n: string) {
+export async function approval(d: Deps, n: string, opts: { pushed?: boolean } = {}) {
   const b = d.binding;
+  const label = b.forge.approval_label || 'approved';
+  if (opts.pushed) await d.forge.unlabel?.(n, label);
   const cr = await d.forge.view(n);
   const klass = await approvalClass(d, cr, await readDiff(d, n));
   const o = ownersFor(b.owners, 'forge');
@@ -243,6 +248,14 @@ export async function approval(d: Deps, n: string) {
     const member = new Set(reviews.filter((r) => !!r.assoc && ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(r.assoc)).map((r) => r.user.toLowerCase()));
     const ok = approvers(reviews, cr.headSha).filter((u) => member.has(u));
     by = need === 'owner' ? ok.find((u) => owner.includes(u)) : ok.find((u) => !bots.includes(u));
+    if (!by && d.forge.labelEvents) {
+      // The label's last event decides: present, by whom, and newer than the head's push (an older label approved another head).
+      const ev = (await d.forge.labelEvents(n)).filter((e) => e.label.toLowerCase() === label.toLowerCase()).at(-1);
+      const who = (need === 'owner' ? o.factory : o.product).map((u) => u.toLowerCase());
+      const actor = ev?.actor.toLowerCase() ?? '';
+      const fresh = !!ev && !!cr.pushedAt && Date.parse(ev.at) > Date.parse(cr.pushedAt);
+      if (ev?.action === 'labeled' && !ev.bot && who.includes(actor) && !bots.includes(actor) && fresh) by = `${actor} (label ${label})`;
+    }
   }
   const pass = need === 'none' || !!by;
   const description = need === 'none' ? `${klass}: no human approval needed`
@@ -684,7 +697,7 @@ export function depsOf(base: Omit<AdapterContext, 'options'>): Deps {
 export const cli: PortCli = (argv, base) =>
   guard(async () => {
     const [gate, ...rest] = argv;
-    const a = parseArgs(rest, ['stdin-prepush']);
+    const a = parseArgs(rest, ['stdin-prepush', 'pushed']);
     const deps = () => depsOf(base);
     const fail = (r: { ok?: boolean; errors?: string[] }) => {
       if (r.errors?.length) throw new Error(r.errors.join('\n'));
@@ -713,7 +726,7 @@ export const cli: PortCli = (argv, base) =>
         return r;
       }
       case 'approval': {
-        const r = await approval(deps(), a.need('cr'));
+        const r = await approval(deps(), a.need('cr'), { pushed: a.has('pushed') });
         return r;
       }
       case 'review': return review(deps(), a.need('cr'));

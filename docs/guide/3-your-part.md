@@ -21,7 +21,7 @@ sequenceDiagram
 | You get | From | You do |
 |---|---|---|
 | A "Needs human" comment on a ticket | `escalate`, inside any step | Reply in a comment. |
-| A request to approve a Full-lane change | `escalate`, when `forge land` reports that a person must approve | Approve the pull request's latest commit. The approval alone releases the ticket; a reply is optional. |
+| A request to approve a Full-lane change | `escalate`, when `forge land` reports that a person must approve | Approve the pull request's latest commit: with one account, add the `approved` label (`forge.approval_label`) to it. The approval alone releases the ticket; a reply is optional. |
 | A request to confirm a `manual` criterion | `review/review` | Reply that you checked it on this version. |
 | A release ready for approval | `ship` | Reply to the proposal, then approve the release workflow run. |
 | A factory change of class `guardrail` | `learn/improve` | Review and approve it as the factory owner. |

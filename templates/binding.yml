@@ -59,10 +59,13 @@ forge:
                                 #   review turns it into the review status. No approving review (GitHub refuses the author's).
                                 #   Set: the separate review account or app behind review_token_env; review/review runs in
                                 #   the review runtime only. organization requires it.
-  human_approval: full-lane     # full-lane | always | never. Which product CRs need one approving review by a human
-                                #   (not owners.bots, not review_identity) on the head: gate approval posts status human-approval.
-                                #   One account in both owners.product and owners.bots can never approve: validate warns. Add a
-                                #   second account to owners.product (it approves), or merge Full-lane CRs as admin
+  human_approval: full-lane     # full-lane | always | never. Which product CRs need a human approval of the head: an approving
+                                #   review by a human (not owners.bots, not review_identity), or approval_label below applied by
+                                #   the owner the class asks for. gate approval posts status human-approval.
+  approval_label: approved      # one identity: GitHub refuses a review by the CR's author, so you approve by applying this label
+                                #   to the CR (on the forge, from a phone too). It counts when an owners.product account (guardrail:
+                                #   owners.factory) not in owners.bots applied it after the head's push; a push removes it.
+                                #   The guard hook and the CLI refuse it to the agent (architecture.md, One identity or two)
   provenance: off               # off | warn | require. Agent commits (author or committer in owners.bots) carry the trailers
                                 #   Agent-Run and Agent-Model; gate provenance posts status agent-provenance on the CR head.
                                 #   warn reports and passes. require fails a CR whose agent commit lacks them: add agent-provenance
@@ -83,7 +86,7 @@ vcs:
 
 product:
   environments: [staging, production] # ordered; the last is where users get value; Shipped options derive from it (library: [prerelease, registry]; mobile: [internal, beta, store])
-  delivery: release-line         # release-line: the last environment deploys from a release line the Product owner approves | continuous: every environment deploys from the trunk, no release line (web CD, a model registry, a package published per merge)
+  delivery: continuous           # continuous (init's default): every environment deploys from the trunk, no release line and no ship step (web CD, a model registry, a package published per merge) | release-line (opt in): the last environment deploys from a release line the Product owner approves (ship); a binding without this key keeps release-line
   evidence: []                  # release evidence the ready check requires: sbom | provenance | signature (SLSA build provenance, an SPDX or CycloneDX SBOM, a signature); commands.evidence_check proves it
   # slo: { change_failure_rate_max: 0.15, window_days: 30 } # optional error budget (unset: none): when changes shipped to the last environment in the window are followed by failures (a P0 bug or Signal, a failed deploy) at a higher rate, `ledger measures` reports errorBudget.exhausted and the cycle starts no new feature ticket
   proofs: [test, eval, visual, data-check, computer-use, manual] # kinds a criterion may name; computer-use = review/verify drives the built product; manual always escalates for a human check

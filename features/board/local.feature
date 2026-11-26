@@ -40,7 +40,7 @@ Feature: The local board
         | Backlog | 0    |
         | Ready   | 1    |
 
-    Scenario: A field is set and cleared, a label is added and removed
+    Scenario: A field is set and cleared, a label is added and removed, and the approval label is refused
       When I run "board set 1 size M"
       Then the result "fields.size" is "M"
       When I run "board set 1 size --clear"
@@ -49,6 +49,9 @@ Feature: The local board
       Then the result "labels" is "bug"
       When I run "board label 1 remove bug"
       Then the result "labels" is ""
+      When I run "board label 1 add approved"
+      Then the exit code is 1
+      And the output says "forge.approval_label"
 
     Scenario: A milestone is set and cleared, and cannot be set on a ticket that does not exist
       When I run "board milestone 1 M1"

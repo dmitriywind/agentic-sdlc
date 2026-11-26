@@ -47,7 +47,10 @@ workflow's `review-gate` job runs on that comment and posts `review` from the ne
 the head (`agentic-sdlc gate review --cr <n>`). `forge approve` refuses, since GitHub refuses an
 approving review from the CR's author. `init` writes a trunk ruleset that needs no approving review. The `approval` gate
 posts `human-approval` with the CI job's token. A CR that needs a human waits until a collaborator
-approves its head, or the owner merges it as admin (the ruleset lets admins bypass in a pull request). The cloud task pushes and merges as the owner, and a rule the owner can bypass does not block it, so with the shipped admin bypass the agent can merge past every pinned check.
+approves its head, or the owner applies `forge.approval_label` (default `approved`) to it after its latest push; the
+CR workflow re-runs the gate on `labeled` and `unlabeled` and removes the label on every push. The agent shares the
+owner's login, so the label proves a deliberate act outside the agent's tools (the guard hook and `board label` refuse
+it), not a second person. Admin merge is not needed. The ruleset still lets admins bypass in a pull request. The cloud task pushes and merges as the owner, and a rule the owner can bypass does not block it, so with the shipped admin bypass the agent can merge past every pinned check.
 
 **Two identities** (required for `organization`): `forge status` and `forge approve` use only
 `forge.options.review_token_env` (the `forge.review_identity` account); without it they fail. The implementer's `token_env` cannot post
@@ -66,9 +69,9 @@ The `approval` gate classifies each CR and posts `human-approval`:
 | Class | Passes when |
 |---|---|
 | `product-fast` | Always (unless `forge.human_approval: always`). |
-| `product-full` | (Also any product CR that touches `paths.lane_areas`.) `forge.human_approval: never`, or a human's approving review on the head (not a bot, not the review identity). |
+| `product-full` | (Also any product CR that touches `paths.lane_areas`.) `forge.human_approval: never`, or a human's approving review on the head (not a bot, not the review identity), or `forge.approval_label` applied by `owners.product` after the latest push. |
 | `tuning` | `tuning` is in `learning.auto_merge_classes`. |
-| `guardrail` | `owners.factory` approved the head. A CR that mixes product and factory paths is `guardrail`. |
+| `guardrail` | `owners.factory` approved the head, or applied `forge.approval_label` after the latest push. A CR that mixes product and factory paths is `guardrail`. |
 
 There is no CODEOWNERS file: the gate enforces owner approval, so `tuning` can auto-merge. The
 gate reruns on `pull_request_review` (submitted, dismissed) in `agentic-sdlc-cr.yml`.

@@ -68,6 +68,9 @@ export interface CR {
 /** assoc: the reviewer's relation to the repo (OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE ...), when the forge reports it. */
 export interface Review { user: string; state: string; sha: string; assoc?: string }
 
+/** One label added to or removed from a CR, oldest first: who did it (bot: the forge marks the account a bot) and when (ISO time, the forge's clock). */
+export interface LabelEvent { label: string; action: 'labeled' | 'unlabeled'; actor: string; bot?: boolean; at: string }
+
 /** One commit of a CR, oldest first. author and committer: forge logins, empty when the forge links no account to the commit email; authorName and committerName: the names git recorded; committerEmail: the committer email git recorded. */
 export interface CrCommit { sha: string; message: string; author: string; committer: string; authorName: string; committerName: string; committerEmail?: string; parents: number }
 
@@ -98,6 +101,10 @@ export interface Forge {
   status(sha: string, s: { context: string; state: 'pending' | 'success' | 'failure'; description: string; url?: string }, opts?: { as?: 'ci' }): Promise<void>;
   approve(n: string): Promise<void>;
   approvals(n: string): Promise<Review[]>;
+  /** The label history of a CR (gate approval reads forge.approval_label in it). Optional: without it no label approves. */
+  labelEvents?(n: string): Promise<LabelEvent[]>;
+  /** Removes a label from a CR; absent already is fine. Optional: CI's approval gate drops the approval label on a push with it. */
+  unlabel?(n: string, label: string): Promise<void>;
   /** Every commit of the CR, oldest first, with message and authors (gate provenance). Throws when the list cannot be read whole. */
   commits(n: string): Promise<CrCommit[]>;
   runs(q?: { ref?: string; failed?: boolean }): Promise<Run[]>;
@@ -241,6 +248,8 @@ export interface Binding {
     review_identity: string;
     /** Who must approve besides the agent review (status human-approval). Absent: full-lane. */
     human_approval?: 'full-lane' | 'always' | 'never';
+    /** The label an owner applies to a CR to approve its current head (one identity: GitHub refuses a review by the CR's author). Absent: approved. */
+    approval_label?: string;
     /** Gate provenance: agent commits carry Agent-Run and Agent-Model trailers. off (default) does nothing; warn reports; require fails the check `agent-provenance`. */
     provenance?: 'off' | 'warn' | 'require';
     review_check_name: string;

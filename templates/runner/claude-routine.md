@@ -5,7 +5,7 @@ Install at: claude.ai/code/routines, or `/schedule` in Claude Code. The task bel
 Usage: scheduled runs draw the same subscription usage as interactive work, and are rejected at the subscription usage limit unless usage credits are on. The shortest schedule interval is 1 hour; pick a minute off the hour (for example `7 */2 * * *`), since on-the-hour starts can be late.
 Silent stops: the task turns off after 72 h without a GitHub connection, and a run row that says "Succeeded" does not prove work was done. Neither writes a heartbeat, so install the dead-man workflow (`agentic-sdlc-dead-man.yml`, installed by `init`).
 Skills: a cloud session loads no repo plugin, only `.claude/skills/`. Install with
-the package's `init --harness claude --no-plugin` (`npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v<version> init ...`) and commit `.claude/skills/` and `.mcp.json`.
+the package's `init --harness claude --no-plugin` (`npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v<version> init ...`) and commit `.claude/skills/`, `.claude/agents/`, `.claude/settings.json` (the guard hook), `.agents/hooks/guard.mjs` and `.mcp.json`.
 Board: the GitHub proxy refuses GraphQL and every `orgs/*` and `users/*` route; the `github-issues` board is reached
 through `repos/{owner}/{repo}/...` only, with the session's own GitHub auth.
 Verify: Docker is available in a cloud session. A foreground command waits 2 minutes by default, up to 10, then can continue in the

@@ -3,7 +3,7 @@
 
 A merge makes the ticket Done and "Not shipped". Your deploy jobs then report each environment to
 the `shipped` check, which moves the ticket's **Shipped** field. `product.delivery` picks one of two
-ways. Merge, deploy, and make a deploy fail below.
+ways: `init` writes `continuous`, and `release-line` is the opt-in. Merge, deploy, and make a deploy fail below.
 
 <!-- viz: ship -->
 ```mermaid
