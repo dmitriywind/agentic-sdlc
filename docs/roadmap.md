@@ -9,7 +9,6 @@ are the history.
 |---|---|
 | The first real pilot cycle | On a real product repository, scheduled cloud routines run the cycle: three runs in a row write a heartbeat with no `errors`, and one ticket goes from Signal to Done with no hand fix. |
 | Proof on real GitHub | Each is seen once on a real repo: a push removes the approval label and the gate then waits; the routine's Issue event trigger starts a cycle on a new Signal; every board and forge verb the cycle calls works over REST behind the cloud proxy. |
-| One account passes the human gate | With one GitHub account as owner and as `owners.bots` (a cloud routine acts as the owner), the approval gate ignores the owner's label (`src/gates.ts` `approval`), so a Full-lane or factory change cannot be approved. A way for that one person to approve the head they saw, with the agent still unable to. |
 | The phone board page | A Claude artifact page over the GitHub connector: live columns by `status:` label, a drag is a label change, a comment box, a new Signal button. |
 | A guard for manual status moves | A workflow that reverses a status label change no rule allows, and says why in a comment. |
 

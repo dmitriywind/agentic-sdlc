@@ -206,11 +206,6 @@ export function bindingWarnings(b: Binding): string[] {
   for (const k of Object.keys(x?.owners ?? {})) if (!['product', 'factory', 'operator', 'security', 'compliance', 'bots'].includes(k)) w.push(`owners.${k} is not a known owner role (product, factory, operator, security, compliance, bots); remove it`);
   if (x?.product?.kind !== undefined) w.push('product.kind is unused; remove it');
   if (x?.board?.milestone !== undefined) w.push('board.milestone is unused; remove it');
-  const ha = x?.forge?.human_approval ?? 'full-lane';
-  if (ha !== 'never' && x?.owners) {
-    const o = ownersFor(x.owners, 'forge');
-    if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved (by a review or forge.approval_label); take your own account out of owners.bots (owners are trusted without it), or add a second account to owners.product`);
-  }
   const hb = String(x?.heartbeat?.ticket ?? '');
   if (['github-issues', 'local'].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb) && hintOf(hb) === undefined) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
   const envs: string[] = x?.product?.environments ?? [];

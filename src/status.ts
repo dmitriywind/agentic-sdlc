@@ -37,8 +37,6 @@ export function personSteps(b: Binding, trunkLines: string[], warnings: string[]
     },
     { step: 'Optional: connect GitHub in claude.ai, so a board page there can read the issues', where: 'https://claude.ai/settings/connectors > GitHub', verified: null },
   ];
-  const both = warnings.find((w) => w.startsWith('forge.human_approval is'));
-  if (both) out.push({ step: 'Decide who approves a Full-lane CR', where: '.agents/binding.yml owners.product / owners.bots, or forge.human_approval', text: both, verified: false });
   return out;
 }
 

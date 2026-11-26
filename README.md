@@ -17,9 +17,9 @@ flowchart LR
 ```
 
 You put in ideas and reports, you answer holds (an issue labelled `needs-human` with one question),
-and you approve Full-lane and factory pull requests with the `approved` label. The label counts only
-from an owner account outside `owners.bots`: with one GitHub account in every role, read
-[Your part](docs/guide/3-your-part.md) first.
+and you approve Full-lane and factory pull requests with the `approved` label. The label counts from
+an owner account, also when the factory acts as that same account: see
+[Your part](docs/guide/3-your-part.md).
 
 ## Install
 

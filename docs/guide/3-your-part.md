@@ -29,7 +29,7 @@ sequenceDiagram
 
 The approval label counts only for the commit you looked at: every push removes it, and a label
 added before the latest push does not count. The agent cannot add it: the guard hook and the CLI
-refuse. It counts only when the account that added it is an owner and is not in `owners.bots`
+refuse. It counts only when the account that added it is an owner the change asks for
 ([the approval feature](../../features/gates/approval.feature), [the guard feature](../../features/guard/push-guard.feature)).
 
 ## Who you are
@@ -45,12 +45,11 @@ The binding names you in three roles:
 <div class="callout warn">
 
 **One account in every role.** Your replies still count, since a reply carries no factory marker.
-But GitHub refuses your review of a pull request your account opened, and the gate ignores a label
-from an account in `owners.bots`. So nothing can approve a Full-lane or factory change. `validate`
-warns, and `status` puts the decision on your list: add a second GitHub account of yours to
-`owners.product` and `owners.factory` and approve with it, or set `forge.human_approval: never` so
-Full-lane changes merge on the agent review. A factory change then still waits for an approval: you
-merge it yourself on GitHub, as the repo admin the trunk ruleset lets bypass.
+GitHub refuses your review of a pull request your account opened, so you approve with the `approved`
+label. The gate takes your label although the factory acts as your account: the guard hook and the
+CLI stop the agent from adding it. This is a deliberate act outside the agent's tools, not a second
+person: an agent that got past the guard with a direct API call could add the label itself. For a
+harder wall, run the factory as a second GitHub account and leave yours out of `owners.bots`.
 
 </div>
 
@@ -63,7 +62,7 @@ without them those asks come to you.
 
 - **Morning.** GitHub notifications show new asks. Filter the issues on `needs-human`; reply to each.
 - **A pull request waits.** Open it in the GitHub app, read the diff and the review comment, add the
-  `approved` label (from an owner account outside `owners.bots`, see above).
+  `approved` label.
 - **An idea.** New issue with the **Signal** form. It is triaged on the next cycle. A thought you want
   to keep but not start: label it `status:Ideas`.
 - **What is going on?** In a Claude Code session on the repo, ask what waits on you. The `setup` skill

@@ -254,7 +254,7 @@ export async function approval(d: Deps, n: string, opts: { pushed?: boolean } = 
       const who = (need === 'owner' ? o.factory : o.product).map((u) => u.toLowerCase());
       const actor = ev?.actor.toLowerCase() ?? '';
       const fresh = !!ev && !!cr.pushedAt && Date.parse(ev.at) > Date.parse(cr.pushedAt);
-      if (ev?.action === 'labeled' && !ev.bot && who.includes(actor) && !bots.includes(actor) && fresh) by = `${actor} (label ${label})`;
+      if (ev?.action === 'labeled' && !ev.bot && who.includes(actor) && fresh) by = `${actor} (label ${label})`;
     }
   }
   const pass = need === 'none' || !!by;
