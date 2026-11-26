@@ -27,8 +27,8 @@ and each Scenario, and each row of an Examples table, to an `it` on `node:test`.
 
 Layout:
 
-- `features/<area>/<thing>.feature`. Areas: board, forge, vcs, gates, dispatch, ledger, bench, install,
-  cli, mcp, binding, plugin, guard, skills, comments.
+- `features/<area>/<thing>.feature`. Areas: bench, binding, board, cli, comments, cycle, dispatch, forge, gates,
+  guard, install, ledger, mcp, plugin, skills, vcs.
 - `features/steps/<area>.ts` holds the step definitions of that area; `features/steps/common.ts` holds the
   vocabulary every area reuses. All steps are global: a step phrase means one thing everywhere.
 - `features/support/` is the machinery: `gherkin.ts` (parser), `steps.ts` (`Given`, `When`, `Then`),
@@ -84,25 +84,18 @@ A step takes `{string}` ("double" or 'single' quoted; `\"` is a quote), `{int}`,
 expression whose groups are its arguments; a data table or a doc string arrives as the last argument.
 An undefined step fails its scenario with a snippet to paste; an ambiguous step names both definitions.
 
-## The contract rule
+## Adding a board adapter
 
-[`references/architecture.md`](references/architecture.md) is the contract. A change to a port,
-gate, binding key, CLI verb or skill interface changes the contract in the same CR, and the
-contract changes the code, templates, skills and docs in that CR too. Process rules live only in
-`skills/`, project values only in `templates/binding.yml`, mechanism only in `src/`. One rule, one
-home; elsewhere a pointer.
+1. Implement the board port from `src/ports.ts` in `src/board/<name>.ts`, running processes and HTTP only
+   through the `exec` and `http` helpers so tests can fake them, and register it in `src/board/index.ts`.
+2. List its options in `templates/binding.yml` and check them in `src/binding.ts`. Credentials come only
+   from env var names.
+3. Add `features/board/<name>.feature`: every verb, its JSON output and its exit codes, against the fake
+   exec (`w.adapterContext`).
+4. Add it to the adapter list in the contract, section 3.1.
 
-## Adding an adapter
-
-1. Implement the port interface from `src/ports.ts` in `src/board/<name>.ts` or
-   `src/forge/<name>.ts`, running processes only through the `exec` helper so tests can fake them.
-2. Register it in that folder's `index.ts`, and list its options in `templates/binding.yml` so
-   `validate` can check them. Credentials come only from env var names.
-3. Add `features/<area>/<name>.feature` with its steps: every verb, its JSON output and its exit codes, against the
-   fake exec (`w.adapterContext`).
-4. A forge adapter also needs gate templates in `templates/gates/<name>/` and a section in
-   [docs/forges.md](docs/forges.md) saying what is native, gated or approximated.
-5. Update the adapter lists in the contract (section 3) and the README.
+GitHub is the one forge: on other forges a change request can change the pipeline file that runs its
+own gates.
 
 ## Releases and `dist/`
 
@@ -115,6 +108,6 @@ tags `v<version>` on `master`.
 
 ## Changes
 
-External contributors: fork the repo and open a pull request against `master`. Maintainers commit
-small changes to `master` (the trunk) directly. Small and focused, with tests. Describe the change and why. Security issues go through
+Fork the repo and open a pull request against `master`; every change, a maintainer's too, reaches
+`master` through a pull request once CI passes. Small and focused, with tests. Describe the change and why. Security issues go through
 [SECURITY.md](SECURITY.md), not a public issue.

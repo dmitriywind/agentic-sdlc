@@ -1,4 +1,4 @@
-# Source: src/gates.ts "proofsOnBase", "proofFiles", "proofRunner"; docs/forges.md
+# Source: src/gates.ts "proofsOnBase", "proofFiles", "proofRunner"; references/architecture.md section 3.4
 @gate:proofs-on-base
 Feature: Gate proofs-on-base
   Each new proof of a product CR must fail on the merge base, so that a proof really tests the new change.

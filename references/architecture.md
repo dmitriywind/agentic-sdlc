@@ -1,416 +1,362 @@
-# agentic-sdlc architecture (the software factory)
+# agentic-sdlc architecture (the contract)
 
-Status: normative. This file is the contract every part of the package is built against. A change
-here changes the parts in the same CR.
+Status: normative. Every part of the package is built against this file; a change here changes the
+parts in the same CR. It holds mechanism only: process rules live in `skills/` (the words, roles, trust
+and waits in `skills/sdlc/references/contract.md`), cloud platform facts in
+`templates/runner/claude-routine.md`.
 
 ## 1. What the package is
 
-A **software factory** that a project installs to deliver value continuously: a skill pack, a
-binding template, and a CLI of ports and gates. It is defined in code, versioned in the repo it
-serves, open to several boards, forges and tech stacks, and measured on the project's own data.
-
-Three layers, each with one home:
+A software factory a project installs: a skill pack, a binding and a CLI of ports and gates.
 
 | Layer | Home | Holds |
 |---|---|---|
-| Process | `skills/` (the Claude Code plugin, or `.agents/skills/` on install) | Every process rule. Generic. No project value. |
-| Binding | `.agents/binding.yml` in the project | Every project value: board, statuses, commands, paths, owners, model tiers, executors. |
-| Ports | `src/` → the `agentic-sdlc` CLI and MCP server | Board, forge and VCS adapters, repo gates, dispatch, the run ledger and the bench. Mechanism only, no process rule. |
+| Process | `skills/` (the Claude Code plugin, or a copy under `.agents/skills/`) | Every process rule. Generic. No project value. |
+| Binding | `.agents/binding.yml` in the project | Every project value. |
+| Ports | `src/`, the `agentic-sdlc` CLI and MCP server | Board, forge and VCS adapters, gates, dispatch, the run ledger, the bench. Mechanism only. |
 
-Claude Code, on the Claude subscription, is the one agent runtime: it runs the loop by
-loading the `sdlc` skill. The package ships **no supervisor and no agent runner**. The one
-exception is `bench run`, which starts the binding's `agent_command` headless on a past task.
-
-Constraint: delivery is **trunk-based on Git**. One trunk, short-lived change branches in, release
-branches out. No long-lived develop branch. A P0 fix starts release at once; there is no hotfix line.
-`board.labels` keys: `human`, `bug`, `feature`, and `release` (marks a release request the Product
-owner opens at Backlog).
+Claude Code on a Claude subscription is the one agent runtime: it runs the loop by loading the `sdlc`
+skill. The package ships no supervisor and no agent runner; the one exception is `bench run`, which
+starts `agent_command` headless on a past task. Delivery is trunk-based on Git: one trunk, short-lived
+change lines in, release lines out (release-line delivery only). No develop branch, no hotfix line.
 
 ## 2. Repository layout
 
 ```
-.claude-plugin/plugin.json   Claude Code plugin manifest: skills, hooks, the MCP server
-.claude-plugin/marketplace.json  this repo as a one-plugin marketplace
-agents/                      plugin subagents: sdlc-fast, sdlc-balanced, sdlc-deep, sdlc-reviewer
-bin/agentic-sdlc             plugin shim: the CLI on the Bash PATH (the project's `.agents/bin/agentic-sdlc`, else its node_modules build, else dist/bin.js)
-evals/                       plugin evals for skill triggering (`claude plugin eval`)
-hooks/                       plugin hooks (hooks.json, guard.mjs, session-start.mjs) and the plugin's MCP launcher (mcp.mjs)
-skills/                      the skill pack: seven phase skills and setup (section 5)
-  sdlc/                      navigator: one cycle
-    routes.yml               the routing rules as data, read by `next` (section 11.3)
-    references/contract.md   words, roles, trust, waits and the rules every step follows
-    references/statuses.md   statuses and Shipped
-    references/board.md      board fields, lanes, sub-issues
-  plan/      steps/triage.md steps/groom.md steps/shape.md   Signals, Ideas, Backlog to Ready
-  build/                     Ready to In review: a draft CR
-  review/    steps/review.md steps/verify.md                 In review to landed or sent back
-  ship/                      the release line (release-line delivery only)
-  learn/     steps/judge.md steps/improve.md                 the learning loop (learning.enabled)
-  escalate/                  classify, ask, hold; run inside any step
-  setup/     references/project.md                           install or repair the factory; answer what waits on the person
-scorers/                     the shipped scorer rubrics, copied to .agents/scorers/
+.claude-plugin/          plugin.json (skills, hooks, MCP server) and marketplace.json (this repo as a one-plugin marketplace)
+agents/                  plugin subagents: sdlc-fast, sdlc-balanced, sdlc-deep, sdlc-reviewer
+bin/agentic-sdlc         plugin shim on the Bash PATH: the project's .agents/bin/agentic-sdlc, else its node_modules build, else dist/bin.js
+evals/                   skill-triggering evals for `claude plugin eval`
+hooks/                   hooks.json, guard.mjs (PreToolUse), session-start.mjs (SessionStart), mcp.mjs (the plugin's MCP launcher)
+skills/                  seven phase skills and setup (section 5)
+  sdlc/                  the navigator; routes.yml (read by `next`, section 11.3); references/contract.md, statuses.md, board.md
+  plan/ build/ review/ ship/ learn/ escalate/ setup/
+scorers/                 scorer rubrics, copied to .agents/scorers/
 templates/
-  binding.yml                the binding template: every key init writes, unresolved values marked (section 4)
-  gates/github/              GitHub Actions workflows and the trunk ruleset
-  gates/hooks/               pre-push
-  bin/                       the launcher init installs at .agents/bin/agentic-sdlc
-  mcp/                       the .mcp.json entry `init --no-plugin` writes
-  runner/                    scheduler templates and the cycle and review prompts
+  binding.yml            every key init writes; unresolved values marked (section 4)
+  gates/github/          the workflows, the issue form, the PR template, the trunk and release rulesets
+  gates/hooks/pre-push
+  bin/agentic-sdlc       the launcher init installs at .agents/bin/
+  mcp/                   the .mcp.json entry `init --no-plugin` writes
+  runner/                scheduler templates, cycle and review prompts, setup.sh
 src/
-  bin.ts  cli.ts             CLI entry and dispatch
-  exec.ts                    the one process helper (injectable for tests)
-  ports.ts                   port interfaces and shared types
-  binding.ts                 load and validate the binding
-  install.ts                 init / validate / doctor
-  status.ts                  status: what waits on the person, the next cycle, what is broken (section 10)
-  board/   github-issues.ts local.ts index.ts
-  forge/   github.ts flow.ts util.ts index.ts
-  vcs/     git.ts index.ts
-  gates.ts                   repo gates shared by every CI template
-  comments.ts                the comment-kind registry: kind to first-line marker (section 11.1)
-  skills.ts                  the skill pack reader: steps, tiers, hashes
-  pristine.ts                which installed files are unedited package files (init --upgrade)
-  dispatch.ts                start a step on its executor
-  next.ts                    the cycle's work in order: evaluates skills/sdlc/routes.yml
-  ledger.ts                  read heartbeats and scores, aggregate runs, measures and learning
-  bench.ts                   build and run bench cases
-  mcp.ts                     the port verbs as MCP tools
-scripts/                     the guide build (guide.mjs), the hash list step (known-hashes.mjs) and the feature pruner
-references/architecture.md   this contract
-docs/                        guides and diagrams; never normative
-features/                    the behaviour as executable Gherkin features (`<area>/*.feature`), their steps (`steps/`) and the runner (`support/`), on node:test; fake exec only (no network)
+  bin.ts cli.ts          entry and dispatch            exec.ts     the one process and HTTP helper (injectable)
+  ports.ts               port types                    binding.ts  load and validate the binding
+  install.ts             init, validate, doctor        status.ts   status (section 10)
+  board/                 github-issues.ts local.ts index.ts
+  forge/                 github.ts flow.ts util.ts index.ts
+  vcs/                   git.ts index.ts
+  gates.ts               the gates                     comments.ts the comment kinds (section 11.1)
+  skills.ts              the skill pack reader         pristine.ts unedited package files (init --upgrade)
+  dispatch.ts            start a step on its executor  next.ts     the cycle's work (section 11.3)
+  ledger.ts              heartbeats, scores, measures  bench.ts    bench cases and runs
+  mcp.ts                 the verbs as MCP tools
+scripts/                 guide.mjs (docs/guide.html), known-hashes.mjs (templates/known-hashes.json), prune-features.mjs
+docs/                    the guide and the roadmap; never normative
+features/                the behaviour as executable Gherkin features on node:test; fake exec, no network
 ```
 
 ## 3. Ports
 
-A skill never calls `gh`, `glab`, `az`, `jira` or `git` for a board, forge or VCS step. It calls
-the CLI verb below (or its MCP tool); the binding picks the adapter.
+A skill never calls a vendor CLI or `git` for a board, forge or VCS step: it calls the verb below or
+its MCP tool, and the binding picks the adapter. Every verb prints JSON on stdout and exits 0 on
+success, 1 on a refused or failed action (message on stderr), 2 on a usage error. Ids are strings.
+A verb takes only the flags it lists: an unknown flag, a value flag with no value or an unreadable
+`--body-file` is a usage error; `--k=v` equals `--k v`.
 
-Every verb prints JSON on stdout and exits 0 on success, 1 on a refused or failed action (message
-on stderr), 2 on a usage error. Ids are strings everywhere (`"123"`, `"PROJ-45"`, `"LIN-9"`).
-Adapters that call an HTTP API retry 429 and 5xx responses with backoff (3 tries, honouring
-`Retry-After`). A POST retries only 429, since a 5xx may come after the write. The `gh` adapters
-(board `github-issues`, forge `github`) retry the same way on what `gh` prints: a read
-(`gh api` GET, `view`, `list`) retries HTTP 429, a 403 that names a rate limit and HTTP 5xx; a write
-retries only 429 and rate limits. They wait the `Retry-After` hint `gh` prints, else 1s then 2s.
-Every verb takes only the flags it lists: an unknown flag, a value flag with no value and a
-`--body-file` that cannot be read are usage errors (exit 2); `--k=v` is the same as `--k v`.
+Retries: an HTTP adapter retries 429 and 5xx with backoff (3 tries, honouring `Retry-After`); a POST
+retries only 429, since a 5xx may follow a write. The `gh` adapters retry a read (`gh api` GET, `view`,
+`list`) on 429, a 403 that names a rate limit, and 5xx, and a write only on 429 and rate limits; they
+wait the `Retry-After` hint `gh` prints, else 1s then 2s. Credentials come only from env vars the
+binding names, never from a file in the repo.
 
 ### 3.1 Board (`agentic-sdlc board <verb>`)
 
 | Verb | Effect | Output |
 |---|---|---|
-| `list [--status <s>]… [--label <l>] [--search <text>] [--state all]` | Open board items without `body` (it is read every cycle: `get` returns the body); `--state all` adds the closed ones (Done, Cancelled), for a caller that needs them (`gate shipped`, `ledger measures`, `bench`); `--search` matches title and body words | `Item[]` |
-| `get <id>` | One item with fields and comments count | `Item` |
-| `create --title <t> --body-file <f> --status <s> [--label <l>]… [--parent <id>] [--milestone <m>]` | New ticket on the board | `Item` |
-| `move <id> <status> [--only-from <s>]` | Set Status. With `--only-from`, refuse (exit 1) unless the item is still there | `Item` |
+| `list [--status <s>]… [--label <l>] [--search <text>] [--state all]` | Open items without `body`; `--state all` adds closed ones (Done, Cancelled) for `gate shipped`, `ledger measures` and `bench`; `--search` matches title and body words | `Item[]` |
+| `get <id>` | One item with its fields and comment count | `Item` |
+| `create --title <t> --body-file <f> --status <s> [--label <l>]… [--parent <id>] [--milestone <m>]` | New ticket | `Item` |
+| `move <id> <status> [--only-from <s>]` | Set Status; with `--only-from`, refuse unless the item is still there | `Item` |
 | `set <id> <field> <value>` / `set <id> <field> --clear` | Set or clear a logical field | `Item` |
-| `label <id> add\|remove <label>` | Add or remove a label. Refuses (exit 1) to add `forge.approval_label`: on a forge whose CRs are issues it is the owner's approval of a CR head | `Item` |
+| `label <id> add\|remove <label>` | Add or remove a label. Refuses to add `forge.approval_label` | `Item` |
 | `assign <id> <user\|--none>` | Set or clear the assignee | `Item` |
-| `milestone <id> <name>` / `milestone <id> --clear` | Set or clear the milestone of an existing ticket, where `create --milestone` puts it (`github-issues`: the issue's milestone, which must exist; `local`: the item's `milestone`) | `Item` |
-| `comment <id> --body-file <f> [--kind <kind> [--ref <value>]]` | Add a comment; `--kind` stamps the kind's marker as its first line, filled with `--ref` (section 11.1) | `{ id, url }` |
-| `comments <id> [--last <n>] [--kind <kind>] [--marker <text>] [--author <a>]… [--trusted]` | Comments, newest first; kind, first-line and author filters (`--last` counts after them). `--trusted` is `--author` for every entry of `owners.bots`, `owners.product`, `owners.factory` and the optional `owners.operator`, `owners.security`, `owners.compliance` | `Comment[]` |
-| `close <id> --reason completed\|not_planned` | Close (and move to Done or Cancelled) | `Item` |
+| `milestone <id> <name>` / `milestone <id> --clear` | Set or clear the milestone (`github-issues`: it must exist) | `Item` |
+| `comment <id> --body-file <f> [--kind <kind> [--ref <value>]]` | Comment; `--kind` stamps its marker (section 11.1) | `{ id, url }` |
+| `comments <id> [--last <n>] [--kind <kind>] [--marker <text>] [--author <a>]… [--trusted]` | Newest first; `--last` counts after the filters. `--trusted` is `--author` for every `owners.bots` entry and every owner role | `Comment[]` |
+| `close <id> --reason completed\|not_planned` | Close and move to Done or Cancelled | `Item` |
 | `child <parent> <child>` | Link a sub-issue | `Item` |
-| `hold <id> --kind <trigger> --body-file <f>` | Adds `board.labels.human` and posts the ask with its `ask` marker for `<trigger>` (the `escalate` trigger, lower case) | `Item` |
-| `holds` | The held tickets. A reply is a comment by any owner role, never an `owners.bots`-only account, after the last ask; an account in both lists counts when its comment carries no factory marker | `[{ id, kind, askedAt, replied: boolean, reply? }]` |
-| `release <id>` | Removes `board.labels.human`; the ticket keeps its Status | `Item` |
-| `bootstrap` | Creates what the board needs, idempotent: every label the binding names (`board.labels`, `board.env_labels`, `signal:<stream>` per `board.signal_streams`, `forge.approval_label`, and on `github-issues` the `status:`, size and priority labels a field id does not replace) and, while `heartbeat.ticket` is unset or unresolved, the heartbeat ticket, found again by its title `agentic-sdlc heartbeat` (`github-issues`: an open issue with no status label; `local`: status Cancelled). Port method `bootstrap?(labels, heartbeat?)` | `{ labels: { created: string[] }, heartbeat: { id, created } \| null }` |
+| `hold <id> --kind <trigger> --body-file <f>` | Add `board.labels.human` and post the `ask` for the `escalate` trigger (lower case) | `Item` |
+| `holds` | Held tickets. A reply is a comment after the last ask by an owner role, never by an `owners.bots`-only account; an account in both counts when its comment has no factory marker | `[{ id, kind, askedAt, replied, reply? }]` |
+| `release <id>` | Remove `board.labels.human`; the Status stays | `Item` |
+| `bootstrap` | Idempotent: create every label the binding names (`board.labels`, `board.env_labels`, `signal:<stream>` per `board.signal_streams`, `forge.approval_label`; on `github-issues` the `status:`, size and priority labels no field id replaces) and, while `heartbeat.ticket` is unset or unresolved, the heartbeat ticket, found again by its title `agentic-sdlc heartbeat` (`github-issues`: an open issue with no status label; `local`: status Cancelled) | `{ labels: { created }, heartbeat: { id, created } \| null }` |
 
-`Item = { id, title, url, status, kind?, labels[], fields: Record<logicalField,string>, milestone?, parent?, children[], assignees[], createdAt, updatedAt, statusChangedAt? }`. `statusChangedAt` is when the ticket entered its status; `ledger measures` reads it for tickets at Done. `github-issues` sets it to the issue's `closed_at` for a closed issue at Done and leaves it unset otherwise.
-Logical fields: `size`, `priority`, `lane`, `shipped`, `release_version`. The binding maps each to
-the tracker's field name (a `github-issues` label prefix or org issue field, a local JSON key).
+`Item = { id, title, url, status, kind?, labels[], fields, milestone?, parent?, children[], assignees[],
+createdAt, updatedAt, statusChangedAt? }`. Logical fields: `size`, `priority`, `lane`, `shipped`,
+`release_version`; `board.fields` maps each to the tracker's name. `statusChangedAt` is when the ticket
+entered its status; `github-issues` sets it to `closed_at` for a closed issue at Done only. `list` does
+not read sub-issues (`children` is empty there); `get` does.
 
-Adapters: `github-issues` (the default; the repo's issues through
-`gh api repos/{owner}/{repo}/…` REST only, so a Claude cloud session reaches it: Status and each logical
-field are labels `<name>:<value>`, `status:` and the lower-cased field name, e.g. `status:Ready`, `size:S`;
-an issue without a status label is off the board, except an open one with a `signal:<stream>` label, which lists (and `get`s) as status `Signals` until triage moves it, so an issue made from a phone, an issue form or an alert is picked up; `create` and every label write create missing labels;
-`close` also closes the issue with its state reason; option `repo`), `local` (`.agents/board.json`, for tests and solo
-projects). Credentials only from env vars the binding names; never from a file in the repo.
+Adapters:
 
-### 3.2 Forge (`agentic-sdlc forge <verb>`): the change request (CR) host, GitHub
+- `github-issues` (default): the repo's issues through `gh api repos/{owner}/{repo}/…`, REST only, so a
+  Claude cloud session reaches it. Status and each field are labels `<name>:<value>` (`status:Ready`,
+  `size:S`); `board.options.field_ids` maps them to organization issue fields instead (`doctor` checks the
+  ids and options). An issue without a status label is off the board, except an open one with a
+  `signal:<stream>` label, which reads as status `Signals`. `create` and every label write create missing
+  labels; `close` closes the issue with its state reason. GitHub has no compare-and-swap: `--only-from`
+  reads, then writes. Option `repo`.
+- `local`: `.agents/board.json`, for tests and trying it out.
+
+### 3.2 Forge (`agentic-sdlc forge <verb>`): GitHub
 
 | Verb | Effect | Output |
 |---|---|---|
 | `open --source <b> --title <t> --body-file <f> [--draft]` | Open a CR into the trunk | `CR` |
-| `view <n>` / `view --sha <sha>` | One CR; by sha, the CR whose merge commit is `<sha>` | `CR` |
+| `view <n>` / `view --sha <sha>` | One CR; by sha, the CR whose merge commit it is | `CR` |
 | `diff <n>` | Unified diff | text |
-| `list [--state open\|merged\|all] [--limit <n>] [--since <iso date>] [--checks]` | CRs (default open), newest update first; merged ones carry `mergeSha`. `--limit` keeps the newest n; `--since` keeps CRs merged (state merged) or updated since the date. Without `--checks` each CR comes from the list payload with `checks: []`, `behind` false and no `pushedAt`: a caller that reads checks, `behind` or `pushedAt` passes `--checks`, which reads each CR as `view` does | `CR[]` |
+| `list [--state open\|merged\|all] [--limit <n>] [--since <iso>] [--checks]` | Newest update first; merged ones carry `mergeSha`. Without `--checks` each CR has `checks: []`, `behind` false and no `pushedAt` | `CR[]` |
 | `ready <n>` / `draft <n>` | Leave or return to draft | `CR` |
-| `sync <n>` | Bring the CR's source up to the trunk tip | `CR` |
-| `automerge <n>` | Merge when every required check is green (low level; steps use `land`) | `CR` |
-| `verdict <n> --pass\|--fail --body-file <f>` | Stamps the `verdict` marker for the CR head and the single `Verdict:` line, and posts the report. With `forge.review_identity` set it also posts the review status (`forge.review_check_name`) and, on pass, the approving review, with `options.review_token_env`; without one, CI's `review` gate turns the report into the status. A missing review token exits 1 naming an Access problem | `{ verdict, comment, status: 'posted'\|'ci' }` |
-| `land <n> [--wait <minutes>]` | Waits, bounded (default `cycle.land_wait_minutes`, 5 when unset), until every `forge.required_checks` entry is green on the head, then arms auto-merge, or merges where the forge cannot arm it. A wait on a human approval is `blocked` with `needsHuman` (the approval class and the owner who must approve). Never merges a draft | `{ state: 'merged'\|'armed'\|'waiting'\|'blocked', blocking: [{ check, state }], needsHuman?: { class, who } }` |
-| `queue` | Every open CR with the one next action the process must take (below) | `[{ n, ticket?, class, action: 'review'\|'rework'\|'land'\|'sync'\|'wait'\|'escalate', reason, reworks, since?, held, release?: true }]` |
-| `comment <n> --body-file <f> [--kind <kind> [--ref <value>]]` | CR comment; `--kind` as in `board comment` | `{ id, url }` |
-| `comments <n> [--last <k>] [--kind <kind>] [--marker <text>] [--author <a>]… [--trusted]` | CR comments (review report, owner reply on a factory CR), newest first, system notes dropped; same filters as `board comments` (`--last` counts after them) | `Comment[]` |
-| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted with `options.review_token_env`; with one identity (`review_identity` empty), with the implementer's token. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`, `agent-provenance`). The `proofs-on-base` and `linkage` gates post with `options.token_env` (the CI job's token); with two identities the CLI verb never does. | `{}` |
-| `approve <n>` | Approving review as `review_identity`, with `options.review_token_env`. Refused with one identity: GitHub refuses an approval from the CR's author | `{}` |
+| `sync <n>` | Bring the source up to the trunk tip | `CR` |
+| `automerge <n>` | Arm auto-merge (low level; steps use `land`) | `CR` |
+| `verdict <n> --pass\|--fail --body-file <f>` | Stamp the `verdict` marker for the head and the one `Verdict:` line, post the report; with a review identity also the review status and, on pass, the approving review (section 10) | `{ verdict, comment, status: 'posted'\|'ci' }` |
+| `land <n> [--wait <minutes>]` | Wait, bounded (default `cycle.land_wait_minutes`, 5 when unset), until every `forge.required_checks` entry is green on the head, then arm auto-merge, or merge where the forge cannot arm it. Never merges a draft. A wait on a human approval is `blocked` with `needsHuman` | `{ state: merged\|armed\|waiting\|blocked, blocking: [{ check, state }], needsHuman?: { class, who } }` |
+| `queue` | Every open CR with its one next action (below) | `[{ n, ticket?, class, action, reason, reworks, since?, held, release?: true }]` |
+| `comment <n> --body-file <f> [--kind <kind> [--ref <value>]]` | CR comment | `{ id, url }` |
+| `comments <n> [--last <k>] [--kind <kind>] [--marker <text>] [--author <a>]… [--trusted]` | As `board comments`; system notes dropped | `Comment[]` |
+| `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status with `options.review_token_env`, or with one identity the implementer's token. Refuses the contexts the gates own: `human-approval`, `ticket-linkage`, `proofs-on-base`, `agent-provenance` | `{}` |
+| `approve <n>` | Approving review as `review_identity`. Refused with one identity | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
-| (no verb) `labelEvents(n)`, `unlabel(n, label)` | Port methods the `approval` gate alone calls: the CR's label history (`{ label, action: labeled\|unlabeled, actor, bot, at }`, the forge's clock; GitHub: `issues/{n}/events`), and the removal of one label (absent is fine). Optional: a forge without them has no label approval | |
-| `runs [--ref <r>] [--failed]` | CI runs (the newest 30) | `Run[]` |
-| `run <id>` | One CI run by id; a run that does not exist fails (exit 1) | `Run` |
-| `whoami` | The login the forge acts as (`gh api user`; where that route is refused, the repo owner, with `loginFrom: repo-owner`), the repo and its default branch when readable. Port method `whoami?()` | `{ login, loginFrom: 'user'\|'repo-owner', repo?, defaultBranch? }` |
-| `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
+| `runs [--ref <r>] [--failed]` | The newest 30 CI runs | `Run[]` |
+| `run <id>` | One CI run; a missing one exits 1 | `Run` |
+| `whoami` | The login the forge acts as (`gh api user`; where refused, the repo owner with `loginFrom: repo-owner`), the repo and its default branch when readable | `{ login, loginFrom, repo?, defaultBranch? }` |
+| `cut <revision> <version>` | Start `agentic-sdlc-release.yml` (Environment `agentic-release`, which the Product owner approves); returns the run this dispatch created | `{ requested, run?, url? }` |
 
-`queue` owns the CR decisions the skills only obey. `ticket` is the one id the CR closes (absent for a factory or dependency CR), `class` the approval gate's class, `held` whether its ticket carries `board.labels.human`, `release: true` on a held ticket whose CR is `land` with its `human-approval` status success under a class that needs a human (an approval on the forge alone answers a Sign-off ask; the navigator releases the hold), `since` when the row's state began, `reason` one line for the action. `reworks` counts the CR's trusted fail verdicts and trusted `note`s (a `note` names the cause of a red check or a request to a person's CR). A check named by `forge.review_check_name` or `human-approval` never counts as red, pending or missing here. The first match wins:
+`queue`: `ticket` is the one id the CR closes (none for a factory or dependency CR), `class` the
+approval class, `held` whether the ticket has `board.labels.human`, `release: true` on a held ticket
+whose CR is `land` with `human-approval` green under a class that needs a human (the forge approval
+answers the ask). `reworks` counts trusted fail verdicts and trusted `note`s. The review check and
+`human-approval` never count as red, pending or missing here. The first match wins:
 
 | Action | When |
 |---|---|
-| `escalate` | `reworks` has reached `cycle.max_rework` (3 when unset) and the CR needs another rework (the `rework` row below, without its `wait`), or a required check other than the review and human-approval statuses is pending or missing longer than `stall_minutes` after `pushedAt` (no `pushedAt`: the clock has not started) |
-| `rework` | the head has a trusted fail verdict, or a required check is red (`wait` instead while the newest trusted `note` for the head names a Signal that is still open: the note's `--ref` is `<head sha> <Signal id>`; a `Signal <id>` in the text is read when the ref has none) |
-| `review` | no trusted verdict for the head (a draft, or a ready CR whose head changed); review itself stops with no verdict while a check is pending |
+| `escalate` | `reworks` reached `cycle.max_rework` (3 when unset) and another rework is due, or a required check other than review and `human-approval` is pending or missing longer than `stall_minutes` after `pushedAt` (no `pushedAt`: the clock has not started) |
+| `rework` | a trusted fail verdict on the head, or a red required check; `wait` instead while the newest trusted `note` for the head names an open Signal (`--ref <head sha> <Signal id>`, else `Signal <id>` in the text) |
+| `review` | no trusted verdict for the head |
 | `sync` | a ready CR behind the trunk |
 | `land` | a pass verdict on the head, the CR ready and open |
 | `wait` | anything else |
 
-The port also has `commits(n)`, used by gate `provenance` and not a CLI verb: every commit of the CR, oldest first, as `{ sha, message, author, committer, authorName, committerName, committerEmail, parents }` (logins empty when the forge links no account). It throws when the list may be cut off (GitHub lists at most 250 commits), so the gate fails closed.
+`CR = { n, url, title, source, target, headSha, baseSha, mergeSha?, draft, state, behind, closes[], checks:
+{ name, state }[], body, author, pushedAt? }`. `closes` is exactly the body lines `Closes <id>`. `pushedAt`
+is the creation time of the first check suite on the head; stall clocks start there.
 
-The forge may implement `closing(id)`: the merged CRs whose body closes ticket `id` (GitHub searches the body). Gates use it to look up a ticket's merges without listing every merged CR. The search index can trail a merge, so a ticket the search finds no merge for is also looked up in `list({ state: 'merged' })`.
-`CR = { n, url, title, source, target, headSha, baseSha, mergeSha?, draft, state: 'open'|'merged'|'closed', behind, closes: string[], checks: {name, state}[], body, author, pushedAt? }`.
-`closes` is parsed from the body by the shared rule: exactly the lines `Closes <id>`. `author` is the forge login that opened the CR, in the form comment authors use. `pushedAt` is when the head reached the forge: the creation time of the first check suite on `headSha` (absent before CI starts). Stall clocks after a push (`stall_minutes`) count from it.
+Port methods with no CLI verb: `commits(n)` (gate `provenance`; every commit oldest first, throws when
+the list may be cut off at 250, so the gate fails closed); `closing(id)` (the merged CRs whose body
+closes the ticket, by search; the index can trail a merge, so a miss also reads `list --state merged`);
+`labelEvents(n)` and `unlabel(n, label)` (gate `approval` only; a forge without them has no label
+approval); `whoami?()`.
 
-Adapter: `github` (`gh`), the one forge: on other forges a CR can change the pipeline file that runs its own gates. In a Claude cloud session every verb but `closing` calls REST under `repos/{owner}/{repo}/…` through `gh api`, because the session's GitHub proxy refuses GraphQL and every path outside the attached repos. `checks` come from the head's check runs and commit statuses. In a cloud session (`CLAUDE_CODE_REMOTE=true`) `ready`, `draft` and `automerge` use the proxy's routes `POST pulls/{n}/ccr/ready_for_review`, `POST pulls/{n}/ccr/convert_to_draft` and `PUT pulls/{n}/ccr/auto_merge`; elsewhere they use `gh pr ready`, `gh pr ready --undo` and `gh pr merge --auto --squash`. In a cloud session an unset `options.token_env` env var falls back to the proxy's token; `options.review_token_env` never falls back. `runs` and `cut` use `gh run` and `gh workflow` (REST). `closing` uses `search/issues`, which a cloud session refuses; gates run in CI, where it works. A repo that refuses draft pull requests (private on GitHub Free) gets a ready PR with the `draft` label: `CR.draft` is true while the label is on, `ready` removes it and `draft` adds it when the native route fails. When GitHub refuses to enable auto-merge (no ruleset or branch protection on the trunk), `automerge` merges the CR at its head (`PUT pulls/{n}/merge`, squash) only when it is not draft and every `forge.required_checks` entry is green there; otherwise it fails.
+Adapter `github` (`gh`), the one forge: on other forges a CR can change the pipeline file that runs
+its own gates. Every verb but `closing` calls REST under `repos/{owner}/{repo}/…`, since a Claude cloud
+session's proxy refuses GraphQL and every other path; `closing` uses `search/issues` and runs in CI.
+With `CLAUDE_CODE_REMOTE=true`, `ready`, `draft` and `automerge` use the proxy's `pulls/{n}/ccr/…` routes,
+and an unset `options.token_env` variable falls back to the proxy's token (`review_token_env` never
+does); elsewhere an unset token fails. A repo that refuses draft PRs (private on GitHub Free) gets a ready
+PR with the `draft` label, which `ready` removes and `draft` adds. Where GitHub refuses auto-merge (no
+ruleset or branch protection), `automerge` merges (squash) only a non-draft CR with every required check
+green on its head.
 
 ### 3.3 VCS (`agentic-sdlc vcs <verb>`): Git
 
 | Verb | Effect |
 |---|---|
-| `start <name>` → `{ workdir, ref }` | refuses a name that fits neither `vcs.change_pattern` nor `vcs.factory_change_pattern`; fetch; reuse the change line `<name>` (its worktree, local branch or origin branch) when it exists, else a worktree and branch from the trunk tip |
+| `start <name>` → `{ workdir, ref }` | Refuse a name that fits neither `vcs.change_pattern` nor `vcs.factory_change_pattern`; fetch; reuse the line's worktree or branch, else a worktree and branch from the trunk tip |
 | `head` → `{ ref, sha }` | `HEAD` |
-| `changed [--since <rev>]` → `string[]` | `diff --name-only` against the merge base |
-| `base` → `{ sha }` | merge base with the trunk |
-| `push` → `{ ref, sha }` | push the current branch; refuses the trunk and a detached HEAD |
-| `cut <rev> <release>` | push `<rev>` to `refs/heads/<release_prefix><release>` |
-| `tag <name> <rev>` | annotated tag (gates only) |
-| `tags [--prefix <p>]` → `{ name, sha }[]`, newest first | `tag --sort=-creatordate` |
-| `drop <name>` | remove the worktree and delete its branch (bench only) |
-| `checkout-tests <rev> <paths…>` | product code at `<rev>`, the given proof paths kept (the `proofs-on-base` gate) |
-| (`snapshot(rev)`, API only) | detached worktree outside the root, for the bench |
+| `changed [--since <rev>]` → `string[]` | Files changed against the merge base |
+| `base` → `{ sha }` | Merge base with the trunk |
+| `push` → `{ ref, sha }` | Push the current branch; refuse the trunk and a detached HEAD |
+| `cut <rev> <release>` | Push `<rev>` to `refs/heads/<release_prefix><release>` |
+| `tag <name> <rev>` | Annotated tag (gates only) |
+| `tags [--prefix <p>]` → `{ name, sha }[]` | Newest first |
+| `drop <name>` | Remove the worktree and its branch (bench only) |
+| `checkout-tests <rev> <paths…>` | Product code at `<rev>`, the proof paths kept (gate `proofs-on-base`) |
 
-The trunk, release prefix and name pattern come from the binding. "Branch" in skills means the
-change line `start` opens.
+`snapshot(rev)` (API only) makes a detached worktree outside the root for the bench.
 
 ### 3.4 Gates (`agentic-sdlc gate <name>`): run by CI, never by agents
 
 | Gate | Guarantee |
 |---|---|
-| `branch-names` | A change line outside the binding's patterns, the dependency lines `dependabot/` and `renovate/`, and the trunk is refused. |
-| `linkage` | Posts check `ticket-linkage`: a product CR closes exactly one open ticket and names it in its source. |
-| `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base, or when a product CR changes only `paths.no_proof`. |
-| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (an owner, member or collaborator of the repo, not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by any `owners.factory` entry. Instead of the review, `forge.approval_label` (default `approved`) on the CR approves the head when its last label event is `labeled`, by an account the class asks for (`owners.product` for `product-full`, `owners.factory` for `guardrail` and an owner-waiting `tuning`), not a forge bot, not in `owners.bots`, not `forge.review_identity`, at a time after the head's `pushedAt`; no `pushedAt` means no label approval. With `--pushed` (CI on a push to the CR) the gate first removes the label, so a push always withdraws it. Runs on CR events (`labeled` and `unlabeled` too) and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
-| `review --cr <n>` | One identity only (`forge.review_identity` empty): posts status `review` on the head from the newest `verdict` comment for that head by a trusted author (`owners.bots` and every owner role): success on `Verdict: PASS`, failure on `REMEDIATION REQUIRED`, pending with no report. Posts with the CI job's token. With two identities it does nothing. |
-| `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. A held ticket moves too, and Done drops its human label; a Cancelled ticket stays. A push with no CR changes nothing. No CR-pipeline gate writes the board; besides this gate only `shipped` moves a ticket (In review to Done, when a deploy reports first). |
-| `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
-| `provenance --cr <n>` | Off unless `forge.provenance` is `warn` or `require`. Reads the CR's commits through the forge API (no CR code runs) and posts status `agent-provenance`. A commit whose author or committer is in `owners.bots` (forge names) needs well-formed `Agent-Run` and `Agent-Model` trailers (the last paragraph of the message, one value each); other commits are `human`; a merge commit whose committer is the forge's own web identity (GitHub: login `web-flow`; a committer email does not count, since the committer sets it, the branch update) is `merge`, and any other merge commit is checked like a commit of its author. Prints `{ commits: [{ sha, by, run?, model?, ok }], agentCommits, humanCommits, missing }`. `warn` always succeeds; `require` fails on a missing or malformed trailer and on commits it cannot read. A squash merge drops the trailers, so the status and report on the CR are the record; `merged` is untouched. Not in `forge.required_checks` by default: with `require`, add it there and to the trunk ruleset (`validate` warns otherwise). |
-| `signal --source <name> --title <text> [--body <text>]` | Files a Signal once: the key is the source and the title (case and spacing aside); an open issue with `signal:<source>` and that title gets the body as a comment, else a Signal is created at `Signals` with that label. Text is redacted. The dead-man workflow (source `factory`), the `repository_dispatch` `signal` workflow and `signal-on-red` call it. |
-| `signal-on-red --run <id>` | Reads the run with `forge run <id>`; a red trunk or release-line run files a Signal through `signal` (source `ci`, title `CI red: <workflow> @ <ref>` without the run id, so a red trunk is one open Signal and each later red run comments on it with its run id, sha and redacted url). Other refs are ignored. A run that does not exist fails the gate. |
-| `skill-regression` | A change under `paths.factory` keeps the skill pack valid: frontmatter, steps and their files, links, forbidden words (section 5), every CLI call a skill names (the verb exists, each `--flag` is one of its verb's, a `dispatch` names a step), scorers' `applies_to`. `test/skills-pack.test.ts` runs the same checks on `skills/`. |
+| `branch-names` | Refuses a change line outside the binding's patterns, the `dependabot/` and `renovate/` lines, and the trunk. |
+| `linkage` | Status `ticket-linkage`: a product CR closes exactly one open ticket and names it in its source. |
+| `proofs-on-base --cr <n>` | In the no-secrets job: runs the CR's new or changed proof files (`commands.proofs_on_base`, once per file) on the merge base's product code; status `proofs-on-base` passes when each fails there, or when the CR changes only `paths.no_proof`. Without the command it fails closed. |
+| `approval --cr <n> [--pushed]` | Classifies the CR and posts `human-approval` by the rules of section 11.4. `--pushed` (CI on a push) first removes `forge.approval_label`. |
+| `review --cr <n>` | One identity only: status `review` from the newest `verdict` comment for the head by a trusted author: success on `Verdict: PASS`, failure on `REMEDIATION REQUIRED`, pending with none. With two identities it does nothing. |
+| `merged --sha <sha>` | On a trunk push: the CR merged at `<sha>` moves its one ticket to Done (`--only-from` its status) and sets Shipped `Not shipped` when empty; Done drops the human label; a Cancelled ticket stays. Only this gate and `shipped` move a ticket. |
+| `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Done or In review tickets whose merge is an ancestor of `<sha>` get `On <env>` (In review moves to Done first); `--version` fills an empty Release Version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` step back one environment. A failure in the last environment returns the version in flight to the previous environment, clears the version and opens a held Signal. Unknown ancestry changes nothing; Shipped never goes down on overlapping runs. |
+| `evidence --sha <sha>` | Runs `commands.evidence_check` for `<sha>` when `product.evidence` is set (fails when the command is unset); passes when the list is empty. |
+| `provenance --cr <n>` | Off unless `forge.provenance` is `warn` or `require`. Reads the commits through the forge (no CR code runs), posts `agent-provenance`. A commit whose author or committer is in `owners.bots` needs one well-formed `Agent-Run` and `Agent-Model` trailer each in its last paragraph; other commits are `human`; a merge committed by the forge's web identity (GitHub `web-flow`, by login, never by email) is `merge`; other merges are checked like a commit. `warn` always passes; `require` fails on a missing trailer or an unreadable commit. A squash drops the trailers, so the status is the record. With `require`, add the check to `forge.required_checks` and the ruleset (`validate` warns). |
+| `signal --source <name> --title <text> [--body <text>]` | Files a Signal once, keyed by source and title (case and spacing aside): an open issue with `signal:<source>` and that title gets the body as a comment, else a new Signal with that label. Text is redacted. |
+| `signal-on-red --run <id>` | A red trunk or release-line run files `signal` (source `ci`, title `CI red: <workflow> @ <ref>`), so a red trunk is one open Signal and each later red run comments on it. Other refs are ignored; a missing run fails. |
+| `skill-regression` | A change under `paths.factory` keeps the pack valid: frontmatter, steps and files, links, forbidden words (section 5), every CLI call a skill names (the verb and each `--flag` exist, a `dispatch` names a step), scorers' `applies_to`. |
 
-Checks:
+Checks and workflows (`templates/gates/github/`, installed by `init`):
 
-- **`Required`** is a CI job, not a gate and not an agent: on `pull_request`, with no secrets, it
-  runs `commands.install` and `commands.verify` on the CR head. The `proofs-on-base` gate runs in
-  its own job, also with no secrets: where it cannot post the status, its result is the check. The GitHub CR workflow also triggers on `merge_group`, for merge queues.
-- **`review`** is posted by `forge verdict` as `forge.review_identity`. With one identity (section 10) the
-  `review` gate posts it in CI from the newest trusted `verdict` comment on the head.
-- **Required checks**: `ticket-linkage`, `Required`, `proofs-on-base`, `review`,
-  `human-approval`, `skill-regression`; `agent-provenance` joins them only with `forge.provenance: require`. The trunk ruleset pins the four CI checks to their
-  source app (`integration_id`); with two identities `review` and `human-approval` post with the review token, so pin them
-  to the review app when it is an App. `doctor` warns when a required check is not pinned. No CODEOWNERS file:
-  the `approval` gate enforces owner approval by class, so `tuning` can auto-merge.
-- A dead-man job runs `ledger stale --max-hours <h>` on a schedule; when it fails it files a deduplicated Signal (`gate signal --source factory`). `init` also installs `agentic-sdlc-signal.yml` (`repository_dispatch` type `signal`: `client_payload.source/title/body` go through env vars to `gate signal`) and the issue form `.github/ISSUE_TEMPLATE/signal.yml` (labels `signal:owner` and `status:Signals`, which must exist in the repo to apply).
+- `agentic-sdlc-verify.yml`: the `Required` job on `pull_request`, no secrets: `commands.install`, then
+  `commands.verify` on the CR head; `proofs-on-base` in its own no-secrets job (where it cannot post the
+  status, its exit code is the check). It and the CR workflow also run on `merge_group`.
+- `agentic-sdlc-cr.yml`: the other gates on `pull_request_target` with the base branch checked out; the CR
+  head is fetched as objects, never run. It reruns `approval` on `labeled`, `unlabeled` and review events,
+  and on a push runs it with `--pushed`. `agentic-sdlc-review-event.yml` (no secrets) relays review
+  events to it; a fork PR's review event has no PR number and updates on the next PR event.
+- `agentic-sdlc-delivery.yml`: a trunk push runs `merged`; the deploy runs named in
+  `forge.deploy_workflows` run `shipped`; a red `forge.ci_workflow` run runs `signal-on-red`. No
+  concurrency group, since one drops pending runs.
+- `agentic-sdlc-release.yml`: `forge cut` (release-line only).
+- `agentic-sdlc-dead-man.yml`: `ledger stale --max-hours <h>` on a schedule; on failure `gate signal
+  --source factory`.
+- `agentic-sdlc-signal.yml`: a `repository_dispatch` of type `signal` passes `client_payload.source`,
+  `title` and `body` through env vars to `gate signal`. The issue form `.github/ISSUE_TEMPLATE/signal.yml`
+  applies `signal:owner` and `status:Signals`, which must exist (`board bootstrap` creates them).
+- Required checks: `ticket-linkage`, `Required`, `proofs-on-base`, `review`, `human-approval`,
+  `skill-regression`; `agent-provenance` with `require`. `ruleset.trunk.json` pins them to their source app
+  (`integration_id`); `doctor` warns when one is not pinned or the trunk has no enforced protection. No
+  CODEOWNERS: the `approval` gate enforces owners by class. Actions are pinned by commit SHA; `doctor`
+  warns on an installed `uses:` that is not.
 
-CI loads the binding from the **target** branch, never from the CR, and never runs CR code with
-secrets. The trunk needs every required check green and, with two identities, the review identity's approving review.
+CI loads the binding from the target branch, never from the CR, and never runs CR code with secrets.
+A job that holds a secret checks out the base ref, so its launcher and pin are the trunk's.
 
 ## 4. The binding (`.agents/binding.yml`)
 
-[`templates/binding.yml`](../templates/binding.yml) holds every key `init` writes, one line each, and names the
-optional keys per group; this section and `validate` hold their meaning, and `validate` checks the adapter options per adapter.
-**Unresolved values.** A value `init` cannot know from the project is the string `unresolved: <hint>` (owners, `vcs.trunk`
-unless `origin/HEAD` names it, `commands.*`, `forge.ci_workflow`, `forge.deploy_workflows`, `heartbeat.ticket` unless the
-board is `local`, `forge.review_identity` for `organization`, a repo with no GitHub origin). `validate` fails on each one
-(`<key> is unresolved: <hint>`); `validate --json` prints `{ ok, problems, warnings, unresolved: [{ key, hint }] }`, the
-unresolved values apart from the other problems, exit 1 while any problem is left. `init` writes no unresolved value
-into a generated file: a workflow gets the default instead, until the binding is resolved and `init --upgrade` reruns.
-`init` leaves out each `paths.*` file key whose file the project does not have (globs and `importance_doc`, which it
-writes, stay). `forge.ci_workflow` (the trunk CI workflow) and `forge.deploy_workflows` (at most two: the first and the
-last environment's deploy) are the workflow names `init` writes into `agentic-sdlc-delivery.yml`; `validate` takes only
-plain names (letters, digits, spaces and `. & ( ) + , / : # - _`), since they reach a shell line there. It also requires `vcs.trunk`, `vcs.release_prefix` (ending in `/`) and `vcs.factory_change_pattern` to be non-empty and `vcs.tag_prefix` to be a string. Its top-level
-groups are `version`, `profile`, `owners`, `board`, `forge`, `vcs`, `product`, `executors`, `mcps`,
-`traces`, `models`, `agent_command`, `commands`, `paths`, the sizing and flow keys, `cycle`,
-`heartbeat` and `learning`.
+[`templates/binding.yml`](../templates/binding.yml) holds every key `init` writes and names the
+optional ones per group; this section and `validate` hold their meaning.
 
-Keys this contract relies on by name:
+**Unresolved values.** A value `init` cannot know is the string `unresolved: <hint>` (owners,
+`vcs.trunk` unless `origin/HEAD` names it, `commands.*`, `forge.ci_workflow`, `forge.deploy_workflows`,
+`heartbeat.ticket` unless the board is `local`, `forge.review_identity` for `organization`).
+`validate` fails on each (`<key> is unresolved: <hint>`); `validate --json` prints `{ ok, problems,
+warnings, unresolved: [{ key, hint }] }`, exit 1 while a problem is left. `init` writes no unresolved
+value into a generated file (it uses the default until `init --upgrade` reruns), leaves out each
+`paths.*` file key whose file is missing, and `init` and `validate` print an `info:` line naming template
+keys the binding lacks.
 
-- `owners.product`, `owners.factory` and each entry of `owners.bots`: one account name, or `{ board, forge }`
-  when the board and the forge name the person differently. `owners.product` and `owners.factory` also take a
-  list of such entries (any member counts as the owner; the first is the primary, the one a skill asks or
-  assigns). `owners.operator`, `owners.security` and `owners.compliance` are optional roles of the same shape,
-  default absent; `ownersFor` normalises every role to a list and `--trusted` includes them; their process
-  meaning is in the `escalate` skill. An unknown key under `owners` is a warning; `forge.review_identity`
-  must not be any owner. Board reads (ledger, dispatch, `board comments
-  --trusted`, spec authors) use `board`; forge reads (the approval gate, `forge comments --trusted`) use `forge`.
-- `heartbeat.ticket`: the id of the ticket that holds heartbeat comments; `validate` fails when it is empty.
-  `init --board local` creates it (status Cancelled, so no route reads it) and sets it.
-- `forge.provenance: off | warn | require` (default `off`): gate `provenance` (section 3.4). When it is
-  not `off`, `dispatch` also prints `run` (the dispatch key when `cycle.dedupe_minutes` is above 0, else `<ticket>-<skill>-<start time>`) and
-  puts it in the executor's task as the `Agent-Run` value; it is the run row's `id`.
-- `forge.human_approval: full-lane | always | never` (default `full-lane`), `forge.review_identity`
-  (empty: one identity), `forge.options.review_token_env` (set exactly when `review_identity` is, and
-  never equal to `token_env`; `validate` fails otherwise), `forge.required_checks`. `validate` warns when
-  `human_approval` is not `never` and every `owners.product` account is also in `owners.bots`: no human outside the bots
-  can approve a Full-lane CR (take your own account out of `owners.bots`, or add a second account). `forge.approval_label`
-  (default `approved`): the label an owner applies to approve a CR head (gate `approval`); `validate` fails an empty one. An unset `token_env` variable falls back to
-  gh's own login only in a Claude cloud session (`CLAUDE_CODE_REMOTE`); elsewhere it fails.
-- `board.scope: { label, home, repos }` (unset: the board serves one repo): many repos on one board.
-  Section 10 says what it does.
-- `commands.install`, `commands.verify` (the `Required` job), `commands.proofs_on_base` (the
-  `proofs-on-base` gate: a command with `{files}`, run once per new proof file), `commands.preview` (optional: deploys
-  a CR head for `review/verify`), `commands.rollback`, `commands.evidence_check` (exits 0 when every
-  `product.evidence` kind exists for `{sha}`; the release ready check runs it).
-- `product.slo: { change_failure_rate_max: <0..1>, window_days: <n> }` (optional; unset: no error
-  budget). `validate` rejects a rate outside 0 to 1 and a non-positive window.
-- `product.delivery: release-line | continuous` (`init` writes `continuous`; a binding without the key is `release-line`; continuous needs no
-  `vcs.release_prefix` and has no In release), `product.evidence: [sbom | provenance | signature]`,
-  `paths.no_proof` (globs a product CR may change with no proof file).
-- `cycle.dedupe_minutes`: a second dispatch of the same skill and subject while the first marker is
-  younger than it is a double fire and is skipped (unset or 0: no dispatch check at all; the template sets 10). A run has finished when its own done line `<!-- agentic-sdlc:done <key> -->` appears after the
-  dispatch marker (posted by a bot); other runs' comments never count. `dispatch` hands that line to every executor in its task.
-  An unfinished run blocks a second dispatch until `stall_minutes`, which must exceed the longest stage run.
-- `executors.<stage>.max_turns`, `max_tokens`, `max_minutes` (optional positive integers, inherited from
-  `executors.default`): per-run caps `dispatch` hands to the executor and prints as `limits`; the
-  executor enforces them (section 7). A run that ends on one has outcome `capped`.
-- `cycle.max_tokens_per_ticket` (optional): the tokens a ticket's runs may report in total; `ledger
-  summary` marks a ticket over it `overBudget: true`, and the cycle dispatches it no further.
-- `cycle.max_rework`: the most reworks (`reworks` of `forge queue`: fail verdicts and `note`s) a CR may take before
-  `forge queue` says `escalate` instead of `rework` (positive integer; default 3 when unset; the template sets 3).
-- `cycle.land_wait_minutes`: how long `forge land` waits for the required checks, and `ship` for a release run (whole
-  minutes, 0 allowed; default 5 when unset; the template sets 5).
-- `paths.factory`: a change only there is a **factory change**: no ticket, its own change pattern
-  (`vcs.factory_change_pattern`), classified by the `approval` gate and checked by
-  `skill-regression`.
-- `learning.every_cycles`, `learning.min_evidence_runs`, `learning.bench_size`,
-  `learning.bench_min_cases` (default 20), `learning.bench_trials` (default 3),
-  `learning.bench_budget` (optional `{ max_runs, max_minutes }`: `bench run` refuses a plan of more runs
-  than `max_runs` (cases x trials) unless `--allow-over-budget`, and starts no new case after
-  `max_minutes`),
-  `learning.auto_merge_classes` (template default `[]` until a bench baseline exists),
-  `learning.judge_tier`, `learning.enabled` (default `false`: `learning.due` and `learning.judge` stay false).
+Keys:
+
+- `version` (2), `profile: individual | organization` (`organization` requires `forge.review_identity`).
+- `owners.product`, `owners.factory`, `owners.bots`; optional `owners.operator`, `owners.security`,
+  `owners.compliance`. Each entry is a login or `{ board, forge }`; `product` and `factory` (and the
+  optional roles) take a list, whose first entry is the primary. Board reads (ledger, dispatch, `board
+  comments --trusted`) use `board`; forge reads (`approval`, `forge comments --trusted`) use `forge`. An
+  unknown key is a warning; `forge.review_identity` must not be an owner.
+- `board`: `adapter`, `options` (`repo`, `field_ids`), `statuses`, `fields`, `labels` (`human`, `bug`,
+  `feature`, `release`), `env_labels`, `done_statuses`, `signal_streams`, optional `later_milestone` and
+  `scope: { label, home, repos }` (section 10).
+- `forge`: `adapter`, `options` (`repo`, `token_env`, `review_token_env`), `review_identity` (empty: one
+  identity), `human_approval: full-lane | always | never` (default `full-lane`), `approval_label` (default
+  `approved`; empty fails), `provenance: off | warn | require` (default `off`), `review_check_name`,
+  `verify_check_name`, `required_checks`, `planned_checks` (wanted checks not yet supplied; `review/review`
+  names each absent one), `ci_workflow`, `deploy_workflows` (at most two: first and last environment).
+  `review_token_env` is set exactly when `review_identity` is, and never equals `token_env`. The workflow
+  names reach a shell line, so `validate` takes only letters, digits, spaces and `. & ( ) + , / : # - _`.
+  `validate` warns when `human_approval` is not `never` and every `owners.product` account is also a bot.
+- `vcs`: `adapter`, `trunk`, `change_pattern`, `factory_change_pattern`, `release_prefix` (ends in `/`),
+  `tag_prefix` (a string), `version_scheme: calver | semver`. `trunk`, `release_prefix` and
+  `factory_change_pattern` must be non-empty.
+- `product`: `environments` (ordered; the last is where users get value), `delivery: continuous |
+  release-line` (`init` writes `continuous`; a binding without the key is `release-line`), `evidence:
+  [sbom | provenance | signature]`, `proofs`, optional `slo: { change_failure_rate_max (0..1), window_days
+  (> 0) }`.
+- `executors`, `mcps`, `traces.uri` (must hold `{run_id}`), `agent_command` (section 7); `models: { fast,
+  balanced, deep }`, the one home of the model choice.
+- `commands`: `install`, `fast_check`, `verify`, `proofs_on_base` (with `{files}`); optional `setup`,
+  `preview` (deploys a CR head for `review/verify`), `rollback`, `evidence_check` (with `{sha}`).
+- `paths`: `guiding_narrative`, `roadmap_doc`, `importance_doc`, `glossary`, `review_checklist`,
+  `test_standard`, `security_policy`, `pr_template`, `sources_before_question`, `factory` (a change only
+  there is a factory change: no ticket, `vcs.factory_change_pattern`, checked by `skill-regression`),
+  `lane_areas` (force the Full lane), `no_proof` (a product CR changing only these needs no proof).
+- Sizing and flow: `sizes`, `ready_size_limit`, `fast_lane_max_size`, `priorities`, `p0_setters`,
+  `max_subissue_depth`, `spec_marker` (the `spec` kind's marker), `stall_minutes` (above the longest
+  step run), `parallel_agents`.
+- `cycle`: `max_implementations`, `min_ready`, `time_budget_minutes`, `failure_limit`, `dedupe_minutes`
+  (section 7), `max_rework` (default 3), `land_wait_minutes` (default 5; 0 allowed), optional
+  `max_tokens_per_ticket` (`ledger summary` marks a ticket over it `overBudget`; the cycle dispatches it
+  no further).
+- `heartbeat.ticket`: the ticket that holds heartbeats; `validate` fails when it is empty.
+- `learning`: `enabled` (default `false`), `every_cycles`, `min_evidence_runs`, `bench_size`,
+  `bench_min_cases` (default 20), `bench_trials` (default 3), `bench_budget: { max_runs, max_minutes }`,
+  `auto_merge_classes` (`[]` until a bench baseline exists), `judge_tier` (section 6).
 
 ## 5. Skills
 
-Seven skills, one per phase: `sdlc` (the navigator), `plan`, `build`, `review`, `ship`, `learn` and
-`escalate`; and `setup`, which no route dispatches: it installs or repairs the factory in a project (`init`,
-the binding's unresolved values from the project and `forge whoami`, `board bootstrap`, `validate --json` and `doctor`
-until clean, the install as a factory CR) and answers what waits on the person from `status`. A **step** is the unit that runs, named `<skill>/<step>`; a one-step skill is named by
-the skill (`build`, `ship`, `escalate`, `sdlc`). `dispatch`, the ledger's `skill` field, the bench,
-a scorer's `applies_to`, the `executors` keys and the `Agent-Skill` trailer all name a run this way.
+Seven skills, one per phase: `sdlc` (the navigator), `plan`, `build`, `review`, `ship`, `learn`,
+`escalate`; and `setup`, which no route dispatches: it installs or repairs the factory and answers from
+`status`. A step is the unit that runs, named `<skill>/<step>`; a one-step skill is named by the skill.
+`dispatch`, the ledger, the bench, a scorer's `applies_to`, the `executors` keys and the `Agent-Skill`
+trailer all name a run this way.
 
-- **Frontmatter**: `name`, `description` (a trigger sentence starting "Use when", naming when to load the skill and
-  never summarising its workflow: a model that reads a summary follows it instead of the body), and `metadata.steps: { <step>: { tier
-  } }` for a multi-step skill (each step in `steps/<step>.md`) or `metadata.tier` for a one-step
-  skill (the step is the SKILL.md body). `tier` is `fast`, `balanced` or `deep`; `models` maps it to
-  a model. `disable-model-invocation: true` marks skills only a person or the cycle starts (`ship`,
-  `learn`); `user-invocable: false` marks a skill only the navigator or another step runs (`plan`, `build`,
-  `review`, `escalate`). `sdlc` and `setup` have neither flag. The `internal-skills-not-direct` and
-  `release-not-model-invoked` evals check the two lists.
-- **Body**: the SKILL.md of a multi-step skill is a table of its steps (what each runs on, its
-  tier, what it ends with) and the rules common to them. A step points to
-  `sdlc/references/contract.md`, lists numbered steps each ending on a checkable **Done when** (a
-  status, a comment kind, a field or a CLI output a later run can verify), then Rules.
-- **Routes**: the navigator's routing is data in `skills/sdlc/routes.yml`, which `next` evaluates
-  (section 11.3); a skill file never restates a route.
-- **One home**: every process rule lives once in the skills; the words, roles, trust table and waits
-  table live in the contract. This file defines mechanism only.
-- **Forbidden content**: a skill names only `agentic-sdlc <group> <verb>` calls and binding keys.
-  It never names a vendor, a harness, a runtime, a forge identity setup, a review token, a vendor
-  CLI, an HTTP status, a hard-coded check name, a law or standard, or a marker string (a comment
-  role is `--kind <kind>`). The `skills/` lint feature enforces the word list.
-- **Names in installs**: under the plugin a skill is `agentic-sdlc:<name>`. A copied install
-  (`.agents/skills`, `.claude/skills`) has no namespace, so `init` writes each skill as
-  `sdlc-<name>` (directory and frontmatter `name`); `sdlc` stays `sdlc`. Skills refer to each other
-  by name, never by path, so a copy keeps every link; links into `sdlc/references/` resolve in both.
+- **Frontmatter**: `name`, `description` (a trigger sentence starting "Use when", never a summary of
+  the workflow), and `metadata.steps: { <step>: { tier } }` (each step in `steps/<step>.md`) or
+  `metadata.tier` (the body is the step). `tier` is `fast`, `balanced` or `deep`. `disable-model-invocation:
+  true` marks `ship` and `learn`; `user-invocable: false` marks `plan`, `build`, `review`, `escalate`;
+  the evals `internal-skills-not-direct` and `release-not-model-invoked` check both lists.
+- **Body**: a multi-step SKILL.md is a table of its steps and their common rules. A step points to the
+  contract, lists numbered steps each ending on a checkable **Done when**, then Rules.
+- **Routes** are data in `skills/sdlc/routes.yml` (section 11.3); no skill restates one.
+- **Forbidden content**: a skill names only `agentic-sdlc <group> <verb>` calls and binding keys; never a
+  vendor, harness, runtime, identity setup, review token, vendor CLI, HTTP status, hard-coded check name,
+  law or standard, or marker string. `skill-regression` enforces the list.
+- **Names**: under the plugin `agentic-sdlc:<name>`; a copy (`.agents/skills`, `.claude/skills`) is
+  `sdlc-<name>` (`sdlc` stays `sdlc`). Skills refer to each other by name, so a copy keeps every link.
 
 ## 6. The self-improvement loop
 
-Visibility into every run, scored runs, a loop that proposes fixes to the factory itself, and
-benchmarks built from the project's own past tasks to compare quality and time across models,
-executors and factory versions. The loop is off unless `learning.enabled` is `true`; the bench
-needs `agent_command`.
+Off unless `learning.enabled`; the bench needs `agent_command`.
 
-1. **Ledger.** Every run the cycle starts is one row in the heartbeat's `runs`: skill, skill
-   version (content hash), ticket or CR, tier, model, executor, tokens, minutes, outcome and
-   `trace` (a reference into `traces.uri` when the executor stored its transcript). `ledger
-   summary` adds `learning: { due, judge, cyclesSince }` (`judge` and `due` are false unless
-   `learning.enabled`), computed from heartbeats and run rows, so no skill keeps a counter. `ledger stale --max-hours <h>` exits 1 when the newest
-   heartbeat is older. The heartbeat's `learning` object carries `lastProposal` and
-   `benchBaseline`; only `learn/improve` changes them and, when `learning.enabled`, every heartbeat copies them forward
-   (fields in section 11.2).
-2. **Scorers.** A scorer is a file `.agents/scorers/<name>.md`: frontmatter `name`, `applies_to`
-   (skills, or `*`) and `scale` (`pass-fail` or `0-4`), and a body that is the rubric question.
-   The package ships `done-conditions` (the 0–4 `score`), `redundant-tests`, `scope-creep`,
-   `spec-adherence`, `over-engineering`, `spec-quality` (`plan/shape`, 0–4) and `triage-accuracy`
-   (`plan/triage`, judged from the ticket's later history). Any scorer value may be `unscorable`:
-   the judge had too little evidence (a missing or unreadable ref) and gives a short `reason`. It is
-   stored, `ledger summary` counts it per scorer (`unscorable: n`), and it is left out of medians,
-   failure rates, failure clusters and the `learning.min_evidence_runs` count. The hard-fact cap
-   applies to real grades only; a human grade may be `unscorable` too. While a hard fact caps the run, `unscorable` for `done-conditions` is refused by `ledger record` and ignored in a human grade.
-3. **Judge.** `dispatch learn/judge --run-model <m>` picks `models[learning.judge_tier]`, or the next
-   tier when that is the run's own model, and prints `{ skip: true }` when none is independent.
-   `ledger plan --run <id>` prints the applicable scorers, the evidence refs (trace, CR, diff) and
-   the hard-fact cap (failed, timed-out or capped outcome, red check, send-back, bounce, reopen, escape,
-   bench oracle red). `learn/judge` grades each scorer with the model. `ledger record --run <id>
-   --file <scores.json>` validates scorer names and scales, applies the cap and posts one
-   `scores` comment on the heartbeat ticket; `ledger` reads these. A **human grade**, a
-   comment `agentic-sdlc:grade <run-id> <scorer> <value>` by `owners.product` or
-   `owners.factory`, wins over both.
-4. **Improve.** When `learning.due`, `learn/improve` reads the ledger, clusters
-   failures by scorer and by normalised error, takes the worst cluster (at least
-   `learning.min_evidence_runs` runs over two tickets), and proposes **one** factory change in a
-   draft factory CR, which `review/review` reviews (`dispatch --cr`).
-5. **Classes and merge.** The `approval` gate classifies. `tuning` is only the `models` map, and a
-   skill's `metadata.tier` when that skill has a bench suite; it merges on the agent review when
-   `tuning` is in `learning.auto_merge_classes`. Everything else under `paths.factory`, including
-   any change to skill text, is `guardrail` and waits for `owners.factory`. A CR that mixes product
-   and factory paths is also `guardrail`.
-6. **Prove.** The change runs on the bench against the current factory. `bench compare` needs at
-   least `learning.bench_min_cases` shared cases and `learning.bench_trials` trials per case and
-   compares the Wilson lower bound of the pass rate; fewer is `regressed`. The change must not
-   lower it.
-7. **Bench.** `bench build` turns merged tickets into cases: the ticket and spec, the merge base,
-   and the CR's own new proofs as the hidden oracle. Cases belong to **suites**
-   (`.agents/bench/suites/<suite>.json`): `bench build --suite <name> [--paths <glob>]…
-   [--per-size <n>]` picks a stratified set by Size and touched area; `bench propose --suite
-   <name>` nominates past tickets, which a factory CR adds. `bench run --suite <s> (--model <id> |
-   --executor <e>) [--factory <rev>]` replays cases in fresh worktrees outside the root and
-   records pass and minutes per case. `bench report --suite <s>` marks the Pareto front
-   of pass rate against median minutes. Only `harness` and `command` executors run on the bench. Cases a spent `learning.bench_budget` left
-   unrun are recorded `skipped: budget`, never as failures; `bench compare` and `bench report` treat
-   such a result as incomplete (`regressed`, off the Pareto front), like too few cases. Bench results
-   carry no token count, so the budget has no token cap.
-8. **Measures.** `ledger summary` reports runs, median score, failure rate and minutes by skill,
-   model, executor and scorer, and the failure clusters, and `tickets`: runs, tokens and minutes per ticket
-   (top 20 by tokens, plus any over `cycle.max_tokens_per_ticket`, with `ticketTotals`). The heartbeat's optional `measures` (DORA,
-   cycle time, first-pass rate) are off unless the runner prompt asks for them.
-   `ledger measures [--days <n>]` (default 30) prints JSON computed from the board and the forge:
-   `deployFrequency` (tickets at Done with Shipped on the last environment, last written in the
-   window, per week), `leadTimeHours` (median from `createdAt` to entering Done, for tickets that
-   reached Done in the window), `changeFailureRate` (P0 bugs and Signals opened in the window plus
-   `signal:deploy` Signals, over changes shipped; a rollback opens no ticket, so it counts only
-   through its Signal), `timeToRestoreHours` (median open to Done of those failures) and `reworkRate`
-   (merged CRs closing a ticket that reached Done in the window, with a trusted `REMEDIATION REQUIRED`
-   `verdict` report, over those CRs). Each carries its counts; a measure the data cannot give is
-   `null` with a `why`. With `product.slo` set it adds `errorBudget: { max, windowDays, actual,
-   exhausted }`, where `actual` is the change failure rate over `slo.window_days` and `exhausted` is `actual > max`,
-   or true when the window has failures and no shipped change (`actual` is `null`, with a `why`); the cycle starts
-   no new `feature` ticket while `exhausted` (`next` applies `skip_when_budget_exhausted` of skills/sdlc/routes.yml).
+1. **Ledger.** Every run is a row in a heartbeat's `runs` (section 11.2). `ledger runs [--since <days>]
+   [--skill <s>]` lists them; `ledger summary [--since <days>]` adds `learning: { due, judge, cyclesSince }`
+   (false unless enabled), so no skill keeps a counter. `ledger stale --max-hours <h>` exits 1 when the
+   newest heartbeat is older. `ledger hash <skill-dir>` prints a skill's content hash.
+2. **Scorers.** `.agents/scorers/<name>.md`: frontmatter `name`, `applies_to` (steps or `*`), `scale`
+   (`pass-fail` or `0-4`), the rubric as body. Shipped: `done-conditions` (the 0–4 `score`),
+   `redundant-tests`, `scope-creep`, `spec-adherence`, `over-engineering`, `spec-quality` (`plan/shape`),
+   `triage-accuracy` (`plan/triage`). A value may be `unscorable` with a `reason`: counted per scorer and
+   left out of medians, failure rates, clusters and `min_evidence_runs`. While a hard fact caps the run,
+   `ledger record` refuses `unscorable` for `done-conditions` and a human grade's is ignored.
+3. **Judge.** `dispatch learn/judge --run-model <m>` takes `models[learning.judge_tier]`, or the next tier
+   when that is the run's model, and prints `{ skip: true }` when none is independent. `ledger plan --run
+   <id>` prints the scorers, the evidence refs and the hard-fact cap (failed, timed-out or capped outcome,
+   red check, send-back, bounce, reopen, escape, bench oracle red). `ledger record --run <id> --file
+   <scores.json>` validates names and scales, applies the cap and posts one `scores` comment. A comment
+   `agentic-sdlc:grade <run-id> <scorer> <value>` by `owners.product` or `owners.factory` wins.
+4. **Improve.** When `learning.due`, `learn/improve` proposes one factory change in a draft factory CR from
+   the worst failure cluster (at least `min_evidence_runs` runs over two tickets).
+5. **Classes.** The `approval` gate classifies it (section 11.4); `tuning` merges on the agent review only
+   when listed in `learning.auto_merge_classes`.
+6. **Prove.** `bench compare <a.json> <b.json>` needs `bench_min_cases` shared cases and `bench_trials`
+   trials and compares the Wilson lower bound of the pass rate; fewer is `regressed`.
+7. **Bench.** `bench build --suite <name> [--paths <glob>]… [--per-size <n>]` turns merged tickets into
+   cases (ticket, spec, merge base, the CR's own new proofs as the hidden oracle) in
+   `.agents/bench/suites/<suite>.json`; `bench propose --suite <name>` nominates tickets. `bench run --suite
+   <s> (--model <id> | --executor <e>) [--factory <rev>]` replays cases in fresh worktrees outside the root
+   (`harness` and `command` executors only). `bench report --suite <s>` marks the Pareto front of pass rate
+   against median minutes. `bench_budget` refuses a plan over `max_runs` (cases x trials) unless
+   `--allow-over-budget` and starts no case after `max_minutes`; unrun cases are `skipped: budget`, which
+   makes a result incomplete. Results carry no token count.
+8. **Measures.** `ledger summary` reports runs, median score, failure rate and minutes by skill, model,
+   executor and scorer, the failure clusters, and tokens and minutes per ticket (top 20, plus any over
+   budget). `ledger measures [--days <n>]` (default 30) computes from the board and forge:
+   `deployFrequency`, `leadTimeHours`, `changeFailureRate` (P0 bugs and Signals opened in the window plus
+   `signal:deploy` Signals, over changes shipped), `timeToRestoreHours`, `reworkRate` (merged CRs with a
+   trusted `REMEDIATION REQUIRED` verdict). Each carries its counts; one the data cannot give is `null`
+   with a `why`. With `product.slo` it adds `errorBudget: { max, windowDays, actual, exhausted }`
+   (`exhausted` also when the window has failures and nothing shipped); while exhausted, `next` applies
+   `skip_when_budget_exhausted`.
 
 ## 7. Executors: who runs each step
 
-The binding's `executors` says who runs each step, keyed `<skill>/<step>` (or the skill name for
-every step of it); the default is the harness's own fresh-context worker.
+`executors` is keyed `<skill>/<step>`, else `<skill>`, else `default`:
 
 ```yaml
 executors:
@@ -420,408 +366,295 @@ executors:
 
 | Kind | Start | Result comes back by |
 |---|---|---|
-| `harness` | `dispatch` prints the task; the navigator runs it in a fresh context on the step's tier (Claude Code: `sdlc-<tier>` from `.claude/agents/`, else the plugin's `agentic-sdlc:sdlc-<tier>`; every `review/review` goes to `agentic-sdlc:sdlc-reviewer`, or without the plugin to `sdlc-reviewer` from `.claude/agents/`). | The worker's own board and forge writes. |
-| `command` | The CLI runs `run` with `{skill} {ticket} {cr} {workdir} {prompt_file} {mcps_file} {model} {max_turns} {max_tokens} {max_minutes}` filled in (`{skill}` is `<skill>/<step>`). | Exit code plus the bot's board and forge writes. |
+| `harness` | `dispatch` prints the task; the navigator runs it in a fresh context on the step's tier (`.claude/agents/sdlc-<tier>` when present, else `agentic-sdlc:sdlc-<tier>`; `review/review` always on `sdlc-reviewer`) | the worker's board and forge writes |
+| `command` | the CLI runs `run` with `{skill} {ticket} {cr} {workdir} {prompt_file} {mcps_file} {model} {max_turns} {max_tokens} {max_minutes}` filled | exit code plus the bot's writes |
 
-**Where `review/review` runs.** With `forge.review_identity` empty, it runs like any step. With it
-set, a `dispatch review/review` outside the review runtime (`AGENTIC_SDLC_ROLE` not `review`) starts
-nothing locally: it runs `AGENTIC_REVIEW_FIRE_CMD` once (or, with it unset, relies on the runner's job
-dependency) and prints `{ kind: 'fire' }` (`via` is `review-runtime` or `job-dependency`); the cycle
-writes no run row for it. An `executors` entry for `review/review` wins over this. Inside the review runtime the
-same dispatch runs on its executor, and the review runtime's own `review` heartbeat holds the row.
-The navigator never branches on this.
+An entry may also set `mcps` (names from the `mcps` map; the step gets only these), `secrets` (env var
+names; nothing else is passed, and never through a comment), `sandbox` (`cloud`, `container`, `local`),
+`model` (`{ tier }` or `{ id }`) and the caps `max_turns`, `max_tokens`, `max_minutes` (positive
+integers, inherited from `default`). `dispatch` enforces no cap: it prints them as `limits` (harness: in
+the task and its instruction) or fills them into `run` (an unset cap fills as an empty quoted word) and
+sets `AGENTIC_SDLC_MAX_TURNS`, `_MAX_TOKENS`, `_MAX_MINUTES` for a set cap. A run that ends on a cap is
+`capped`. `review/verify` drives a preview: give it a browser in `mcps`, test credentials in `secrets`
+and a `container` sandbox; it never holds the review token.
 
-Every executor entry may also declare `mcps` (names from the binding's `mcps` map; the step gets
-only these), `secrets` (env var names the step may receive; nothing else is passed), `sandbox`
-(`cloud`, `container` or `local`) and `model` (`{ tier }` or `{ id }`). Secrets reach an executor
-only when listed, and never through a board or CR comment. `review/verify` is the step that drives a
-preview with test credentials: give it a browser in `mcps`, those credentials in `secrets` and a
-`container` sandbox; it never holds the review token.
+`dispatch <skill>[/<step>] [--ticket <id>] [--cr <n>] [--run <id>] [--run-model <m>] [--workdir <d>]
+[--unattended]` (a ticket or CR, except `learn/improve`) prints `{ kind, ref, startedAt, key, done }`
+(`harness`: also the instruction, which names the done line and key) and starts the executor. The key is
+`<ticket, cr or factory>-<skill>/<step>[-<run>][-<CR head sha>]`. With `cycle.dedupe_minutes` above 0 it
+posts a `dispatch` comment, and a second dispatch with the same key prints `{ skipped: true }` while that
+comment is younger than the longer of `dedupe_minutes` and `stall_minutes` and the run has not finished.
+A run has finished when its own `done` comment (`--kind done --ref <key>`) by a bot follows the
+`dispatch` comment. The cycle's own claim (`dispatch sdlc`) goes stale after `cycle.time_budget_minutes`,
+and a `kind: cycle` heartbeat by a bot after the claim also ends it. With `forge.provenance` on,
+`dispatch` also prints `run` (the key, or `<ticket>-<skill>-<start time>` without dedupe), the
+`Agent-Run` value and the row's `id`. With `AGENTIC_SDLC_UNATTENDED=1` it refuses a step whose sandbox
+is `local` or unset, except `sandbox: local` with `AGENTIC_SDLC_LOCAL=1`.
 
-A step may cap a run: `max_turns`, `max_tokens` and `max_minutes`, positive integers inherited from
-`executors.default`. `dispatch` hands them to the executor and prints them as `limits`; it enforces
-none, because it detaches from the run.
-
-| Kind | How the caps arrive | Who enforces |
-|---|---|---|
-| `harness` | `limits` in the printed task, and a sentence in the instruction. | The harness's turn limit, or the worker stopping at the cap. |
-| `command` | `{max_turns}`, `{max_tokens}`, `{max_minutes}` in `run` (an unset cap fills as an empty quoted word), and `AGENTIC_SDLC_MAX_TURNS`, `AGENTIC_SDLC_MAX_TOKENS`, `AGENTIC_SDLC_MAX_MINUTES` in the child's environment (set only for a set cap). | The command's own flags, e.g. `claude -p --max-turns {max_turns}`. |
-
-A run that ends on a cap records outcome `capped`.
-
-`agentic-sdlc dispatch <skill>[/<step>] [--ticket <id>] [--cr <n>] (at least one; none for
-learn/improve) [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]` posts its `dispatch`
-comment, starts the executor and prints `{ kind, ref, startedAt, key, done }`: `key` is the run's
-done-line key (the `--ref` of its `done` comment) and `done` the stamped line; for `harness` it also
-prints the instruction for the navigator (it names the done line, the key and, with provenance on, the run id) and starts nothing. The key is printed in every setup; the
-`dispatch` comment and the checks below run only with `cycle.dedupe_minutes` above 0. The idempotency key is
-`<ticket, cr or factory>-<skill>/<step>[-<run>][-<CR head sha>]`. A second dispatch with the same
-key, while the `dispatch` comment is younger than `cycle.dedupe_minutes` or `stall_minutes`
-(whichever is longer) and its run has not finished, prints `{ skipped: true }`. A run has finished
-when its own `done` comment (`--kind done --ref <key>`) appears after the `dispatch` comment, posted
-by a bot; other runs' comments never count. So a double fire is
-skipped for `dedupe_minutes`, and a run with no done line blocks a second dispatch until
-`stall_minutes`: keep `stall_minutes` above the longest step run. The cycle's own claim (`dispatch sdlc`) goes stale after `cycle.time_budget_minutes` instead, and every cycle exit after the claim posts its `done` line; a `kind: cycle` heartbeat by a bot after the claim also ends it, so a forgotten done line cannot hold the lock. With `dedupe_minutes` unset or 0
-the check is off and no `dispatch` comment is posted. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses a step whose sandbox is
-`local` or unset, except one that names `sandbox: local` when the runner sets `AGENTIC_SDLC_LOCAL=1`
-(`templates/runner/local.md`). The ledger row records `executor` and `ref`, so the bench and
-`learn/improve` compare executors as they compare models. `dispatch learn/judge` prints `{ skip:
-true }` when no model independent of the run exists (section 6.3).
+**Where `review/review` runs.** With `forge.review_identity` empty, like any step. With it set, a
+dispatch outside the review runtime (`AGENTIC_SDLC_ROLE` not `review`) starts nothing: it runs
+`AGENTIC_REVIEW_FIRE_CMD` once (or relies on the runner's job dependency) and prints `{ kind: 'fire',
+via }`; the cycle writes no row for it. An `executors` entry for `review/review` wins. The navigator
+never branches on this.
 
 ## 8. Any product type
 
-Nothing in the skills assumes a web app or a code product. The binding states what "verify" and
-"shipped" mean for this product:
-
-```yaml
-product:
-  environments: [staging, production]   # ordered; the last is where users get value
-  delivery: continuous                   # continuous | release-line
-  evidence: [sbom, provenance, signature] # release evidence; commands.evidence_check proves it
-  proofs: [test, eval, visual, data-check, computer-use, manual]
-paths:
-  no_proof: ["docs/**", "*.md"]          # a product CR changing only these needs no proof file
-```
-
-- `product.delivery: release-line` (opt in; also what a binding without the key gets) deploys the last environment from a release line the
-  Product owner approves (`ship`). `continuous` (what `init` writes) deploys every environment from the trunk: no release line, no
-  `ship` step, and the deploy pipeline records the artifact version with `gate shipped --version`.
-- Shipped options are derived: `Not shipped`, `On <env>` per environment, and `In release` before
-  the last one (release-line only). The `shipped` gate takes any environment name. A product with no deploy uses its
-  publish step as the last environment.
-- A criterion names its proof kind. `commands.verify` runs every kind except `computer-use` and
-  `manual`: scripted UI checks are `visual` or `test`. `computer-use` is agent-driven by
-  `review/verify` on the `commands.preview` deployment of the CR head; `manual` escalates for a human
-  check.
-- The bench oracle is the merged change's own new proofs (tests, eval cases, data checks), not only
-  unit tests.
+Nothing in the skills assumes a web app. `product.environments` names the stages and `gate shipped
+<env>` takes any of them; a product with no deploy uses its publish step as the last environment.
+Shipped options are derived: `Not shipped`, `On <env>` per environment, and `In release` before the last
+(release-line only). `release-line` deploys the last environment from a release line the Product owner
+approves (`ship`); `continuous` deploys every environment from the trunk, with no release line and no
+`ship`, and the deploy records the version with `gate shipped --version`; missing evidence
+(`gate evidence`) reports the last deploy as failed. A criterion names its proof kind: `commands.verify`
+runs every kind except `computer-use` (driven by `review/verify` on the `commands.preview` deployment)
+and `manual` (escalated for a person). The bench oracle is the merged change's own new proofs.
 
 ## 9. Intake and data ownership
 
-- **Intake.** Any tool that creates a board item at Signals with a `signal:<stream>` label is an
-  intake: a chat bot, the tracker's own form, a CR comment command, a monitoring alert. The
-  factory needs no intake of its own.
-- **Data ownership.** The board, the repo and `traces.uri` hold every fact, score and trace. The
-  binding names the inference endpoints (`models` may point at any provider or self-hosted model)
-  and where each stage runs (`sandbox`). Nothing leaves the project's own systems except calls to
-  the providers the binding names.
+- **Intake.** Anything that creates a board item at Signals with a `signal:<stream>` label is an intake:
+  the issue form, a `repository_dispatch` of type `signal`, `signal-on-red`, the dead-man workflow, a
+  `shipped` failure, or an issue labelled `signal:<stream>` by hand (it lists as Signals with no status
+  label).
+- **Data ownership.** The board, the repo and `traces.uri` hold every fact, score and trace. Nothing
+  leaves the project's systems except calls to the model providers the binding names.
 
-## 10. Runtimes and profiles: no dependency on one machine
+## 10. Runtimes, install and trust
 
-Any scheduler that can start an agent with the repo and network access runs one cycle with the
-prompt in `templates/runner/cycle-prompt.md`.
+Any scheduler that can start Claude Code with the repo and network access runs one cycle with
+`templates/runner/cycle-prompt.md` (`routine.md` lists the templates; platform limits are in
+`claude-routine.md`).
 
-| Runtime | How it reaches the ports |
+| Runtime | Reaches the ports through |
 |---|---|
-| Claude Code with a shell (interactive, a cloud routine, CI cron with the headless CLI) | `agentic-sdlc <group> <verb>`: the launcher `.agents/bin/agentic-sdlc`, on PATH in the plugin and the runner templates |
-| Claude Code with MCP but no shell | `agentic-sdlc mcp` (stdio). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. `initialize` answers the client's protocol version when the server supports it (2025-11-25 down to 2024-11-05), else the newest; a request whose `_meta` carries `io.modelcontextprotocol/protocolVersion` and `clientCapabilities` is served per revision 2026-07-28 with no handshake (`server/discover`, `tools/list`, `tools/call` only; results carry `resultType: "complete"`, `tools/list` and `server/discover` add `ttlMs` and `cacheScope`, a missing field is -32602, an unsupported version is -32022 with `data.supported`, `ping` is -32601); every tool carries a title and annotations (read-only, destructive, idempotent, open-world); `tools/call` checks arguments against the input schema and answers -32602 on a bad one; an object result also comes back as `structuredContent`. |
+| Claude Code with a shell (interactive, a cloud routine, CI with the headless CLI) | `agentic-sdlc <group> <verb>`: the launcher `.agents/bin/agentic-sdlc`, on PATH in the plugin and the runner templates |
+| Claude Code with MCP and no shell | `agentic-sdlc mcp` (stdio) |
 
-**The CLI pin.** The CLI ships from Git only (the npm name `agentic-sdlc` is another project) and is pinned
-by a factory file, never by the product's `package.json`, so a product that is not a Node project needs nothing and an
-upgrade is one factory change. `.agents/cli.json` is `{ "package": "github:dmitriywind/agentic-sdlc", "ref": "<ref>" }`;
-`ref` is a 40-hex commit sha (immutable) or a version tag `v<version>` (a tag can move: `doctor` warns). `init` writes it
-with the running package's `v<version>`, or `--ref <sha|vX.Y.Z>`. `init --upgrade` moves the ref to the running
-package's, unless the file was edited to a sha that `init` did not write (the install lock tracks what it wrote);
-`--force` or `--ref` moves it anyway. `.agents/bin/agentic-sdlc` is the one launcher (POSIX sh, installed executable):
-it reads the pin and installs that ref once with
-`npm i --prefix .agents/.cli/<ref> --ignore-scripts --allow-git=root --no-save --no-audit --no-fund "<package>#<ref>"`
-(into a temporary folder, then renamed; npm's output goes to stderr), then execs
-`node .agents/.cli/<ref>/node_modules/agentic-sdlc/dist/bin.js "$@"`. It refuses a ref or package that could read as
-an option or leave the folder, and ends with one line when node or npm is missing or the ref cannot be fetched.
-`init` adds `.cli/` (the launcher cache) and `work/` (the `vcs start` workdirs) to `.agents/.gitignore` once. Everything that runs the CLI goes through the launcher: every workflow
-job, the pre-push hook, `runner-setup.sh` (which also puts `.agents/bin` on `PATH` in GitHub Actions) and the MCP entry
-(`command: ".agents/bin/agentic-sdlc", args: ["mcp"]`). A job that holds a secret checks out the base ref only, so its
-launcher and pin are the trunk's, never the CR's. `init` writes no dependency and no `.npmrc` into the product; when
-`package.json` still pins `agentic-sdlc` as a devDependency it prints `npm rm agentic-sdlc`. `doctor` checks that
-`.agents/cli.json` parses, that its ref is a sha or a version tag, and that the launcher exists and is executable.
+**MCP server.** The tools are the board verbs but `bootstrap`, the forge verbs but `whoami`, the VCS
+verbs but `tag` and `checkout-tests`, `dispatch`, and `ledger runs|summary|plan|record|hash|stale`. The
+default list leaves out `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them. It
+serves both protocol eras: the `initialize` handshake (2025-11-25 down to 2024-11-05) and, for a request
+whose `_meta` carries the protocol version and client capabilities, revision 2026-07-28 with no
+handshake. `tools/call` checks arguments against each tool's schema.
 
-**Local execution.** A scheduler on your own machine (`templates/runner/local.md`) runs the same cycle
-prompt with no sandbox. An unattended `dispatch` refuses a `local` or unset sandbox, unless the stage
-names `sandbox: local` and the runner sets `AGENTIC_SDLC_LOCAL=1`; an unset sandbox on a `harness` or `command` stage (after it inherits `executors.default.sandbox`) is always refused.
+**The CLI pin.** The CLI ships from Git only (the npm name `agentic-sdlc` is another project).
+`.agents/cli.json` is `{ "package": "github:dmitriywind/agentic-sdlc", "ref": "<ref>" }`, a 40-hex sha
+or a tag `v<version>` (a tag can move: `doctor` warns). `init` writes the running package's tag, or
+`--ref`. `.agents/bin/agentic-sdlc` (POSIX sh) installs the ref once with `npm i --prefix
+.agents/.cli/<ref> --ignore-scripts --allow-git=root --no-save --no-audit --no-fund "<package>#<ref>"`
+(into a temporary folder, then renamed; npm output to stderr) and execs its `dist/bin.js`. It refuses a
+ref or package that could read as an option or leave the folder, and ends with one line when node or npm
+is missing or the fetch fails. Every workflow job, the pre-push hook, `runner-setup.sh` and the MCP entry
+run through it. `init` adds `.cli/` and `work/` to `.agents/.gitignore`, writes nothing into
+`package.json` or `.npmrc` (and prints `npm rm agentic-sdlc` when a devDependency pins it). `doctor`
+checks the pin and that the launcher is executable.
 
-**Environment variables the mechanism reads.** `AGENTIC_SDLC_UNATTENDED=1` (dispatch refuses local
-stages), `AGENTIC_SDLC_LOCAL=1` (local execution opt-in), `AGENTIC_SDLC_ROLE=review` (the plugin hook
-allows `forge approve` and `forge status`, and its MCP launcher serves `forge_approve` and `forge_status`),
-`AGENTIC_SDLC_ALLOW_STATUS=1` (the plugin hook allows `forge status` outside the review role; a one-identity runner that starts `mcp --allow status` sets it, nothing else needs it),
-`CLAUDE_CODE_REMOTE=true` (a Claude cloud session: REST and `ccr` routes, the proxy token),
-`AGENTIC_SDLC_PACKAGE` (the package root `init` copies from; tests set it). `dispatch` sets
-`AGENTIC_SDLC_MAX_TURNS`, `AGENTIC_SDLC_MAX_TOKENS` and `AGENTIC_SDLC_MAX_MINUTES` in a `command` executor's child (section 7).
+**Install and upgrade.** `init [--profile individual|organization] [--harness claude] [--board
+github-issues|local] [--forge github] [--vcs git] [--no-plugin] [--ref <sha|vX.Y.Z>] [--upgrade]
+[--force]`. It always copies the pack to `.agents/skills` (the gates and `validate` read it), generates
+`.claude/agents/sdlc-<tier>.md` from `models`, and adds an `@AGENTS.md` import to `CLAUDE.md`.
+`--no-plugin` also copies the skills to `.claude/skills`, writes `.mcp.json`, writes the plugin's
+`agents/sdlc-reviewer.md` to `.claude/agents/` (MCP tools `mcp__agentic-sdlc__*`, skill `sdlc-review`),
+copies the scripts `hooks/hooks.json` runs to `.agents/hooks/` and merges its entries into
+`.claude/settings.json` (adds what is missing, keeps every other key). `init --upgrade` treats
+`.claude/skills` as `--no-plugin`, and writes only under `paths.factory`, so the result is a factory CR;
+a change it would make to a root file (`AGENTS.md` block, `.mcp.json`, `CLAUDE.md` import) is printed as
+`kept <file>: ...`. `init` records the sha256 of every file it copies in `.agents/install.lock.json`
+(a legacy `.agents/skills.lock.json` is read once and removed). A rerun updates a file still at its
+hash, keeps an edited one, writes new files and reports dropped ones as `stale`. A file with no matching
+lock entry counts as edited unless it equals the package's or a released version's hash
+(`templates/known-hashes.json`, written by `npm run build`; workflows compared with their binding values
+normalised). `--upgrade` moves the pin unless it holds a sha `init` did not write; `--force` or `--ref`
+moves it, and `--force` overwrites edited template files. No flag rewrites the binding.
 
-**Install and upgrade.** `init --upgrade` keeps an install without the plugin: `.claude/skills` means `--no-plugin`. A generated tier agent with no lock entry is regenerated when it names `npx --no agentic-sdlc`, `init --upgrade` writes only under `paths.factory`, so the ticket-linkage gate sees a factory CR: a change it would make to a root file (the `AGENTS.md` block, an `npx` agentic-sdlc entry in `.mcp.json`, the `@AGENTS.md` import in `CLAUDE.md`) is reported as a `kept <file>: ...` line to make in a product change. A first `init` writes those files. `init` records the sha256 of every file it copies from the package (skills,
-scorers, workflows, rulesets as patched, the pre-push hook, runner files, generated tier agents) in
-`.agents/install.lock.json`; it reads the older `.agents/skills.lock.json` once and removes it. A re-run (`init --upgrade`
-is the same run) updates a file still at its recorded hash, keeps an edited one and names the package file
-with the new version, writes files new in the package, and reports as `stale` any recorded file the package no
-longer ships, deleting none. A file with no lock entry, or a lock entry that does not match, counts as edited unless it equals the package's or its
-hash is one a released version had (`templates/known-hashes.json`, appended by `npm run build`;
-the delivery and verify workflows are compared with their binding values normalised, and `init` writes those values
-from `vcs.trunk`, `vcs.release_prefix`, `product.delivery`, `commands.install` and `commands.verify`).
-The delivery workflow is also compared with `forge.ci_workflow` and `forge.deploy_workflows` normalised.
-`--force` overwrites locally edited template files only. No flag rewrites `.agents/binding.yml` (to
-regenerate it, delete it) or adds a second heartbeat ticket; `init` and `validate` print an `info:` line
-listing the template's top- and second-level binding keys that the binding does not set (not `paths.*`, which `init`
-prunes), and `init` ends with a `next:` line naming the unresolved keys.
+**Status.** `agentic-sdlc status` (no binding needed) prints one JSON report. Without a binding:
+`{ installed: false, install: "agentic-sdlc init --no-plugin" }`. With one: `{ installed, ok, problems,
+unresolved, warnings, waiting, cycle, heartbeat, broken, person }`. `waiting` lists each hold (`{ kind:
+hold, ticket, ask, since, replied }`) and each open, ready CR whose `human-approval` is not green under a
+class that needs an approver (`{ kind: approval, cr, url, ticket?, class, who, label }`). `cycle` is
+`next` in short; `heartbeat` the newest trusted heartbeat's time and age; `broken` every failed read and
+`next`'s errors. `person` is the steps only the person can take (the Claude GitHub App, the cloud routine
+with its prompt and triggers, the trunk ruleset, the optional GitHub connector, the approval decision
+when every product owner is a bot), each `{ step, where, text?, verified }` (`null`: the CLI cannot
+check it; a step verified true is left out). With binding problems it stops after `problems`,
+`unresolved`, `warnings` and `person`. Exit 1 when anything is broken or invalid. It decides nothing.
 
-**Self-guide.** `agentic-sdlc status` (no binding needed) prints one compact JSON report. Without a binding:
-`{ installed: false, install }`, the install command (`init --no-plugin`, since a cloud routine, the primary runtime,
-loads only project files). With one: `{ installed, ok, problems, unresolved, warnings, waiting, cycle, heartbeat, broken,
-person }`. `waiting` lists each hold (`{ kind: hold, ticket, ask, since, replied }`, from `board holds`) and each open, ready
-CR whose `human-approval` check is not green and whose class needs an approver (`{ kind: approval, cr, url, ticket?,
-class, who, label }`, `who` from the approval gate's `approvalWho`, `label` the `forge.approval_label`). `cycle` is `next`
-in short (`idle`, `work` as one line each, `later` as a count, `releases`, `budget`); `heartbeat` the newest trusted
-heartbeat's `at` and age in hours; `broken` every read that failed and `next`'s errors. `person` lists the steps only the
-person can take (the forge app, the scheduled routine with its prompt and triggers, the trunk ruleset, the optional
-connector, the approval decision when every product owner is also a bot), each `{ step, where, text?, verified }`, where
-`verified` is `null` when the CLI cannot check it; a step verified true is left out. With binding problems it stops after
-`problems`, `unresolved`, `warnings` and `person`. Exit 1 when anything is broken or invalid. It decides nothing: the
-`setup` skill answers from it.
+**Session start.** The `SessionStart` hook prints a few lines: with a binding, that `sdlc` runs a cycle,
+`setup` installs, repairs or answers what waits, and board, forge and VCS work goes through the CLI;
+without one, a line offering `setup`.
 
-**Session start.** The plugin's `SessionStart` hook (`hooks/session-start.mjs`) prints a few lines of orientation to
-stdout: with `.agents/binding.yml`, that the project runs the factory, that the `sdlc` skill runs a cycle and the `setup`
-skill installs, repairs or answers what waits on the person, and that board, forge and VCS work goes through the CLI;
-without a binding, one line offering `setup`. Under the plugin it names `agentic-sdlc:<skill>`, otherwise the copied names.
+**Packaging.** The plugin (`.claude-plugin/`) carries the skills, hooks, the MCP server, `agents/` and
+`bin/`. Its tier agents set `model` and `effort` (fast: sonnet, low; balanced: sonnet, medium; deep:
+opus, high); `sdlc-reviewer` (sonnet, medium, `maxTurns` 60) has no Edit or Write, and the guard hook
+lets it run only `agentic-sdlc` in Bash, so `review/review` never runs CR code. A project's
+`.claude/agents/sdlc-<tier>.md` wins when present. Headless runs pass `--permission-mode acceptEdits`,
+`--allowedTools` and `--max-turns`; the cycle allows the CLI, the MCP server, `git add|commit|push` and
+the npm checks and disallows `forge approve`; the review allows only the CLI and the MCP server.
 
-Gates always run in the forge's CI, so trunk guarantees never depend on the runtime. A gate blocks a
-merge only where the forge enforces it: `doctor` warns when the trunk has no enforced ruleset or branch
-protection (an empty rule list, or the 403 a private repo on GitHub Free gets).
+**Runners.** The GitHub workflows read `runs-on` from repo variables as JSON: `AGENTIC_RUNS_ON` for jobs
+that run CR or agent code, `AGENTIC_RUNS_ON_TRUSTED` for jobs that hold secrets (default
+`AGENTIC_RUNS_ON`, then `"ubuntu-latest"`). `doctor` fails a self-hosted runner on a public repo and warns
+when both name the same runner. Every job runs `bash`. The runner workflow
+(`github-actions-claude.yml`) needs the repo variable `AGENTIC_AGENT_CLI_VERSION`, and
+`runner-setup.sh` refuses to start when `ANTHROPIC_API_KEY` is set, since it outranks the subscription
+token and bills the API.
 
-**Runners.** The GitHub templates read `runs-on` from two repo variables, as JSON: `AGENTIC_RUNS_ON` for the
-jobs that run CR or agent code (`agentic-sdlc-verify.yml`, the runner's `cycle` job) and
-`AGENTIC_RUNS_ON_TRUSTED` for the jobs that hold secrets (default: `AGENTIC_RUNS_ON`, then
-`"ubuntu-latest"`). A self-hosted runner bills no minutes; hosted runners draw on a monthly compute amount ($12 on Free, about 2,000 Linux minutes; $18 on Pro and Team) and stop when it is spent without a payment method. `doctor` fails a self-hosted runner on a public
-repo and warns when both variables name the same runner. Every job runs `bash`.
+**Claude cloud session.** The proxy refuses GraphQL and every route outside `repos/{owner}/{repo}/…`, so
+the board and forge use REST there (section 3). A cloud session loads no repo plugin: install with
+`--no-plugin`. A stopped routine writes no heartbeat, so the dead-man workflow runs outside it.
 
-**Claude cloud session.** A Claude cloud scheduled task (formerly routine; "routine" is the short name from here on
-and in file names; `templates/runner/claude-routine.md`) is a full runtime on a subscription. Its GitHub proxy
-refuses GraphQL and every `orgs/*` and `users/*` route; REST works under `repos/{owner}/{repo}/...`, which is all the
-`github-issues` board uses. It can store status and fields as org
-issue fields (`board.options.field_ids`); a GitHub Project shows them as columns, so a Project view stays available
-while the cycle runs in the cloud. Issue fields exist only in organization repos. A cloud session loads no repo plugin, so it
-gets the skills from `.claude/skills` (`init --no-plugin`). Docker is available (Docker, dockerd,
-docker compose installed). A foreground command waits 2 minutes by default, up to 10, then can continue in the
-background for up to 30 more minutes; the environment variables `BASH_DEFAULT_TIMEOUT_MS` and
-`BASH_MAX_TIMEOUT_MS` raise both. `commands.verify` still runs in CI as `Required` (the gate), and
-`commands.fast_check` may run containers. The shortest schedule interval is 1 hour; runs draw subscription usage.
-The dead-man check is its own workflow, `agentic-sdlc-dead-man.yml`, installed by `init` for every runtime, because
-a cloud task stopped at the usage limit or disconnected from GitHub writes no heartbeat.
+**Environment variables.** `AGENTIC_SDLC_UNATTENDED=1` (dispatch refuses local stages),
+`AGENTIC_SDLC_LOCAL=1` (local opt-in), `AGENTIC_SDLC_ROLE=review` (the guard hook allows `forge
+approve` and `forge status`, the MCP launcher serves them), `AGENTIC_SDLC_ALLOW_STATUS=1` (the hook allows
+`forge status` outside the review role, for a one-identity `mcp --allow status`), `AGENTIC_REVIEW_FIRE_CMD`
+(section 7), `CLAUDE_CODE_REMOTE=true` (cloud routes, the proxy token), `AGENTIC_SDLC_PACKAGE` (the
+package root `init` copies from; tests set it).
 
-**Packaging.** The package is a Claude Code plugin (`.claude-plugin/`: skills,
-hooks, the MCP server, `agents/` with a subagent per tier and `sdlc-reviewer`, `bin/` with the CLI on the Bash PATH, `evals/`), so skills are named `/agentic-sdlc:<skill>`. The plugin's tier agents are the default, each with an explicit `model` and `effort` (fast: sonnet, low; balanced: sonnet, medium; deep: opus, high; `sdlc-reviewer`: sonnet, medium, `maxTurns` 60), so none inherits the session's model by omission; their per-run turn caps stay in `executors.<stage>.max_turns`. `.claude/agents/sdlc-<tier>.md` from `init` carries the binding's models (the one home of a project's choice; the template sets sonnet, sonnet, opus) and is used when present (the names differ: `agentic-sdlc:sdlc-<tier>` against `sdlc-<tier>`). `sdlc-reviewer` has no Edit or Write tool, and the guard hook lets it run only `agentic-sdlc` commands in Bash, so `review/review` never runs CR code. `init` always
-copies the pack to `.agents/skills` (the gates and `validate` read it); `init` generates one subagent per tier and adds an `@AGENTS.md` import to
-`CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. It also
-keeps the review sandbox there: it writes the plugin's `agents/sdlc-reviewer.md` to `.claude/agents/sdlc-reviewer.md` (its MCP tools named
-`mcp__agentic-sdlc__*`, its skill `sdlc-review`), copies every script `hooks/hooks.json` runs (`guard.mjs`, `session-start.mjs`) to
-`.agents/hooks/` and merges every event's entries of the plugin's `hooks/hooks.json`, with that path, into `.claude/settings.json` (adds a missing entry, keeps every other key; a second run
-writes nothing). The plugin's files are the one source; `init --upgrade` follows them like any installed file. Claude
-headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-turns`. The cycle
-allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm checks, and adds
-`--disallowedTools` for `forge approve`. The review allows only the CLI and the MCP server.
+**Profiles.** `individual` (one identity by default) and `organization` (two identities, required). Both
+run on the subscription; no path uses a metered API key.
 
-`profile` in the binding picks one of two paths. Both run on the Claude subscription; no path uses a metered API key.
+**One identity** (`review_identity` empty). The factory acts as one account, the owner's; in a cloud
+routine, the proxy's login. One scheduled job, the cycle, dispatches `review/review` as a fresh-context
+subagent that runs no CR code. `forge verdict` posts only the report: a cloud session's proxy refuses
+commit-status writes (observed in pilot runs, not documented, can change). The report comment starts the
+CR workflow, whose `review` gate posts the status with the CI job's token. `forge approve` refuses, since
+GitHub refuses an approval from the CR's author; the installed trunk ruleset needs no approving review
+and pins every required check to GitHub Actions. A CR that needs a human waits for a collaborator's
+approval of its head or the owner's `forge.approval_label` (section 11.4). What the label proves: a
+deliberate act outside the agent's tool surface, not a second identity. The guard hook refuses every
+agent write of it (`board label … add`, the `board_label` MCP tool, a `gh`, `curl` or `wget` command
+naming a label and it) and `board label` refuses it; an agent that reached GitHub another way could still
+apply it. The review is a separate context, not a separate account, so the ruleset cannot prove an agent
+did not post its own `review` status or label. The shipped ruleset lets repo admins bypass in a pull
+request, and the routine acts as the owner.
 
-| | `individual` | `organization` |
-|---|---|---|
-| Scheduler | A Claude cloud routine, or CI cron with a subscription-authenticated Claude Code CLI | Same, or the org's job runner |
-| Executors | `harness`; `command` for a CLI logged in with the subscription | Same |
-| Forge identities | One (default): yours | Two: required |
-| Traces | None, or local files | `traces.uri` on the org's storage |
-| Bench | Small suites inside the plan's usage limits | Full suites across models and executors |
+**Two identities** (`review_identity` and `review_token_env` set). Two jobs: the cycle, which never holds
+the review token, and the review (`templates/runner/review-prompt.md`), started after the cycle by a job
+dependency or `AGENTIC_REVIEW_FIRE_CMD`, never on its own clock; it holds the review token and runs only
+`review/review`. `forge verdict` posts the status and, on pass, the approval with that token; anywhere
+else it exits 1 with `Access:` and posts nothing. The implementer's token has no commit-status write (a
+fine-grained token, Commit statuses: no access; `doctor` warns on a classic `repo` or `repo:status`
+token), and every required check is pinned to the app that posts it, so an implementer cannot post
+`review` or approve its own CR, and CR code never sees the review token. The review token lives only in
+Environment `agentic-review` (the trunk, the merge queue and release lines as deployment branches); the
+release token only in `agentic-release`, after the Product owner approves the run. Keep `.github/**` in
+`paths.factory`.
 
-`init --profile <p>` writes these defaults. `validate` fails an `organization` binding with no
-`forge.review_identity`. The runner setup fails when `ANTHROPIC_API_KEY` is set, since it outranks the
-subscription token and bills the API.
+In both: `forge status` refuses the gate contexts, `review/review` never runs CR code (it reads CI and
+runs no install or test), untrusted text is data, and unattended jobs set `AGENTIC_SDLC_UNATTENDED=1`.
+`forge verdict` has no hook rule: the token decides. The `sdlc-reviewer` agent cannot write a file, so
+it posts through the `forge_verdict` MCP tool.
 
-**One identity or two.** `forge.review_identity` decides it.
-
-- **One identity** (`review_identity` empty; the `individual` default). The
-  factory acts as one account, yours: on a Claude cloud routine, the proxy's GitHub login. There is
-  one scheduled job, the cycle. It dispatches `review/review` like any other step, as a harness subagent
-  with a fresh context that runs no CR code. `forge verdict` posts the report and no status: a Claude cloud
-  session's proxy refuses commit-status writes (HTTP 403; observed in pilot runs, not documented by Anthropic, can change). The report comment starts the CR workflow
-  (`issue_comment`), whose `review` gate posts the `review` status from the newest report on the head
-  by a trusted author (`owners.bots` and every owner role) with the CI job's token.
-  `forge land` then waits for that status and arms the merge. `forge verdict` gives no approving review, since
-  GitHub refuses one from the CR's author, and `forge approve` refuses. `init` writes a trunk ruleset
-  that needs no approving review and pins every required check to GitHub Actions. The
-  `approval` gate posts `human-approval` with the CI job's token; a CR that needs a human waits until a
-  collaborator approves its head, or the owner applies `forge.approval_label` to it (GitHub refuses the
-  owner's own review, since the owner's account authored the CR). The CR workflow runs from the base
-  branch (`pull_request_target`), re-runs the gate on `labeled` and `unlabeled`, and on every push removes
-  the label with the job's token before the gate runs; the gate also takes only a label applied after the
-  head's `pushedAt`. What the label proves here: a deliberate act on the forge outside the agent's
-  allowed tool surface, not a second identity. The agent and the owner are one login, so the forge
-  cannot tell who applied it; the guard hook refuses every agent write of it (`board label ... add`, the
-  `board_label` MCP tool, and a `gh`, `curl` or `wget` command naming a label and it), and `board label`
-  refuses it in the CLI. An agent that reached GitHub some other way could still apply it. The
-  trade-off: the review is a separate context, not a separate account, so the trunk ruleset cannot
-  prove that an agent did not post its own `review` status or apply the approval label.
-- **Two identities** (`review_identity` and `review_token_env` set; required for `organization`).
-  Every scheduler runs two jobs: the cycle (`templates/runner/cycle-prompt.md`), which never holds the
-  review token, and the review (`templates/runner/review-prompt.md`), which runs after the cycle
-  finishes (a job dependency, or the cycle's fire command when a CR needs a review; never its own clock),
-  holds `forge.options.review_token_env` and runs only `review/review`, for product and factory CRs. The
-  implementer's `token_env` has no commit-status write (a fine-grained token with Commit statuses: no
-  access; `doctor` warns on a classic token with scope `repo` or `repo:status`), and every required
-  check is pinned to the app that posts it. So an implementer can never post the `review` status or
-  the approving review for its own CR, and a CR's code never sees the review token.
-
-In both, the guard hook refuses an agent write of `forge.approval_label`, `forge status` refuses the contexts the gates own (`human-approval`, `ticket-linkage`,
-`proofs-on-base`, `agent-provenance`), and `review/review` **never runs CR code**: it reads the required checks
-from CI and runs no install or test command. The MCP server's default tool list has no `forge_status`,
-so a one-identity cycle that has no shell starts it with `mcp --allow status`. Unattended jobs set
-`AGENTIC_SDLC_UNATTENDED=1`.
-
-**Who may post a verdict.** `forge verdict` has no hook rule: the setup decides. With no review identity any
-runtime may call it, since the report is the only thing it posts and CI's `review` gate turns it into the status.
-With `forge.review_identity` set it posts the review status and, on pass, the approving review with the token that
-`forge.options.review_token_env` names; only the review runtime holds that token, so anywhere else the verb exits 1
-with `Access:` and posts nothing. The `sdlc-reviewer` agent cannot write a file, so it calls the MCP tool
-`forge_verdict` (the report as `body`) instead of the Bash verb with `--body-file`.
-
-**One repo or many.** A binding belongs to one repo; each repo has its own install, cycle, heartbeat
-ticket and pinned version.
-
-- **One repo** (`board.scope` unset): the board serves one repo: its own `github-issues` board or a `local` board.
-- **Many repos, one board**: one hub repo's `github-issues` board; each repo's binding sets `board.scope`. `board list` then returns only tickets
-  with `board.scope.label` (`repo:<name>`), and `board create` adds that label. Exactly one repo sets
-  `home: true` and lists every label in `repos`: it also lists the tickets with no `repo:` label, and
-  `plan/triage` gives each one the label of the repo whose code it is about. Grooming, shaping and
-  delivery stay inside each repo's scope.
+**One repo or many.** A binding belongs to one repo, with its own install, cycle, heartbeat ticket and
+pin. With `board.scope` set, many repos share one hub repo's `github-issues` board: `board list` returns
+only items with `scope.label` (`repo:<name>`) and `board create` adds it; the one repo with `home: true`
+lists every label in `repos` and also sees unlabelled items, which `plan/triage` labels.
 
 ## 11. Mechanism reference for the skills
 
-What the skills rely on but never describe. Section 3 is the verb reference; this section holds the
-rest.
-
 ### 11.1 Comment kinds
 
-`board comment` and `forge comment` take `--kind <kind> [--ref <value>]` and stamp the kind's
-marker as the first line; `comments --kind <kind>` filters by it. The exact first-line format of
-each kind is defined once, in `src/comments.ts`; no skill spells one. The `spec` marker is the
-binding's `spec_marker`.
+`comment --kind <kind> [--ref <value>]` stamps the kind's marker as the first line; `comments --kind`
+filters by it. Each format is defined once, in `src/comments.ts`; the `spec` marker is `spec_marker`.
 
 | Kind | Written by | Where | `--ref` |
 |---|---|---|---|
-| `spec` | `plan/shape` (a later pass posts a new one; the newest trusted is the spec) | ticket | none |
-| `verdict` | `forge verdict` only (`review/review`) | CR | the head (stamped by the verb) |
-| `note` | `build` (the cause of a red check, a request to a person's CR author); the navigator (asking a person to update a CR behind the trunk) | CR | the head sha; with a Signal, `<head sha> <Signal id>` |
-| `verify` | `review/verify` | CR | the head sha |
-| `manual-check` | `review/review` | ticket | the head sha |
-| `ask` | `board hold` (from `escalate`); `escalate` for a CR with no ticket (on the CR and on `heartbeat.ticket`); the navigator for a step with no ticket past `cycle.failure_limit` | ticket, CR, heartbeat ticket | the trigger, via `board hold --kind` |
-| `heartbeat` | `ledger heartbeat` for the navigator (`kind: cycle`), the review runtime (`kind: review`), `learn/improve` (`kind: learn`) | heartbeat ticket | none |
-| `scores` | `ledger record` (`learn/judge`) | heartbeat ticket | none (the run id is in the JSON body) |
+| `spec` | `plan/shape` (the newest trusted is the spec) | ticket | none |
+| `verdict` | `forge verdict` only | CR | the head (stamped) |
+| `note` | `build`; the navigator (asking a person to update a CR) | CR | the head; with a Signal `<head> <Signal id>` |
+| `verify` | `review/verify` | CR | the head |
+| `manual-check` | `review/review` | ticket | the head |
+| `ask` | `board hold`; `escalate` for a CR with no ticket (CR and heartbeat ticket); the navigator past `cycle.failure_limit` | ticket, CR, heartbeat ticket | the trigger |
+| `heartbeat` | `ledger heartbeat` (`kind: cycle`), the review runtime (`review`), `learn/improve` (`learn`) | heartbeat ticket | none |
+| `scores` | `ledger record` only | heartbeat ticket | none |
 | `release-proposal` | `ship` | release request | the revision |
 | `release-cut` | `ship` | release request | the version |
-| `dispatch` | `dispatch` | the subject's ticket, else heartbeat ticket | the key |
-| `done` | every run, last | the run's ticket; heartbeat ticket for a CR with no ticket | the key `dispatch` gave |
-
-`comment --kind` refuses the kinds only one verb writes: `verdict` (`forge verdict`), `dispatch` (`dispatch`) and `scores` (`ledger record`).
-
-An owner's grade is a comment `agentic-sdlc:grade <run-id> <scorer> <value>` (section 6.3).
+| `dispatch` | `dispatch` only | the subject's ticket, else heartbeat ticket | the key |
+| `done` | every run, last | the run's ticket; heartbeat ticket for a CR with no ticket | the key |
 
 ### 11.2 Heartbeat
 
 One `heartbeat` comment on `heartbeat.ticket` per cycle; it is also the run ledger. The body is the
-marker line (stamped by `--kind heartbeat`), then the JSON object, bare or in a `json` code fence. `ledger runs` and `ledger summary` read only
-heartbeats by `owners.bots`; `ledger summary` also prints `learning: { due, judge, cyclesSince }`,
-so no skill keeps a counter. Scores are not written here: `ledger` joins `scores` comments and
-grades to the run rows, and a human grade wins.
+marker line, then the JSON, bare or in a `json` fence. `ledger` reads only heartbeats by `owners.bots`
+and joins `scores` comments and grades to the rows.
 
 ```json
 {
   "kind": "cycle",
-  "at": "ISO-8601 UTC time the cycle ended",
-  "factory": "the `sha` field of `vcs head`, a bare hex string, of the trunk the skills were read from",
+  "at": "ISO-8601 UTC end time",
+  "factory": "the sha of `vcs head` for the trunk the skills were read from",
   "runs": [{ "id": "", "skill": "build", "skillHash": "", "ticket": "", "cr": "", "tier": "", "model": "", "executor": "harness", "ref": "", "tokens": 0, "minutes": 0, "outcome": "done", "error": "", "trace": "" }],
   "errors": [{ "step": "", "id": "", "msg": "" }]
 }
 ```
 
-`at`, `factory`, `runs` and `errors` are required; `board comment --kind heartbeat` refuses a `factory` that is not a hex sha. Optional: `kind` (`cycle` by default, `review`,
-`learn`; only `cycle` counts cycles), `did` (one line per result), `learning` (`lastProposal`,
-`benchBaseline`; copied forward only when `learning.enabled`, changed only by `learn/improve`),
-`measures` (off unless the runner prompt asks) and `budget` (`exhausted`, only when `ledger
-measures` reported `errorBudget.exhausted` this cycle). A field the runner could not read is left
-out and named in `errors`.
+Required: `at`, `factory` (a hex sha, or `board comment --kind heartbeat` refuses it), `runs`, `errors`.
+Optional: `kind` (`cycle` default, `review`, `learn`; only `cycle` counts cycles), `did`, `learning`
+(`lastProposal`: when, CR, class, cluster, evidence runs, state; `benchBaseline`: results file, factory,
+model, executor, cases, pass rate, minutes; copied forward only when enabled, changed only by
+`learn/improve`), `measures`, `budget` (`exhausted`). A field the runner could not read is left out and
+named in `errors`.
 
 | Run key | Value |
 |---|---|
-| `id` | The `run` `dispatch` printed (with `forge.provenance` on; the `Agent-Run` trailer), else `<at>-<skill>-<ticket>`, or the executor's unique `ref`. |
-| `skill`, `skillHash` | `<skill>/<step>`, and the `hash` string `ledger hash <skill dir>` printed at the run's start. |
-| `ticket`, `cr` | The subject; empty when none. |
-| `tier`, `model` | The step's tier and the model the binding mapped it to; for another executor what it reported, or empty. |
-| `executor`, `ref` | The executor kind and the `ref` `dispatch` printed. |
-| `tokens`, `minutes` | What the run reported, never guessed. `ledger summary` adds them per ticket. |
-| `outcome` | `done`, `sent_back`, `failed`, `escalated`, `timeout` or `capped`; anything but `done` is a failure, and `capped` caps the score like `failed`. |
-| `trace` | The run id that fills `traces.uri`, when the executor stored a transcript. |
-| `error` | The first line of the cause, as the run or the gate stated it; the ledger clusters on it. |
+| `id` | The `run` `dispatch` printed, else `<at>-<skill>-<ticket>`, or the executor's `ref` |
+| `skill`, `skillHash` | `<skill>/<step>`, and `ledger hash` at the run's start |
+| `ticket`, `cr` | The subject; empty when none |
+| `tier`, `model`, `executor`, `ref` | The step's tier and mapped model, the executor kind and `dispatch`'s `ref` |
+| `tokens`, `minutes` | What the run reported, never guessed |
+| `outcome` | `done`, `sent_back`, `failed`, `escalated`, `timeout` or `capped`; all but `done` are failures |
+| `error` | The first line of the cause; the ledger clusters on it |
+| `trace` | The run id in `traces.uri`, when stored |
 
-`lastProposal`: when, its CR, the class the gate gave it, the targeted cluster, its evidence run
-ids, and `open`, `merged`, `rejected` or `closed`. `benchBaseline`: the results file, factory
-revision, model, executor, case count, pass rate and minutes of the trunk's last bench.
-
-`ledger heartbeat [--file <report.json>] [--next <next.json>] [--key <key>]` writes the cycle's heartbeat and
-ends its claim. `report.json` is `{ runs, errors, did }` as the navigator collected them; `next.json` is the
-output of `next`, whose `errors` come first and whose `budget` is copied. The verb sets `kind: cycle`, `at`
-(now), `factory` (the `sha` of `vcs head`; left out, with an error, when the VCS cannot say) and, when
-`learning.enabled`, `learning` from the newest heartbeat holding one. A run row gets `skillHash` and `tier`
-from the installed pack, `model` from `models[tier]` and `executor` from the binding where the row left
-them out; empty values are dropped. It posts the heartbeat on `heartbeat.ticket`, then the done line of
-`--key` (default `<heartbeat.ticket>-sdlc`, the key `dispatch sdlc --ticket <heartbeat.ticket>` gives), and
-prints `{ heartbeat, done, key, ...the heartbeat }`.
+`ledger heartbeat [--file <report.json>] [--next <next.json>] [--key <key>]` writes it: `report.json` is
+`{ runs, errors, did }`, `next.json` the output of `next` (its `errors` first, its `budget` copied). It
+sets `kind`, `at`, `factory` (left out with an error when VCS cannot say) and `learning`; fills
+`skillHash`, `tier`, `model` and `executor` a row left out; posts the heartbeat, then the done line of
+`--key` (default `<heartbeat.ticket>-sdlc`), and prints `{ heartbeat, done, key, ... }`.
 
 ### 11.3 Next: the cycle's work
 
-`next [--ticket <id>] [--idle-exit]` reads the open tickets (`board get` for a ticket at a status a row
-reads children or blockers of, and for each child or blocker not listed), `board holds`, the open CRs
-and their `forge queue` rows, the heartbeat ticket's ledger, and with `product.slo` the error budget.
-It applies `skills/sdlc/routes.yml` from `.agents/skills/sdlc/` (the package's copy when the install has
-none) and prints:
+`next [--ticket <id>] [--idle-exit]` reads the open tickets (`board get` where a row needs children or
+blockers), `board holds`, the open CRs and their `forge queue` rows, the ledger, and with `product.slo`
+the error budget; applies `routes.yml` from `.agents/skills/sdlc/` (the package's when the install has
+none); and prints:
 
 ```json
 { "idle": false, "holds": ["7"], "work": [{ "step": "build", "ticket": "7", "reason": "Ready" }],
   "later": [], "errors": [{ "step": "next", "msg": "forge queue: ..." }], "budget": "exhausted" }
 ```
 
-- `holds`: every `board holds` id with `replied: true` and every ticket of a queue row with
-  `release: true`; a held ticket routes only when it is listed here.
-- `work` then `later`: one entry per ticket or CR, `{ step, ticket?, cr?, head?, run?, runModel?, trigger?, reason }`,
-  in the order of the routes' `groups`. An entry whose step is in `navigator` always goes in `work`; of
-  the others the first `parallel_agents` go in `work`, the rest in `later`. `head` comes with a `note`
-  entry; `run` and `runModel` with a `learn/judge` entry; `trigger` with a guard's entry.
-- `errors`: what could not be read, one `{ step: "next", msg }` each; the rest is still routed.
-- `idle`: no entry, no hold to release and no error. With `--idle-exit` an idle `next` also writes the
-  heartbeat and done line as `ledger heartbeat` does, and prints them as `heartbeat`.
-- `--ticket <id>` keeps only that ticket's entries and hold.
+- `holds`: replied holds and the tickets of queue rows with `release: true`; a held ticket routes only
+  when listed here.
+- `work`, `later`: `{ step, ticket?, cr?, head?, run?, runModel?, trigger?, reason }` in the order of the
+  routes' `groups`; navigator steps always in `work`, others up to `parallel_agents`, the rest in `later`.
+- `errors`: what could not be read; the rest is still routed. `idle`: no entry, hold or error; with
+  `--idle-exit` it also writes the heartbeat and done line and prints them as `heartbeat`.
 
-The routes file holds four lists. `tickets`: the first row whose conditions all hold routes a
-ticket; held tickets and `heartbeat.ticket` match none. Conditions: `status` (one or a list), `label`,
-`children` (`none`, `some`, `all-closed`), `blocked` (an open `Blocked by <id>` body line), `cr`
-(`none`, `open`, `by-person`), `no_open_title`, `not`, and any field or `milestone` (`set`, `unset`, or a
-value). `step: queue` routes by the queue row of the CR that closes the ticket. `crs`: per queue action,
-its step and group (`no_ticket: false` skips a CR with no ticket; `by_person` names the step for a CR a
-person opened, once per head: a trusted comment of that kind for the head suppresses it). `groups`: the
-order, each with optional `sort` (`{ label }`, `priority`, `unblocks`, `oldest`), `cap`, `fill`
-(`{ status, to }`: until the tickets at that status plus the group's entries reach `to`) and
-`skip_when_budget_exhausted` (a label); `from: unscored-runs` lists `learn/judge` per run with no
-`done-conditions` score in the heartbeats since the newest one holding a `learn/judge` run, `from:
-learning-due` lists the step once when `learning.due`. `guards`: `over_budget` replaces a dispatch for a
-ticket `ledger summary` marks `overBudget`; `repeat` replaces a dispatch whose step and subject failed (an
-`errors` entry, or a run whose outcome is not `done`) in each of the last `cycle.failure_limit` cycle
-heartbeats, all with the `factory` of `vcs head`. A value `{$a.b}` is a binding key (a negative list
-index counts from the end), `{id}` the ticket's id; a condition whose binding value is unset fails.
+`routes.yml` holds four lists. `tickets`: the first row whose conditions all hold routes a ticket (held
+tickets and the heartbeat ticket match none). Conditions: `status`, `label`, `children` (`none`, `some`,
+`all-closed`), `blocked` (an open `Blocked by <id>` body line), `cr` (`none`, `open`, `by-person`),
+`no_open_title`, `not`, and any field or `milestone` (`set`, `unset`, a value); `step: queue` routes by the
+CR's queue row. `crs`: per queue action, its step and group (`no_ticket: false`, `by_person` once per
+head). `groups`: order, with `sort` (`{ label }`, `priority`, `unblocks`, `oldest`), `cap`, `fill` (`{
+status, to }`), `skip_when_budget_exhausted`, and `from: unscored-runs` or `from: learning-due`. `guards`:
+`over_budget` replaces a dispatch for an `overBudget` ticket; `repeat` replaces one whose step and subject
+failed in each of the last `cycle.failure_limit` heartbeats on the same `factory`. `{$a.b}` is a binding
+key (a negative index counts from the end), `{id}` the ticket id; a condition on an unset key fails.
 
 ### 11.4 Checks and approval
 
-- No merge until every `forge.required_checks` entry is green on the head; the forge's branch
-  protection enforces it, `doctor` reports it, and `forge land` waits for it. The `review` status
-  comes from `forge verdict` (with a review identity) or CI's `review` gate (without one).
-- `forge.planned_checks` are wanted checks not yet supplied; `review/review` names each absent one.
-- The `approval` gate's classes, which `forge land` reports as `needsHuman.class`:
+No merge until every `forge.required_checks` entry is green on the head: the forge enforces it, `doctor`
+reports it, `forge land` waits for it. The `approval` gate's classes, which `forge land` reports as
+`needsHuman.class`:
 
 | Class | Covers | `human-approval` passes when |
 |---|---|---|
 | `product-fast` | a Fast-lane product CR | always; with `forge.human_approval: always`, as `product-full` |
-| `product-full` | a Full-lane product CR, or one touching `paths.lane_areas` | `forge.human_approval` is `never`, or a human (not `owners.bots`, not `forge.review_identity`) approved the head, or an `owners.product` account applied `forge.approval_label` after the head's push |
+| `product-full` | a Full-lane product CR, or one touching `paths.lane_areas` | `human_approval` is `never`; or a review approving the head by an owner, member or collaborator outside `owners.bots` and not `review_identity`; or the label from `owners.product` |
 | `tuning` | only the `models` map, and a skill's tiers when it has a bench suite | `tuning` is in `learning.auto_merge_classes`; else as `guardrail` |
-| `guardrail` | everything else under `paths.factory`, a mixed CR, anything unclassifiable | an `owners.factory` entry approved the head, or applied `forge.approval_label` after the head's push |
+| `guardrail` | anything else under `paths.factory`, a CR mixing product and factory paths, unknown paths, deletions, an unreadable head | an `owners.factory` entry approved the head, or applied the label |
+
+The label (`forge.approval_label`) approves the head when its last event on the CR is `labeled`, by an
+account the class asks for, not a forge bot, not in `owners.bots`, not `review_identity`, after the
+head's `pushedAt`; no `pushedAt`, no label approval. Every push removes it (`gate approval --pushed`), so
+it approves exactly the head the owner saw.

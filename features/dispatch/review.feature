@@ -1,4 +1,4 @@
-# Source: src/dispatch.ts "cli" (review/review, REVIEW_FIRE_ENV); docs/forges.md "Review identity and approval"
+# Source: src/dispatch.ts "cli" (review/review, REVIEW_FIRE_ENV); references/architecture.md section 7 "Where review/review runs"
 @cli:dispatch
 Feature: The review step runs in the review runtime when a review identity is set
   With a review identity the review runs in its own runtime. Outside it, dispatch starts nothing locally: it runs the

@@ -1,4 +1,4 @@
-# Source: src/gates.ts "approval"; docs/forges.md "Review identity and approval"
+# Source: src/gates.ts "approval"; references/architecture.md section 11.4
 @gate:approval
 Feature: Gate human-approval
   Each CR gets the approvals its class needs, so that no CR merges without the right human decision.

@@ -1,4 +1,4 @@
-# Source: src/dispatch.ts "cli", "executorFor"; references/architecture.md "Dispatch"
+# Source: src/dispatch.ts "cli", "executorFor"; references/architecture.md section 7
 @cli:dispatch
 Feature: Dispatch takes step ids and finds the step's executor
   `agentic-sdlc dispatch <skill>[/<step>]` starts one step of the installed pack. The id is `<skill>/<step>`, or the

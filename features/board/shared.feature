@@ -1,4 +1,4 @@
-# Source: src/board/index.ts "createBoard" and "checked"; references/architecture.md "Board port"
+# Source: src/board/index.ts "createBoard" and "checked"; references/architecture.md section 3.1
 @board:shared
 Feature: What every board adapter does the same way
   A skill calls `agentic-sdlc board <verb>` and never a vendor CLI. Whatever the tracker, an adapter fails clearly

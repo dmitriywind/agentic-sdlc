@@ -1,4 +1,4 @@
-# Source: src/board/github-issues.ts; src/binding.ts "validateBinding" (field_ids); references/architecture.md "Board port"
+# Source: src/board/github-issues.ts; src/binding.ts "validateBinding" (field_ids); references/architecture.md section 3.1
 @board:github-issues
 Feature: The github-issues board
   The board keeps Status and fields as labels on the repo's issues ("status:Ready", "size:S").

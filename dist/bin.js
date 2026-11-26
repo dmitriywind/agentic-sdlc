@@ -11803,7 +11803,7 @@ function selfHostedRunner(b, ctx) {
   const code = vars.AGENTIC_RUNS_ON ?? "", trusted = vars.AGENTIC_RUNS_ON_TRUSTED ?? code;
   if (![code, trusted].some((v) => v.includes("self-hosted"))) return void 0;
   if (visibility === "public") return "fail runner: a self-hosted runner on a public repo runs fork code on your machine; use GitHub-hosted runners";
-  if (code.includes("self-hosted") && trusted === code) return "warn: runner: CR code and the secret jobs share one self-hosted runner; set AGENTIC_RUNS_ON_TRUSTED to a separate runner (see docs/forges.md, Self-hosted runners)";
+  if (code.includes("self-hosted") && trusted === code) return "warn: runner: CR code and the secret jobs share one self-hosted runner; set AGENTIC_RUNS_ON_TRUSTED to a separate runner (see docs/platform.md, Self-hosted runners)";
   return `ok   runner: self-hosted, code on ${code || "ubuntu-latest"}, secrets on ${trusted || "ubuntu-latest"}`;
 }
 function issueFields(b, ctx) {

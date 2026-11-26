@@ -187,7 +187,7 @@ export interface StageDef {
   secrets?: string[];
   sandbox?: 'cloud' | 'container' | 'local';
   model?: { tier?: 'fast' | 'balanced' | 'deep'; id?: string };
-  /** Per-run caps, positive integers; a stage that sets none inherits executors.default (section 6, `limitsOf`). */
+  /** Per-run caps, positive integers; a stage that sets none inherits executors.default (section 7, `limitsOf`). */
   max_turns?: number;
   max_tokens?: number;
   max_minutes?: number;
