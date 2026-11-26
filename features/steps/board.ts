@@ -52,63 +52,15 @@ Then('the result has no {string}', (w, path: string) => assert.equal(at(w, path)
 Then('the {string} of the result entries are {string}', (w, key: string, values: string) =>
   assert.equal(w.last.json().map((e: Record<string, unknown>) => e[key]).join(', '), values));
 
-// ---- the vendor adapters (github Projects, github-issues, jira, linear), run in-process against a fake exec and http ----
+// ---- the github-issues adapter, run in-process against a fake exec ----
 // State on w.state, besides tickets: adapter (its name), options, board (made on first use), result and error of the last
-// verb, status (the status the fake ticket has), assignee, ghItems, issues/labels/milestones (the github-issues repo),
-// jira/linear (the pages a fake answers), failure (gh failures to inject), rest (the github-issues calls with their JSON input).
+// verb, issues/labels/milestones (the github-issues repo), failure (gh failures to inject), rest (the calls with their JSON input).
 
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Rest = { args: string[]; input?: Any };
 
 const DEFAULTS: Record<string, { options: Record<string, unknown>; env: Record<string, string> }> = {
-  github: { options: { owner: 'o', project_number: 1, repo: 'o/r', token_env: 'BT' }, env: { BT: 'pat' } },
   'github-issues': { options: { repo: 'o/r' }, env: {} },
-  jira: { options: { base_url: 'https://x.atlassian.net', project_key: 'PROJ', email_env: 'JE', token_env: 'JT' }, env: { JE: 'a@b', JT: 'secret' } },
-  linear: { options: { team_key: 'LIN', token_env: 'LT' }, env: { LT: 'k' } },
-};
-
-// github Projects: `gh project ...` and `gh issue view`
-const ghAnswer = (w: World) => (c: string): unknown => {
-  const s = w.state;
-  if (c.includes('project view')) return { id: 'P1' };
-  if (c.includes('field-list')) return { fields: [{ id: 'F1', name: 'Status', options: [{ id: 'O1', name: 'Ready' }, { id: 'O2', name: 'In progress' }] }] };
-  if (c.includes('item-add')) return { id: 'I7' };
-  if (c.includes('item-list')) return { items: s.ghItems ?? [{ id: 'I7', status: s.status ?? 'Ready', content: { number: 7, title: 't', url: 'u' } }] };
-  if (c.includes('issue view')) return { body: '', createdAt: '', updatedAt: '', assignees: s.assignee ? [{ login: s.assignee }] : [], labels: [] };
-  return [];
-};
-
-// jira: REST over http
-const jIssue = (k: string) => ({ key: k, fields: { summary: k, status: { name: 'Ready' }, labels: [], subtasks: [] } });
-const jiraAnswer = (w: World) => (c: string): unknown => {
-  const s = w.state;
-  if (c.includes('/transitions') && c.startsWith('GET')) return { transitions: [{ id: '31', to: { name: 'In progress' } }] };
-  if (c.includes('/field')) return [{ id: 'cf1', name: 'Size' }, { id: 'cf2', name: 'Priority' }];
-  if (c.includes('/search/jql')) {
-    if (s.jiraPages === 'two') return c.includes('"nextPageToken":"t2"') ? { issues: [jIssue(s.jiraLast)], isLast: true } : { issues: [jIssue(s.jiraFirst)], nextPageToken: 't2' };
-    if (s.jiraPages === 'stuck') return { issues: [jIssue('PROJ-1')], nextPageToken: 't1' };
-    return { issues: [], isLast: true };
-  }
-  if (c.includes('/issue/PROJ-1')) return { key: 'PROJ-1', fields: { summary: 's', status: { name: s.status ?? 'Ready' }, labels: [], subtasks: [] } };
-  return {};
-};
-
-// linear: GraphQL over http
-const lIssue = (id: string, status: string, labels: Any[] = []) => ({ id, identifier: id, title: 't', url: 'u', createdAt: '', updatedAt: '', priority: 0, state: { name: status }, labels: { nodes: labels }, parent: null, children: { nodes: [] } });
-const linearAnswer = (w: World) => (c: string): unknown => {
-  const s = w.state;
-  const issue = { ...lIssue('LIN-9', s.status ?? 'Ready', s.linearLabels), id: 'U1' };
-  if (c.includes('teams(')) return { data: { teams: { nodes: [{ id: 'T1', states: { nodes: [{ id: 'S1', name: 'Ready' }, { id: 'S2', name: 'In progress' }] }, labels: { nodes: [] } }] } } };
-  if (c.includes('issueLabelCreate')) return { data: { issueLabelCreate: { issueLabel: { id: 'L1', name: 'milestone:Q3' } } } };
-  if (c.includes('issueUpdate')) return { data: { issueUpdate: { issue } } };
-  if (s.linearPages) {
-    const second = c.includes('"a":"c1"');
-    const info = { hasNextPage: !second, endCursor: 'c1' };
-    if (c.includes('comments(')) return { data: { issue: { comments: { nodes: [{ id: second ? 'k2' : 'k1', body: 'b', createdAt: second ? 'k2' : 'k1', url: 'u', user: null }], pageInfo: info } } } };
-    if (c.includes('issues(')) return { data: { issues: { nodes: [lIssue(second ? 'L2' : 'L1', 'Ready')], pageInfo: info } } };
-  }
-  if (s.linearStuck) return { data: { issues: { nodes: [{ id: 'x' }], pageInfo: { hasNextPage: true, endCursor: 'c1' } } } };
-  return { data: { issue } };
 };
 
 // github-issues: a fake REST repo behind `gh api -X <method> <url>`; every call is kept with its JSON input
@@ -162,20 +114,9 @@ const boardOf = (w: World): Board => {
   const s = w.state;
   if (s.board) return s.board;
   const name: string = s.adapter;
-  w.binding({ board: { adapter: name, fields: name === 'github-issues' ? { size: 'Size', release_version: 'Release Version' } : undefined } });
+  w.binding({ board: { adapter: name, fields: { size: 'Size', release_version: 'Release Version' } } });
   const ctx: AdapterContext = w.adapterContext(s.options);
-  if (name === 'github-issues') ctx.exec = issuesExec(w) as AdapterContext['exec'];
-  else {
-    const answer = { github: ghAnswer, jira: jiraAnswer, linear: linearAnswer }[name as 'github' | 'jira' | 'linear'](w);
-    ctx.exec = (cmd, args, o) => {
-      const c = [cmd, ...args].join(' ');
-      w.calls.push(c);
-      (s.tokens ??= []).push(o?.env?.GH_TOKEN);
-      const r = answer(c);
-      return typeof r === 'string' ? r : JSON.stringify(r ?? {});
-    };
-    ctx.http = (async (method: string, url: string, o?: { body?: unknown }) => { const c = `${method} ${url} ${o?.body ? JSON.stringify(o.body) : ''}`; w.calls.push(c); return answer(c) ?? {}; }) as AdapterContext['http'];
-  }
+  ctx.exec = issuesExec(w) as AdapterContext['exec'];
   ctx.env = w.env;
   return (s.board = createBoard(ctx));
 };
@@ -197,16 +138,6 @@ Given('the {word} board adapter', (w, name: string) => {
   Object.assign(w.env, d.env);
 });
 Given('the board adapter has no option {string}', (w, key: string) => { delete w.state.options[key]; });
-Given('the ticket is at {string}', (w, status: string) => { w.state.status = status; });
-Given('the ticket is assigned to {string}', (w, login: string) => { w.state.assignee = login; });
-Given('the GitHub Project holds issue {int} of {string} and issue {int} of {string}', (w, a: number, repoA: string, b: number, repoB: string) => {
-  w.state.ghItems = [{ id: 'A', status: 'Ready', content: { number: a, title: `of ${repoA}`, url: 'u', repository: repoA } }, { id: 'B', status: 'Done', content: { number: b, title: `of ${repoB}`, url: 'u', repository: repoB } }];
-});
-Given('Jira lists the issues {string} and {string} on two pages', (w, a: string, b: string) => { w.state.jiraPages = 'two'; w.state.jiraFirst = a; w.state.jiraLast = b; });
-Given('Jira answers every page with the same next page token', (w) => { w.state.jiraPages = 'stuck'; });
-Given('Linear holds the issues L1 and L2 and the comments k1 and k2 on two pages each', (w) => { w.state.linearPages = true; });
-Given('Linear answers every page with a next page and the same cursor', (w) => { w.state.linearStuck = true; });
-Given('the Linear issue carries the workspace label {string} with the id {string}', (w, name: string, id: string) => { w.state.linearLabels = [{ id, name }]; });
 
 Given('the repo has these issues:', (w, t: DataTable) => {
   (w.state.issues ??= []).push(...t.hashes().map((r) => iss(Number(r.number), csv(r.labels ?? ''), {
@@ -238,18 +169,13 @@ Given('gh fails {int} times with {string} before it answers', (w, times: number,
 
 // ---- When: one board verb ----
 When('the factory gets the ticket {string}', (w, id: string) => attempt(w, (b) => b.get(id)));
-When('the factory lists the tickets', (w) => attempt(w, (b) => b.list()));
 When('the factory lists the tickets in the status {string}', (w, status: string) => attempt(w, (b) => b.list({ status: [status] })));
-When('the factory searches the tickets for {string}', (w, text: string) => attempt(w, (b) => b.list({ search: text })));
-When('the factory moves the ticket {string} to {string}', (w, id: string, status: string) => attempt(w, (b) => b.move(id, status)));
 When('the factory moves the ticket {string} to {string} only from {string}', (w, id: string, status: string, from: string) => attempt(w, (b) => b.move(id, status, from)));
-When('the factory reads the comments of the ticket {string}', (w, id: string) => attempt(w, (b) => b.comments(id)));
 When('the factory reads the comments of the ticket {string} with the marker {string}', (w, id: string, marker: string) => attempt(w, (b) => b.comments(id, { marker })));
 When('the factory assigns the ticket {string} to {string}', (w, id: string, login: string) => attempt(w, (b) => b.assign(id, login)));
 When('the factory sets the milestone of the ticket {string} to {string}', (w, id: string, name: string) => attempt(w, (b) => b.milestone(id, name)));
 When('the factory sets the field {string} of the ticket {string} to {string}', (w, f: string, id: string, v: string) => attempt(w, (b) => b.set(id, f as LogicalField, v)));
 When('the factory clears the field {string} of the ticket {string}', (w, f: string, id: string) => attempt(w, (b) => b.set(id, f as LogicalField, null)));
-When('the factory adds the label {string} to the ticket {string}', (w, l: string, id: string) => attempt(w, (b) => b.label(id, 'add', l)));
 When('the factory closes the ticket {string} as {string}', (w, id: string, reason: string) => attempt(w, (b) => b.close(id, reason as 'completed' | 'not_planned')));
 When('the factory creates a ticket at {string} with the labels {string}, the milestone {string} and the parent {string}', (w, status: string, labels: string, milestone: string, parent: string) =>
   attempt(w, (b) => b.create({ title: 'n', body: 'b', status, labels: csv(labels), milestone, parent })));
@@ -257,12 +183,10 @@ When('the factory creates a ticket at {string} with the labels {string}, the mil
 // ---- Then: what the verb returned, what it called ----
 const items = (w: World) => w.state.result as Item[];
 Then('the verb fails matching {string}', (w, re: string) => assert.match(failed(w).message, new RegExp(re)));
-Then('the board adapter made {int} calls', (w, n: number) => assert.equal(w.calls.length, n, w.calls.join('\n')));
 Then('no call reaches the board', (w) => assert.equal(w.calls.length, 0, w.calls.join('\n')));
 Then('a call includes {string}', (w, text: string) => assert.ok(w.calls.some((c) => c.includes(text)), `no call includes ${text}:\n${w.calls.join('\n')}`));
 Then('no call includes {string}', (w, text: string) => assert.ok(!w.calls.some((c) => c.includes(text)), `a call includes ${text}:\n${w.calls.join('\n')}`));
 Then('the listed ticket ids are {string}', (w, ids: string) => assert.equal(items(w).map((i) => i.id).join(', '), ids));
-Then('the listed ticket titles are {string}', (w, titles: string) => assert.equal(items(w).map((i) => i.title).join(', '), titles));
 Then('the listed ticket {string} has the status {string}', (w, id: string, status: string) => assert.equal(items(w).find((i) => i.id === id)?.status, status));
 Then('the listed ticket {string} has the fields {string}', (w, id: string, fields: string) =>
   assert.equal(Object.entries(items(w).find((i) => i.id === id)!.fields).map(([k, v]) => `${k}=${v}`).join(', '), fields));
@@ -270,19 +194,6 @@ Then('the listed ticket {string} has the labels {string}', (w, id: string, label
 Then('the comment ids are {string}', (w, ids: string) => assert.equal((w.state.result as { id: string }[]).map((c) => c.id).sort().join(', '), ids));
 Then('the returned ticket has the status {string}', (w, status: string) => assert.equal((w.state.result as Item).status, status));
 Then('the returned ticket has the fields {string}', (w, fields: string) => assert.equal(Object.entries((w.state.result as Item).fields).map(([k, v]) => `${k}=${v}`).join(', '), fields));
-Then('the search was called {int} times', (w, n: number) => assert.equal(w.calls.filter((c) => c.includes('/search/jql')).length, n));
-Then('the JQL searches for the text {string} with the backslash and the quote escaped', (w, text: string) => {
-  const call = w.calls.find((c) => c.includes('/search/jql'))!;
-  assert.ok(JSON.parse(call.slice(call.indexOf('{'))).jql.includes(`text ~ "${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`));
-});
-Then('the Linear update keeps the label ids {string}', (w, ids: string) => {
-  const upd = JSON.parse(w.calls.find((c) => c.includes('labelIds'))!.replace(/^POST \S+ /, ''));
-  assert.equal(upd.variables.i.labelIds.join(', '), ids);
-});
-Then('the Linear queries read up to 250 labels, states and children', (w) => {
-  const q = w.calls.join('\n');
-  for (const part of ['states(first:250)', 'labels(first:250)', 'children(first:250)']) assert.ok(q.includes(part), `no query reads ${part}`);
-});
 
 // github-issues: the REST calls and the repo they left
 const rest = (w: World): Rest[] => w.state.rest ?? [];

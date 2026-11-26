@@ -62,7 +62,7 @@ src/
   ports.ts                   port interfaces and shared types
   binding.ts                 load and validate the binding
   install.ts                 init / validate / doctor
-  board/   github.ts jira.ts linear.ts local.ts index.ts
+  board/   github-issues.ts local.ts index.ts
   forge/   github.ts flow.ts util.ts index.ts
   vcs/     git.ts index.ts
   gates.ts                   repo gates shared by every CI template
@@ -91,7 +91,7 @@ Every verb prints JSON on stdout and exits 0 on success, 1 on a refused or faile
 on stderr), 2 on a usage error. Ids are strings everywhere (`"123"`, `"PROJ-45"`, `"LIN-9"`).
 Adapters that call an HTTP API retry 429 and 5xx responses with backoff (3 tries, honouring
 `Retry-After`). A POST retries only 429, since a 5xx may come after the write. The `gh` adapters
-(board `github` and `github-issues`, forge `github`) retry the same way on what `gh` prints: a read
+(board `github-issues`, forge `github`) retry the same way on what `gh` prints: a read
 (`gh api` GET, `view`, `list`) retries HTTP 429, a 403 that names a rate limit and HTTP 5xx; a write
 retries only 429 and rate limits. They wait the `Retry-After` hint `gh` prints, else 1s then 2s.
 Every verb takes only the flags it lists: an unknown flag, a value flag with no value and a
@@ -108,7 +108,7 @@ Every verb takes only the flags it lists: an unknown flag, a value flag with no 
 | `set <id> <field> <value>` / `set <id> <field> --clear` | Set or clear a logical field | `Item` |
 | `label <id> add\|remove <label>` | Add or remove a label | `Item` |
 | `assign <id> <user\|--none>` | Set or clear the assignee | `Item` |
-| `milestone <id> <name>` / `milestone <id> --clear` | Set or clear the milestone of an existing ticket, where `create --milestone` puts it (`github`: the issue's milestone; `github-issues`: the issue's milestone, which must exist; `jira`: `fixVersions`; `linear`: the `milestone:<name>` label; `local`: the item's `milestone`) | `Item` |
+| `milestone <id> <name>` / `milestone <id> --clear` | Set or clear the milestone of an existing ticket, where `create --milestone` puts it (`github-issues`: the issue's milestone, which must exist; `local`: the item's `milestone`) | `Item` |
 | `comment <id> --body-file <f> [--kind <kind> [--ref <value>]]` | Add a comment; `--kind` stamps the kind's marker as its first line, filled with `--ref` (section 11.1) | `{ id, url }` |
 | `comments <id> [--last <n>] [--kind <kind>] [--marker <text>] [--author <a>]… [--trusted]` | Comments, newest first; kind, first-line and author filters (`--last` counts after them). `--trusted` is `--author` for every entry of `owners.bots`, `owners.product`, `owners.factory` and the optional `owners.operator`, `owners.security`, `owners.compliance` | `Comment[]` |
 | `close <id> --reason completed\|not_planned` | Close (and move to Done or Cancelled) | `Item` |
@@ -117,17 +117,15 @@ Every verb takes only the flags it lists: an unknown flag, a value flag with no 
 | `holds` | The held tickets. A reply is a comment by any owner role, never an `owners.bots`-only account, after the last ask; an account in both lists counts when its comment carries no factory marker | `[{ id, kind, askedAt, replied: boolean, reply? }]` |
 | `release <id>` | Removes `board.labels.human`; the ticket keeps its Status | `Item` |
 
-`Item = { id, title, url, status, kind?, labels[], fields: Record<logicalField,string>, milestone?, parent?, children[], assignees[], createdAt, updatedAt, statusChangedAt? }`. `statusChangedAt` is when the ticket entered its status; `ledger measures` reads it for tickets at Done. `github-issues` sets it to the issue's `closed_at` for a closed issue at Done and leaves it unset otherwise; `github` (Projects) never sets it.
+`Item = { id, title, url, status, kind?, labels[], fields: Record<logicalField,string>, milestone?, parent?, children[], assignees[], createdAt, updatedAt, statusChangedAt? }`. `statusChangedAt` is when the ticket entered its status; `ledger measures` reads it for tickets at Done. `github-issues` sets it to the issue's `closed_at` for a closed issue at Done and leaves it unset otherwise.
 Logical fields: `size`, `priority`, `lane`, `shipped`, `release_version`. The binding maps each to
-the tracker's field name (Jira custom field, Linear label group or custom field, GitHub Projects
-field, local JSON key).
+the tracker's field name (a `github-issues` label prefix or org issue field, a local JSON key).
 
-Adapters: `github` (Projects v2 via `gh`, for CI runtimes), `github-issues` (the repo's issues through
+Adapters: `github-issues` (the default; the repo's issues through
 `gh api repos/{owner}/{repo}/…` REST only, so a Claude cloud session reaches it: Status and each logical
 field are labels `<name>:<value>`, `status:` and the lower-cased field name, e.g. `status:Ready`, `size:S`;
 an issue without a status label is off the board; `create` and every label write create missing labels;
-`close` also closes the issue with its state reason; option `repo`), `jira` (Cloud REST v3, transitions for Status), `linear`
-(GraphQL API, workflow states for Status), `local` (`.agents/board.json`, for tests and solo
+`close` also closes the issue with its state reason; option `repo`), `local` (`.agents/board.json`, for tests and solo
 projects). Credentials only from env vars the binding names; never from a file in the repo.
 
 ### 3.2 Forge (`agentic-sdlc forge <verb>`): the change request (CR) host, GitHub
@@ -587,13 +585,10 @@ repo and warns when both variables name the same runner. Every job runs `bash`.
 
 **Claude cloud session.** A Claude cloud scheduled task (formerly routine; "routine" is the short name from here on
 and in file names; `templates/runner/claude-routine.md`) is a full runtime on a subscription. Its GitHub proxy
-refuses GraphQL and every `orgs/*` and `users/*` route; REST works under `repos/{owner}/{repo}/...`. So it runs a
-`github-issues`, `jira` or `linear` board, never `github` (Projects v2): `doctor` in a cloud session
-(`CLAUDE_CODE_REMOTE=true`) fails a `github` board, which runs from GitHub Actions
-(`templates/runner/github-actions-claude.yml`) instead. A `github-issues` board can store status and fields as org
+refuses GraphQL and every `orgs/*` and `users/*` route; REST works under `repos/{owner}/{repo}/...`, which is all the
+`github-issues` board uses. It can store status and fields as org
 issue fields (`board.options.field_ids`); a GitHub Project shows them as columns, so a Project view stays available
-while the cycle runs in the cloud. Issue fields exist only in organization repos. Jira and Linear need their host
-in the environment's allowed domains and the token as a network secret. A cloud session loads no repo plugin, so it
+while the cycle runs in the cloud. Issue fields exist only in organization repos. A cloud session loads no repo plugin, so it
 gets the skills from `.claude/skills` (`init --harness claude --no-plugin`). Docker is available (Docker, dockerd,
 docker compose installed). A foreground command waits 2 minutes by default, up to 10, then can continue in the
 background for up to 30 more minutes; the environment variables `BASH_DEFAULT_TIMEOUT_MS` and
@@ -669,11 +664,8 @@ with `Access:` and posts nothing. The `sdlc-reviewer` agent cannot write a file,
 **One repo or many.** A binding belongs to one repo; each repo has its own install, cycle, heartbeat
 ticket and pinned version.
 
-- **One repo** (`board.scope` unset): the board serves one repo: a `github-issues` board, a Jira
-  project or Linear team of its own, a `local` board.
-- **Many repos, one board**: a GitHub Project needs no scope, since `board.options.repo` keeps one
-  repo's issues. Any other shared board (one Jira project, one Linear team, one hub repo's
-  `github-issues`) sets `board.scope` in each repo's binding. `board list` then returns only tickets
+- **One repo** (`board.scope` unset): the board serves one repo: its own `github-issues` board or a `local` board.
+- **Many repos, one board**: one hub repo's `github-issues` board; each repo's binding sets `board.scope`. `board list` then returns only tickets
   with `board.scope.label` (`repo:<name>`), and `board create` adds that label. Exactly one repo sets
   `home: true` and lists every label in `repos`: it also lists the tickets with no `repo:` label, and
   `plan/triage` gives each one the label of the repo whose code it is about. Grooming, shaping and

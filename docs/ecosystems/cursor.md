@@ -8,7 +8,7 @@
 
 ## Install
 ```bash
-npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --harness cursor --profile individual --board github --forge github --vcs git
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --harness cursor --profile individual --board github-issues --forge github --vcs git
 ```
 Files it writes:
 - `.agents/cli.json` (the CLI pin) and `.agents/bin/agentic-sdlc` (the launcher), `.agents/binding.yml`, the skills in `.agents/skills/` (Cursor reads project `.agents/skills/` and `.cursor/skills/`: [docs](https://cursor.com/docs/skills)), gate templates, and an `AGENTS.md` pointer (Cursor supports root and nested `AGENTS.md`: [docs](https://cursor.com/docs/context/rules)).

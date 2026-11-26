@@ -88,7 +88,7 @@ Given('the installed binding is complete and runs a bot that is assigned work', 
 });
 Given('the installed binding is the shipped template on a local board with the heartbeat ticket {string}', (w, ticket: string) => {
   w.write('.agents/binding.yml', readFileSync(join(REPO, 'templates/binding.yml'), 'utf8')
-    .replace(/^(\s*adapter:\s*)github(\s*#.*)?$/m, '$1local').replace(/^(\s*ticket:\s*)""/m, `$1"${ticket}"`));
+    .replace(/^(\s*adapter:\s*)github-issues(\s*#.*)?$/m, '$1local').replace(/^(\s*ticket:\s*)""/m, `$1"${ticket}"`));
 });
 Given('I note the installed file {string}', (w, rel: string) => { (w.state.noted ??= {})[rel] = w.read(rel); });
 
@@ -233,7 +233,7 @@ const fakeHttp = (d: Doctor) => async (method: string, url: string, o?: Obj) => 
 };
 const ctxOf = (w: World) => { const d = doc(w); return { root: w.root, binding: {} as any, options: {}, env: d.env, exec: fakeExec(d), http: fakeHttp(d) }; }; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** The binding of the scenario as the doctor checks read it: a GitHub forge on trunk main, plus what the scenario set. */
-const bound = (w: World): any => merge({ forge: { adapter: 'github', options: {} }, board: { adapter: 'github' }, vcs: { trunk: 'main' }, product: {} }, w.bindingPatch); // eslint-disable-line @typescript-eslint/no-explicit-any
+const bound = (w: World): any => merge({ forge: { adapter: 'github', options: {} }, board: { adapter: 'github-issues' }, vcs: { trunk: 'main' }, product: {} }, w.bindingPatch); // eslint-disable-line @typescript-eslint/no-explicit-any
 const answer = (w: World, re: RegExp, text: string | Error) => doc(w).rules.push([re, text]);
 const shown = (w: World, ...ls: (string | undefined)[]) => { doc(w).lines = ls.filter((l): l is string => l !== undefined); };
 

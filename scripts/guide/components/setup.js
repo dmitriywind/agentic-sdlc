@@ -15,16 +15,13 @@ VIZ.setup = (el) => {
       ['one', 'One repo', 'Pick it when one repo holds the product. Limits: none; nothing extra in the binding.'],
       ['many', 'Many repos, one board', 'Pick it when several repos share one backlog. Limits: each repo scopes the board; one home repo triages new work.']]],
     ['runs', 'Where the cycle runs', 'Picks the runner template. The gates run in CI whatever you pick.', [
-      ['claude', 'Claude cloud routine', 'Pick it when you want no machine of your own, on subscription usage. Limits: no GitHub Project, no Docker (verify runs in CI), at most hourly.'],
+      ['claude', 'Claude cloud routine', 'Pick it when you want no machine of your own, on subscription usage. Limits: no Docker (verify runs in CI), at most hourly.'],
       ['vendor', 'Codex or Cursor cloud task', 'Pick it when your agent is Codex or Cursor and you want no machine of your own. Limits: the vendor\'s schedule and network rules.'],
-      ['actions', 'GitHub Actions', 'Pick it when you want any board, a GitHub Project included. Limits: a subscription token or an API key in a repo secret.'],
+      ['actions', 'GitHub Actions', 'Pick it when you want the cycle in your repo\'s CI. Limits: a subscription token or an API key in a repo secret.'],
       ['local', 'Your own machine', 'Pick it when the code, tools or network are reachable only from your machine. Limits: no sandbox; the machine must be on.'],
       ['managed', 'Managed agents', 'Pick it when stages run as hosted agents. Limits: API billing.']]],
     ['board', 'Where tickets live', 'Sets board.adapter and its options. The process statuses are the same on every board.', [
       ['issues', 'GitHub issues', 'Pick it when the repo\'s issues are enough. Limits: status and fields are labels.'],
-      ['project', 'GitHub Project', 'Pick it when you want a Project board with fields and views. Limits: a token with project scope.'],
-      ['jira', 'Jira', 'Pick it when the team already plans in Jira. Limits: an email and an API token in env vars.'],
-      ['linear', 'Linear', 'Pick it when the team already plans in Linear. Limits: an API key in an env var.'],
       ['local', 'A local file', 'Pick it to try the factory. Limits: one file, .agents/board.json; no scheduler, no shared board.']]],
     ['agent', 'Which agent', 'Sets --harness: which agent\'s files init writes.', [
       ['claude', 'Claude Code', 'Pick it when you run Claude Code. The plugin carries the skills, except on a Claude cloud routine.'],
@@ -149,7 +146,7 @@ VIZ.setup = (el) => {
   function output(prof) {
     const p = pick;
     const harness = { claude: 'claude', codex: 'codex', cursor: 'cursor', other: 'generic' }[p.agent];
-    const board = { issues: 'github-issues', project: 'github', jira: 'jira', linear: 'linear', local: 'local' }[p.board];
+    const board = { issues: 'github-issues', local: 'local' }[p.board];
     const cmd = ['npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init', '--profile ' + prof, '--harness ' + harness, '--board ' + board, '--forge github']
       .concat(p.agent === 'claude' && p.runs === 'claude' ? ['--no-plugin'] : []);
 
@@ -169,7 +166,6 @@ VIZ.setup = (el) => {
       docs: ['[production]', 'continuous', '[visual, manual]'],
     }[p.ship];
     const y = ['profile: ' + prof, 'owners:', '  product: ' + owners[0], '  factory: ' + owners[1], '  bots: [' + owners[2] + ']'];
-    if (p.board === 'jira' || p.board === 'linear') y.push('  # names differ? product: { board: <account id>, forge: <login> }');
     // forge: token_env only where gh has no login of its own, or to keep the implementer off commit statuses.
     const forgeToken = p.ids === 'two' || ['vendor', 'actions', 'managed'].includes(p.runs);
     y.push('forge:', '  adapter: github', '  options:', '    repo: your-org/your-repo');
@@ -180,13 +176,10 @@ VIZ.setup = (el) => {
     y.push('board:', '  adapter: ' + board);
     const bo = {
       issues: ['repo: your-org/your-repo'],
-      project: ['owner: your-org', 'project_number: 1', 'repo: your-org/your-repo' + (shared ? '   # each repo sets its own' : ''), 'token_env: AGENTIC_BOARD_TOKEN'],
-      jira: ['base_url: https://your-site.atlassian.net', 'project_key: PROJ', 'email_env: JIRA_EMAIL', 'token_env: JIRA_TOKEN'],
-      linear: ['team_key: ENG', 'token_env: LINEAR_API_KEY'],
       local: [],
     }[p.board];
     if (bo.length) y.push('  options:', ...bo.map((l) => '    ' + l)); else y.push('  options: {}');
-    if (shared && p.board !== 'project' && p.board !== 'local') y.push('  scope:', '    label: repo:your-repo', '    home: true   # only in the home repo', '    repos: [repo:your-repo, repo:other-repo]   # only in the home repo');
+    if (shared && p.board !== 'local') y.push('  scope:', '    label: repo:your-repo', '    home: true   # only in the home repo', '    repos: [repo:your-repo, repo:other-repo]   # only in the home repo');
     y.push('  env_labels: [' + ship[0].slice(1, -1).split(', ').map((e) => 'env:' + e).join(', ') + ']   # one per product.environments');
     y.push('product:', '  environments: ' + ship[0], '  delivery: ' + ship[1], '  proofs: ' + ship[2]);
     y.push('executors:', '  default:', '    kind: harness', '    sandbox: ' + (p.runs === 'local' ? 'local' : prof === 'organization' ? 'container' : 'cloud'));
@@ -197,8 +190,6 @@ VIZ.setup = (el) => {
 
     const warn = [], note = [], ok = [];
     note.push(...moved);
-    if (p.runs === 'claude' && p.board === 'project') warn.push('A Claude cloud routine cannot reach a GitHub Project: its GitHub proxy refuses GraphQL. Pick GitHub issues, Jira or Linear, or run the cycle in GitHub Actions.');
-    if (p.runs === 'claude' && (p.board === 'jira' || p.board === 'linear')) note.push('From a Claude cloud routine, ' + label('board', p.board) + ' needs its host in the environment\'s allowed domains, its token as a network secret, and NODE_USE_ENV_PROXY=1.');
     if (p.board === 'local' && p.runs !== 'local') warn.push('The local board is a file for trying the factory, not for a scheduler or many repos. Pick a shared board before you schedule the cycle.');
     if (p.runs === 'local') note.push('On your own machine: run the cycle in a separate clone, with AGENTIC_SDLC_UNATTENDED=1 and AGENTIC_SDLC_LOCAL=1 in the scheduler\'s environment. Agents run with your account and files.');
     if (p.runs === 'actions' && (p.agent === 'cursor' || p.agent === 'other')) note.push('The Actions template runs Claude Code. Replace its agent step with ' + (p.agent === 'cursor' ? 'Cursor\'s CLI' : 'your agent') + '.');

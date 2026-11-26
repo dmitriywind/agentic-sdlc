@@ -1,7 +1,7 @@
 # Source: src/board/github-issues.ts; src/binding.ts "validateBinding" (field_ids); references/architecture.md "Board port"
 @board:github-issues
 Feature: The github-issues board
-  A project with no GitHub Project keeps Status and fields as labels on the repo's issues ("status:Ready", "size:S").
+  The board keeps Status and fields as labels on the repo's issues ("status:Ready", "size:S").
   The adapter speaks `gh api` under `repos/<owner>/<repo>/` only: never GraphQL, `gh issue` or `gh project`.
 
   Rule: A ticket is an issue with a status label

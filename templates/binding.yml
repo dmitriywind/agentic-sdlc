@@ -9,9 +9,9 @@ profile: individual # individual | individual-api | organization
 owners:
   product: your-product-owner   # rules the product: narrative, priorities, P0, releases, production approval
   factory: your-factory-owner   # rules the factory: skills, binding, gates, guardrail learning proposals
-  bots: [your-factory-bot]      # accounts the factory runs as; only their heartbeats and specs are trusted (github login, jira accountId, linear user id, local: local)
-  # When the board and the forge name a person differently (Jira or Linear with GitHub), give both:
-  #   product: { board: 5b10ac8d82e05b22cc7d4ef5, forge: ann }   bots: [{ board: 712020:abc, forge: factory-bot[bot] }]
+  bots: [your-factory-bot]      # accounts the factory runs as; only their heartbeats and specs are trusted (github login, local: local)
+  # When the board and the forge name a person differently, give both:
+  #   product: { board: ann-board, forge: ann }   bots: [{ board: local, forge: factory-bot[bot] }]
   # product and factory take one entry or a list of entries; any member counts as the owner (an approval by
   # any factory owner passes guardrail). The first entry is the primary: the one an ask or request is addressed to.
   #   factory: [alice, bob]
@@ -21,16 +21,12 @@ owners:
   #   compliance: [grc-lead]    # release evidence gaps
 
 board:
-  adapter: github               # github | github-issues | jira | linear | local
+  adapter: github-issues        # github-issues | local
   options:                      # adapter-specific; credentials only as env var names; validate rejects unknown keys
-    # github:  { owner: my-org, project_number: 1, repo: my-org/my-repo, token_env: AGENTIC_BOARD_TOKEN }
-    #          token_env (optional): env var holding a PAT with project scope, passed to gh as GH_TOKEN; Projects v2 needs it
     # github-issues: { repo: my-org/my-repo }   # the repo's issues, REST only: the board a Claude cloud session reaches.
     #          Status and the fields are labels status:<s> and <field name, lower case>:<value> (size:S, release version:1.2)
     #          field_ids (optional): { status: 101, size: 102 } maps the status and any board.fields key to an org issue field id
     #          (gh api orgs/<org>/issue-fields); a mapped one is an issue field, not a label. Org repos only; docs/guide/8-install.md
-    # jira:    { base_url: https://example.atlassian.net, project_key: PROJ, email_env: JIRA_EMAIL, token_env: JIRA_TOKEN }
-    # linear:  { team_key: ENG, token_env: LINEAR_API_KEY }
     # local:   {}                 # always .agents/board.json
     {}
   # mcp:                        # optional: drive the board through an MCP server instead of the CLI
@@ -53,7 +49,6 @@ board:
   #   label: repo:app-a         # this repo's tickets carry it; board list shows only them; board create adds it
   #   home: true                # in exactly one repo: it also lists tickets with no repo: label and triage gives each one a label
   #   repos: [repo:app-a, repo:app-b] # home only: every repo label triage may give
-  # A GitHub Project needs no scope: board.options.repo already keeps one repo's issues.
 
 forge:
   adapter: github               # github
@@ -178,9 +173,7 @@ cycle:                          # Run one cycle (sdlc skill)
 heartbeat:
   ticket: ""                    # id of the ticket that holds heartbeat comments; keep it off every route. init sets it on a local
                                 # board (status Cancelled). github-issues: create an issue with no `status:` label (the board
-                                # lists only labelled issues; comments still work). github (Projects): create the issue and
-                                # remove it from the project, or set its status to Cancelled. jira, linear: create the ticket
-                                # in a Cancelled status. Put its id here
+                                # lists only labelled issues; comments still work). Put its id here
 
 learning:                       # the self-improvement loop
   enabled: false                # learn/judge and learn/improve run only when true; set it with agent_command

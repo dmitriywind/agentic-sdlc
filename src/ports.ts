@@ -233,7 +233,7 @@ export interface Binding {
    * compliance are optional roles of the same shape. */
   owners: { product: WhoList; factory: WhoList; operator?: WhoList; security?: WhoList; compliance?: WhoList; bots: Who[] };
   board: {
-    adapter: 'github' | 'github-issues' | 'jira' | 'linear' | 'local';
+    adapter: 'github-issues' | 'local';
     options: Record<string, unknown>;
     mcp?: Record<string, unknown>;
     statuses: string[];

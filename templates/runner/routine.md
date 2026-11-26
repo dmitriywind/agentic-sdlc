@@ -8,16 +8,14 @@ Two identities (required for organization): every scheduler runs two prompts, on
 - the review, started when the cycle ends: `review-prompt.md` (installed at `.agents/review-prompt.md`), the only run holding `AGENTIC_REVIEW_TOKEN` and `AGENTIC_SDLC_ROLE=review`.
 
 The cycle never holds the review token, so an implementer cannot approve its own CR. Every run sets `AGENTIC_SDLC_UNATTENDED=1`.
-A `github` (Projects v2) board needs a runtime that can reach GitHub Projects: GitHub Actions works, on a GitHub-hosted or a
-self-hosted runner (`AGENTIC_RUNS_ON`; no billed minutes). A Claude cloud routine cannot reach it; it runs a
-`github-issues`, `jira` or `linear` board (`claude-routine.md`).
+The `github-issues` board uses GitHub REST only, so every runtime below reaches it, a Claude cloud routine included.
 Setup step everywhere (a Claude cloud environment uses its own setup script, see `claude-routine.md`): `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_API_KEY` under the individual and individual-api profiles). Gates run in the forge's CI whatever the runtime.
 
 | Runtime | Template | Profile |
 |---|---|---|
 | GitHub Actions + Claude Code CLI | `github-actions-claude.yml` | individual, individual-api (OAuth token) or organization (API key) |
 | GitHub Actions + Codex CLI | `github-actions-codex.yml` | individual-api or organization |
-| Claude cloud scheduled task (routine) | `claude-routine.md` (`github-issues`, `jira` or `linear` board) | individual, individual-api |
+| Claude cloud scheduled task (routine) | `claude-routine.md` | individual, individual-api |
 | Claude Managed Agents scheduled deployment | `claude-managed-deployment.json` (below) | individual-api or organization |
 | Cursor automation | `cursor-automation.md` | any |
 | Your own machine (cron, launchd, Task Scheduler, a Claude Desktop scheduled task) | `local.md` (no sandbox: opt in with `sandbox: local` and `AGENTIC_SDLC_LOCAL=1`) | any |

@@ -18,7 +18,7 @@ export const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, s
   mcp: [() => import('./mcp.ts'), true, 'serve the port verbs as MCP tools over stdio; --allow approve,status'],
 };
 
-const INIT_FLAGS = '[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github|github-issues|jira|linear|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]';
+const INIT_FLAGS = '[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github-issues|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]';
 
 /** The package version: package.json sits one folder above src/ and dist/. */
 const version = () => {

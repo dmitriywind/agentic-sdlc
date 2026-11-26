@@ -9,13 +9,13 @@ Contract: [`references/architecture.md`](../../references/architecture.md) secti
 |---|---|---|
 | Shell | A shell and Node | `.agents/bin/agentic-sdlc <group> <verb>` |
 | MCP only | MCP, no shell | `agentic-sdlc mcp` exposes every port verb as an MCP tool |
-| Vendor MCP tools only | A chat bot with a GitHub, Jira or Linear connector | The vendor tools that `board.mcp` maps to the port verbs |
+| Vendor MCP tools only | A chat bot with a GitHub connector | The vendor tools that `board.mcp` maps to the port verbs |
 
 Gates always run in the forge's CI, so trunk guarantees never depend on the runtime.
 
 ## Install
 ```bash
-npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --harness generic --profile individual --board github --forge github --vcs git
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --harness generic --profile individual --board github-issues --forge github --vcs git
 ```
 It writes the CLI pin `.agents/cli.json`, the launcher `.agents/bin/agentic-sdlc` (everything runs through it; it installs the pinned CLI on first use), `.agents/binding.yml`, the skills in `.agents/skills/` (each named `sdlc-<skill>`; `sdlc` stays `sdlc`), the gate templates and an `AGENTS.md` pointer.
 Point your tool at `.agents/skills/sdlc/SKILL.md` if it does not scan that path. The init log lists the files; the `--harness` flag decides.
@@ -50,7 +50,7 @@ The server is stdio only; a bot that cannot spawn a process uses route 3.
 Map the vendor's tools to the board verbs in the binding:
 ```yaml
 board:
-  adapter: jira
+  adapter: github-issues
   mcp:
     server: my-board-connector
     tools: { list: <tool>, get: <tool>, update: <tool> }

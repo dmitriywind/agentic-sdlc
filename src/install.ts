@@ -324,7 +324,7 @@ function originRepo(root: string): string | undefined {
 
 async function init(root: string, argv: string[], log: string[]) {
   const f = flagsOf(argv);
-  const board = f.board ?? 'github', forge = f.forge ?? 'github', vcs = f.vcs ?? 'git';
+  const board = f.board ?? 'github-issues', forge = f.forge ?? 'github', vcs = f.vcs ?? 'git';
   // An upgrade without --harness reuses what the install has: tier agents or .claude/skills mean Claude Code.
   const prior = f.upgrade === 'true' && f.harness === undefined && (existsSync(join(root, '.claude/skills')) || existsSync(join(root, '.claude/agents')) && readdirSync(join(root, '.claude/agents')).some((n) => /^sdlc-.*\.md$/.test(n)));
   const harness = f.harness ?? (prior ? 'claude' : 'generic');
@@ -563,12 +563,6 @@ export function selfHostedRunner(b: any, ctx: { exec: (c: string, a: string[], o
   return `ok   runner: self-hosted, code on ${code || 'ubuntu-latest'}, secrets on ${trusted || 'ubuntu-latest'}`;
 }
 
-/** A Claude cloud session reaches only `repos/{owner}/{repo}/...` REST: no GraphQL, so no GitHub Projects. */
-export function cloudBoard(b: any, env: Record<string, string | undefined> = {}): string | undefined {
-  if (b.board?.adapter !== 'github' || env.CLAUDE_CODE_REMOTE !== 'true') return undefined;
-  return 'fail board: a Claude cloud session cannot reach GitHub Projects (board adapter github); use github-issues, jira or linear, or run the cycle from GitHub Actions (templates/runner/github-actions-claude.yml)';
-}
-
 /** A github-issues board with field_ids: every mapped id is an org issue field and the status field has every board status. */
 export function issueFields(b: any, ctx: { exec: (c: string, a: string[], o?: any) => string; env: Record<string, string | undefined> }): string[] {
   const ids: Record<string, number> | undefined = b.board?.adapter === 'github-issues' ? b.board.options?.field_ids : undefined;
@@ -682,8 +676,6 @@ export const cli: PortCli = async (argv, ctx) => {
         ['vcs.head', () => createVcs({ ...c, options: binding.vcs.options ?? {} }).head()],
       ];
       let bad = 0;
-      const cb = cloudBoard(binding, ctx.env);
-      if (cb) { out(cb); bad++; probes.shift(); } // the board.list probe would only repeat it
       for (const l of issueFields(binding, ctx)) { out(l); if (l.startsWith('fail')) bad++; }
       trunkProtection(binding, ctx).forEach(out);
       const it = implementerToken(binding, ctx);

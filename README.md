@@ -27,8 +27,8 @@ everything runs through the launcher, which installs the pinned CLI on first use
 `package.json` or `.npmrc`, and a product that is not a Node project needs neither. To upgrade, run the new
 package's `init --upgrade`: it rewrites `.agents/cli.json` and the templates in one factory change. npm 12 refuses
 Git dependencies without `--allow-git`; older npm versions that do not know the flag can drop it. The CLI installs
-from Git only. Warning: the npm package `agentic-sdlc` is a different project; do not install it. Before `doctor` passes, set `heartbeat.ticket` in `.agents/binding.yml` (and the board options for Jira,
-Linear or a GitHub Project; `init` reads the repo from `git remote origin`). `.agents/bin/agentic-sdlc` lists
+from Git only. Warning: the npm package `agentic-sdlc` is a different project; do not install it. Before `doctor` passes, set `heartbeat.ticket` in `.agents/binding.yml` (`init` reads
+the board's and the forge's repo from `git remote origin`). `.agents/bin/agentic-sdlc` lists
 every group and `.agents/bin/agentic-sdlc <group> --help` its verbs; `.agents/bin/agentic-sdlc --version` prints the version. The board, forge, vcs and gate verbs print JSON; `init`, `validate` and `doctor` print text. Exit 0 is
 success, 1 is a refused or failed action, 2 is a usage error.
 

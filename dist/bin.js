@@ -48,9 +48,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/yaml/dist/nodes/identity.js
+// ../../../node_modules/yaml/dist/nodes/identity.js
 var require_identity = __commonJS({
-  "node_modules/yaml/dist/nodes/identity.js"(exports) {
+  "../../../node_modules/yaml/dist/nodes/identity.js"(exports) {
     "use strict";
     var ALIAS = /* @__PURE__ */ Symbol.for("yaml.alias");
     var DOC = /* @__PURE__ */ Symbol.for("yaml.document");
@@ -105,9 +105,9 @@ var require_identity = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/visit.js
+// ../../../node_modules/yaml/dist/visit.js
 var require_visit = __commonJS({
-  "node_modules/yaml/dist/visit.js"(exports) {
+  "../../../node_modules/yaml/dist/visit.js"(exports) {
     "use strict";
     var identity = require_identity();
     var BREAK = /* @__PURE__ */ Symbol("break visit");
@@ -263,9 +263,9 @@ var require_visit = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/doc/directives.js
+// ../../../node_modules/yaml/dist/doc/directives.js
 var require_directives = __commonJS({
-  "node_modules/yaml/dist/doc/directives.js"(exports) {
+  "../../../node_modules/yaml/dist/doc/directives.js"(exports) {
     "use strict";
     var identity = require_identity();
     var visit = require_visit();
@@ -434,9 +434,9 @@ var require_directives = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/doc/anchors.js
+// ../../../node_modules/yaml/dist/doc/anchors.js
 var require_anchors = __commonJS({
-  "node_modules/yaml/dist/doc/anchors.js"(exports) {
+  "../../../node_modules/yaml/dist/doc/anchors.js"(exports) {
     "use strict";
     var identity = require_identity();
     var visit = require_visit();
@@ -504,9 +504,9 @@ var require_anchors = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/doc/applyReviver.js
+// ../../../node_modules/yaml/dist/doc/applyReviver.js
 var require_applyReviver = __commonJS({
-  "node_modules/yaml/dist/doc/applyReviver.js"(exports) {
+  "../../../node_modules/yaml/dist/doc/applyReviver.js"(exports) {
     "use strict";
     function applyReviver(reviver, obj, key, val) {
       if (val && typeof val === "object") {
@@ -554,9 +554,9 @@ var require_applyReviver = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/nodes/toJS.js
+// ../../../node_modules/yaml/dist/nodes/toJS.js
 var require_toJS = __commonJS({
-  "node_modules/yaml/dist/nodes/toJS.js"(exports) {
+  "../../../node_modules/yaml/dist/nodes/toJS.js"(exports) {
     "use strict";
     var identity = require_identity();
     function toJS(value, arg, ctx) {
@@ -584,9 +584,9 @@ var require_toJS = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/nodes/Node.js
+// ../../../node_modules/yaml/dist/nodes/Node.js
 var require_Node = __commonJS({
-  "node_modules/yaml/dist/nodes/Node.js"(exports) {
+  "../../../node_modules/yaml/dist/nodes/Node.js"(exports) {
     "use strict";
     var applyReviver = require_applyReviver();
     var identity = require_identity();
@@ -625,9 +625,9 @@ var require_Node = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/nodes/Alias.js
+// ../../../node_modules/yaml/dist/nodes/Alias.js
 var require_Alias = __commonJS({
-  "node_modules/yaml/dist/nodes/Alias.js"(exports) {
+  "../../../node_modules/yaml/dist/nodes/Alias.js"(exports) {
     "use strict";
     var anchors = require_anchors();
     var visit = require_visit();
@@ -743,9 +743,9 @@ var require_Alias = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/nodes/Scalar.js
+// ../../../node_modules/yaml/dist/nodes/Scalar.js
 var require_Scalar = __commonJS({
-  "node_modules/yaml/dist/nodes/Scalar.js"(exports) {
+  "../../../node_modules/yaml/dist/nodes/Scalar.js"(exports) {
     "use strict";
     var identity = require_identity();
     var Node = require_Node();
@@ -773,9 +773,9 @@ var require_Scalar = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/doc/createNode.js
+// ../../../node_modules/yaml/dist/doc/createNode.js
 var require_createNode = __commonJS({
-  "node_modules/yaml/dist/doc/createNode.js"(exports) {
+  "../../../node_modules/yaml/dist/doc/createNode.js"(exports) {
     "use strict";
     var Alias = require_Alias();
     var identity = require_identity();
@@ -848,9 +848,9 @@ var require_createNode = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/nodes/Collection.js
+// ../../../node_modules/yaml/dist/nodes/Collection.js
 var require_Collection = __commonJS({
-  "node_modules/yaml/dist/nodes/Collection.js"(exports) {
+  "../../../node_modules/yaml/dist/nodes/Collection.js"(exports) {
     "use strict";
     var createNode = require_createNode();
     var identity = require_identity();
@@ -991,9 +991,9 @@ var require_Collection = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/stringify/stringifyComment.js
+// ../../../node_modules/yaml/dist/stringify/stringifyComment.js
 var require_stringifyComment = __commonJS({
-  "node_modules/yaml/dist/stringify/stringifyComment.js"(exports) {
+  "../../../node_modules/yaml/dist/stringify/stringifyComment.js"(exports) {
     "use strict";
     var stringifyComment = (str) => str.replace(/^(?!$)(?: $)?/gm, "#");
     function indentComment(comment, indent) {
@@ -1008,9 +1008,9 @@ var require_stringifyComment = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/stringify/foldFlowLines.js
+// ../../../node_modules/yaml/dist/stringify/foldFlowLines.js
 var require_foldFlowLines = __commonJS({
-  "node_modules/yaml/dist/stringify/foldFlowLines.js"(exports) {
+  "../../../node_modules/yaml/dist/stringify/foldFlowLines.js"(exports) {
     "use strict";
     var FOLD_FLOW = "flow";
     var FOLD_BLOCK = "block";
@@ -1144,9 +1144,9 @@ ${indent}${text.slice(fold + 1, end2)}`;
   }
 });
 
-// node_modules/yaml/dist/stringify/stringifyString.js
+// ../../../node_modules/yaml/dist/stringify/stringifyString.js
 var require_stringifyString = __commonJS({
-  "node_modules/yaml/dist/stringify/stringifyString.js"(exports) {
+  "../../../node_modules/yaml/dist/stringify/stringifyString.js"(exports) {
     "use strict";
     var Scalar = require_Scalar();
     var foldFlowLines = require_foldFlowLines();
@@ -1427,9 +1427,9 @@ ${indent}`);
   }
 });
 
-// node_modules/yaml/dist/stringify/stringify.js
+// ../../../node_modules/yaml/dist/stringify/stringify.js
 var require_stringify = __commonJS({
-  "node_modules/yaml/dist/stringify/stringify.js"(exports) {
+  "../../../node_modules/yaml/dist/stringify/stringify.js"(exports) {
     "use strict";
     var anchors = require_anchors();
     var identity = require_identity();
@@ -1551,9 +1551,9 @@ ${ctx.indent}${str}`;
   }
 });
 
-// node_modules/yaml/dist/stringify/stringifyPair.js
+// ../../../node_modules/yaml/dist/stringify/stringifyPair.js
 var require_stringifyPair = __commonJS({
-  "node_modules/yaml/dist/stringify/stringifyPair.js"(exports) {
+  "../../../node_modules/yaml/dist/stringify/stringifyPair.js"(exports) {
     "use strict";
     var identity = require_identity();
     var Scalar = require_Scalar();
@@ -1684,9 +1684,9 @@ ${ctx.indent}`;
   }
 });
 
-// node_modules/yaml/dist/log.js
+// ../../../node_modules/yaml/dist/log.js
 var require_log = __commonJS({
-  "node_modules/yaml/dist/log.js"(exports) {
+  "../../../node_modules/yaml/dist/log.js"(exports) {
     "use strict";
     var node_process = __require("process");
     function debug(logLevel, ...messages) {
@@ -1706,9 +1706,9 @@ var require_log = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/yaml-1.1/merge.js
+// ../../../node_modules/yaml/dist/schema/yaml-1.1/merge.js
 var require_merge = __commonJS({
-  "node_modules/yaml/dist/schema/yaml-1.1/merge.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/yaml-1.1/merge.js"(exports) {
     "use strict";
     var identity = require_identity();
     var Scalar = require_Scalar();
@@ -1766,9 +1766,9 @@ var require_merge = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/nodes/addPairToJSMap.js
+// ../../../node_modules/yaml/dist/nodes/addPairToJSMap.js
 var require_addPairToJSMap = __commonJS({
-  "node_modules/yaml/dist/nodes/addPairToJSMap.js"(exports) {
+  "../../../node_modules/yaml/dist/nodes/addPairToJSMap.js"(exports) {
     "use strict";
     var log = require_log();
     var merge = require_merge();
@@ -1830,9 +1830,9 @@ var require_addPairToJSMap = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/nodes/Pair.js
+// ../../../node_modules/yaml/dist/nodes/Pair.js
 var require_Pair = __commonJS({
-  "node_modules/yaml/dist/nodes/Pair.js"(exports) {
+  "../../../node_modules/yaml/dist/nodes/Pair.js"(exports) {
     "use strict";
     var createNode = require_createNode();
     var stringifyPair = require_stringifyPair();
@@ -1870,9 +1870,9 @@ var require_Pair = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/stringify/stringifyCollection.js
+// ../../../node_modules/yaml/dist/stringify/stringifyCollection.js
 var require_stringifyCollection = __commonJS({
-  "node_modules/yaml/dist/stringify/stringifyCollection.js"(exports) {
+  "../../../node_modules/yaml/dist/stringify/stringifyCollection.js"(exports) {
     "use strict";
     var identity = require_identity();
     var stringify = require_stringify();
@@ -2021,9 +2021,9 @@ ${indent}${end}`;
   }
 });
 
-// node_modules/yaml/dist/nodes/YAMLMap.js
+// ../../../node_modules/yaml/dist/nodes/YAMLMap.js
 var require_YAMLMap = __commonJS({
-  "node_modules/yaml/dist/nodes/YAMLMap.js"(exports) {
+  "../../../node_modules/yaml/dist/nodes/YAMLMap.js"(exports) {
     "use strict";
     var stringifyCollection = require_stringifyCollection();
     var addPairToJSMap = require_addPairToJSMap();
@@ -2165,9 +2165,9 @@ var require_YAMLMap = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/common/map.js
+// ../../../node_modules/yaml/dist/schema/common/map.js
 var require_map = __commonJS({
-  "node_modules/yaml/dist/schema/common/map.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/common/map.js"(exports) {
     "use strict";
     var identity = require_identity();
     var YAMLMap = require_YAMLMap();
@@ -2187,9 +2187,9 @@ var require_map = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/nodes/YAMLSeq.js
+// ../../../node_modules/yaml/dist/nodes/YAMLSeq.js
 var require_YAMLSeq = __commonJS({
-  "node_modules/yaml/dist/nodes/YAMLSeq.js"(exports) {
+  "../../../node_modules/yaml/dist/nodes/YAMLSeq.js"(exports) {
     "use strict";
     var createNode = require_createNode();
     var stringifyCollection = require_stringifyCollection();
@@ -2303,9 +2303,9 @@ var require_YAMLSeq = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/common/seq.js
+// ../../../node_modules/yaml/dist/schema/common/seq.js
 var require_seq = __commonJS({
-  "node_modules/yaml/dist/schema/common/seq.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/common/seq.js"(exports) {
     "use strict";
     var identity = require_identity();
     var YAMLSeq = require_YAMLSeq();
@@ -2325,9 +2325,9 @@ var require_seq = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/common/string.js
+// ../../../node_modules/yaml/dist/schema/common/string.js
 var require_string = __commonJS({
-  "node_modules/yaml/dist/schema/common/string.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/common/string.js"(exports) {
     "use strict";
     var stringifyString = require_stringifyString();
     var string = {
@@ -2344,9 +2344,9 @@ var require_string = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/common/null.js
+// ../../../node_modules/yaml/dist/schema/common/null.js
 var require_null = __commonJS({
-  "node_modules/yaml/dist/schema/common/null.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/common/null.js"(exports) {
     "use strict";
     var Scalar = require_Scalar();
     var nullTag = {
@@ -2362,9 +2362,9 @@ var require_null = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/core/bool.js
+// ../../../node_modules/yaml/dist/schema/core/bool.js
 var require_bool = __commonJS({
-  "node_modules/yaml/dist/schema/core/bool.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/core/bool.js"(exports) {
     "use strict";
     var Scalar = require_Scalar();
     var boolTag = {
@@ -2386,9 +2386,9 @@ var require_bool = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/stringify/stringifyNumber.js
+// ../../../node_modules/yaml/dist/stringify/stringifyNumber.js
 var require_stringifyNumber = __commonJS({
-  "node_modules/yaml/dist/stringify/stringifyNumber.js"(exports) {
+  "../../../node_modules/yaml/dist/stringify/stringifyNumber.js"(exports) {
     "use strict";
     function stringifyNumber({ format, minFractionDigits, tag, value }) {
       if (typeof value === "bigint")
@@ -2413,9 +2413,9 @@ var require_stringifyNumber = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/core/float.js
+// ../../../node_modules/yaml/dist/schema/core/float.js
 var require_float = __commonJS({
-  "node_modules/yaml/dist/schema/core/float.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/core/float.js"(exports) {
     "use strict";
     var Scalar = require_Scalar();
     var stringifyNumber = require_stringifyNumber();
@@ -2459,9 +2459,9 @@ var require_float = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/core/int.js
+// ../../../node_modules/yaml/dist/schema/core/int.js
 var require_int = __commonJS({
-  "node_modules/yaml/dist/schema/core/int.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/core/int.js"(exports) {
     "use strict";
     var stringifyNumber = require_stringifyNumber();
     var intIdentify = (value) => typeof value === "bigint" || Number.isInteger(value);
@@ -2504,9 +2504,9 @@ var require_int = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/core/schema.js
+// ../../../node_modules/yaml/dist/schema/core/schema.js
 var require_schema = __commonJS({
-  "node_modules/yaml/dist/schema/core/schema.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/core/schema.js"(exports) {
     "use strict";
     var map = require_map();
     var _null = require_null();
@@ -2532,9 +2532,9 @@ var require_schema = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/json/schema.js
+// ../../../node_modules/yaml/dist/schema/json/schema.js
 var require_schema2 = __commonJS({
-  "node_modules/yaml/dist/schema/json/schema.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/json/schema.js"(exports) {
     "use strict";
     var Scalar = require_Scalar();
     var map = require_map();
@@ -2599,9 +2599,9 @@ var require_schema2 = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/yaml-1.1/binary.js
+// ../../../node_modules/yaml/dist/schema/yaml-1.1/binary.js
 var require_binary = __commonJS({
-  "node_modules/yaml/dist/schema/yaml-1.1/binary.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/yaml-1.1/binary.js"(exports) {
     "use strict";
     var node_buffer = __require("buffer");
     var Scalar = require_Scalar();
@@ -2665,9 +2665,9 @@ var require_binary = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/yaml-1.1/pairs.js
+// ../../../node_modules/yaml/dist/schema/yaml-1.1/pairs.js
 var require_pairs = __commonJS({
-  "node_modules/yaml/dist/schema/yaml-1.1/pairs.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/yaml-1.1/pairs.js"(exports) {
     "use strict";
     var identity = require_identity();
     var Pair = require_Pair();
@@ -2743,9 +2743,9 @@ ${cn.comment}` : item.comment;
   }
 });
 
-// node_modules/yaml/dist/schema/yaml-1.1/omap.js
+// ../../../node_modules/yaml/dist/schema/yaml-1.1/omap.js
 var require_omap = __commonJS({
-  "node_modules/yaml/dist/schema/yaml-1.1/omap.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/yaml-1.1/omap.js"(exports) {
     "use strict";
     var identity = require_identity();
     var toJS = require_toJS();
@@ -2821,9 +2821,9 @@ var require_omap = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/yaml-1.1/bool.js
+// ../../../node_modules/yaml/dist/schema/yaml-1.1/bool.js
 var require_bool2 = __commonJS({
-  "node_modules/yaml/dist/schema/yaml-1.1/bool.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/yaml-1.1/bool.js"(exports) {
     "use strict";
     var Scalar = require_Scalar();
     function boolStringify({ value, source }, ctx) {
@@ -2853,9 +2853,9 @@ var require_bool2 = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/yaml-1.1/float.js
+// ../../../node_modules/yaml/dist/schema/yaml-1.1/float.js
 var require_float2 = __commonJS({
-  "node_modules/yaml/dist/schema/yaml-1.1/float.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/yaml-1.1/float.js"(exports) {
     "use strict";
     var Scalar = require_Scalar();
     var stringifyNumber = require_stringifyNumber();
@@ -2902,9 +2902,9 @@ var require_float2 = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/yaml-1.1/int.js
+// ../../../node_modules/yaml/dist/schema/yaml-1.1/int.js
 var require_int2 = __commonJS({
-  "node_modules/yaml/dist/schema/yaml-1.1/int.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/yaml-1.1/int.js"(exports) {
     "use strict";
     var stringifyNumber = require_stringifyNumber();
     var intIdentify = (value) => typeof value === "bigint" || Number.isInteger(value);
@@ -2981,9 +2981,9 @@ var require_int2 = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/yaml-1.1/set.js
+// ../../../node_modules/yaml/dist/schema/yaml-1.1/set.js
 var require_set = __commonJS({
-  "node_modules/yaml/dist/schema/yaml-1.1/set.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/yaml-1.1/set.js"(exports) {
     "use strict";
     var identity = require_identity();
     var Pair = require_Pair();
@@ -3070,9 +3070,9 @@ var require_set = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/yaml-1.1/timestamp.js
+// ../../../node_modules/yaml/dist/schema/yaml-1.1/timestamp.js
 var require_timestamp = __commonJS({
-  "node_modules/yaml/dist/schema/yaml-1.1/timestamp.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/yaml-1.1/timestamp.js"(exports) {
     "use strict";
     var stringifyNumber = require_stringifyNumber();
     function parseSexagesimal(str, asBigInt) {
@@ -3158,9 +3158,9 @@ var require_timestamp = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/yaml-1.1/schema.js
+// ../../../node_modules/yaml/dist/schema/yaml-1.1/schema.js
 var require_schema3 = __commonJS({
-  "node_modules/yaml/dist/schema/yaml-1.1/schema.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/yaml-1.1/schema.js"(exports) {
     "use strict";
     var map = require_map();
     var _null = require_null();
@@ -3202,9 +3202,9 @@ var require_schema3 = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/tags.js
+// ../../../node_modules/yaml/dist/schema/tags.js
 var require_tags = __commonJS({
-  "node_modules/yaml/dist/schema/tags.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/tags.js"(exports) {
     "use strict";
     var map = require_map();
     var _null = require_null();
@@ -3296,9 +3296,9 @@ var require_tags = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/schema/Schema.js
+// ../../../node_modules/yaml/dist/schema/Schema.js
 var require_Schema = __commonJS({
-  "node_modules/yaml/dist/schema/Schema.js"(exports) {
+  "../../../node_modules/yaml/dist/schema/Schema.js"(exports) {
     "use strict";
     var identity = require_identity();
     var map = require_map();
@@ -3328,9 +3328,9 @@ var require_Schema = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/stringify/stringifyDocument.js
+// ../../../node_modules/yaml/dist/stringify/stringifyDocument.js
 var require_stringifyDocument = __commonJS({
-  "node_modules/yaml/dist/stringify/stringifyDocument.js"(exports) {
+  "../../../node_modules/yaml/dist/stringify/stringifyDocument.js"(exports) {
     "use strict";
     var identity = require_identity();
     var stringify = require_stringify();
@@ -3408,9 +3408,9 @@ var require_stringifyDocument = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/doc/Document.js
+// ../../../node_modules/yaml/dist/doc/Document.js
 var require_Document = __commonJS({
-  "node_modules/yaml/dist/doc/Document.js"(exports) {
+  "../../../node_modules/yaml/dist/doc/Document.js"(exports) {
     "use strict";
     var Alias = require_Alias();
     var Collection = require_Collection();
@@ -3717,9 +3717,9 @@ var require_Document = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/errors.js
+// ../../../node_modules/yaml/dist/errors.js
 var require_errors = __commonJS({
-  "node_modules/yaml/dist/errors.js"(exports) {
+  "../../../node_modules/yaml/dist/errors.js"(exports) {
     "use strict";
     var YAMLError = class extends Error {
       constructor(name, pos, code, message) {
@@ -3782,9 +3782,9 @@ ${pointer}
   }
 });
 
-// node_modules/yaml/dist/compose/resolve-props.js
+// ../../../node_modules/yaml/dist/compose/resolve-props.js
 var require_resolve_props = __commonJS({
-  "node_modules/yaml/dist/compose/resolve-props.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/resolve-props.js"(exports) {
     "use strict";
     function resolveProps(tokens, { flow, indicator, next, offset, onError, parentIndent, startOnNewline }) {
       let spaceBefore = false;
@@ -3916,9 +3916,9 @@ var require_resolve_props = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/util-contains-newline.js
+// ../../../node_modules/yaml/dist/compose/util-contains-newline.js
 var require_util_contains_newline = __commonJS({
-  "node_modules/yaml/dist/compose/util-contains-newline.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/util-contains-newline.js"(exports) {
     "use strict";
     function containsNewline(key) {
       if (!key)
@@ -3958,9 +3958,9 @@ var require_util_contains_newline = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/util-flow-indent-check.js
+// ../../../node_modules/yaml/dist/compose/util-flow-indent-check.js
 var require_util_flow_indent_check = __commonJS({
-  "node_modules/yaml/dist/compose/util-flow-indent-check.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/util-flow-indent-check.js"(exports) {
     "use strict";
     var utilContainsNewline = require_util_contains_newline();
     function flowIndentCheck(indent, fc, onError) {
@@ -3976,9 +3976,9 @@ var require_util_flow_indent_check = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/util-map-includes.js
+// ../../../node_modules/yaml/dist/compose/util-map-includes.js
 var require_util_map_includes = __commonJS({
-  "node_modules/yaml/dist/compose/util-map-includes.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/util-map-includes.js"(exports) {
     "use strict";
     var identity = require_identity();
     function mapIncludes(ctx, items, search) {
@@ -3992,9 +3992,9 @@ var require_util_map_includes = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/resolve-block-map.js
+// ../../../node_modules/yaml/dist/compose/resolve-block-map.js
 var require_resolve_block_map = __commonJS({
-  "node_modules/yaml/dist/compose/resolve-block-map.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/resolve-block-map.js"(exports) {
     "use strict";
     var Pair = require_Pair();
     var YAMLMap = require_YAMLMap();
@@ -4100,9 +4100,9 @@ var require_resolve_block_map = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/resolve-block-seq.js
+// ../../../node_modules/yaml/dist/compose/resolve-block-seq.js
 var require_resolve_block_seq = __commonJS({
-  "node_modules/yaml/dist/compose/resolve-block-seq.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/resolve-block-seq.js"(exports) {
     "use strict";
     var YAMLSeq = require_YAMLSeq();
     var resolveProps = require_resolve_props();
@@ -4151,9 +4151,9 @@ var require_resolve_block_seq = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/resolve-end.js
+// ../../../node_modules/yaml/dist/compose/resolve-end.js
 var require_resolve_end = __commonJS({
-  "node_modules/yaml/dist/compose/resolve-end.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/resolve-end.js"(exports) {
     "use strict";
     function resolveEnd(end, offset, reqSpace, onError) {
       let comment = "";
@@ -4194,9 +4194,9 @@ var require_resolve_end = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/resolve-flow-collection.js
+// ../../../node_modules/yaml/dist/compose/resolve-flow-collection.js
 var require_resolve_flow_collection = __commonJS({
-  "node_modules/yaml/dist/compose/resolve-flow-collection.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/resolve-flow-collection.js"(exports) {
     "use strict";
     var identity = require_identity();
     var Pair = require_Pair();
@@ -4388,9 +4388,9 @@ var require_resolve_flow_collection = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/compose-collection.js
+// ../../../node_modules/yaml/dist/compose/compose-collection.js
 var require_compose_collection = __commonJS({
-  "node_modules/yaml/dist/compose/compose-collection.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/compose-collection.js"(exports) {
     "use strict";
     var identity = require_identity();
     var Scalar = require_Scalar();
@@ -4453,9 +4453,9 @@ var require_compose_collection = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/resolve-block-scalar.js
+// ../../../node_modules/yaml/dist/compose/resolve-block-scalar.js
 var require_resolve_block_scalar = __commonJS({
-  "node_modules/yaml/dist/compose/resolve-block-scalar.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/resolve-block-scalar.js"(exports) {
     "use strict";
     var Scalar = require_Scalar();
     function resolveBlockScalar(ctx, scalar, onError) {
@@ -4636,9 +4636,9 @@ var require_resolve_block_scalar = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/resolve-flow-scalar.js
+// ../../../node_modules/yaml/dist/compose/resolve-flow-scalar.js
 var require_resolve_flow_scalar = __commonJS({
-  "node_modules/yaml/dist/compose/resolve-flow-scalar.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/resolve-flow-scalar.js"(exports) {
     "use strict";
     var Scalar = require_Scalar();
     var resolveEnd = require_resolve_end();
@@ -4857,9 +4857,9 @@ var require_resolve_flow_scalar = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/compose-scalar.js
+// ../../../node_modules/yaml/dist/compose/compose-scalar.js
 var require_compose_scalar = __commonJS({
-  "node_modules/yaml/dist/compose/compose-scalar.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/compose-scalar.js"(exports) {
     "use strict";
     var identity = require_identity();
     var Scalar = require_Scalar();
@@ -4938,9 +4938,9 @@ var require_compose_scalar = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/util-empty-scalar-position.js
+// ../../../node_modules/yaml/dist/compose/util-empty-scalar-position.js
 var require_util_empty_scalar_position = __commonJS({
-  "node_modules/yaml/dist/compose/util-empty-scalar-position.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/util-empty-scalar-position.js"(exports) {
     "use strict";
     function emptyScalarPosition(offset, before, pos) {
       if (before) {
@@ -4968,9 +4968,9 @@ var require_util_empty_scalar_position = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/compose-node.js
+// ../../../node_modules/yaml/dist/compose/compose-node.js
 var require_compose_node = __commonJS({
-  "node_modules/yaml/dist/compose/compose-node.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/compose-node.js"(exports) {
     "use strict";
     var Alias = require_Alias();
     var identity = require_identity();
@@ -5074,9 +5074,9 @@ var require_compose_node = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/compose-doc.js
+// ../../../node_modules/yaml/dist/compose/compose-doc.js
 var require_compose_doc = __commonJS({
-  "node_modules/yaml/dist/compose/compose-doc.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/compose-doc.js"(exports) {
     "use strict";
     var Document = require_Document();
     var composeNode = require_compose_node();
@@ -5117,9 +5117,9 @@ var require_compose_doc = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/compose/composer.js
+// ../../../node_modules/yaml/dist/compose/composer.js
 var require_composer = __commonJS({
-  "node_modules/yaml/dist/compose/composer.js"(exports) {
+  "../../../node_modules/yaml/dist/compose/composer.js"(exports) {
     "use strict";
     var node_process = __require("process");
     var directives = require_directives();
@@ -5325,9 +5325,9 @@ ${end.comment}` : end.comment;
   }
 });
 
-// node_modules/yaml/dist/parse/cst-scalar.js
+// ../../../node_modules/yaml/dist/parse/cst-scalar.js
 var require_cst_scalar = __commonJS({
-  "node_modules/yaml/dist/parse/cst-scalar.js"(exports) {
+  "../../../node_modules/yaml/dist/parse/cst-scalar.js"(exports) {
     "use strict";
     var resolveBlockScalar = require_resolve_block_scalar();
     var resolveFlowScalar = require_resolve_flow_scalar();
@@ -5510,9 +5510,9 @@ var require_cst_scalar = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/parse/cst-stringify.js
+// ../../../node_modules/yaml/dist/parse/cst-stringify.js
 var require_cst_stringify = __commonJS({
-  "node_modules/yaml/dist/parse/cst-stringify.js"(exports) {
+  "../../../node_modules/yaml/dist/parse/cst-stringify.js"(exports) {
     "use strict";
     var stringify = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
     function stringifyToken(token) {
@@ -5571,9 +5571,9 @@ var require_cst_stringify = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/parse/cst-visit.js
+// ../../../node_modules/yaml/dist/parse/cst-visit.js
 var require_cst_visit = __commonJS({
-  "node_modules/yaml/dist/parse/cst-visit.js"(exports) {
+  "../../../node_modules/yaml/dist/parse/cst-visit.js"(exports) {
     "use strict";
     var BREAK = /* @__PURE__ */ Symbol("break visit");
     var SKIP = /* @__PURE__ */ Symbol("skip children");
@@ -5633,9 +5633,9 @@ var require_cst_visit = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/parse/cst.js
+// ../../../node_modules/yaml/dist/parse/cst.js
 var require_cst = __commonJS({
-  "node_modules/yaml/dist/parse/cst.js"(exports) {
+  "../../../node_modules/yaml/dist/parse/cst.js"(exports) {
     "use strict";
     var cstScalar = require_cst_scalar();
     var cstStringify = require_cst_stringify();
@@ -5735,9 +5735,9 @@ var require_cst = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/parse/lexer.js
+// ../../../node_modules/yaml/dist/parse/lexer.js
 var require_lexer = __commonJS({
-  "node_modules/yaml/dist/parse/lexer.js"(exports) {
+  "../../../node_modules/yaml/dist/parse/lexer.js"(exports) {
     "use strict";
     var cst = require_cst();
     function isEmpty(ch) {
@@ -6324,9 +6324,9 @@ var require_lexer = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/parse/line-counter.js
+// ../../../node_modules/yaml/dist/parse/line-counter.js
 var require_line_counter = __commonJS({
-  "node_modules/yaml/dist/parse/line-counter.js"(exports) {
+  "../../../node_modules/yaml/dist/parse/line-counter.js"(exports) {
     "use strict";
     var LineCounter = class {
       constructor() {
@@ -6355,9 +6355,9 @@ var require_line_counter = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/parse/parser.js
+// ../../../node_modules/yaml/dist/parse/parser.js
 var require_parser = __commonJS({
-  "node_modules/yaml/dist/parse/parser.js"(exports) {
+  "../../../node_modules/yaml/dist/parse/parser.js"(exports) {
     "use strict";
     var node_process = __require("process");
     var cst = require_cst();
@@ -7229,9 +7229,9 @@ var require_parser = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/public-api.js
+// ../../../node_modules/yaml/dist/public-api.js
 var require_public_api = __commonJS({
-  "node_modules/yaml/dist/public-api.js"(exports) {
+  "../../../node_modules/yaml/dist/public-api.js"(exports) {
     "use strict";
     var composer = require_composer();
     var Document = require_Document();
@@ -7326,9 +7326,9 @@ var require_public_api = __commonJS({
   }
 });
 
-// node_modules/yaml/dist/index.js
+// ../../../node_modules/yaml/dist/index.js
 var require_dist = __commonJS({
-  "node_modules/yaml/dist/index.js"(exports) {
+  "../../../node_modules/yaml/dist/index.js"(exports) {
     "use strict";
     var composer = require_composer();
     var Document = require_Document();
@@ -7576,7 +7576,7 @@ function bindingWarnings(b) {
     if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved; add a second account to owners.product, or merge those CRs as admin`);
   }
   const hb = String(x?.heartbeat?.ticket ?? "");
-  if (["github", "github-issues", "local"].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
+  if (["github-issues", "local"].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
   const envs = x?.product?.environments ?? [];
   for (const l of x?.board?.env_labels ?? []) if (String(l).startsWith("env:") && !envs.includes(String(l).slice(4))) w.push(`board.env_labels '${l}' names no product.environments entry`);
   if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push("product.evidence is set but commands.evidence_check is unset: no release can show its evidence");
@@ -7611,16 +7611,13 @@ var init_binding = __esm({
     init_ports();
     BINDING_PATH = ".agents/binding.yml";
     ADAPTERS = {
-      board: ["github", "github-issues", "jira", "linear", "local"],
+      board: ["github-issues", "local"],
       forge: ["github"],
       vcs: ["git"]
     };
     OPTIONS = {
       board: {
-        github: [["owner", "project_number", "repo"], ["token_env"]],
         "github-issues": [["repo"], ["field_ids"]],
-        jira: [["base_url", "project_key", "email_env", "token_env"], []],
-        linear: [["team_key", "token_env"], []],
         local: [[], []]
       },
       forge: {
@@ -7960,171 +7957,6 @@ var init_comments = __esm({
   }
 });
 
-// src/board/github.ts
-function createGithubBoard(ctx) {
-  const o = ctx.options;
-  const num = String(o.project_number);
-  const env = () => {
-    if (!o.token_env) return void 0;
-    const t = ctx.env[o.token_env];
-    if (!t) throw new Error(`set ${o.token_env} (board.options.token_env) for the GitHub board`);
-    return { ...ctx.env, GH_TOKEN: t };
-  };
-  const gh = async (args) => ghRetry(ctx.exec, args, { env: env() });
-  const json = async (args) => JSON.parse(await gh(args) || "null");
-  const fieldName = (f) => ctx.binding?.board?.fields?.[f] ?? DEFAULT_FIELDS[f];
-  let projectId;
-  let fieldCache;
-  const pid = async () => projectId ??= (await json(["project", "view", num, "--owner", o.owner, "--format", "json"])).id;
-  const fields = async () => fieldCache ??= (await json(["project", "field-list", num, "--owner", o.owner, "--format", "json"])).fields;
-  const field = async (name) => {
-    const f = (await fields()).find((x) => x.name === name);
-    if (!f) throw new Error(`the board has no field '${name}'`);
-    return f;
-  };
-  const itemId = async (id) => (await json(["project", "item-add", num, "--owner", o.owner, "--url", `https://github.com/${o.repo}/issues/${id}`, "--format", "json"])).id;
-  const edit = async (id, f, rest) => gh(["project", "item-edit", "--project-id", await pid(), "--id", await itemId(id), "--field-id", f.id, ...rest]);
-  const setOption = async (id, name, option) => {
-    const f = await field(name);
-    const opt = f.options?.find((x) => x.name === option);
-    if (!opt) throw new Error(`the board has no field '${name}' with an option '${option}'`);
-    await edit(id, f, ["--single-select-option-id", opt.id]);
-  };
-  const raw = (it, name) => {
-    const v = it[name] ?? it[name[0].toLowerCase() + name.slice(1)] ?? it[name.toLowerCase()];
-    return v === void 0 || v === null ? void 0 : String(v);
-  };
-  const toItem = (it) => {
-    const fs = {};
-    for (const k of Object.keys(DEFAULT_FIELDS)) {
-      const v = raw(it, fieldName(k));
-      if (v !== void 0) fs[k] = v;
-    }
-    const c = it.content ?? {};
-    return {
-      id: String(c.number),
-      title: c.title ?? it.title,
-      url: c.url ?? "",
-      status: it.status ?? "",
-      labels: it.labels ?? [],
-      fields: fs,
-      milestone: it.milestone?.title,
-      children: [],
-      assignees: it.assignees ?? [],
-      createdAt: "",
-      updatedAt: ""
-    };
-  };
-  const ITEM_CAP = 5e3, SEARCH_CAP = 200;
-  const items = async () => {
-    const all = (await json(["project", "item-list", num, "--owner", o.owner, "--limit", String(ITEM_CAP), "--format", "json"])).items;
-    if (all.length >= ITEM_CAP) throw new Error(`the board has ${ITEM_CAP} or more items: archive Done items (gh project item-archive) so every ticket is read`);
-    const repo = String(o.repo).toLowerCase();
-    return all.filter((i) => i.content?.number !== void 0 && (!i.content.repository || String(i.content.repository).toLowerCase() === repo));
-  };
-  const get = async (id) => {
-    const it = (await items()).find((i) => String(i.content.number) === id);
-    if (!it) throw new Error(`#${id} is not on the board`);
-    const out = toItem(it);
-    const v = await json(["issue", "view", id, "--repo", o.repo, "--json", "body,createdAt,updatedAt,assignees,milestone,labels"]);
-    Object.assign(out, {
-      body: v.body,
-      createdAt: v.createdAt,
-      updatedAt: v.updatedAt,
-      assignees: v.assignees.map((a) => a.login),
-      labels: v.labels.map((l) => l.name),
-      milestone: v.milestone?.title
-    });
-    try {
-      const subs = await json(["api", `repos/${o.repo}/issues/${id}/sub_issues`]);
-      out.children = subs.map((s) => String(s.number));
-      const p = await json(["api", `repos/${o.repo}/issues/${id}/parent`]);
-      if (p?.number) out.parent = String(p.number);
-    } catch {
-    }
-    return out;
-  };
-  const move = async (id, status, onlyFrom) => {
-    if (onlyFrom) {
-      const cur = (await items()).find((i) => String(i.content.number) === id)?.status ?? "";
-      if (cur !== onlyFrom) throw new MovedError(id, onlyFrom, cur);
-    }
-    await setOption(id, "Status", status);
-    return get(id);
-  };
-  return {
-    async list(q = {}) {
-      let hits;
-      if (q.search) {
-        const found = await json(["issue", "list", "--repo", o.repo, "--state", "all", "--search", q.search, "--limit", String(SEARCH_CAP), "--json", "number"]);
-        if (found.length >= SEARCH_CAP) throw new Error(`the search matched ${SEARCH_CAP} or more issues: narrow it`);
-        hits = new Set(found.map((x) => String(x.number)));
-      }
-      return (await items()).map(toItem).filter((i) => (!hits || hits.has(i.id)) && (!q.status?.length || q.status.includes(i.status)) && (!q.label || i.labels.includes(q.label)));
-    },
-    get,
-    async create(t) {
-      const args = ["issue", "create", "--repo", o.repo, "--title", t.title, "--body", t.body];
-      for (const l of t.labels ?? []) args.push("--label", l);
-      if (t.milestone) args.push("--milestone", t.milestone);
-      const id = (await gh(args)).trim().split("/").pop();
-      await move(id, t.status);
-      if (t.parent) await this.child(t.parent, id);
-      return get(id);
-    },
-    move,
-    async set(id, f, value) {
-      const fd = await field(fieldName(f));
-      if (value === null) await edit(id, fd, ["--clear"]);
-      else if (fd.options) await setOption(id, fd.name, value);
-      else await edit(id, fd, ["--text", value]);
-      return get(id);
-    },
-    async label(id, op, label) {
-      await gh(["issue", "edit", id, "--repo", o.repo, op === "add" ? "--add-label" : "--remove-label", label]);
-      return get(id);
-    },
-    async assign(id, user) {
-      const drop = (await get(id)).assignees.filter((a) => a !== user).flatMap((a) => ["--remove-assignee", a]);
-      const args = ["issue", "edit", id, "--repo", o.repo, ...user ? ["--add-assignee", user] : [], ...drop];
-      if (args.length > 5) await gh(args);
-      return get(id);
-    },
-    async milestone(id, name) {
-      await gh(["issue", "edit", id, "--repo", o.repo, ...name === null ? ["--remove-milestone"] : ["--milestone", name]]);
-      return get(id);
-    },
-    async comment(id, body) {
-      const url = (await gh(["issue", "comment", id, "--repo", o.repo, "--body", body])).trim();
-      return { id: url.split("issuecomment-")[1] ?? url, url };
-    },
-    async comments(id, q = {}) {
-      const all = (await json(["api", `repos/${o.repo}/issues/${id}/comments`, "--paginate", "--slurp"])).flat();
-      let list = all.map((c) => ({ id: String(c.id), author: c.user?.login ?? "", createdAt: c.created_at, body: c.body ?? "", url: c.html_url })).reverse();
-      if (q.marker) list = list.filter((c) => c.body.split("\n")[0].includes(q.marker));
-      return q.last ? list.slice(0, q.last) : list;
-    },
-    async close(id, reason) {
-      await gh(["issue", "close", id, "--repo", o.repo, "--reason", reason === "completed" ? "completed" : "not planned"]);
-      return move(id, reason === "completed" ? "Done" : "Cancelled");
-    },
-    async child(parent, child) {
-      const cid = (await json(["api", `repos/${o.repo}/issues/${child}`])).id;
-      await gh(["api", `repos/${o.repo}/issues/${parent}/sub_issues`, "-X", "POST", "-F", `sub_issue_id=${cid}`]);
-      return get(parent);
-    }
-  };
-}
-var DEFAULT_FIELDS;
-var init_github = __esm({
-  "src/board/github.ts"() {
-    "use strict";
-    init_ports();
-    init_exec();
-    DEFAULT_FIELDS = { size: "Size", priority: "Priority", lane: "Lane", shipped: "Shipped", release_version: "Release Version" };
-  }
-});
-
 // src/board/github-issues.ts
 function createGithubIssuesBoard(ctx) {
   const repo = String(ctx.options.repo);
@@ -8295,335 +8127,6 @@ var init_github_issues = __esm({
   }
 });
 
-// src/board/jira.ts
-function createJiraBoard(ctx) {
-  const o = ctx.options;
-  const base = o.base_url.replace(/\/$/, "");
-  const auth = () => {
-    const e = ctx.env[o.email_env], t = ctx.env[o.token_env];
-    if (!e || !t) throw new Error(`set ${o.email_env} and ${o.token_env} for the Jira board`);
-    return "Basic " + Buffer.from(`${e}:${t}`).toString("base64");
-  };
-  const api = (method, path, body) => ctx.http(method, `${base}/rest/api/3${path}`, { headers: { authorization: auth() }, body });
-  const fieldName = (f) => ctx.binding?.board?.fields?.[f];
-  let fieldCache;
-  const jiraField = async (f) => {
-    const name = fieldName(f);
-    if (!name) throw new Error(`binding board.fields.${f} is not set`);
-    fieldCache ??= await api("GET", "/field");
-    const hit = fieldCache.find((x) => x.name === name);
-    if (!hit) throw new Error(`Jira has no field '${name}'`);
-    return hit;
-  };
-  const fieldIds = async () => {
-    const m = {};
-    for (const f of LOGICAL2) if (fieldName(f)) m[f] = (await jiraField(f)).id;
-    return m;
-  };
-  const toItem = async (i) => {
-    const f = i.fields, ids = await fieldIds(), fs = {};
-    for (const k of Object.keys(ids)) {
-      const v = f[ids[k]];
-      if (v !== null && v !== void 0) fs[k] = typeof v === "object" ? v.value ?? v.name ?? "" : String(v);
-    }
-    return {
-      id: i.key,
-      title: f.summary,
-      url: `${base}/browse/${i.key}`,
-      status: f.status?.name ?? "",
-      kind: f.issuetype?.name,
-      labels: f.labels ?? [],
-      fields: fs,
-      milestone: f.fixVersions?.[0]?.name,
-      parent: f.parent?.key,
-      children: (f.subtasks ?? []).map((s) => s.key),
-      assignees: f.assignee ? [f.assignee.accountId] : [],
-      createdAt: f.created,
-      updatedAt: f.updated,
-      statusChangedAt: f.statuscategorychangedate,
-      body: adfText(f.description)
-    };
-  };
-  const fetchFields = async () => ["summary", "status", "issuetype", "labels", "parent", "subtasks", "assignee", "created", "updated", "fixVersions", "description", "statuscategorychangedate", ...Object.values(await fieldIds())].join(",");
-  const get = async (id) => toItem(await api("GET", `/issue/${id}?fields=${await fetchFields()}`));
-  const transition = async (id, status) => {
-    const t = (await api("GET", `/issue/${id}/transitions`)).transitions.find((x) => x.to?.name === status);
-    if (!t) throw new Error(`${id} has no transition to '${status}'`);
-    await api("POST", `/issue/${id}/transitions`, { transition: { id: t.id } });
-  };
-  const put = async (id, fields) => {
-    await api("PUT", `/issue/${id}`, { fields });
-    return get(id);
-  };
-  const move = async (id, status, onlyFrom) => {
-    if (onlyFrom) {
-      const cur = (await api("GET", `/issue/${id}?fields=status`)).fields.status.name;
-      if (cur !== onlyFrom) throw new MovedError(id, onlyFrom, cur);
-    }
-    await transition(id, status);
-    return get(id);
-  };
-  const quote2 = (s) => `"${s.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-  return {
-    async list(q = {}) {
-      const jql = [`project = ${o.project_key}`];
-      if (q.status?.length) jql.push(`status in (${q.status.map(quote2).join(",")})`);
-      if (q.label) jql.push(`labels = ${quote2(q.label)}`);
-      if (q.search) jql.push(`text ~ ${quote2(q.search)}`);
-      const fields = (await fetchFields()).split(",");
-      const issues = [];
-      let nextPageToken;
-      for (let page = 1; ; page++) {
-        const r = await api("POST", "/search/jql", { jql: jql.join(" AND ") + " ORDER BY created ASC", maxResults: 100, fields, ...nextPageToken ? { nextPageToken } : {} });
-        issues.push(...r.issues);
-        const next = r.isLast === true ? void 0 : r.nextPageToken;
-        if (!next) break;
-        if (!r.issues.length || next === nextPageToken || page >= 500) throw new Error("jira: list does not advance (empty page, repeated token or over 500 pages); stopping");
-        nextPageToken = next;
-      }
-      return Promise.all(issues.map(toItem));
-    },
-    get,
-    async create(t) {
-      const fields = {
-        project: { key: o.project_key },
-        summary: t.title,
-        description: adf(t.body),
-        issuetype: { name: t.parent ? "Sub-task" : "Task" }
-      };
-      if (t.labels?.length) fields.labels = t.labels;
-      if (t.parent) fields.parent = { key: t.parent };
-      if (t.milestone) fields.fixVersions = [{ name: t.milestone }];
-      const { key } = await api("POST", "/issue", { fields });
-      return move(key, t.status);
-    },
-    move,
-    async set(id, f, value) {
-      const fd = await jiraField(f);
-      return put(id, { [fd.id]: value === null ? null : fd.schema?.type === "option" ? { value } : value });
-    },
-    async label(id, op, label) {
-      await api("PUT", `/issue/${id}`, { update: { labels: [{ [op]: label }] } });
-      return get(id);
-    },
-    async assign(id, user) {
-      await api("PUT", `/issue/${id}/assignee`, { accountId: user });
-      return get(id);
-    },
-    milestone(id, name) {
-      return put(id, { fixVersions: name === null ? [] : [{ name }] });
-    },
-    async comment(id, body) {
-      const c = await api("POST", `/issue/${id}/comment`, { body: adf(body) });
-      return { id: String(c.id), url: `${base}/browse/${id}?focusedCommentId=${c.id}` };
-    },
-    async comments(id, q = {}) {
-      const raw = [];
-      for (let page = 1; ; page++) {
-        const r = await api("GET", `/issue/${id}/comment?orderBy=-created&maxResults=100&startAt=${raw.length}`);
-        raw.push(...r.comments);
-        if (raw.length >= r.total) break;
-        if (!r.comments.length || page >= 500) throw new Error("jira: comments does not advance (empty page or over 500 pages); stopping");
-      }
-      let list = raw.map((c) => ({
-        id: String(c.id),
-        author: c.author?.accountId ?? "",
-        createdAt: c.created,
-        body: adfText(c.body),
-        url: `${base}/browse/${id}?focusedCommentId=${c.id}`
-      }));
-      if (q.marker) list = list.filter((c) => c.body.split("\n")[0].includes(q.marker));
-      return q.last ? list.slice(0, q.last) : list;
-    },
-    close(id, reason) {
-      return move(id, reason === "completed" ? "Done" : "Cancelled");
-    },
-    async child(parent, child) {
-      await api("PUT", `/issue/${child}`, { fields: { parent: { key: parent } } });
-      return get(parent);
-    }
-  };
-}
-var LOGICAL2, adf, adfText;
-var init_jira = __esm({
-  "src/board/jira.ts"() {
-    "use strict";
-    init_ports();
-    LOGICAL2 = ["size", "priority", "lane", "shipped", "release_version"];
-    adf = (text) => ({
-      type: "doc",
-      version: 1,
-      content: text.split("\n").filter((l) => l.trim()).map((l) => ({ type: "paragraph", content: [{ type: "text", text: l }] }))
-    });
-    adfText = (n) => !n ? "" : typeof n.text === "string" ? n.text : (n.content ?? []).map(adfText).join(n.type === "doc" ? "\n" : "");
-  }
-});
-
-// src/board/linear.ts
-function createLinearBoard(ctx) {
-  const o = ctx.options;
-  const gql = async (query, variables = {}) => {
-    const token = ctx.env[o.token_env];
-    if (!token) throw new Error(`set ${o.token_env} for the Linear board`);
-    const r = await ctx.http("POST", "https://api.linear.app/graphql", { headers: { authorization: token }, body: { query, variables } });
-    if (r.errors?.length) throw new Error(`Linear: ${r.errors[0].message}`);
-    return r.data;
-  };
-  const fieldName = (f) => ctx.binding?.board?.fields?.[f] ?? f;
-  const nativePriority = () => fieldName("priority").toLowerCase() === "priority";
-  const priorities = () => ctx.binding?.priorities ?? [];
-  let team;
-  const getTeam = async () => team ??= (await gql(`query($k:String!){ teams(filter:{key:{eq:$k}}){ nodes { id states(first:250) { nodes { id name } } labels(first:250) { nodes { id name } } } } }`, { k: o.team_key })).teams.nodes[0];
-  const state = async (name) => {
-    const s = (await getTeam()).states.nodes.find((x) => x.name === name);
-    if (!s) throw new Error(`Linear team ${o.team_key} has no state '${name}'`);
-    return s.id;
-  };
-  const labelId = async (name) => {
-    const t = await getTeam();
-    let l = t.labels.nodes.find((x) => x.name === name);
-    if (!l) {
-      l = (await gql(`mutation($i:IssueLabelCreateInput!){ issueLabelCreate(input:$i){ issueLabel { id name } } }`, { i: { teamId: t.id, name } })).issueLabelCreate.issueLabel;
-      t.labels.nodes.push(l);
-    }
-    return l.id;
-  };
-  const prefix = (f) => `${f}:`;
-  const toItem = (i) => {
-    const fs = {}, labels = [];
-    let milestone;
-    for (const l of i.labels.nodes.map((x) => x.name)) {
-      const f = LOGICAL3.find((k) => !(k === "priority" && nativePriority()) && l.startsWith(prefix(fieldName(k))));
-      if (f) fs[f] = l.slice(prefix(fieldName(f)).length);
-      else if (l.startsWith("milestone:")) milestone = l.slice(10);
-      else labels.push(l);
-    }
-    if (nativePriority() && i.priority) fs.priority = priorities()[i.priority - 1] ?? String(i.priority);
-    return {
-      id: i.identifier,
-      title: i.title,
-      url: i.url,
-      status: i.state.name,
-      labels,
-      fields: fs,
-      milestone,
-      parent: i.parent?.identifier,
-      children: i.children.nodes.map((c) => c.identifier),
-      assignees: i.assignee ? [i.assignee.id] : [],
-      createdAt: i.createdAt,
-      updatedAt: i.updatedAt,
-      body: i.description ?? ""
-    };
-  };
-  const raw = async (id) => (await gql(`query($id:String!){ issue(id:$id){ ${ISSUE} } }`, { id })).issue;
-  const get = async (id) => toItem(await raw(id));
-  const update = async (id, input) => {
-    const u = (await raw(id)).id;
-    const r = await gql(`mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ issue { ${ISSUE} } } }`, { id: u, i: input });
-    return toItem(r.issueUpdate.issue);
-  };
-  const withLabels = async (id, change) => {
-    const own = (await raw(id)).labels.nodes;
-    const names = change(own.map((l) => l.name));
-    return update(id, { labelIds: await Promise.all(names.map((n) => own.find((l) => l.name === n)?.id ?? labelId(n))) });
-  };
-  const move = async (id, status, onlyFrom) => {
-    if (onlyFrom) {
-      const cur = (await raw(id)).state.name;
-      if (cur !== onlyFrom) throw new MovedError(id, onlyFrom, cur);
-    }
-    return update(id, { stateId: await state(status) });
-  };
-  return {
-    async list(q = {}) {
-      const filter = { team: { key: { eq: o.team_key } } };
-      if (q.status?.length) filter.state = { name: { in: q.status } };
-      if (q.label) filter.labels = { name: { eq: q.label } };
-      const ws = (q.search ?? "").split(/\s+/).filter(Boolean);
-      if (ws.length) filter.and = ws.map((w) => ({ or: [{ title: { containsIgnoreCase: w } }, { description: { containsIgnoreCase: w } }] }));
-      const nodes = [];
-      let a = null;
-      for (let page = 1; ; page++) {
-        const r = await gql(`query($f:IssueFilter,$a:String){ issues(filter:$f, first:100, after:$a){ nodes { ${ISSUE} } pageInfo { hasNextPage endCursor } } }`, { f: filter, a });
-        nodes.push(...r.issues.nodes);
-        if (!r.issues.pageInfo.hasNextPage) break;
-        if (!r.issues.nodes.length || r.issues.pageInfo.endCursor === a || page >= 500) throw new Error("linear: list does not advance (empty page, repeated cursor or over 500 pages); stopping");
-        a = r.issues.pageInfo.endCursor;
-      }
-      return nodes.map(toItem);
-    },
-    get,
-    async create(t) {
-      const names = [...t.labels ?? [], ...t.milestone ? [`milestone:${t.milestone}`] : []];
-      const input = {
-        teamId: (await getTeam()).id,
-        title: t.title,
-        description: t.body,
-        stateId: await state(t.status),
-        labelIds: await Promise.all(names.map(labelId))
-      };
-      if (t.parent) input.parentId = (await raw(t.parent)).id;
-      const r = await gql(`mutation($i:IssueCreateInput!){ issueCreate(input:$i){ issue { ${ISSUE} } } }`, { i: input });
-      return toItem(r.issueCreate.issue);
-    },
-    move,
-    async set(id, f, value) {
-      if (f === "priority" && nativePriority()) {
-        const n = value === null ? 0 : priorities().indexOf(value) + 1;
-        if (value !== null && !n) throw new Error(`'${value}' is not in binding priorities`);
-        return update(id, { priority: n });
-      }
-      const p = prefix(fieldName(f));
-      return withLabels(id, (ls) => [...ls.filter((l) => !l.startsWith(p)), ...value === null ? [] : [p + value]]);
-    },
-    label(id, op, label) {
-      return withLabels(id, (ls) => op === "add" ? [.../* @__PURE__ */ new Set([...ls, label])] : ls.filter((l) => l !== label));
-    },
-    assign(id, user) {
-      return update(id, { assigneeId: user });
-    },
-    milestone(id, name) {
-      return withLabels(id, (ls) => [...ls.filter((l) => !l.startsWith("milestone:")), ...name === null ? [] : [`milestone:${name}`]]);
-    },
-    async comment(id, body) {
-      const r = await gql(`mutation($i:CommentCreateInput!){ commentCreate(input:$i){ comment { id url } } }`, { i: { issueId: (await raw(id)).id, body } });
-      return r.commentCreate.comment;
-    },
-    async comments(id, q = {}) {
-      const nodes = [];
-      let a = null;
-      for (let page = 1; ; page++) {
-        const r = await gql(`query($id:String!,$a:String){ issue(id:$id){ comments(first:100, after:$a){ nodes { id body createdAt url user { id } } pageInfo { hasNextPage endCursor } } } }`, { id, a });
-        const c = r.issue.comments;
-        nodes.push(...c.nodes);
-        if (!c.pageInfo.hasNextPage) break;
-        if (!c.nodes.length || c.pageInfo.endCursor === a || page >= 500) throw new Error("linear: comments does not advance (empty page, repeated cursor or over 500 pages); stopping");
-        a = c.pageInfo.endCursor;
-      }
-      let list = nodes.map((c) => ({ id: c.id, author: c.user?.id ?? "", createdAt: c.createdAt, body: c.body, url: c.url })).sort((a2, b) => b.createdAt.localeCompare(a2.createdAt));
-      if (q.marker) list = list.filter((c) => c.body.split("\n")[0].includes(q.marker));
-      return q.last ? list.slice(0, q.last) : list;
-    },
-    close(id, reason) {
-      return move(id, reason === "completed" ? "Done" : "Cancelled");
-    },
-    async child(parent, child) {
-      await update(child, { parentId: (await raw(parent)).id });
-      return get(parent);
-    }
-  };
-}
-var LOGICAL3, ISSUE;
-var init_linear = __esm({
-  "src/board/linear.ts"() {
-    "use strict";
-    init_ports();
-    LOGICAL3 = ["size", "priority", "lane", "shipped", "release_version"];
-    ISSUE = `id identifier title url description createdAt updatedAt priority state { name } labels(first:250) { nodes { id name } }
-  assignee { id } parent { identifier } children(first:250) { nodes { identifier } }`;
-  }
-});
-
 // src/board/local.ts
 import { existsSync, mkdirSync, readFileSync as readFileSync3, writeFileSync } from "fs";
 import { dirname, join as join2 } from "path";
@@ -8758,7 +8261,7 @@ __export(board_exports, {
   holds: () => holds
 });
 function createBoard(ctx) {
-  const make = { github: createGithubBoard, "github-issues": createGithubIssuesBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
+  const make = { "github-issues": createGithubIssuesBoard, local: createLocalBoard }[ctx.binding.board.adapter];
   if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
   const missing = validateBinding({ ...ctx.binding, board: { ...ctx.binding.board, options: ctx.options } }).map((m) => /^board\.options\.(\w+) is required/.exec(m)?.[1]).filter(Boolean).map((k) => `board.options.${k}`);
   if (missing.length) throw new Error(`board adapter '${ctx.binding.board.adapter}' needs binding keys: ${missing.join(", ")}; run: agentic-sdlc validate`);
@@ -8774,7 +8277,7 @@ function createBoard(ctx) {
   };
 }
 function checked(b, ctx) {
-  const numeric = ctx.binding.board.adapter === "github" || ctx.binding.board.adapter === "github-issues";
+  const numeric = ctx.binding.board.adapter === "github-issues";
   const statuses = ctx.binding.board.statuses;
   const id = (v) => {
     if (numeric && v !== void 0 && !/^\d+$/.test(String(v))) throw new Error(`board: not an issue number: ${v}`);
@@ -8846,10 +8349,7 @@ var init_board = __esm({
     init_binding();
     init_comments();
     init_util();
-    init_github();
     init_github_issues();
-    init_jira();
-    init_linear();
     init_local();
     Usage = UsageError;
     asked = (c) => isMarked(c.body, "ask");
@@ -9358,7 +8858,7 @@ function github(ctx) {
   };
 }
 var runState, runOf, RUN_FIELDS, statusState;
-var init_github2 = __esm({
+var init_github = __esm({
   "src/forge/github.ts"() {
     "use strict";
     init_ports();
@@ -11918,7 +11418,7 @@ var init_forge = __esm({
     init_comments();
     init_flow();
     init_util();
-    init_github2();
+    init_github();
     GATE_CONTEXTS = ["human-approval", "ticket-linkage", "proofs-on-base", "agent-provenance"];
     adapters2 = { github };
     VERBS3 = {
@@ -12098,7 +11598,6 @@ var install_exports = {};
 __export(install_exports, {
   cli: () => cli8,
   cliPin: () => cliPin,
-  cloudBoard: () => cloudBoard,
   deliveryWorkflow: () => deliveryWorkflow,
   implementerToken: () => implementerToken,
   issueFields: () => issueFields,
@@ -12264,7 +11763,7 @@ function originRepo(root) {
 }
 async function init(root, argv, log) {
   const f = flagsOf(argv);
-  const board = f.board ?? "github", forge = f.forge ?? "github", vcs = f.vcs ?? "git";
+  const board = f.board ?? "github-issues", forge = f.forge ?? "github", vcs = f.vcs ?? "git";
   const prior = f.upgrade === "true" && f.harness === void 0 && (existsSync8(join10(root, ".claude/skills")) || existsSync8(join10(root, ".claude/agents")) && readdirSync6(join10(root, ".claude/agents")).some((n) => /^sdlc-.*\.md$/.test(n)));
   const harness = f.harness ?? (prior ? "claude" : "generic");
   const force = f.force === "true";
@@ -12470,10 +11969,6 @@ function selfHostedRunner(b, ctx) {
   if (visibility === "public") return "fail runner: a self-hosted runner on a public repo runs fork code on your machine; use GitHub-hosted runners";
   if (code.includes("self-hosted") && trusted === code) return "warn: runner: CR code and the secret jobs share one self-hosted runner; set AGENTIC_RUNS_ON_TRUSTED to a separate runner (see docs/forges.md, Self-hosted runners)";
   return `ok   runner: self-hosted, code on ${code || "ubuntu-latest"}, secrets on ${trusted || "ubuntu-latest"}`;
-}
-function cloudBoard(b, env = {}) {
-  if (b.board?.adapter !== "github" || env.CLAUDE_CODE_REMOTE !== "true") return void 0;
-  return "fail board: a Claude cloud session cannot reach GitHub Projects (board adapter github); use github-issues, jira or linear, or run the cycle from GitHub Actions (templates/runner/github-actions-claude.yml)";
 }
 function issueFields(b, ctx) {
   const ids = b.board?.adapter === "github-issues" ? b.board.options?.field_ids : void 0;
@@ -12796,12 +12291,6 @@ ${END}`;
             ["vcs.head", () => createVcs({ ...c, options: binding.vcs.options ?? {} }).head()]
           ];
           let bad = 0;
-          const cb = cloudBoard(binding, ctx.env);
-          if (cb) {
-            out(cb);
-            bad++;
-            probes.shift();
-          }
           for (const l of issueFields(binding, ctx)) {
             out(l);
             if (l.startsWith("fail")) bad++;
@@ -13247,7 +12736,7 @@ var init_cli = __esm({
       bench: [() => Promise.resolve().then(() => (init_bench(), bench_exports)), true, "build propose run report compare"],
       mcp: [() => Promise.resolve().then(() => (init_mcp(), mcp_exports)), true, "serve the port verbs as MCP tools over stdio; --allow approve,status"]
     };
-    INIT_FLAGS2 = "[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github|github-issues|jira|linear|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]";
+    INIT_FLAGS2 = "[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github-issues|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]";
     version2 = () => {
       try {
         return JSON.parse(readFileSync11(new URL("../package.json", import.meta.url), "utf8")).version;

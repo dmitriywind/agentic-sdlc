@@ -73,7 +73,7 @@ The `approval` gate classifies each CR and posts `human-approval`:
 There is no CODEOWNERS file: the gate enforces owner approval, so `tuning` can auto-merge. The
 gate reruns on `pull_request_review` (submitted, dismissed) in `agentic-sdlc-cr.yml`.
 
-When the board is Jira or Linear, an owner has one name on the board and another on GitHub. Write
+When an owner has one name on the board and another on GitHub, write
 `owners.<role>: { board: <board account>, forge: <GitHub login> }`. The approval gate and
 `forge comments --trusted` read the forge name. The ledger, dispatch and `board comments --trusted`
 read the board name.

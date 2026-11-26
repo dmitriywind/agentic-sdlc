@@ -1,4 +1,4 @@
-# Source: src/install.ts "doctor", "trunkProtection", "implementerToken", "selfHostedRunner", "cloudBoard", "issueFields", "deliveryWorkflow", "unpinnedActions", "cliPin", "probeFailure"
+# Source: src/install.ts "doctor", "trunkProtection", "implementerToken", "selfHostedRunner","issueFields", "deliveryWorkflow", "unpinnedActions", "cliPin", "probeFailure"
 @cli:doctor
 Feature: Doctor checks what the gates rely on
   `agentic-sdlc doctor` validates, then probes the board, the forge and the vcs and checks the project's setup: that

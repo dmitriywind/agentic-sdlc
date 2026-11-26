@@ -42,7 +42,7 @@ with no automated checks. It is early (0.1): interfaces may still change before 
 
 </div>
 
-You need: a GitHub repo with CI, a board (GitHub issues, a GitHub Project, Jira or Linear), an agent
+You need: a GitHub repo with CI, the repo's GitHub issues as the board, an agent
 (Claude Code, Codex, Cursor or another with a shell), and a place to run the cycle (an agent
 vendor's cloud, GitHub Actions or your own machine).
 

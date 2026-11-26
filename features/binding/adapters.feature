@@ -10,10 +10,10 @@ Feature: Adapter options are checked per adapter
       Given a complete binding
 
     Scenario: A board option the adapter requires is missing
-      Given the binding value "board.adapter" is '"jira"'
-      And the binding value "board.options" is '{"base_url":"u","project":"P","email_env":"E","token_env":"T"}'
+      Given the binding value "board.adapter" is '"github-issues"'
+      And the binding value "board.options" is '{"repository":"o/r"}'
       When the binding is validated
-      Then the problems mention "board.options.project_key is required"
+      Then the problems mention "board.options.repo is required"
 
   Rule: github-issues field_ids map the status and board fields to org issue field ids
 

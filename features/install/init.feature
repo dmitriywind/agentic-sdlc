@@ -11,13 +11,13 @@ Feature: Init installs the factory
   Rule: Init writes the factory files and a pointer
 
     Scenario: Init writes the skills, the binding, the gates, the hook and the prompts
-      When I run the install command "init --board jira --harness claude"
+      When I run the install command "init --board local --harness claude"
       Then the exit code is 0
       And the installed file ".agents/skills/sdlc/SKILL.md" exists
       And the installed file ".github/workflows/gate.yml" exists
       And the installed file ".agents/cycle-prompt.md" exists
       And the installed file ".agents/review-prompt.md" exists
-      And the installed file ".agents/binding.yml" sets "board.adapter" to "jira"
+      And the installed file ".agents/binding.yml" sets "board.adapter" to "local"
       And the installed file ".agents/hooks/pre-push" is executable
       And the installed file ".agents/bin/agentic-sdlc" is executable
       And the installed file ".claude/skills" is absent

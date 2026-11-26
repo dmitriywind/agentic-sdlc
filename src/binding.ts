@@ -13,17 +13,14 @@ export function loadBinding(root: string): Binding {
 }
 
 export const ADAPTERS = {
-  board: ['github', 'github-issues', 'jira', 'linear', 'local'],
+  board: ['github-issues', 'local'],
   forge: ['github'],
   vcs: ['git'],
 };
 /** Option keys each adapter reads: [required, optional]. Anything else is a typo the adapter would ignore. */
 const OPTIONS: Record<string, Record<string, [string[], string[]]>> = {
   board: {
-    github: [['owner', 'project_number', 'repo'], ['token_env']],
     'github-issues': [['repo'], ['field_ids']],
-    jira: [['base_url', 'project_key', 'email_env', 'token_env'], []],
-    linear: [['team_key', 'token_env'], []],
     local: [[], []],
   },
   forge: {
@@ -209,7 +206,7 @@ export function bindingWarnings(b: Binding): string[] {
     if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved; add a second account to owners.product, or merge those CRs as admin`);
   }
   const hb = String(x?.heartbeat?.ticket ?? '');
-  if (['github', 'github-issues', 'local'].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
+  if (['github-issues', 'local'].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
   const envs: string[] = x?.product?.environments ?? [];
   for (const l of x?.board?.env_labels ?? []) if (String(l).startsWith('env:') && !envs.includes(String(l).slice(4))) w.push(`board.env_labels '${l}' names no product.environments entry`);
   if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push('product.evidence is set but commands.evidence_check is unset: no release can show its evidence');

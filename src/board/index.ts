@@ -3,14 +3,11 @@ import { ownersFor } from '../ports.ts';
 import { validateBinding } from '../binding.ts';
 import { isFactoryComment, isMarked, matches, parseKind, parseWritableKind, selectComments, stamp, stampBody } from '../comments.ts';
 import { UsageError, bodyFile, parseStrict, type VerbSpec } from '../forge/util.ts';
-import { createGithubBoard } from './github.ts';
 import { createGithubIssuesBoard } from './github-issues.ts';
-import { createJiraBoard } from './jira.ts';
-import { createLinearBoard } from './linear.ts';
 import { createLocalBoard } from './local.ts';
 
 export function createBoard(ctx: AdapterContext): Board {
-  const make = { github: createGithubBoard, 'github-issues': createGithubIssuesBoard, jira: createJiraBoard, linear: createLinearBoard, local: createLocalBoard }[ctx.binding.board.adapter];
+  const make = { 'github-issues': createGithubIssuesBoard, local: createLocalBoard }[ctx.binding.board.adapter];
   if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
   // The same required-option check `validate` runs: a missing key fails here, not as `gh ... undefined`.
   const missing = validateBinding({ ...ctx.binding, board: { ...ctx.binding.board, options: ctx.options } } as Binding)
@@ -30,9 +27,9 @@ export function createBoard(ctx: AdapterContext): Board {
   };
 }
 
-/** Refuses what no adapter should see: a status the binding does not list, and, on the GitHub boards, an id that is not an issue number. */
+/** Refuses what no adapter should see: a status the binding does not list, and, on github-issues, an id that is not an issue number. */
 function checked(b: Board, ctx: AdapterContext): Board {
-  const numeric = ctx.binding.board.adapter === 'github' || ctx.binding.board.adapter === 'github-issues';
+  const numeric = ctx.binding.board.adapter === 'github-issues';
   const statuses = ctx.binding.board.statuses;
   const id = (v: string | undefined) => {
     if (numeric && v !== undefined && !/^\d+$/.test(String(v))) throw new Error(`board: not an issue number: ${v}`);

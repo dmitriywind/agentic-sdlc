@@ -38,8 +38,6 @@
     "trunk-based",
     "kanban",
     "github",
-    "jira",
-    "linear",
     "claude-code-plugin"
   ],
   "license": "Apache-2.0",
