@@ -7521,6 +7521,8 @@ function validateBinding(b) {
   }
   const ha = x.forge?.human_approval;
   if (ha !== void 0 && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join("|")}`);
+  const al = x.forge?.approval_label;
+  if (al !== void 0 && (typeof al !== "string" || !al.trim())) p.push("forge.approval_label must be a label name");
   for (const k of ["bench_min_cases", "bench_trials"]) {
     const v = x.learning?.[k];
     if (v !== void 0 && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
@@ -7559,7 +7561,7 @@ function bindingWarnings(b) {
   const ha = x?.forge?.human_approval ?? "full-lane";
   if (ha !== "never" && x?.owners) {
     const o = ownersFor(x.owners, "forge");
-    if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved; add a second account to owners.product, or merge those CRs as admin`);
+    if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved (by a review or forge.approval_label); take your own account out of owners.bots (owners are trusted without it), or add a second account to owners.product`);
   }
   const hb = String(x?.heartbeat?.ticket ?? "");
   if (["github-issues", "local"].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
@@ -8415,6 +8417,7 @@ var init_board = __esm({
           case "label":
             need2(3);
             if (a.pos[1] !== "add" && a.pos[1] !== "remove") throw new Usage("label: add or remove");
+            if (a.pos[1] === "add" && a.pos[2].toLowerCase() === (base.binding.forge?.approval_label || "approved").toLowerCase()) throw new Error(`board label: '${a.pos[2]}' is forge.approval_label, the owner's approval; only the owner applies it, on the forge`);
             out = await board.label(id, a.pos[1], a.pos[2]);
             break;
           case "assign":
@@ -8825,6 +8828,19 @@ function github(ctx) {
       n = num(n);
       const out = await gh(["api", "--paginate", `${api}/pulls/${n}/reviews`, "--jq", ".[] | {user: .user.login, state: (.state | ascii_downcase), sha: .commit_id, assoc: .author_association}"]);
       return out.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+    },
+    async labelEvents(n) {
+      n = num(n);
+      const out = await gh(["api", "--paginate", `${api}/issues/${n}/events?per_page=100`, "--jq", '.[] | select(.event == "labeled" or .event == "unlabeled") | {label: .label.name, action: .event, actor: (.actor.login // ""), bot: (.actor.type == "Bot"), at: .created_at}']);
+      return lines(out);
+    },
+    async unlabel(n, label2) {
+      n = num(n);
+      try {
+        await gh(["api", "-X", "DELETE", `${api}/issues/${n}/labels/${encodeURIComponent(label2)}`]);
+      } catch (e) {
+        if (!/404|Label does not exist/.test(String(e.message))) throw e;
+      }
     },
     async commits(n) {
       n = num(n);
@@ -10581,8 +10597,10 @@ async function approvalWho(d, cr) {
   const o = ownersFor(d.binding.owners, "forge");
   return { class: klass, who: need2 === "owner" ? o.factory : need2 === "human" ? o.product : [] };
 }
-async function approval(d, n) {
+async function approval(d, n, opts = {}) {
   const b = d.binding;
+  const label = b.forge.approval_label || "approved";
+  if (opts.pushed) await d.forge.unlabel?.(n, label);
   const cr = await d.forge.view(n);
   const klass = await approvalClass(d, cr, await readDiff(d, n));
   const o = ownersFor(b.owners, "forge");
@@ -10595,6 +10613,13 @@ async function approval(d, n) {
     const member = new Set(reviews.filter((r) => !!r.assoc && ["OWNER", "MEMBER", "COLLABORATOR"].includes(r.assoc)).map((r) => r.user.toLowerCase()));
     const ok = approvers(reviews, cr.headSha).filter((u) => member.has(u));
     by = need2 === "owner" ? ok.find((u) => owner.includes(u)) : ok.find((u) => !bots.includes(u));
+    if (!by && d.forge.labelEvents) {
+      const ev = (await d.forge.labelEvents(n)).filter((e) => e.label.toLowerCase() === label.toLowerCase()).at(-1);
+      const who = (need2 === "owner" ? o.factory : o.product).map((u) => u.toLowerCase());
+      const actor = ev?.actor.toLowerCase() ?? "";
+      const fresh = !!ev && !!cr.pushedAt && Date.parse(ev.at) > Date.parse(cr.pushedAt);
+      if (ev?.action === "labeled" && !ev.bot && who.includes(actor) && !bots.includes(actor) && fresh) by = `${actor} (label ${label})`;
+    }
   }
   const pass = need2 === "none" || !!by;
   const description = need2 === "none" ? `${klass}: no human approval needed` : pass ? `${klass}: approved by ${by}` : `${klass}: waits for an approval of the head by ${need2 === "owner" ? "owners.factory" : "a human"}`;
@@ -11030,7 +11055,7 @@ var init_gates = __esm({
     mdFiles = (dir) => readdirSync4(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? mdFiles(join8(dir, e.name)).map((f) => `${e.name}/${f}`) : e.name.endsWith(".md") ? [e.name] : []);
     cli6 = (argv, base) => guard(async () => {
       const [gate, ...rest] = argv;
-      const a = parseArgs(rest, ["stdin-prepush"]);
+      const a = parseArgs(rest, ["stdin-prepush", "pushed"]);
       const deps = () => depsOf(base);
       const fail = (r) => {
         if (r.errors?.length) throw new Error(r.errors.join("\n"));
@@ -11060,7 +11085,7 @@ var init_gates = __esm({
           return r;
         }
         case "approval": {
-          const r = await approval(deps(), a.need("cr"));
+          const r = await approval(deps(), a.need("cr"), { pushed: a.has("pushed") });
           return r;
         }
         case "review":
@@ -11436,9 +11461,32 @@ Do not start subagents.
     writeFileSync4(file, (cur ? cur.replace(/\n*$/, "\n\n") : "") + "@AGENTS.md\n");
     log.push(cur ? "appended @AGENTS.md to CLAUDE.md" : "wrote CLAUDE.md (@AGENTS.md)");
   }
-  if (noPlugin) return;
+  if (noPlugin) {
+    reviewSandbox(root, inst, log);
+    return;
+  }
   log.push("install the Claude Code plugin (skills, guard hook, MCP server): /plugin marketplace add dmitriywind/agentic-sdlc, then /plugin install agentic-sdlc@agentic-sdlc");
   log.push("headless runs load it from the pinned package: claude -p ... --plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc (the ref in .agents/cli.json)");
+}
+function reviewSandbox(root, inst, log) {
+  const agent = readFileSync9(need(inst.pkg, "agents/sdlc-reviewer.md"), "utf8").replaceAll("mcp__plugin_agentic-sdlc_agentic-sdlc__", "mcp__agentic-sdlc__").replaceAll("agentic-sdlc:review", `${COPY_PREFIX}review`).replace(/\b([Tt]he) plugin's /g, "$1 ");
+  inst.put(".claude/agents/sdlc-reviewer.md", agent, "agents/sdlc-reviewer.md");
+  inst.copy("hooks/guard.mjs", GUARD);
+  const want = JSON.parse(readFileSync9(need(inst.pkg, "hooks/hooks.json"), "utf8").replaceAll("${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs", `\${CLAUDE_PROJECT_DIR}/${GUARD}`));
+  const rel = ".claude/settings.json", file = join10(root, rel);
+  const had = existsSync8(file);
+  const doc = had ? parseJson(readFileSync9(file, "utf8") || "{}", rel) : {};
+  const pre = (doc.hooks ??= {}).PreToolUse ??= [];
+  const has = (e) => pre.some((x) => x?.matcher === e.matcher && JSON.stringify(x.hooks) === JSON.stringify(e.hooks));
+  const add = want.hooks.PreToolUse.filter((e) => !has(e));
+  if (!add.length) {
+    log.push(`kept ${rel} (the guard hook is registered)`);
+    return;
+  }
+  pre.push(...add);
+  mkdirSync4(dirname4(file), { recursive: true });
+  writeFileSync4(file, JSON.stringify(doc, null, 2) + "\n");
+  log.push(`${had ? "updated" : "wrote"} ${rel}: the guard hook (${GUARD})`);
 }
 function originRepo(root) {
   try {
@@ -11540,7 +11588,7 @@ async function init(root, argv, log) {
       }
       inst.put(".github/rulesets/trunk.json", text, `${tdir}/ruleset.trunk.json`);
       log.push("import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk");
-      log.push(oneIdentity ? "one identity: the ruleset needs no approving review and pins every required check to GitHub Actions (integration_id 15368); a Full-lane CR waits on human-approval until a collaborator approves it or you merge it as admin" : "its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
+      log.push(oneIdentity ? "one identity: the ruleset needs no approving review and pins every required check to GitHub Actions (integration_id 15368); a Full-lane CR waits on human-approval until a collaborator approves its head or you apply forge.approval_label to it" : "its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
     }
     if (continuous && existsSync8(join10(dir, "ruleset.release.json"))) inst.skip(".github/rulesets/release.json");
     if (!continuous && existsSync8(join10(dir, "ruleset.release.json"))) {
@@ -11729,7 +11777,7 @@ function pathWarnings(root, b) {
   const paths = b?.paths ?? {};
   return Object.entries(paths).filter(([k, v]) => !["factory", "light_verify", "lane_areas", "no_proof"].includes(k) && typeof v === "string" && v && !existsSync8(join10(root, v))).map(([k, v]) => `paths.${k} names ${v}, which does not exist in the project; the skills will read nothing there`);
 }
-var import_yaml5, START, END, POINTER, INSTALL_LOCK, LEGACY_LOCK, TIERS4, FORGES, INIT_FLAGS, flagsOf, need, parseJson, readJson2, filesUnder, posix2, Installer, missingKeysLine, CLI_PIN, CLI_PACKAGE, LAUNCHER, IGNORED, isSha, isTag, envNames, redact2, firstLines, probeFailure, cli8;
+var import_yaml5, START, END, POINTER, INSTALL_LOCK, LEGACY_LOCK, TIERS4, FORGES, INIT_FLAGS, flagsOf, need, parseJson, readJson2, filesUnder, posix2, Installer, missingKeysLine, CLI_PIN, CLI_PACKAGE, LAUNCHER, IGNORED, isSha, isTag, GUARD, envNames, redact2, firstLines, probeFailure, cli8;
 var init_install = __esm({
   "src/install.ts"() {
     "use strict";
@@ -11916,6 +11964,7 @@ ${END}`;
     IGNORED = [".cli/", "work/"];
     isSha = (s) => typeof s === "string" && /^[0-9a-f]{40}$/.test(s);
     isTag = (s) => typeof s === "string" && /^v\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.+-]+)?$/.test(s);
+    GUARD = ".agents/hooks/guard.mjs";
     envNames = (x, out = []) => {
       if (x && typeof x === "object")
         for (const [k, v] of Object.entries(x)) {

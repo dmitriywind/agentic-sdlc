@@ -92,7 +92,9 @@ Every wait in the process, with the binding key that bounds it. No step uses ano
   `merged` moves it (to Done; the label stays). `board release` is the only release; the navigator
   runs it once an owner replied.
 - **Land.** Only `forge land <n>` merges. On `merged` or `armed`, done. On `waiting`, stop; the queue
-  brings it back. On `blocked` with `needsHuman`, run `escalate` naming its `class` and `who`. On
+  brings it back. On `blocked` with `needsHuman`, run `escalate` naming its `class` and `who`; the ask says how
+  to approve: an approving review of the head, or the label `forge.approval_label` on the CR after its latest push.
+  Never apply that label yourself: it is the owner's approval. On
   `blocked` without it, name each `blocking` check in the done line and stop.
 - **Escalate.** Unsure of authority, or a trigger of the `escalate` skill holds: follow that skill in
   this run. When it holds the ticket, stop.

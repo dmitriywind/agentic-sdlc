@@ -297,9 +297,37 @@ Do not start subagents.
     writeFileSync(file, (cur ? cur.replace(/\n*$/, '\n\n') : '') + '@AGENTS.md\n');
     log.push(cur ? 'appended @AGENTS.md to CLAUDE.md' : 'wrote CLAUDE.md (@AGENTS.md)');
   }
-  if (noPlugin) return;
+  if (noPlugin) { reviewSandbox(root, inst, log); return; }
   log.push('install the Claude Code plugin (skills, guard hook, MCP server): /plugin marketplace add dmitriywind/agentic-sdlc, then /plugin install agentic-sdlc@agentic-sdlc');
   log.push('headless runs load it from the pinned package: claude -p ... --plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc (the ref in .agents/cli.json)');
+}
+
+const GUARD = '.agents/hooks/guard.mjs';
+
+/**
+ * Without the plugin (a Claude cloud session), the plugin's review sandbox as project files: its `sdlc-reviewer` agent
+ * in .claude/agents (tool and skill names as a project install has them) and its guard hook (hooks/hooks.json, the
+ * script copied to .agents/hooks) merged into .claude/settings.json. The plugin's files are the one source.
+ */
+function reviewSandbox(root: string, inst: Installer, log: string[]) {
+  const agent = readFileSync(need(inst.pkg, 'agents/sdlc-reviewer.md'), 'utf8')
+    .replaceAll('mcp__plugin_agentic-sdlc_agentic-sdlc__', 'mcp__agentic-sdlc__')
+    .replaceAll('agentic-sdlc:review', `${COPY_PREFIX}review`)
+    .replace(/\b([Tt]he) plugin's /g, '$1 ');
+  inst.put('.claude/agents/sdlc-reviewer.md', agent, 'agents/sdlc-reviewer.md');
+  inst.copy('hooks/guard.mjs', GUARD);
+  const want = JSON.parse(readFileSync(need(inst.pkg, 'hooks/hooks.json'), 'utf8').replaceAll('${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs', `\${CLAUDE_PROJECT_DIR}/${GUARD}`));
+  const rel = '.claude/settings.json', file = join(root, rel);
+  const had = existsSync(file);
+  const doc = had ? parseJson(readFileSync(file, 'utf8') || '{}', rel) : {};
+  const pre: any[] = (doc.hooks ??= {}).PreToolUse ??= []; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const has = (e: any) => pre.some((x) => x?.matcher === e.matcher && JSON.stringify(x.hooks) === JSON.stringify(e.hooks)); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const add = want.hooks.PreToolUse.filter((e: unknown) => !has(e));
+  if (!add.length) { log.push(`kept ${rel} (the guard hook is registered)`); return; }
+  pre.push(...add);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(doc, null, 2) + '\n');
+  log.push(`${had ? 'updated' : 'wrote'} ${rel}: the guard hook (${GUARD})`);
 }
 
 /** owner/name of a GitHub origin remote, or undefined. */
@@ -412,7 +440,7 @@ async function init(root: string, argv: string[], log: string[]) {
       inst.put('.github/rulesets/trunk.json', text, `${tdir}/ruleset.trunk.json`); // hashed as written, patch included
       log.push('import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk');
       log.push(oneIdentity
-        ? 'one identity: the ruleset needs no approving review and pins every required check to GitHub Actions (integration_id 15368); a Full-lane CR waits on human-approval until a collaborator approves it or you merge it as admin'
+        ? 'one identity: the ruleset needs no approving review and pins every required check to GitHub Actions (integration_id 15368); a Full-lane CR waits on human-approval until a collaborator approves its head or you apply forge.approval_label to it'
         : 'its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App\'s id if it is an App (a PAT cannot be pinned)');
     }
     if (continuous && existsSync(join(dir, 'ruleset.release.json'))) inst.skip('.github/rulesets/release.json');

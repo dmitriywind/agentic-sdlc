@@ -118,6 +118,42 @@ Feature: Gate human-approval
       When the approval gate runs
       Then the status "human-approval" is "success"
 
+  Rule: With one account an owner approves by the approval label, for the head it was applied to
+    GitHub refuses an approving review by the CR's author, so the gate also takes forge.approval_label
+    (default approved) applied by an account the class asks for, outside the bots, after the head reached the forge.
+
+    Scenario Outline: The label approves only when the right account applied it after the head's push
+      Given the binding sets "owners.product" to the list "po, factory-bot"
+      And a product CR whose ticket has the Lane "Full"
+      And the head reached the forge at "10:00"
+      And "<who>" applied the approval label at "<at>"
+      When the approval gate runs
+      Then the status "human-approval" is "<state>"
+
+      Examples:
+        | who         | at    | state   |
+        | po          | 10:05 | success |
+        | po          | 09:55 | pending |
+        | dana        | 10:05 | pending |
+        | factory-bot | 10:05 | pending |
+
+    Scenario: The status names the owner and the label
+      Given the binding sets "owners.product" to "po"
+      And a product CR whose ticket has the Lane "Full"
+      And the head reached the forge at "10:00"
+      And "PO" applied the approval label at "10:05"
+      When the approval gate runs
+      Then the status description is "product-full: approved by po (label approved)"
+
+    Scenario: A push withdraws the label
+      Given the binding sets "owners.product" to "po"
+      And a product CR whose ticket has the Lane "Full"
+      And the head reached the forge at "10:00"
+      And "po" applied the approval label at "10:05"
+      When the approval gate runs on a push
+      Then the CR no longer carries the approval label
+      And the status "human-approval" is "pending"
+
   Rule: A guardrail CR needs owners.factory
 
     Scenario: A human who is not owners.factory leaves a guardrail CR pending

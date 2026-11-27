@@ -1,5 +1,5 @@
 // In-memory board, forge and VCS for the gates: what a gate scenario programs and then inspects.
-import type { Comment, CR, CrCommit, Item, Review, Run } from '../../src/ports.ts';
+import type { Comment, CR, CrCommit, Item, LabelEvent, Review, Run } from '../../src/ports.ts';
 import type { Deps } from '../../src/gates.ts';
 
 /** The binding every gate scenario starts from. Steps change it through world.gate.binding. */
@@ -24,6 +24,8 @@ export class GateFakes {
   crs = new Map<string, Partial<CR>>();
   diffs = new Map<string, string | Error>();
   reviews = new Map<string, Review[]>();
+  /** The label history of a CR, oldest first. */
+  labelEvents = new Map<string, LabelEvent[]>();
   comments = new Map<string, Comment[]>();
   /** The commits of a CR (oldest first), or the error the forge answers with. */
   commits = new Map<string, CrCommit[] | Error>();
@@ -96,6 +98,12 @@ export class GateFakes {
       },
       diff: async (n: string) => { const d = this.diffs.get(n) ?? ''; if (d instanceof Error) throw d; return d; },
       approvals: async (n: string) => this.reviews.get(n) ?? [],
+      labelEvents: async (n: string) => [...(this.labelEvents.get(n) ?? [])],
+      unlabel: async (n: string, label: string) => {
+        const list = this.labelEvents.get(n) ?? [];
+        if (list.filter((e) => e.label === label).at(-1)?.action === 'labeled') list.push({ label, action: 'unlabeled', actor: 'github-actions[bot]', bot: true, at: new Date().toISOString() });
+        this.labelEvents.set(n, list);
+      },
       comments: async (n: string) => [...(this.comments.get(n) ?? [])],
       commits: async (n: string) => { const c = this.commits.get(n) ?? []; if (c instanceof Error) throw c; return c; },
       run: async (id: string) => { const r = this.runs.find((x) => x.id === id); if (!r) throw new Error(`no run ${id}`); return r; },

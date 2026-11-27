@@ -26,7 +26,7 @@ You can change every answer later.
 | Who reviews | `review/review` in the cycle, as a fresh agent context. | `review/review` in a separate review run that holds the review token. |
 | Review status | CI posts it from the report `forge verdict` publishes. | `forge verdict` posts it as the review app, and approves. |
 | Runs to schedule | One: the cycle. | Two: the cycle, then the review run (`review-prompt.md`). |
-| Full-lane approval | A collaborator approves it, or you merge it as admin. | A human approves the latest commit. |
+| Full-lane approval | You add the approval label after the latest push, or a collaborator approves it. | A human approves the latest commit. |
 | What it proves | The review is a separate agent context, not a separate account: the branch rules cannot prove an agent did not post its own review status. | No implementer can post the review status or approve its own change. |
 
 </details>

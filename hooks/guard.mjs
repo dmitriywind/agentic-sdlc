@@ -4,7 +4,9 @@
 // - `agentic-sdlc forge approve` (Bash or the MCP tool) unless AGENTIC_SDLC_ROLE=review: only the review runtime approves;
 // - `agentic-sdlc forge status` (Bash or the MCP tool) unless AGENTIC_SDLC_ROLE=review or AGENTIC_SDLC_ALLOW_STATUS=1
 //   (the runner sets it for a one-identity cycle that starts `mcp --allow status`): an implementer never posts a status.
-// - any Bash command that is not an agentic-sdlc CLI call, from the `sdlc-reviewer` agent.
+// - any Bash command that is not an agentic-sdlc CLI call, from the `sdlc-reviewer` agent;
+// - a write of forge.approval_label (default approved): `board label <id> add <it>` (Bash or the MCP tool), and any gh,
+//   curl or wget command that names a label and it. With one identity the label is the owner's approval: no agent sets it.
 // No dependencies: a plugin installed from git has no node_modules.
 // ponytail: a token scan, not a shell parser, and it fails closed on what it cannot resolve (a variable, a cd to a computed path).
 // The trunk ruleset and the absence of the review token are the real boundary; this hook is a second line of defence.
@@ -26,6 +28,31 @@ const REVIEWER = 'the sdlc-reviewer agent runs only agentic-sdlc commands in Bas
 const APPROVE = 'forge approve is for the review runtime only (AGENTIC_SDLC_ROLE=review).';
 const STATUS = 'forge status is for the review runtime only (AGENTIC_SDLC_ROLE=review, or AGENTIC_SDLC_ALLOW_STATUS=1 set by the runner for a one-identity cycle).';
 
+// The binding lives at the project root: the repo top, the main checkout of a linked worktree, the plugin's project dir, or cwd.
+const gitOut = (cwd, ...args) => {
+  try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+  catch { return ''; }
+};
+const common = gitOut(dir, 'rev-parse', '--path-format=absolute', '--git-common-dir');
+const trunks = new Set(['main', 'master']);
+let approvalLabel = 'approved';
+for (const c of [gitOut(dir, 'rev-parse', '--show-toplevel'), common && dirname(common), process.env.CLAUDE_PROJECT_DIR, dir]) {
+  if (!c) continue;
+  let text;
+  try { text = readFileSync(join(c, '.agents', 'binding.yml'), 'utf8'); } catch { continue; }
+  const m = /^\s*trunk:\s*["']?([^\s"'#]+)/m.exec(text);
+  if (m) { trunks.clear(); trunks.add(m[1]); }
+  const l = /^\s*approval_label:\s*["']?([^"'#\n]*?)["']?\s*(#.*)?$/m.exec(text);
+  if (l?.[1]) approvalLabel = l[1].trim();
+  break;
+}
+const LABEL = `the approval label '${approvalLabel}' is the owner's approval (forge.approval_label): no agent writes it; ask the owner (escalate).`;
+
+if (/board_label$/.test(input.tool_name ?? '')) {
+  // GitHub matches label names case-insensitively.
+  if (String(input.tool_input?.op ?? '') !== 'remove' && String(input.tool_input?.label ?? '').trim().toLowerCase() === approvalLabel.toLowerCase()) block(LABEL);
+  process.exit(0);
+}
 if (/forge_approve$/.test(input.tool_name ?? '')) {
   if (!review) block(APPROVE);
   process.exit(0);
@@ -37,23 +64,8 @@ if (/forge_status$/.test(input.tool_name ?? '')) {
 const command = String(input.tool_input?.command ?? '');
 if (!command) process.exit(0);
 
-const gitOut = (cwd, ...args) => {
-  try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
-  catch { return ''; }
-};
 const headOf = (cwd, extra = []) => gitOut(cwd, ...extra, 'rev-parse', '--abbrev-ref', 'HEAD');
 
-// The binding lives at the project root: the repo top, the main checkout of a linked worktree, the plugin's project dir, or cwd.
-const common = gitOut(dir, 'rev-parse', '--path-format=absolute', '--git-common-dir');
-const trunks = new Set(['main', 'master']);
-for (const c of [gitOut(dir, 'rev-parse', '--show-toplevel'), common && dirname(common), process.env.CLAUDE_PROJECT_DIR, dir]) {
-  if (!c) continue;
-  let text;
-  try { text = readFileSync(join(c, '.agents', 'binding.yml'), 'utf8'); } catch { continue; }
-  const m = /^\s*trunk:\s*["']?([^\s"'#]+)/m.exec(text);
-  if (m) { trunks.clear(); trunks.add(m[1]); }
-  break;
-}
 const CLI = /[^/\\]*agentic-sdlc[^/\\]*$|(^|[/\\])bin\.js$|agentic-sdlc[/\\](.*[/\\])?dist[/\\](bin|cli)\.js$/;
 const GIT = /(^|[/\\])git(\.exe)?$/;
 const WITH_VALUE = ['-C', '-c', '--git-dir', '--work-tree', '--namespace'];
@@ -101,6 +113,10 @@ let cwd = dir; // where the next command runs; null when a cd went to a path tha
 // The reviewer's command is scanned with its /dev/null redirections removed; any other redirection or `$` or backtick blocks it.
 const scanned = reviewer ? command.replace(/\s\d*>>?\s*\/dev\/null/g, '').replace(/\s2>&1/g, '') : command;
 if (reviewer && /[<>$`]/.test(scanned)) block(REVIEWER);
+// ponytail: a word scan; a gh/curl/wget command that names a label and the approval label anywhere is refused, reads included.
+const LABEL_WORD = new RegExp(`(^|[^\\w-])${approvalLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^\\w-]|$)`, 'i');
+const WRITER = /(^|[/\\])(gh|curl|wget)(\.exe)?$/;
+if (/label/i.test(command) && LABEL_WORD.test(command) && scan(command).some((s) => s.t.some((x) => WRITER.test(x.s)))) block(LABEL);
 for (const seg of scan(scanned)) {
   const tt = seg.t, t = tt.map((x) => x.s);
   let ci = 0;
@@ -125,6 +141,10 @@ for (const seg of scan(scanned)) {
       const verb = rest[1]?.s ?? '', unknown = seg.subst || /[$`]/.test(verb);
       if ((verb === 'approve' || unknown) && !review) block(APPROVE);
       if ((verb === 'status' || unknown) && !status) block(STATUS);
+    }
+    if (rest[0]?.s === 'board' && (rest[1]?.s === 'label' || seg.subst || rest[1]?.dyn)) {
+      const tail = rest.slice(2);
+      if (seg.subst || tail.some((x) => x.dyn) || (!tail.some((x) => x.s === 'remove') && tail.some((x) => LABEL_WORD.test(x.s)))) block(LABEL);
     }
   }
   const g = t.findIndex((x) => GIT.test(x));

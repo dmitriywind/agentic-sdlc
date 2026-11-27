@@ -147,6 +147,8 @@ export function validateBinding(b: Binding): string[] {
   }
   const ha = x.forge?.human_approval;
   if (ha !== undefined && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join('|')}`);
+  const al = x.forge?.approval_label;
+  if (al !== undefined && (typeof al !== 'string' || !al.trim())) p.push('forge.approval_label must be a label name');
   for (const k of ['bench_min_cases', 'bench_trials']) {
     const v = x.learning?.[k];
     if (v !== undefined && !(Number.isInteger(v) && v > 0)) p.push(`learning.${k} must be a positive integer`);
@@ -188,7 +190,7 @@ export function bindingWarnings(b: Binding): string[] {
   const ha = x?.forge?.human_approval ?? 'full-lane';
   if (ha !== 'never' && x?.owners) {
     const o = ownersFor(x.owners, 'forge');
-    if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved; add a second account to owners.product, or merge those CRs as admin`);
+    if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved (by a review or forge.approval_label); take your own account out of owners.bots (owners are trusted without it), or add a second account to owners.product`);
   }
   const hb = String(x?.heartbeat?.ticket ?? '');
   if (['github-issues', 'local'].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);

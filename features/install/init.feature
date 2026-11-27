@@ -105,6 +105,16 @@ Feature: Init installs the factory
       And the installed file ".mcp.json" sets "mcpServers.agentic-sdlc.command" to ".agents/bin/agentic-sdlc"
       And the installed file ".mcp.json" sets "mcpServers.agentic-sdlc.args" to '["mcp"]'
 
+    Scenario: Without the plugin, init writes the reviewer agent and registers the guard hook, keeping the adopter's settings
+      Given the project has the file ".claude/settings.json" holding '{"model":"mine","hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[]}]}}'
+      When I run the install command "init --harness claude --no-plugin"
+      Then the installed file ".claude/agents/sdlc-reviewer.md" matches "^tools: .*mcp__agentic-sdlc__\*$"
+      And the installed file ".claude/agents/sdlc-reviewer.md" matches "^disallowedTools: Edit, Write"
+      And the installed file ".agents/hooks/guard.mjs" exists
+      And the installed file ".claude/settings.json" sets "model" to "mine"
+      And the installed file ".claude/settings.json" sets "hooks.PostToolUse.matcher=Edit.matcher" to "Edit"
+      And the installed file ".claude/settings.json" sets "hooks.PreToolUse.matcher=Bash.hooks.type=command.command" to 'node "${CLAUDE_PROJECT_DIR}/.agents/hooks/guard.mjs"'
+
     Scenario Outline: Init keeps an MCP entry that the adopter wrote, and --force replaces it
       Given the project has the file ".mcp.json" holding '{"mcpServers":{"agentic-sdlc":{"command":"mine"}}}'
       When I run the install command "init --harness claude --no-plugin <flag>"

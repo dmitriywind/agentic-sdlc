@@ -103,7 +103,7 @@ Every verb takes only the flags it lists: an unknown flag, a value flag with no 
 | `create --title <t> --body-file <f> --status <s> [--label <l>]… [--parent <id>] [--milestone <m>]` | New ticket on the board | `Item` |
 | `move <id> <status> [--only-from <s>]` | Set Status. With `--only-from`, refuse (exit 1) unless the item is still there | `Item` |
 | `set <id> <field> <value>` / `set <id> <field> --clear` | Set or clear a logical field | `Item` |
-| `label <id> add\|remove <label>` | Add or remove a label | `Item` |
+| `label <id> add\|remove <label>` | Add or remove a label. Refuses (exit 1) to add `forge.approval_label`: on a forge whose CRs are issues it is the owner's approval of a CR head | `Item` |
 | `assign <id> <user\|--none>` | Set or clear the assignee | `Item` |
 | `milestone <id> <name>` / `milestone <id> --clear` | Set or clear the milestone of an existing ticket, where `create --milestone` puts it (`github-issues`: the issue's milestone, which must exist; `local`: the item's `milestone`) | `Item` |
 | `comment <id> --body-file <f> [--kind <kind> [--ref <value>]]` | Add a comment; `--kind` stamps the kind's marker as its first line, filled with `--ref` (section 11.1) | `{ id, url }` |
@@ -144,6 +144,7 @@ projects). Credentials only from env vars the binding names; never from a file i
 | `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status / external check, posted with `options.review_token_env`; with one identity (`review_identity` empty), with the implementer's token. The verb refuses the contexts the gates own (`human-approval`, `ticket-linkage`, `proofs-on-base`, `agent-provenance`). The `proofs-on-base` and `linkage` gates post with `options.token_env` (the CI job's token); with two identities the CLI verb never does. | `{}` |
 | `approve <n>` | Approving review as `review_identity`, with `options.review_token_env`. Refused with one identity: GitHub refuses an approval from the CR's author | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
+| (no verb) `labelEvents(n)`, `unlabel(n, label)` | Port methods the `approval` gate alone calls: the CR's label history (`{ label, action: labeled\|unlabeled, actor, bot, at }`, the forge's clock; GitHub: `issues/{n}/events`), and the removal of one label (absent is fine). Optional: a forge without them has no label approval | |
 | `runs [--ref <r>] [--failed]` | CI runs (the newest 30) | `Run[]` |
 | `run <id>` | One CI run by id; a run that does not exist fails (exit 1) | `Run` |
 | `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
@@ -193,7 +194,7 @@ change line `start` opens.
 | `branch-names` | A change line outside the binding's patterns, the dependency lines `dependabot/` and `renovate/`, and the trunk is refused. |
 | `linkage` | Posts check `ticket-linkage`: a product CR closes exactly one open ticket and names it in its source. |
 | `proofs-on-base --cr <n>` | In the no-secrets `pull_request` job: runs the CR's new or changed proof files against the merge base's product code; posts status `proofs-on-base`, success when each new proof fails on base, or when a product CR changes only `paths.no_proof`. |
-| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (an owner, member or collaborator of the repo, not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by any `owners.factory` entry. Runs on CR events and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
+| `approval --cr <n>` | Classifies the CR as `product-fast`, `product-full`, `tuning` or `guardrail` (§6.5) and posts status `human-approval`. Success for `product-fast`; for `tuning` when `tuning` is in `learning.auto_merge_classes`; for `product-full` (when `forge.human_approval` is `full-lane` or `always`) and for every product CR when `always`, only with an approving review on the head SHA by a human (an owner, member or collaborator of the repo, not in `owners.bots`, not `forge.review_identity`); for `guardrail` only with an approval by any `owners.factory` entry. Instead of the review, `forge.approval_label` (default `approved`) on the CR approves the head when its last label event is `labeled`, by an account the class asks for (`owners.product` for `product-full`, `owners.factory` for `guardrail` and an owner-waiting `tuning`), not a forge bot, not in `owners.bots`, not `forge.review_identity`, at a time after the head's `pushedAt`; no `pushedAt` means no label approval. With `--pushed` (CI on a push to the CR) the gate first removes the label, so a push always withdraws it. Runs on CR events (`labeled` and `unlabeled` too) and on review submitted. Unknown paths, deletions or an unreadable head fail closed to `guardrail`. A CR that mixes product and factory paths is `guardrail`; a product CR that touches `paths.lane_areas` is `product-full`. |
 | `review --cr <n>` | One identity only (`forge.review_identity` empty): posts status `review` on the head from the newest `verdict` comment for that head by a trusted author (`owners.bots` and every owner role): success on `Verdict: PASS`, failure on `REMEDIATION REQUIRED`, pending with no report. Posts with the CI job's token. With two identities it does nothing. |
 | `merged --sha <sha>` | Run on a trunk push. The CR merged at `<sha>` moves its one ticket to Done (`--only-from` its current status) and sets Shipped Not shipped when empty. A held ticket moves too, and Done drops its human label; a Cancelled ticket stays. A push with no CR changes nothing. No CR-pipeline gate writes the board; besides this gate only `shipped` moves a ticket (In review to Done, when a deploy reports first). |
 | `shipped <env> --sha <sha> --result success\|failure\|rolled-back [--version <v>]` | Only Done or In review tickets whose CR merge is an ancestor of `<sha>` get `On <env>` (an In review one moves to Done first); `--version` gives the ones without a Release Version that version, and the last environment tags it. `rolled-back`: tickets On `<env>` or later whose merges are not in `<sha>` (the revision now running) step back one environment and keep their version. Unknown ancestry changes nothing. A failure in the last environment returns the tickets of the version in flight to the previous environment, clears the version and opens a held Signal. |
@@ -246,7 +247,8 @@ Keys this contract relies on by name:
   (empty: one identity), `forge.options.review_token_env` (set exactly when `review_identity` is, and
   never equal to `token_env`; `validate` fails otherwise), `forge.required_checks`. `validate` warns when
   `human_approval` is not `never` and every `owners.product` account is also in `owners.bots`: no human outside the bots
-  can approve a Full-lane CR (add a second account, or merge as admin). An unset `token_env` variable falls back to
+  can approve a Full-lane CR (take your own account out of `owners.bots`, or add a second account). `forge.approval_label`
+  (default `approved`): the label an owner applies to approve a CR head (gate `approval`); `validate` fails an empty one. An unset `token_env` variable falls back to
   gh's own login only in a Claude cloud session (`CLAUDE_CODE_REMOTE`); elsewhere it fails.
 - `board.scope: { label, home, repos }` (unset: the board serves one repo): many repos on one board.
   Section 10 says what it does.
@@ -256,7 +258,7 @@ Keys this contract relies on by name:
   `product.evidence` kind exists for `{sha}`; the release ready check runs it).
 - `product.slo: { change_failure_rate_max: <0..1>, window_days: <n> }` (optional; unset: no error
   budget). `validate` rejects a rate outside 0 to 1 and a non-positive window.
-- `product.delivery: release-line | continuous` (default `release-line`; continuous needs no
+- `product.delivery: release-line | continuous` (`init` writes `continuous`; a binding without the key is `release-line`; continuous needs no
   `vcs.release_prefix` and has no In release), `product.evidence: [sbom | provenance | signature]`,
   `paths.no_proof` (globs a product CR may change with no proof file).
 - `cycle.dedupe_minutes`: a second dispatch of the same skill and subject while the first marker is
@@ -401,7 +403,7 @@ executors:
 
 | Kind | Start | Result comes back by |
 |---|---|---|
-| `harness` | `dispatch` prints the task; the navigator runs it in a fresh context on the step's tier (Claude Code: `sdlc-<tier>` from `.claude/agents/`, else the plugin's `agentic-sdlc:sdlc-<tier>`; every `review/review` goes to `agentic-sdlc:sdlc-reviewer`). | The worker's own board and forge writes. |
+| `harness` | `dispatch` prints the task; the navigator runs it in a fresh context on the step's tier (Claude Code: `sdlc-<tier>` from `.claude/agents/`, else the plugin's `agentic-sdlc:sdlc-<tier>`; every `review/review` goes to `agentic-sdlc:sdlc-reviewer`, or without the plugin to `sdlc-reviewer` from `.claude/agents/`). | The worker's own board and forge writes. |
 | `command` | The CLI runs `run` with `{skill} {ticket} {cr} {workdir} {prompt_file} {mcps_file} {model} {max_turns} {max_tokens} {max_minutes}` filled in (`{skill}` is `<skill>/<step>`). | Exit code plus the bot's board and forge writes. |
 
 **Where `review/review` runs.** With `forge.review_identity` empty, it runs like any step. With it
@@ -457,15 +459,15 @@ Nothing in the skills assumes a web app or a code product. The binding states wh
 ```yaml
 product:
   environments: [staging, production]   # ordered; the last is where users get value
-  delivery: release-line                 # release-line | continuous
+  delivery: continuous                   # continuous | release-line
   evidence: [sbom, provenance, signature] # release evidence; commands.evidence_check proves it
   proofs: [test, eval, visual, data-check, computer-use, manual]
 paths:
   no_proof: ["docs/**", "*.md"]          # a product CR changing only these needs no proof file
 ```
 
-- `product.delivery: release-line` (the default) deploys the last environment from a release line the
-  Product owner approves. `continuous` deploys every environment from the trunk: no release line, no
+- `product.delivery: release-line` (opt in; also what a binding without the key gets) deploys the last environment from a release line the
+  Product owner approves (`ship`). `continuous` (what `init` writes) deploys every environment from the trunk: no release line, no
   `ship` step, and the deploy pipeline records the artifact version with `gate shipped --version`.
 - Shipped options are derived: `Not shipped`, `On <env>` per environment, and `In release` before
   the last one (release-line only). The `shipped` gate takes any environment name. A product with no deploy uses its
@@ -568,7 +570,11 @@ a cloud task stopped at the usage limit or disconnected from GitHub writes no he
 **Packaging.** The package is a Claude Code plugin (`.claude-plugin/`: skills,
 hooks, the MCP server, `agents/` with a subagent per tier and `sdlc-reviewer`, `bin/` with the CLI on the Bash PATH, `evals/`), so skills are named `/agentic-sdlc:<skill>`. The plugin's tier agents are the default; `.claude/agents/sdlc-<tier>.md` from `init` carries the binding's models and is used when present (the names differ: `agentic-sdlc:sdlc-<tier>` against `sdlc-<tier>`). `sdlc-reviewer` has no Edit or Write tool, and the guard hook lets it run only `agentic-sdlc` commands in Bash, so `review/review` never runs CR code. `init` always
 copies the pack to `.agents/skills` (the gates and `validate` read it); `init` generates one subagent per tier and adds an `@AGENTS.md` import to
-`CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. Claude
+`CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. It also
+keeps the review sandbox there: it writes the plugin's `agents/sdlc-reviewer.md` to `.claude/agents/sdlc-reviewer.md` (its MCP tools named
+`mcp__agentic-sdlc__*`, its skill `sdlc-review`), copies `hooks/guard.mjs` to `.agents/hooks/guard.mjs` and merges the entries of the
+plugin's `hooks/hooks.json`, with that path, into `.claude/settings.json` (adds a missing entry, keeps every other key; a second run
+writes nothing). The plugin's files are the one source; `init --upgrade` follows them like any installed file. Claude
 headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-turns`. The cycle
 allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm checks, and adds
 `--disallowedTools` for `forge approve`. The review allows only the CLI and the MCP server.
@@ -600,9 +606,17 @@ subscription token and bills the API.
   GitHub refuses one from the CR's author, and `forge approve` refuses. `init` writes a trunk ruleset
   that needs no approving review and pins every required check to GitHub Actions. The
   `approval` gate posts `human-approval` with the CI job's token; a CR that needs a human waits until a
-  collaborator approves its head, or the owner merges it as admin (the ruleset's admin bypass). The
+  collaborator approves its head, or the owner applies `forge.approval_label` to it (GitHub refuses the
+  owner's own review, since the owner's account authored the CR). The CR workflow runs from the base
+  branch (`pull_request_target`), re-runs the gate on `labeled` and `unlabeled`, and on every push removes
+  the label with the job's token before the gate runs; the gate also takes only a label applied after the
+  head's `pushedAt`. What the label proves here: a deliberate act on the forge outside the agent's
+  allowed tool surface, not a second identity. The agent and the owner are one login, so the forge
+  cannot tell who applied it; the guard hook refuses every agent write of it (`board label ... add`, the
+  `board_label` MCP tool, and a `gh`, `curl` or `wget` command naming a label and it), and `board label`
+  refuses it in the CLI. An agent that reached GitHub some other way could still apply it. The
   trade-off: the review is a separate context, not a separate account, so the trunk ruleset cannot
-  prove that an agent did not post its own `review` status.
+  prove that an agent did not post its own `review` status or apply the approval label.
 - **Two identities** (`review_identity` and `review_token_env` set; required for `organization`).
   Every scheduler runs two jobs: the cycle (`templates/runner/cycle-prompt.md`), which never holds the
   review token, and the review (`templates/runner/review-prompt.md`), which runs after the cycle
@@ -613,7 +627,7 @@ subscription token and bills the API.
   check is pinned to the app that posts it. So an implementer can never post the `review` status or
   the approving review for its own CR, and a CR's code never sees the review token.
 
-In both, `forge status` refuses the contexts the gates own (`human-approval`, `ticket-linkage`,
+In both, the guard hook refuses an agent write of `forge.approval_label`, `forge status` refuses the contexts the gates own (`human-approval`, `ticket-linkage`,
 `proofs-on-base`, `agent-provenance`), and `review/review` **never runs CR code**: it reads the required checks
 from CI and runs no install or test command. The MCP server's default tool list has no `forge_status`,
 so a one-identity cycle that has no shell starts it with `mcp --allow status`. Unattended jobs set
@@ -770,6 +784,6 @@ index counts from the end), `{id}` the ticket's id; a condition whose binding va
 | Class | Covers | `human-approval` passes when |
 |---|---|---|
 | `product-fast` | a Fast-lane product CR | always; with `forge.human_approval: always`, as `product-full` |
-| `product-full` | a Full-lane product CR, or one touching `paths.lane_areas` | `forge.human_approval` is `never`, or a human (not `owners.bots`, not `forge.review_identity`) approved the head |
+| `product-full` | a Full-lane product CR, or one touching `paths.lane_areas` | `forge.human_approval` is `never`, or a human (not `owners.bots`, not `forge.review_identity`) approved the head, or an `owners.product` account applied `forge.approval_label` after the head's push |
 | `tuning` | only the `models` map, and a skill's tiers when it has a bench suite | `tuning` is in `learning.auto_merge_classes`; else as `guardrail` |
-| `guardrail` | everything else under `paths.factory`, a mixed CR, anything unclassifiable | an `owners.factory` entry approved the head |
+| `guardrail` | everything else under `paths.factory`, a mixed CR, anything unclassifiable | an `owners.factory` entry approved the head, or applied `forge.approval_label` after the head's push |

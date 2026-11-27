@@ -153,6 +153,8 @@ export const cli: PortCli = async (argv, base) => {
       case 'label':
         need(3);
         if (a.pos[1] !== 'add' && a.pos[1] !== 'remove') throw new Usage('label: add or remove');
+        // With one identity this label is the owner's approval of a CR head (gate approval): no agent writes it.
+        if (a.pos[1] === 'add' && a.pos[2].toLowerCase() === (base.binding.forge?.approval_label || 'approved').toLowerCase()) throw new Error(`board label: '${a.pos[2]}' is forge.approval_label, the owner's approval; only the owner applies it, on the forge`);
         out = await board.label(id, a.pos[1], a.pos[2]);
         break;
       case 'assign': need(a.has('none') ? 1 : 2); out = await board.assign(id, a.has('none') ? null : a.pos[1]); break;

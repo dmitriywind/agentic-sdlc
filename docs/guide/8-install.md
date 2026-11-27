@@ -41,6 +41,8 @@ install it.
    options (`init` reads the repo from `git remote origin`), `commands.*`, `product.environments`,
    `product.delivery` and `models`. `.agents/bin/agentic-sdlc validate` names every key still missing.
    It also warns, per `paths.*` file key, when the named file is missing: the skills then read nothing there.
+   `init` writes `product.delivery: continuous`: every merge ships, with no release line and no `ship`
+   step. Set `release-line` to opt in to releases the Product owner approves.
    The Claude Code plugin also brings a subagent per tier, a `sdlc-reviewer` that can only read files and
    run `agentic-sdlc` commands, and `agentic-sdlc` itself on the Bash path.
 3. **Write the two docs** the skills judge every ticket against: `paths.importance_doc` (what
@@ -92,5 +94,10 @@ A skill under the plugin is `agentic-sdlc:<skill>`. A copied install has no name
 names each copy `sdlc-<skill>` (`sdlc` stays `sdlc`). A scheduled run loads the pinned copy instead:
 `claude --plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc`, where `<ref>` is the `ref` in
 `.agents/cli.json`. A Claude cloud routine loads `.claude/skills/`: install with `init --no-plugin`.
+Without the plugin, `init` also writes the plugin's reviewer as `.claude/agents/sdlc-reviewer.md` and
+registers the plugin's guard hook in `.claude/settings.json` (the script at `.agents/hooks/guard.mjs`),
+keeping every setting you have there, so the review still never runs the pull request's code. A second
+run changes nothing. The behaviour is in [the init feature](../../features/install/init.feature) and
+[the upgrade feature](../../features/install/upgrade.feature).
 
 Next: [9. Run it](9-run-it.md).
