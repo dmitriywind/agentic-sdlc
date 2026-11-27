@@ -62,6 +62,14 @@ Feature: Init upgrades an install
       Then the installed file ".agents/cycle-prompt.md" holds "cycle-prompt.md"
       And the output has the line "updated .agents/cycle-prompt.md"
 
+    Scenario: A checkout with CRLF line endings is not an edit
+      Given the package file "templates/runner/cycle-prompt.md" holds "line one\nline two\n"
+      And I run the install command "init"
+      And the project has the file ".agents/cycle-prompt.md" holding "line one\r\nline two\r\n"
+      When I run the install command "init --upgrade"
+      Then no line of the output matches "cycle-prompt"
+      And the installed file ".agents/cycle-prompt.md" holds "line one\r\nline two\r\n"
+
   Rule: A file the package no longer ships is removed when unedited and reported when edited
 
     Background:
