@@ -6,8 +6,11 @@ loads the `sdlc` skill, the navigator: it decides the order of work, fresh-conte
 steps, and it writes a heartbeat at the end. Step through one cycle below, and try the cases that
 stop or change it.
 
-The navigator reads the board, the held tickets (`board holds`) and the open pull requests
-(`forge queue`) once. A ticket routes by its status. A pull request routes by the one next action
+The navigator does not read the board itself. It runs `agentic-sdlc next`, which reads the board, the
+held tickets (`board holds`), the open pull requests (`forge queue`) and the run ledger once and
+prints the holds to release and the work in order. A quiet hour costs two commands: the claim and
+`next --idle-exit`, which writes the heartbeat itself. At the end `ledger heartbeat` writes the
+heartbeat and the line that ends the claim. A ticket routes by its status. A pull request routes by the one next action
 the queue gives it: `review` (no verdict for its latest commit), `rework` (a failed review or a red
 check: `build` fixes it), `sync` (behind the main branch), `land` (`forge land` merges it), `wait`
 or `escalate` (stalled, or sent back `cycle.max_rework` times).
@@ -19,7 +22,9 @@ flowchart LR
   c3 --> c4["4. Route"]:::agent --> c5["5. Review"]:::agent --> c6["6. Heartbeat"]:::board
 ```
 
-The routing order and every rule of the cycle are in [`skills/sdlc/SKILL.md`](../../skills/sdlc/SKILL.md).
+The routes, their order and the caps are data in [`skills/sdlc/routes.yml`](../../skills/sdlc/routes.yml);
+the steps of the cycle are in [`skills/sdlc/SKILL.md`](../../skills/sdlc/SKILL.md). The behaviour is in
+[`features/cycle/next.feature`](../../features/cycle/next.feature).
 
 ## Rules that keep it safe
 

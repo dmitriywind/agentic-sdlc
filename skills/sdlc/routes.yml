@@ -1,0 +1,62 @@
+# The navigator's routing as data. `agentic-sdlc next` reads this file and applies it; the CLI holds no route.
+# `{$a.b}` is a binding value (a negative list index counts from the end: -1 is the last), `{id}` the ticket's id.
+# A condition whose binding value is unset does not hold.
+
+# Tickets: the first row whose conditions all hold routes the ticket. A held ticket and the heartbeat ticket match none.
+# A row without `step` routes nowhere. `step: queue` routes by the queue row of the CR that closes the ticket (crs below).
+# Conditions: status (one or a list); label (the ticket carries it); children (none | some | all-closed);
+# blocked (true | false: an open `Blocked by <id>` line); cr (none | open | by-person: an open CR closes the ticket,
+# by-person: one a person opened); no_open_title (no open ticket has this title); not (a condition that must fail);
+# any other key is a field or `milestone`: set, unset, or the value it must equal.
+tickets:
+  - { status: Ideas }                                                          # humans only
+  - { status: Signals, step: plan/triage, group: triage }
+  - { status: Backlog, label: "{$board.labels.release}", step: ship, group: release }
+  - { status: Backlog, children: all-closed, step: plan/groom, group: groom }  # it closes the initiative
+  - { status: Backlog, children: some }                                        # an initiative is never shaped or built
+  - { status: Backlog, priority: unset, step: plan/groom, group: groom }
+  - { status: Backlog, blocked: false, not: { milestone: "{$board.later_milestone}" }, step: plan/shape, group: shape }
+  - { status: Backlog }
+  - { status: [Ready, In progress], cr: by-person, step: build, group: handoff } # it hands the ticket to review
+  - { status: Ready, step: build, group: ready }
+  - { status: In progress, step: build, group: in-progress }
+  - { status: In review, cr: none, step: build, group: in-review }
+  - { status: In review, cr: open, step: queue }
+  - { status: Done, priority: "{$priorities.0}", shipped: "On {$product.environments.-2}", no_open_title: "Release for P0 #{id}", step: ship, group: release }
+  - { status: [Done, Cancelled] }                                              # gates write Shipped
+
+# CRs: what a `forge queue` action becomes, for a ticket at In review that is not held and for a CR with no ticket.
+# no_ticket: false skips a CR with no ticket. by_person: the step instead for a CR a person opened, once per head.
+crs:
+  review: { step: review/review, group: review }
+  rework: { step: build, group: in-review, no_ticket: false }                  # with no ticket the verdict is the answer
+  land: { step: land, group: in-review }
+  sync: { step: sync, group: in-review, by_person: note }
+  escalate: { step: escalate, group: in-review }
+  wait: {}
+
+# The order the navigator acts in. from: unscored-runs (learning.judge) or learning-due (learning.due) take their
+# entries from the ledger. sort: label (carries it first), priority, unblocks (named by an open blocker line first),
+# oldest. cap: at most this many. fill: until the tickets at `status` plus these entries reach `to`.
+# skip_when_budget_exhausted: no ticket with this label while the error budget is exhausted.
+groups:
+  - { name: judge, step: learn/judge, from: unscored-runs }
+  - { name: learn, step: learn/improve, from: learning-due }
+  - { name: triage, sort: [{ label: "signal:security" }, { label: "{$board.env_labels.-1}" }, oldest] }
+  - { name: release }
+  - { name: handoff }
+  - { name: in-review }
+  - { name: in-progress }
+  - { name: ready, sort: [priority, unblocks, oldest], cap: "{$cycle.max_implementations}", skip_when_budget_exhausted: "{$board.labels.feature}" }
+  - { name: groom }
+  - { name: shape, fill: { status: Ready, to: "{$cycle.min_ready}" } }
+  - { name: review }
+
+# Steps the navigator runs itself: never dispatched, outside the parallel_agents cap and the guards.
+navigator: [land, sync, note, escalate, ask]
+
+# Instead of a dispatch: over_budget for a ticket `ledger summary` marks overBudget; repeat for a step that failed in
+# each of the last cycle.failure_limit heartbeats with this factory sha (no_ticket: the step for one with no ticket).
+guards:
+  over_budget: { step: escalate, trigger: Money }
+  repeat: { step: escalate, trigger: Repeat, no_ticket: ask }

@@ -13,7 +13,8 @@ export const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, s
   vcs: [() => import('./vcs/index.ts'), true, 'start head changed base push cut tag tags drop checkout-tests'],
   dispatch: [() => import('./dispatch.ts'), true, 'dispatch <skill>[/<step>] --ticket <id> | --cr <n> [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]: start the step on its executor'],
   gate: [() => import('./gates.ts'), true, 'branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red signal skill-regression review provenance'],
-  ledger: [() => import('./ledger.ts'), true, 'runs summary plan record stale hash measures: the run ledger from heartbeats'],
+  next: [() => import('./next.ts'), true, '[--ticket <id>] [--idle-exit]: the cycle\'s work in order, from the board, holds, forge queue and ledger'],
+  ledger: [() => import('./ledger.ts'), true, 'runs summary plan record stale hash measures heartbeat: the run ledger from heartbeats'],
   bench: [() => import('./bench.ts'), true, 'build propose run report compare'],
   mcp: [() => import('./mcp.ts'), true, 'serve the port verbs as MCP tools over stdio; --allow approve,status'],
 };
@@ -45,10 +46,10 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv = process.env)
   if (!Object.hasOwn(GROUPS, group)) { console.error(`unknown group '${group}'\n${help()}`); return 2; }
   const entry = GROUPS[group];
   // `<group> --help` (or -h) prints that group's usage; a group that needs a verb and has none is a usage error.
-  const usage = `usage: agentic-sdlc ${group} ${group === 'init' ? INIT_FLAGS : entry[1] ? '<verb> ...' : ''}\n  ${entry[2]}`;
+  const usage = `usage: agentic-sdlc ${group} ${group === 'init' ? INIT_FLAGS : entry[1] && group !== 'next' ? '<verb> ...' : ''}\n  ${entry[2]}`;
   const isHelp = (a?: string) => a === '--help' || a === '-h';
   if (isHelp(rest[0]) || (entry[1] && isHelp(rest[1]))) { console.log(usage); return 0; }
-  if (!rest.length && entry[1] && group !== 'mcp') { console.error(usage); return 2; }
+  if (!rest.length && entry[1] && group !== 'mcp' && group !== 'next') { console.error(usage); return 2; }
   const ctx = { root, env, exec, http } as Omit<AdapterContext, 'options'>;
   // The binding loads on first read of ctx.binding; init, validate and doctor never use this getter.
   if (entry[1]) {

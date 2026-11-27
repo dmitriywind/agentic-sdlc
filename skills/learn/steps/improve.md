@@ -46,9 +46,11 @@ rule. Its output is one draft factory CR, or one heartbeat line saying why there
    holds the target with its count, the cause with run links, what the change touches, and the
    compare output (or the `bench report` rows). The approval gate classifies it; `review/review`
    reviews it. Done when the draft CR is open.
-9. **Record.** One `board comment <heartbeat.ticket> --kind heartbeat` as the navigator's Report
-   step says, with `kind: learn`: your own run row, its minutes including the bench, and `learning`
-   with `lastProposal` and, when you ran the trunk bench, `benchBaseline`. Done when it is posted.
+9. **Record.** One `board comment <heartbeat.ticket> --kind heartbeat --body-file <f>`, the body a
+   JSON object with `kind: learn`, `at`, `factory` (the `sha` of `vcs head`), `errors`, `runs` with
+   your own run row (the fields of the navigator's Report step, its minutes including the bench), and
+   `learning` with `lastProposal` and, when you ran the trunk bench, `benchBaseline`. Done when it is
+   posted.
 
 ## Rules
 
