@@ -5,6 +5,8 @@ import { posix } from 'node:path';
 import { join } from 'node:path';
 
 export const sha = (data: string | Buffer) => createHash('sha256').update(data).digest('hex');
+/** The hash of an installed file with LF line endings: a checkout with core.autocrlf (Windows) holds the same file with CRLF. */
+export const lfSha = (data: Buffer) => sha(data.toString('utf8').replaceAll('\r\n', '\n'));
 
 /** Package paths init installs from: the skill pack, scorers, gate templates, the launcher, and three runner files. */
 export const isInstallable = (path: string) =>

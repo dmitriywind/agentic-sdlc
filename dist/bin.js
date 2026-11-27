@@ -11375,11 +11375,12 @@ function knownHashes(pkg) {
   const f = join9(pkg, "templates", "known-hashes.json");
   return new Set(existsSync7(f) ? JSON.parse(readFileSync8(f, "utf8")) : []);
 }
-var sha, DEFAULTS, yamlScalar, COPY_PREFIX, skillNames, SKILL_ROOT;
+var sha, lfSha, DEFAULTS, yamlScalar, COPY_PREFIX, skillNames, SKILL_ROOT;
 var init_pristine = __esm({
   "src/pristine.ts"() {
     "use strict";
     sha = (data) => createHash2("sha256").update(data).digest("hex");
+    lfSha = (data) => sha(data.toString("utf8").replaceAll("\r\n", "\n"));
     DEFAULTS = { trunk: "main", releasePrefix: "release/", delivery: "release-line", install: "npm ci", verify: "npm test", ci: "CI", deployFirst: "Deploy staging", deployLast: "Deploy production" };
     yamlScalar = (v) => /^[\w./ -]+$/.test(v) ? v : JSON.stringify(v);
     COPY_PREFIX = "sdlc-";
@@ -11430,7 +11431,7 @@ function missingBindingKeys(template2, binding) {
     if (!(k in b)) out.push(k);
     else if (k === "paths") continue;
     else if (isMap(v) && isMap(b[k])) {
-      for (const k2 of Object.keys(v)) if (!(k2 in b[k])) out.push(`${k}.${k2}`);
+      for (const k2 of Object.keys(v)) if (!(k2 in b[k]) && `${k}.${k2}` !== "forge.ci_workflow") out.push(`${k}.${k2}`);
     }
   }
   return out;
@@ -11958,10 +11959,10 @@ ${END}`;
       put(rel, data, src, quiet = false, legacy) {
         rel = posix2(rel);
         this.offered.add(rel);
-        const to = join10(this.root, rel), want = sha(data);
+        const to = join10(this.root, rel), want = lfSha(Buffer.from(data));
         let how = "wrote";
         if (existsSync8(to)) {
-          const bytes = readFileSync9(to), have = sha(bytes);
+          const bytes = readFileSync9(to), have = lfSha(bytes);
           if (have === want) {
             this.lock[rel] = want;
             return true;
@@ -12022,7 +12023,7 @@ ${END}`;
       /** Is the installed file `rel` an unedited copy of some released version (its lock hash, or a known hash)? */
       pristine(rel) {
         const bytes = readFileSync9(join10(this.root, rel));
-        return sha(bytes) === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel));
+        return lfSha(bytes) === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel));
       }
       /**
        * Files the package no longer ships: an unedited one (its lock hash, or a hash a released version had) is removed, so an

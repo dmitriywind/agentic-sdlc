@@ -10,7 +10,7 @@ import { createForge } from './forge/index.ts';
 import { createVcs } from './vcs/index.ts';
 import { createLocalBoard } from './board/local.ts';
 import type { AdapterContext, Binding, PortCli } from './ports.ts';
-import { DEFAULTS, COPY_PREFIX, bindWorkflow, knownHashes, oneIdentityRuleset, releasedHash, renameSkill, sha, skillNames, type Bound } from './pristine.ts';
+import { DEFAULTS, COPY_PREFIX, bindWorkflow, knownHashes, lfSha, oneIdentityRuleset, releasedHash, renameSkill, sha, skillNames, type Bound } from './pristine.ts';
 import { readSkills, scorerTargets } from './skills.ts';
 
 const START = '<!-- agentic-sdlc:start -->';
@@ -90,10 +90,10 @@ class Installer {
   put(rel: string, data: string | Buffer, src?: string, quiet = false, legacy?: (text: string) => boolean): boolean {
     rel = posix(rel);
     this.offered.add(rel);
-    const to = join(this.root, rel), want = sha(data);
+    const to = join(this.root, rel), want = lfSha(Buffer.from(data));
     let how = 'wrote';
     if (existsSync(to)) {
-      const bytes = readFileSync(to), have = sha(bytes);
+      const bytes = readFileSync(to), have = lfSha(bytes);
       if (have === want) { this.lock[rel] = want; return true; }
       if (have === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel)) || (!(rel in this.lock) && legacy?.(bytes.toString('utf8')))) how = 'updated';
       else if (this.force) how = 'overwrote';
@@ -145,7 +145,7 @@ class Installer {
   /** Is the installed file `rel` an unedited copy of some released version (its lock hash, or a known hash)? */
   pristine(rel: string): boolean {
     const bytes = readFileSync(join(this.root, rel));
-    return sha(bytes) === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel));
+    return lfSha(bytes) === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel));
   }
   /**
    * Files the package no longer ships: an unedited one (its lock hash, or a hash a released version had) is removed, so an
@@ -188,8 +188,9 @@ export function missingBindingKeys(template: string, binding: string): string[] 
   const out: string[] = [];
   for (const [k, v] of Object.entries(t)) {
     if (!(k in b)) out.push(k);
-    else if (k === 'paths') continue; // init leaves out a paths file key whose file the project does not have
-    else if (isMap(v) && isMap(b[k])) for (const k2 of Object.keys(v)) if (!(k2 in (b[k] as object))) out.push(`${k}.${k2}`);
+    else if (k === 'paths') continue;
+    // forge.ci_workflow is absent on purpose where no workflow runs on a trunk push
+    else if (isMap(v) && isMap(b[k])) for (const k2 of Object.keys(v)) if (!(k2 in (b[k] as object)) && `${k}.${k2}` !== 'forge.ci_workflow') out.push(`${k}.${k2}`);
   }
   return out;
 }
