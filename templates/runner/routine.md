@@ -8,21 +8,16 @@ Two identities (required for organization): every scheduler runs two prompts, on
 - the review, started when the cycle ends: `review-prompt.md` (installed at `.agents/review-prompt.md`), the only run holding `AGENTIC_REVIEW_TOKEN` and `AGENTIC_SDLC_ROLE=review`.
 
 The cycle never holds the review token, so an implementer cannot approve its own CR. Every run sets `AGENTIC_SDLC_UNATTENDED=1`.
-A `github` (Projects v2) board needs a runtime that can reach GitHub Projects: GitHub Actions works, on a GitHub-hosted or a
-self-hosted runner (`AGENTIC_RUNS_ON`; no billed minutes). A Claude cloud routine cannot reach it; it runs a
-`github-issues`, `jira` or `linear` board (`claude-routine.md`).
-Setup step everywhere (a Claude cloud environment uses its own setup script, see `claude-routine.md`): `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_API_KEY` under the individual and individual-api profiles). Gates run in the forge's CI whatever the runtime.
+The `github-issues` board uses GitHub REST only, so every runtime below reaches it, a Claude cloud routine included.
+Setup step everywhere (a Claude cloud environment uses its own setup script, see `claude-routine.md`): `sh .agents/runner-setup.sh` (it also refuses `ANTHROPIC_API_KEY`). Gates run in the forge's CI whatever the runtime.
 
 | Runtime | Template | Profile |
 |---|---|---|
-| GitHub Actions + Claude Code CLI | `github-actions-claude.yml` | individual, individual-api (OAuth token) or organization (API key) |
-| GitHub Actions + Codex CLI | `github-actions-codex.yml` | individual-api or organization |
-| Claude cloud scheduled task (routine) | `claude-routine.md` (`github-issues`, `jira` or `linear` board) | individual, individual-api |
-| Claude Managed Agents scheduled deployment | `claude-managed-deployment.json` (below) | individual-api or organization |
-| Cursor automation | `cursor-automation.md` | any |
+| GitHub Actions + Claude Code CLI | `github-actions-claude.yml` | any (OAuth token) |
+| Claude cloud scheduled task (routine) | `claude-routine.md` | any |
 | Your own machine (cron, launchd, Task Scheduler, a Claude Desktop scheduled task) | `local.md` (no sandbox: opt in with `sandbox: local` and `AGENTIC_SDLC_LOCAL=1`) | any |
 
-Secrets: the agent's own credential plus `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN` (or the names the binding gives); with two identities, `AGENTIC_REVIEW_TOKEN` in the review run only.
+Secrets: the Claude subscription login plus `AGENTIC_FORGE_TOKEN` (or the names the binding gives); with two identities, `AGENTIC_REVIEW_TOKEN` in the review run only.
 Every `learning.every_cycles` cycles the sdlc skill runs `learn/improve`; the schedule does nothing extra.
 Executors: `executors` in the binding (`references/architecture.md` section 7 in the package). Scheduled runs pass `--unattended`.
 
@@ -33,9 +28,6 @@ put the command that starts the review run in the cycle environment as `AGENTIC_
 
 - Routine: give the review routine an API trigger and set
   `AGENTIC_REVIEW_FIRE_CMD='curl -fsS -X POST "https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire" -H "Authorization: Bearer $REVIEW_FIRE_TOKEN" -H "anthropic-beta: experimental-cc-routine-2026-04-01"'`.
-- Managed Agents: the review deployment has no schedule; set
-  `AGENTIC_REVIEW_FIRE_CMD='curl -fsS -X POST "https://api.anthropic.com/v1/deployments/<review id>/run?beta=true" -H "x-api-key: $REVIEW_FIRE_KEY" -H "anthropic-version: 2026-10-21" -H "anthropic-beta: managed-agents-2026-04-01"'`.
-  If the API insists on a schedule, give the review one and pause it (`POST /v1/deployments/{id}/pause`); `/run` still starts it (unverified).
 
 If nothing can chain, use the scheduler's own concurrency lock (one run of cycle or review at a time per
 repo; GitHub Actions keeps one running and one pending run per group, and a newer pending run cancels the older pending one) and give both the same cadence; never pick fixed offsets such as :15 and :45.
@@ -44,12 +36,3 @@ repo; GitHub Actions keeps one running and one pending run per group, and a newe
 A dead-man check runs `.agents/bin/agentic-sdlc ledger stale --max-hours <h>` (exit 1 when the newest heartbeat is older).
 `init` installs it as its own workflow, `.github/workflows/agentic-sdlc-dead-man.yml`, for every runtime: a cloud task stopped at the usage limit writes no heartbeat, so only a check outside it sees the stop.
 In a public repo GitHub disables scheduled workflows after 60 days without repo activity, so the dead-man workflow stops too; keep a check that runs elsewhere if a public repo can go quiet.
-
-## Claude Managed Agents deployment
-
-Profiles individual-api and organization. `claude-managed-deployment.json` holds two request bodies: POST each entry of
-`deployments` to `https://api.anthropic.com/v1/deployments?beta=true` with headers
-`x-api-key: $ANTHROPIC_API_KEY`, `anthropic-version: 2026-10-21`, `anthropic-beta: managed-agents-2026-04-01`.
-Create the agents (`/v1/agents`) and two environments (`/v1/environments`) first and put their ids in.
-`budget.max_list_cost.amount` is in cents per run (`"500"` = about 5 USD). Manage with
-`POST /v1/deployments/{id}/pause|unpause|run|archive`; runs: `GET /v1/deployment_runs`.

@@ -36,7 +36,7 @@ Feature: Validate checks the installed skills and the binding
   Rule: Warnings alone do not fail
 
     Scenario: Validate prints warn: lines and exits 0 when only warnings exist
-      Given the installed binding is complete and runs a bot that is assigned work
+      Given the installed binding is complete and names an executor for no step
       When I run the install command "validate"
       Then a line of the output matches "^warn: executors\.bot"
       And the exit code is 0

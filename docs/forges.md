@@ -3,7 +3,7 @@
 Git only, and GitHub is the one forge: on other forges a CR can change the pipeline file that runs
 its own gates. The adapter is
 tested by executable features against a fake process runner, not against GitHub itself yet.
-Secrets: `AGENTIC_BOARD_TOKEN`, `AGENTIC_FORGE_TOKEN`, and with two identities `AGENTIC_REVIEW_TOKEN`
+Secrets: `AGENTIC_FORGE_TOKEN`, and with two identities `AGENTIC_REVIEW_TOKEN`
 (the review identity). In a Claude cloud session the proxy is the forge login.
 
 ## Claude cloud sessions
@@ -73,7 +73,7 @@ The `approval` gate classifies each CR and posts `human-approval`:
 There is no CODEOWNERS file: the gate enforces owner approval, so `tuning` can auto-merge. The
 gate reruns on `pull_request_review` (submitted, dismissed) in `agentic-sdlc-cr.yml`.
 
-When the board is Jira or Linear, an owner has one name on the board and another on GitHub. Write
+When an owner has one name on the board and another on GitHub, write
 `owners.<role>: { board: <board account>, forge: <GitHub login> }`. The approval gate and
 `forge comments --trusted` read the forge name. The ledger, dispatch and `board comments --trusted`
 read the board name.
@@ -114,11 +114,11 @@ One-time setup (private repos need a plan with Environments for `agentic-review`
 
 1. Create Environment `agentic-review`. Deployment branches: selected branches, the trunk exactly,
    `gh-readonly-queue/<trunk>/*` and the release line glob (`<release_prefix>*`; without it a CR to a release line never gets `human-approval`). Store `AGENTIC_REVIEW_TOKEN` there and nowhere else. Only the jobs
-   `approval-gate`, `carry-statuses` and the review job of the runner workflow (`github-actions-claude.yml`, `github-actions-codex.yml`) declare it, so no PR-ref run can read it.
+   `approval-gate`, `carry-statuses` and the review job of the runner workflow (`github-actions-claude.yml`) declares it, so no PR-ref run can read it.
 2. Add `AGENTIC_FORGE_TOKEN` as a repo secret (`proofs-on-base` falls back to the read-only job token and
    its status post fails by design; the job's exit code is the check).
 3. Release line only: create Environment `agentic-release` with the Product owner as required reviewer and deployment branches limited to the trunk. Store `AGENTIC_RELEASE_TOKEN` there: the release bot, a bypass actor of `.github/rulesets/release.json`. The shipped ruleset lets repo admins bypass too (`RepositoryRole` 5); to make the bot the only bypass actor, replace that entry with your release GitHub App (`actor_type: Integration`, its `actor_id`) after you import the ruleset. The `ship` step starts `forge cut <revision> <version>`, which runs `agentic-sdlc-release.yml`; the Product owner's approval of that run is the go-ahead. A required reviewer on a private repo needs Enterprise (Free, Pro and Team give required reviewers on public repos only), so below Enterprise the release go-ahead is not enforced. The cycle never holds this token.
-4. Repo variables (Settings > Secrets and variables > Actions > Variables): the workflows need none for the CLI; its version is `.agents/cli.json` (a commit SHA is the immutable choice, a tag can move: `doctor` warns). The runner workflows read `AGENTIC_AGENT_CLI_VERSION`, an exact version of the Claude Code or Codex CLI, and fail without it.
+4. Repo variables (Settings > Secrets and variables > Actions > Variables): the workflows need none for the CLI; its version is `.agents/cli.json` (a commit SHA is the immutable choice, a tag can move: `doctor` warns). The runner workflows read `AGENTIC_AGENT_CLI_VERSION`, an exact version of the Claude Code CLI, and fail without it.
 5. `init` installs `.github/workflows/agentic-sdlc-review-event.yml`, which holds no secret and relays review events to `human-approval`; it must stay in place or approvals do not update. A fork PR's review event carries no PR number, so its approval updates on the next PR event.
 
 ## Agent provenance and the SLSA Source track

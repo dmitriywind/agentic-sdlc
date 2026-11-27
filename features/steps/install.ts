@@ -75,7 +75,7 @@ Given('the installed binding also runs the executors {string}', (w, names: strin
   for (const n of names.split(',').map((s) => s.trim())) b.executors[n] = { kind: 'harness' };
   w.write('.agents/binding.yml', JSON.stringify(b));
 });
-Given('the installed binding is complete and runs a bot that is assigned work', (w) => {
+Given('the installed binding is complete and names an executor for no step', (w) => {
   w.write('.agents/binding.yml', stringify({
     version: 2, profile: 'individual', owners: { product: 'a', factory: 'b', bots: ['bot'] },
     board: { adapter: 'local', options: {}, statuses: ['Ideas', 'Signals', 'Backlog', 'Ready', 'In progress', 'In review', 'Done', 'Cancelled'] },
@@ -83,12 +83,12 @@ Given('the installed binding is complete and runs a bot that is assigned work', 
     models: { fast: 'f', balanced: 'b', deep: 'd' }, commands: {}, paths: { factory: ['.agents/**'] }, sizes: ['S', 'M'], ready_size_limit: 'M', fast_lane_max_size: 'S',
     priorities: [], p0_setters: [], max_subissue_depth: 1, spec_marker: 'spec.md', stall_minutes: 60, parallel_agents: 1,
     cycle: {}, heartbeat: { ticket: '1' }, learning: {}, product: { environments: ['staging', 'production'], proofs: ['test'] },
-    executors: { default: { kind: 'harness' }, bot: { kind: 'assign', user: 'coding-bot' } },
+    executors: { default: { kind: 'harness' }, bot: { kind: 'command', run: 'bot' } },
   }));
 });
 Given('the installed binding is the shipped template on a local board with the heartbeat ticket {string}', (w, ticket: string) => {
   w.write('.agents/binding.yml', readFileSync(join(REPO, 'templates/binding.yml'), 'utf8')
-    .replace(/^(\s*adapter:\s*)github(\s*#.*)?$/m, '$1local').replace(/^(\s*ticket:\s*)""/m, `$1"${ticket}"`));
+    .replace(/^(\s*adapter:\s*)github-issues(\s*#.*)?$/m, '$1local').replace(/^(\s*ticket:\s*)""/m, `$1"${ticket}"`));
 });
 Given('I note the installed file {string}', (w, rel: string) => { (w.state.noted ??= {})[rel] = w.read(rel); });
 
@@ -233,7 +233,7 @@ const fakeHttp = (d: Doctor) => async (method: string, url: string, o?: Obj) => 
 };
 const ctxOf = (w: World) => { const d = doc(w); return { root: w.root, binding: {} as any, options: {}, env: d.env, exec: fakeExec(d), http: fakeHttp(d) }; }; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** The binding of the scenario as the doctor checks read it: a GitHub forge on trunk main, plus what the scenario set. */
-const bound = (w: World): any => merge({ forge: { adapter: 'github', options: {} }, board: { adapter: 'github' }, vcs: { trunk: 'main' }, product: {} }, w.bindingPatch); // eslint-disable-line @typescript-eslint/no-explicit-any
+const bound = (w: World): any => merge({ forge: { adapter: 'github', options: {} }, board: { adapter: 'github-issues' }, vcs: { trunk: 'main' }, product: {} }, w.bindingPatch); // eslint-disable-line @typescript-eslint/no-explicit-any
 const answer = (w: World, re: RegExp, text: string | Error) => doc(w).rules.push([re, text]);
 const shown = (w: World, ...ls: (string | undefined)[]) => { doc(w).lines = ls.filter((l): l is string => l !== undefined); };
 

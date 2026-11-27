@@ -191,18 +191,6 @@ export type Executor = StageDef &
   (
     | { kind: 'harness' }
     | { kind: 'command'; run: string }
-    | { kind: 'webhook'; url_env: string; token_env?: string }
-    | {
-        kind: 'managed';
-        /** Request shape: claude (Managed Agents sessions), cursor (Cloud Agents), antigravity (Gemini Interactions), generic (POST <endpoint>/sessions). */
-        api?: 'claude' | 'cursor' | 'antigravity' | 'generic';
-        agent_env?: string;
-        token_env: string;
-        endpoint_env?: string;
-        environment_env?: string; // claude: environment_id
-        repo_url?: string; // cursor: repos[].url
-      }
-    | { kind: 'assign'; user: string }
   );
 
 export interface McpServer { url?: string; command?: string; token_env?: string }
@@ -224,18 +212,16 @@ export function ownersFor(o: Binding['owners'] | undefined, side: 'board' | 'for
 /** The parsed binding. src/binding.ts validates it; keys follow references/architecture.md section 4. */
 export interface Binding {
   version: 2;
-  /** individual: subscriptions only; individual-api: subscriptions plus API keys and managed agents;
-   * organization: API keys and managed agents, a separate review identity (architecture.md section 10). */
-  profile: 'individual' | 'individual-api' | 'organization';
+  /** individual: one identity; organization: a separate review identity (architecture.md section 10). */
+  profile: 'individual' | 'organization';
   /** bots: the accounts the factory runs as; only their heartbeat comments are trusted. Each account is one
    * name, or `{ board, forge }` when the board and the forge know the person by different names.
    * product and factory take one account or a list (the first is the primary); operator, security and
    * compliance are optional roles of the same shape. */
   owners: { product: WhoList; factory: WhoList; operator?: WhoList; security?: WhoList; compliance?: WhoList; bots: Who[] };
   board: {
-    adapter: 'github' | 'github-issues' | 'jira' | 'linear' | 'local';
+    adapter: 'github-issues' | 'local';
     options: Record<string, unknown>;
-    mcp?: Record<string, unknown>;
     statuses: string[];
     fields: Partial<Record<LogicalField, string>>;
     labels: { human: string; bug: string; feature: string; release?: string };
@@ -274,8 +260,6 @@ export interface Binding {
   mcps?: Record<string, McpServer>;
   /** Where executors write run traces; must contain {run_id}. */
   traces?: { uri: string };
-  /** Opt-in telemetry export. Each key names an env var (never a value); unset = nothing is sent. headers_env: `name=value,name2=value2`. */
-  telemetry?: { otlp_endpoint_env?: string; cdevents_sink_env?: string; headers_env?: string };
   models: { fast: string; balanced: string; deep: string };
   agent_command?: string;
   commands: {

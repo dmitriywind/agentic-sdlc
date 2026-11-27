@@ -2,16 +2,15 @@
 # Another project replaces this file and keeps .agents/skills/. Secrets never go here: name env vars.
 version: 2
 # profile picks the defaults init writes and what validate checks (architecture.md section 10):
-#   individual: subscriptions only; harness executors or a local subscription CLI via `command`; no API keys, no org storage.
-#   individual-api: individual plus API keys: every executor kind, managed agents included.
-#   organization: API keys and managed agents; a separate review identity (required), traces on org storage, full bench.
-profile: individual # individual | individual-api | organization
+#   individual: one identity; harness executors or a local Claude Code CLI via `command`, on the Claude subscription; no org storage.
+#   organization: a separate review identity (required), traces on org storage, full bench.
+profile: individual # individual | organization
 owners:
   product: your-product-owner   # rules the product: narrative, priorities, P0, releases, production approval
   factory: your-factory-owner   # rules the factory: skills, binding, gates, guardrail learning proposals
-  bots: [your-factory-bot]      # accounts the factory runs as; only their heartbeats and specs are trusted (github login, jira accountId, linear user id, local: local)
-  # When the board and the forge name a person differently (Jira or Linear with GitHub), give both:
-  #   product: { board: 5b10ac8d82e05b22cc7d4ef5, forge: ann }   bots: [{ board: 712020:abc, forge: factory-bot[bot] }]
+  bots: [your-factory-bot]      # accounts the factory runs as; only their heartbeats and specs are trusted (github login, local: local)
+  # When the board and the forge name a person differently, give both:
+  #   product: { board: ann-board, forge: ann }   bots: [{ board: local, forge: factory-bot[bot] }]
   # product and factory take one entry or a list of entries; any member counts as the owner (an approval by
   # any factory owner passes guardrail). The first entry is the primary: the one an ask or request is addressed to.
   #   factory: [alice, bob]
@@ -21,21 +20,14 @@ owners:
   #   compliance: [grc-lead]    # release evidence gaps
 
 board:
-  adapter: github               # github | github-issues | jira | linear | local
+  adapter: github-issues        # github-issues | local
   options:                      # adapter-specific; credentials only as env var names; validate rejects unknown keys
-    # github:  { owner: my-org, project_number: 1, repo: my-org/my-repo, token_env: AGENTIC_BOARD_TOKEN }
-    #          token_env (optional): env var holding a PAT with project scope, passed to gh as GH_TOKEN; Projects v2 needs it
     # github-issues: { repo: my-org/my-repo }   # the repo's issues, REST only: the board a Claude cloud session reaches.
     #          Status and the fields are labels status:<s> and <field name, lower case>:<value> (size:S, release version:1.2)
     #          field_ids (optional): { status: 101, size: 102 } maps the status and any board.fields key to an org issue field id
     #          (gh api orgs/<org>/issue-fields); a mapped one is an issue field, not a label. Org repos only; docs/guide/8-install.md
-    # jira:    { base_url: https://example.atlassian.net, project_key: PROJ, email_env: JIRA_EMAIL, token_env: JIRA_TOKEN }
-    # linear:  { team_key: ENG, token_env: LINEAR_API_KEY }
     # local:   {}                 # always .agents/board.json
     {}
-  # mcp:                        # optional: drive the board through an MCP server instead of the CLI
-  #   server: my-board-connector
-  #   tools: { list: <tool>, get: <tool>, update: <tool> }
   statuses: [Ideas, Signals, Backlog, Ready, In progress, In review, Done, Cancelled] # the process statuses, in order
   # later_milestone: Later       # milestone for accepted nice-to-have work; plan/shape never routes it
   fields:                       # logical field -> the tracker's field name
@@ -53,7 +45,6 @@ board:
   #   label: repo:app-a         # this repo's tickets carry it; board list shows only them; board create adds it
   #   home: true                # in exactly one repo: it also lists tickets with no repo: label and triage gives each one a label
   #   repos: [repo:app-a, repo:app-b] # home only: every repo label triage may give
-  # A GitHub Project needs no scope: board.options.repo already keeps one repo's issues.
 
 forge:
   adapter: github               # github
@@ -99,10 +90,7 @@ product:
 
 executors:                      # who runs each step; lookup: executors.<skill>/<step>, then executors.<skill>, then default (a harness subagent, model by the step's tier)
   default: { kind: harness }
-  # build: { kind: assign, user: coding-bot }  # a hosted coding agent picked up by assignment
-  # review/review: { kind: webhook, url_env: REVIEW_BOT_URL, token_env: REVIEW_BOT_TOKEN }
-  # ship: { kind: command, run: "my-release-bot --ticket {ticket} --step {skill}", secrets: [AGENTIC_BOARD_TOKEN, AGENTIC_FORGE_TOKEN], sandbox: container }
-  # plan/triage: { kind: managed, api: claude, agent_env: TRIAGE_AGENT_ID, environment_env: TRIAGE_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }  # api: claude | cursor (repo_url) | antigravity | generic (endpoint_env)
+  # ship: { kind: command, run: "my-release-bot --ticket {ticket} --step {skill}", secrets: [AGENTIC_FORGE_TOKEN], sandbox: container }
   # Any executor may also declare its stage definition:
   # review/verify: { kind: harness, mcps: [browser], secrets: [TEST_USER_PASSWORD], sandbox: container, model: { tier: balanced } }
   #   mcps: names from `mcps` below | secrets: env var names only, nothing else is passed | sandbox: cloud | container | local (--unattended refuses local unless AGENTIC_SDLC_LOCAL=1; unset inherits executors.default.sandbox) | model: { tier } or { id }, not both
@@ -117,12 +105,7 @@ mcps:                           # tool servers executors may use; name -> { url 
 # traces:
 #   uri: "s3://my-bucket/agentic/{run_id}.jsonl" # where executors write run traces; must contain {run_id}
 
-# telemetry:                    # opt-in export of runs (OpenTelemetry GenAI spans) and deploys (CDEvents); default: unset, nothing is sent
-#   otlp_endpoint_env: OTEL_EXPORTER_OTLP_ENDPOINT # NAME of the env var holding the OTLP/HTTP base URL; `ledger export --format otlp --send` POSTs <url>/v1/traces
-#   cdevents_sink_env: CDEVENTS_SINK_URL           # NAME of the env var holding the CDEvents sink URL; the merged and shipped gates POST one event each, best effort (a failed send never fails a gate)
-#   headers_env: TELEMETRY_HEADERS                 # NAME of the env var holding request headers as name=value,name2=value2 (an auth token); URLs and headers are never written in this file
-
-models:                         # steps name a tier (frontmatter metadata.steps.<step>.tier, or metadata.tier), never a model; init --harness claude writes .claude/agents/sdlc-<tier>.md from this map
+models:                         # steps name a tier (frontmatter metadata.steps.<step>.tier, or metadata.tier), never a model; init writes .claude/agents/sdlc-<tier>.md from this map
   fast: your-fast-model-id      # the cycle routine runs on this tier
   balanced: your-balanced-model-id
   deep: your-deep-model-id      # plan/shape and learn/improve
@@ -178,9 +161,7 @@ cycle:                          # Run one cycle (sdlc skill)
 heartbeat:
   ticket: ""                    # id of the ticket that holds heartbeat comments; keep it off every route. init sets it on a local
                                 # board (status Cancelled). github-issues: create an issue with no `status:` label (the board
-                                # lists only labelled issues; comments still work). github (Projects): create the issue and
-                                # remove it from the project, or set its status to Cancelled. jira, linear: create the ticket
-                                # in a Cancelled status. Put its id here
+                                # lists only labelled issues; comments still work). Put its id here
 
 learning:                       # the self-improvement loop
   enabled: false                # learn/judge and learn/improve run only when true; set it with agent_command

@@ -30,8 +30,8 @@ flowchart TB
 
 <div class="callout ok">
 
-**A good fit:** a product on GitHub with tests in CI, work you can write as tickets, and an agent
-subscription (Claude, Codex or Cursor) or API keys.
+**A good fit:** a product on GitHub with tests in CI, work you can write as tickets, and a Claude
+subscription for Claude Code.
 
 </div>
 
@@ -42,8 +42,7 @@ with no automated checks. It is early (0.1): interfaces may still change before 
 
 </div>
 
-You need: a GitHub repo with CI, a board (GitHub issues, a GitHub Project, Jira or Linear), an agent
-(Claude Code, Codex, Cursor or another with a shell), and a place to run the cycle (an agent
-vendor's cloud, GitHub Actions or your own machine).
+You need: a GitHub repo with CI, the repo's GitHub issues as the board, Claude Code
+on your Claude subscription, and a place to run the cycle (a Claude cloud routine, GitHub Actions or your own machine).
 
 Next: [2. A ticket's journey](2-a-ticket.md).

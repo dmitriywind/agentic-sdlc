@@ -28,7 +28,6 @@ Feature: A binding is validated before anything runs
       Examples:
         | key                          | value                                        | problem                              |
         | board.done_statuses          | "Done"                                       | board.done_statuses must be a list   |
-        | executors.claude             | {"kind":"managed","api":"claude","token_env":"K"} | executors.claude.agent_env      |
 
   Rule: The approval, learning and proof keys are checked
 

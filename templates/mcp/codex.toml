@@ -1,3 +1,0 @@
-[mcp_servers.agentic-sdlc]
-command = ".agents/bin/agentic-sdlc"
-args = ["mcp"]

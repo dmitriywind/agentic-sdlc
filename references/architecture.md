@@ -17,7 +17,7 @@ Three layers, each with one home:
 | Binding | `.agents/binding.yml` in the project | Every project value: board, statuses, commands, paths, owners, model tiers, executors. |
 | Ports | `src/` → the `agentic-sdlc` CLI and MCP server | Board, forge and VCS adapters, repo gates, dispatch, the run ledger and the bench. Mechanism only, no process rule. |
 
-An agent harness (Claude Code, Codex, Cursor, any other) runs the loop by
+Claude Code, on the Claude subscription, is the one agent runtime: it runs the loop by
 loading the `sdlc` skill. The package ships **no supervisor and no agent runner**. The one
 exception is `bench run`, which starts the binding's `agent_command` headless on a past task.
 
@@ -31,8 +31,6 @@ owner opens at Backlog).
 ```
 .claude-plugin/plugin.json   Claude Code plugin manifest: skills, hooks, the MCP server
 .claude-plugin/marketplace.json  this repo as a one-plugin marketplace
-.codex-plugin/plugin.json    Codex plugin manifest: skills and the MCP server (mcp.json)
-.cursor-plugin/plugin.json   Cursor plugin manifest: skills and the MCP server (mcp.json)
 agents/                      plugin subagents: sdlc-fast, sdlc-balanced, sdlc-deep, sdlc-reviewer
 bin/agentic-sdlc             plugin shim: the CLI on the Bash PATH (the project's `.agents/bin/agentic-sdlc`, else its node_modules build, else dist/bin.js)
 evals/                       plugin evals for skill triggering (`claude plugin eval`)
@@ -54,7 +52,7 @@ templates/
   gates/github/              GitHub Actions workflows and the trunk ruleset
   gates/hooks/               pre-push
   bin/                       the launcher init installs at .agents/bin/agentic-sdlc
-  mcp/                       the MCP server entry per harness
+  mcp/                       the .mcp.json entry `init --no-plugin` writes
   runner/                    scheduler templates and the cycle and review prompts
 src/
   bin.ts  cli.ts             CLI entry and dispatch
@@ -62,7 +60,7 @@ src/
   ports.ts                   port interfaces and shared types
   binding.ts                 load and validate the binding
   install.ts                 init / validate / doctor
-  board/   github.ts jira.ts linear.ts local.ts index.ts
+  board/   github-issues.ts local.ts index.ts
   forge/   github.ts flow.ts util.ts index.ts
   vcs/     git.ts index.ts
   gates.ts                   repo gates shared by every CI template
@@ -73,7 +71,6 @@ src/
   ledger.ts                  read heartbeats and scores, aggregate runs, measures and learning
   bench.ts                   build and run bench cases
   mcp.ts                     the port verbs as MCP tools
-  telemetry.ts               run and deploy records as OTLP traces and CDEvents (ledger export, the merged and shipped gates)
 scripts/                     the guide build (guide.mjs), the release hash step (known-hashes.mjs) and the feature pruner
 references/architecture.md   this contract
 docs/                        guides and diagrams; never normative
@@ -83,15 +80,13 @@ features/                    the behaviour as executable Gherkin features (`<are
 ## 3. Ports
 
 A skill never calls `gh`, `glab`, `az`, `jira` or `git` for a board, forge or VCS step. It calls
-the CLI verb below; the binding picks the adapter. A board with an MCP server may be driven
-through the MCP tools the binding's `board.mcp` names instead; the verbs and their meaning stay the
-same.
+the CLI verb below (or its MCP tool); the binding picks the adapter.
 
 Every verb prints JSON on stdout and exits 0 on success, 1 on a refused or failed action (message
 on stderr), 2 on a usage error. Ids are strings everywhere (`"123"`, `"PROJ-45"`, `"LIN-9"`).
 Adapters that call an HTTP API retry 429 and 5xx responses with backoff (3 tries, honouring
 `Retry-After`). A POST retries only 429, since a 5xx may come after the write. The `gh` adapters
-(board `github` and `github-issues`, forge `github`) retry the same way on what `gh` prints: a read
+(board `github-issues`, forge `github`) retry the same way on what `gh` prints: a read
 (`gh api` GET, `view`, `list`) retries HTTP 429, a 403 that names a rate limit and HTTP 5xx; a write
 retries only 429 and rate limits. They wait the `Retry-After` hint `gh` prints, else 1s then 2s.
 Every verb takes only the flags it lists: an unknown flag, a value flag with no value and a
@@ -108,7 +103,7 @@ Every verb takes only the flags it lists: an unknown flag, a value flag with no 
 | `set <id> <field> <value>` / `set <id> <field> --clear` | Set or clear a logical field | `Item` |
 | `label <id> add\|remove <label>` | Add or remove a label | `Item` |
 | `assign <id> <user\|--none>` | Set or clear the assignee | `Item` |
-| `milestone <id> <name>` / `milestone <id> --clear` | Set or clear the milestone of an existing ticket, where `create --milestone` puts it (`github`: the issue's milestone; `github-issues`: the issue's milestone, which must exist; `jira`: `fixVersions`; `linear`: the `milestone:<name>` label; `local`: the item's `milestone`) | `Item` |
+| `milestone <id> <name>` / `milestone <id> --clear` | Set or clear the milestone of an existing ticket, where `create --milestone` puts it (`github-issues`: the issue's milestone, which must exist; `local`: the item's `milestone`) | `Item` |
 | `comment <id> --body-file <f> [--kind <kind> [--ref <value>]]` | Add a comment; `--kind` stamps the kind's marker as its first line, filled with `--ref` (section 11.1) | `{ id, url }` |
 | `comments <id> [--last <n>] [--kind <kind>] [--marker <text>] [--author <a>]… [--trusted]` | Comments, newest first; kind, first-line and author filters (`--last` counts after them). `--trusted` is `--author` for every entry of `owners.bots`, `owners.product`, `owners.factory` and the optional `owners.operator`, `owners.security`, `owners.compliance` | `Comment[]` |
 | `close <id> --reason completed\|not_planned` | Close (and move to Done or Cancelled) | `Item` |
@@ -117,17 +112,15 @@ Every verb takes only the flags it lists: an unknown flag, a value flag with no 
 | `holds` | The held tickets. A reply is a comment by any owner role, never an `owners.bots`-only account, after the last ask; an account in both lists counts when its comment carries no factory marker | `[{ id, kind, askedAt, replied: boolean, reply? }]` |
 | `release <id>` | Removes `board.labels.human`; the ticket keeps its Status | `Item` |
 
-`Item = { id, title, url, status, kind?, labels[], fields: Record<logicalField,string>, milestone?, parent?, children[], assignees[], createdAt, updatedAt, statusChangedAt? }`. `statusChangedAt` is when the ticket entered its status; `ledger measures` reads it for tickets at Done. `github-issues` sets it to the issue's `closed_at` for a closed issue at Done and leaves it unset otherwise; `github` (Projects) never sets it.
+`Item = { id, title, url, status, kind?, labels[], fields: Record<logicalField,string>, milestone?, parent?, children[], assignees[], createdAt, updatedAt, statusChangedAt? }`. `statusChangedAt` is when the ticket entered its status; `ledger measures` reads it for tickets at Done. `github-issues` sets it to the issue's `closed_at` for a closed issue at Done and leaves it unset otherwise.
 Logical fields: `size`, `priority`, `lane`, `shipped`, `release_version`. The binding maps each to
-the tracker's field name (Jira custom field, Linear label group or custom field, GitHub Projects
-field, local JSON key).
+the tracker's field name (a `github-issues` label prefix or org issue field, a local JSON key).
 
-Adapters: `github` (Projects v2 via `gh`, for CI runtimes), `github-issues` (the repo's issues through
+Adapters: `github-issues` (the default; the repo's issues through
 `gh api repos/{owner}/{repo}/…` REST only, so a Claude cloud session reaches it: Status and each logical
 field are labels `<name>:<value>`, `status:` and the lower-cased field name, e.g. `status:Ready`, `size:S`;
 an issue without a status label is off the board; `create` and every label write create missing labels;
-`close` also closes the issue with its state reason; option `repo`), `jira` (Cloud REST v3, transitions for Status), `linear`
-(GraphQL API, workflow states for Status), `local` (`.agents/board.json`, for tests and solo
+`close` also closes the issue with its state reason; option `repo`), `local` (`.agents/board.json`, for tests and solo
 projects). Credentials only from env vars the binding names; never from a file in the repo.
 
 ### 3.2 Forge (`agentic-sdlc forge <verb>`): the change request (CR) host, GitHub
@@ -252,9 +245,6 @@ Keys this contract relies on by name:
   `human_approval` is not `never` and every `owners.product` account is also in `owners.bots`: no human outside the bots
   can approve a Full-lane CR (add a second account, or merge as admin). An unset `token_env` variable falls back to
   gh's own login only in a Claude cloud session (`CLAUDE_CODE_REMOTE`); elsewhere it fails.
-- `telemetry: { otlp_endpoint_env, cdevents_sink_env, headers_env }` (all optional, default unset: nothing is
-  sent): each key names an env var, never a URL or a token, and `validate` rejects a value that is not a
-  variable name. Section 6.9 says what is exported and sent.
 - `board.scope: { label, home, repos }` (unset: the board serves one repo): many repos on one board.
   Section 10 says what it does.
 - `commands.install`, `commands.verify` (the `Required` job), `commands.proofs_on_base` (the
@@ -268,7 +258,7 @@ Keys this contract relies on by name:
   `paths.no_proof` (globs a product CR may change with no proof file).
 - `cycle.dedupe_minutes`: a second dispatch of the same skill and subject while the first marker is
   younger than it is a double fire and is skipped (unset or 0: no dispatch check at all; the template sets 10). A run has finished when its own done line `<!-- agentic-sdlc:done <key> -->` appears after the
-  dispatch marker (posted by a bot, or by the `assign` executor's user); other runs' comments never count. `dispatch` hands that line to every executor in its task.
+  dispatch marker (posted by a bot); other runs' comments never count. `dispatch` hands that line to every executor in its task.
   An unfinished run blocks a second dispatch until `stall_minutes`, which must exceed the longest stage run.
 - `executors.<stage>.max_turns`, `max_tokens`, `max_minutes` (optional positive integers, inherited from
   `executors.default`): per-run caps `dispatch` hands to the executor and prints as `limits`; the
@@ -392,24 +382,6 @@ needs `agent_command`.
    exhausted }`, where `actual` is the change failure rate over `slo.window_days` and `exhausted` is `actual > max`,
    or true when the window has failures and no shipped change (`actual` is `null`, with a `why`); the cycle starts
    no new `feature` ticket while `exhausted` (skills/sdlc, Run one cycle step 1).
-9. **Telemetry export** (opt-in; the mapping is `src/telemetry.ts`). `ledger export --format otlp|cdevents
-   [--since <days|iso>] [--run <id>] [--out <file>] [--send]` prints, writes or sends the run rows.
-   `otlp` is one OTLP/HTTP JSON document, one trace per heartbeat: an `invoke_workflow sdlc` span for the cycle and an
-   `invoke_agent <skill>` span per run (OpenTelemetry GenAI conventions, stability `development`, schema
-   `gen-ai-dev/1.42.0-dev`): `gen_ai.agent.name` is the skill, `gen_ai.agent.version` its content hash,
-   `gen_ai.request.model` the row's model; a run that is not `done` gets status error and `error.type` = its
-   outcome; ticket, CR, tier, executor, `ref`, tokens, minutes and scores are `agentic_sdlc.*` attributes, and each score is
-   a `gen_ai.evaluation.result` event. A row holds one `tokens` total, so it is `agentic_sdlc.tokens`; no input/output
-   split is invented, and `gen_ai.provider.name` is left out because no row knows the provider. Ids are hashes of
-   the heartbeat comment id and the run id, so a re-export is the same document. `cdevents` prints CDEvents
-   (spec 0.5.1) as JSON lines: `taskrun.finished` per run, `change.created` for the first `build` run per CR
-   in the window and `change.reviewed` for each done `review/review` run. `--send` posts to the sinks the binding's
-   `telemetry` names: OTLP to `<url>/v1/traces`, each CDEvent as a CloudEvents HTTP binary-mode request, both
-   with the headers from `headers_env`, through `ctx.http`. The `merged` and `shipped` gates post their one
-   event the same way, best effort: `change.merged` for a merged CR, `service.deployed` or `service.rolledback`
-   with `environment.id` and `artifactId` `pkg:generic/<forge.options.repo>@<version or sha>`. A failed deploy has no CDEvents event, and
-   with `forge.options.repo` unset the deploy has no service name, so no event is built. A failed send writes
-   one line to stderr and never changes a gate's result.
 
 ## 7. Executors: who runs each step
 
@@ -419,19 +391,13 @@ every step of it); the default is the harness's own fresh-context worker.
 ```yaml
 executors:
   default: { kind: harness }
-  build: { kind: assign, user: coding-bot }
-  review/review: { kind: webhook, url_env: REVIEW_BOT_URL, token_env: REVIEW_BOT_TOKEN }
   ship: { kind: command, run: "my-release-bot --ticket {ticket} --skill {skill}" }
-  plan/triage: { kind: managed, api: claude, agent_env: TRIAGE_AGENT_ID, environment_env: TRIAGE_ENVIRONMENT_ID, token_env: ANTHROPIC_API_KEY }
 ```
 
 | Kind | Start | Result comes back by |
 |---|---|---|
 | `harness` | `dispatch` prints the task; the navigator runs it in a fresh context on the step's tier (Claude Code: `sdlc-<tier>` from `.claude/agents/`, else the plugin's `agentic-sdlc:sdlc-<tier>`; every `review/review` goes to `agentic-sdlc:sdlc-reviewer`). | The worker's own board and forge writes. |
 | `command` | The CLI runs `run` with `{skill} {ticket} {cr} {workdir} {prompt_file} {mcps_file} {model} {max_turns} {max_tokens} {max_minutes}` filled in (`{skill}` is `<skill>/<step>`). | Exit code plus the bot's board and forge writes. |
-| `webhook` | The CLI POSTs the task (`skill`, `ticket`, `cr`) as JSON to the URL. | The bot's board and forge writes; the next cycle reads them. |
-| `managed` | The CLI starts a run on a managed-agent API, shaped by `api`: `claude` (Managed Agents `POST /v1/sessions`), `cursor` (Cloud Agents `POST /v1/agents`), `antigravity` (Gemini Interactions) or `generic` (`POST <endpoint>/sessions`). | Same. The run id goes in the ledger row. |
-| `assign` | The CLI assigns the ticket (or CR) to the bot user and adds the step name as a comment. | Same. |
 
 **Where `review/review` runs.** With `forge.review_identity` empty, it runs like any step. With it
 set, a `dispatch review/review` outside the review runtime (`AGENTIC_SDLC_ROLE` not `review`) starts
@@ -456,9 +422,6 @@ none, because it detaches from the run.
 |---|---|---|
 | `harness` | `limits` in the printed task, and a sentence in the instruction. | The harness's turn limit, or the worker stopping at the cap. |
 | `command` | `{max_turns}`, `{max_tokens}`, `{max_minutes}` in `run` (an unset cap fills as an empty quoted word), and `AGENTIC_SDLC_MAX_TURNS`, `AGENTIC_SDLC_MAX_TOKENS`, `AGENTIC_SDLC_MAX_MINUTES` in the child's environment (set only for a set cap). | The command's own flags, e.g. `claude -p --max-turns {max_turns}`. |
-| `webhook` | `limits` in the JSON body. | The bot. |
-| `managed` | A sentence in the task text; `limits` in the `generic` body. | The managed agent. |
-| `assign` | A sentence in the dispatch comment. | The bot. |
 
 A run that ends on a cap records outcome `capped`.
 
@@ -467,13 +430,12 @@ learn/improve) [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]` po
 comment, starts the executor and prints `{ kind, ref, startedAt, key, done }`: `key` is the run's
 done-line key (the `--ref` of its `done` comment) and `done` the stamped line; for `harness` it also
 prints the instruction for the navigator (it names the done line, the key and, with provenance on, the run id) and starts nothing. The key is printed in every setup; the
-`dispatch` comment and the checks below run only with `cycle.dedupe_minutes` above 0 (or for an
-`assign` executor). The idempotency key is
+`dispatch` comment and the checks below run only with `cycle.dedupe_minutes` above 0. The idempotency key is
 `<ticket, cr or factory>-<skill>/<step>[-<run>][-<CR head sha>]`. A second dispatch with the same
 key, while the `dispatch` comment is younger than `cycle.dedupe_minutes` or `stall_minutes`
 (whichever is longer) and its run has not finished, prints `{ skipped: true }`. A run has finished
 when its own `done` comment (`--kind done --ref <key>`) appears after the `dispatch` comment, posted
-by a bot or by the `assign` executor's user; other runs' comments never count. So a double fire is
+by a bot; other runs' comments never count. So a double fire is
 skipped for `dedupe_minutes`, and a run with no done line blocks a second dispatch until
 `stall_minutes`: keep `stall_minutes` above the longest step run. The cycle's own claim (`dispatch sdlc`) goes stale after `cycle.time_budget_minutes` instead, and every cycle exit after the claim posts its `done` line; a `kind: cycle` heartbeat by a bot after the claim also ends it, so a forgotten done line cannot hold the lock. With `dedupe_minutes` unset or 0
 the check is off and no `dispatch` comment is posted. With `AGENTIC_SDLC_UNATTENDED=1`, `dispatch` refuses a step whose sandbox is
@@ -517,7 +479,7 @@ paths:
   factory needs no intake of its own.
 - **Data ownership.** The board, the repo and `traces.uri` hold every fact, score and trace. The
   binding names the inference endpoints (`models` may point at any provider or self-hosted model)
-  and where each stage runs (`sandbox`). Nothing leaves the project's own systems except the telemetry the binding's `telemetry` keys name (off by default) and calls to
+  and where each stage runs (`sandbox`). Nothing leaves the project's own systems except calls to
   the providers the binding names.
 
 ## 10. Runtimes and profiles: no dependency on one machine
@@ -527,9 +489,8 @@ prompt in `templates/runner/cycle-prompt.md`.
 
 | Runtime | How it reaches the ports |
 |---|---|
-| Agent with a shell (Claude Code, Codex, Cursor, CI cron with a headless agent CLI) | `agentic-sdlc <group> <verb>`: the launcher `.agents/bin/agentic-sdlc`, on PATH in the plugin and the runner templates |
-| Agent with MCP but no shell | `agentic-sdlc mcp` (stdio). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. `initialize` answers the client's protocol version when the server supports it (2025-11-25 down to 2024-11-05), else the newest; a request whose `_meta` carries `io.modelcontextprotocol/protocolVersion` and `clientCapabilities` is served per revision 2026-07-28 with no handshake (`server/discover`, `tools/list`, `tools/call` only; results carry `resultType: "complete"`, `tools/list` and `server/discover` add `ttlMs` and `cacheScope`, a missing field is -32602, an unsupported version is -32022 with `data.supported`, `ping` is -32601); every tool carries a title and annotations (read-only, destructive, idempotent, open-world); `tools/call` checks arguments against the input schema and answers -32602 on a bad one; an object result also comes back as `structuredContent`. |
-| Agent with only vendor MCP tools | the vendor tools that `board.mcp` maps to the board verbs; forge steps need a shell or the MCP server; gates still run in CI |
+| Claude Code with a shell (interactive, a cloud routine, CI cron with the headless CLI) | `agentic-sdlc <group> <verb>`: the launcher `.agents/bin/agentic-sdlc`, on PATH in the plugin and the runner templates |
+| Claude Code with MCP but no shell | `agentic-sdlc mcp` (stdio). The default tool list excludes `forge_approve` and `forge_status`; `mcp --allow approve,status` adds them, for the review runtime only. `initialize` answers the client's protocol version when the server supports it (2025-11-25 down to 2024-11-05), else the newest; a request whose `_meta` carries `io.modelcontextprotocol/protocolVersion` and `clientCapabilities` is served per revision 2026-07-28 with no handshake (`server/discover`, `tools/list`, `tools/call` only; results carry `resultType: "complete"`, `tools/list` and `server/discover` add `ttlMs` and `cacheScope`, a missing field is -32602, an unsupported version is -32022 with `data.supported`, `ping` is -32601); every tool carries a title and annotations (read-only, destructive, idempotent, open-world); `tools/call` checks arguments against the input schema and answers -32602 on a bad one; an object result also comes back as `structuredContent`. |
 
 **The CLI pin.** The CLI ships from Git only (the npm name `agentic-sdlc` is another project) and is pinned
 by a factory file, never by the product's `package.json`, so a product that is not a Node project needs nothing and an
@@ -562,7 +523,7 @@ allows `forge approve` and `forge status`, and its MCP launcher serves `forge_ap
 `AGENTIC_SDLC_PACKAGE` (the package root `init` copies from; tests set it). `dispatch` sets
 `AGENTIC_SDLC_MAX_TURNS`, `AGENTIC_SDLC_MAX_TOKENS` and `AGENTIC_SDLC_MAX_MINUTES` in a `command` executor's child (section 7).
 
-**Install and upgrade.** `init --upgrade` without `--harness` reuses the install's harness: `.claude/skills` means `claude --no-plugin`, tier agents `.claude/agents/sdlc-*.md` mean `claude`. A generated tier agent with no lock entry is regenerated when it names `npx --no agentic-sdlc`, `init --upgrade` writes only under `paths.factory`, so the ticket-linkage gate sees a factory CR: a change it would make to a root file (the `AGENTS.md` block, an `npx` agentic-sdlc entry in `.mcp.json`, the `@AGENTS.md` import in `CLAUDE.md`) is reported as a `kept <file>: ...` line to make in a product change. A first `init` writes those files. `init` records the sha256 of every file it copies from the package (skills,
+**Install and upgrade.** `init --upgrade` keeps an install without the plugin: `.claude/skills` means `--no-plugin`. A generated tier agent with no lock entry is regenerated when it names `npx --no agentic-sdlc`, `init --upgrade` writes only under `paths.factory`, so the ticket-linkage gate sees a factory CR: a change it would make to a root file (the `AGENTS.md` block, an `npx` agentic-sdlc entry in `.mcp.json`, the `@AGENTS.md` import in `CLAUDE.md`) is reported as a `kept <file>: ...` line to make in a product change. A first `init` writes those files. `init` records the sha256 of every file it copies from the package (skills,
 scorers, workflows, rulesets as patched, the pre-push hook, runner files, generated tier agents) in
 `.agents/install.lock.json`; it reads the older `.agents/skills.lock.json` once and removes it. A re-run (`init --upgrade`
 is the same run) updates a file still at its recorded hash, keeps an edited one and names the package file
@@ -587,14 +548,11 @@ repo and warns when both variables name the same runner. Every job runs `bash`.
 
 **Claude cloud session.** A Claude cloud scheduled task (formerly routine; "routine" is the short name from here on
 and in file names; `templates/runner/claude-routine.md`) is a full runtime on a subscription. Its GitHub proxy
-refuses GraphQL and every `orgs/*` and `users/*` route; REST works under `repos/{owner}/{repo}/...`. So it runs a
-`github-issues`, `jira` or `linear` board, never `github` (Projects v2): `doctor` in a cloud session
-(`CLAUDE_CODE_REMOTE=true`) fails a `github` board, which runs from GitHub Actions
-(`templates/runner/github-actions-claude.yml`) instead. A `github-issues` board can store status and fields as org
+refuses GraphQL and every `orgs/*` and `users/*` route; REST works under `repos/{owner}/{repo}/...`, which is all the
+`github-issues` board uses. It can store status and fields as org
 issue fields (`board.options.field_ids`); a GitHub Project shows them as columns, so a Project view stays available
-while the cycle runs in the cloud. Issue fields exist only in organization repos. Jira and Linear need their host
-in the environment's allowed domains and the token as a network secret. A cloud session loads no repo plugin, so it
-gets the skills from `.claude/skills` (`init --harness claude --no-plugin`). Docker is available (Docker, dockerd,
+while the cycle runs in the cloud. Issue fields exist only in organization repos. A cloud session loads no repo plugin, so it
+gets the skills from `.claude/skills` (`init --no-plugin`). Docker is available (Docker, dockerd,
 docker compose installed). A foreground command waits 2 minutes by default, up to 10, then can continue in the
 background for up to 30 more minutes; the environment variables `BASH_DEFAULT_TIMEOUT_MS` and
 `BASH_MAX_TIMEOUT_MS` raise both. `commands.verify` still runs in CI as `Required` (the gate), and
@@ -602,34 +560,31 @@ background for up to 30 more minutes; the environment variables `BASH_DEFAULT_TI
 The dead-man check is its own workflow, `agentic-sdlc-dead-man.yml`, installed by `init` for every runtime, because
 a cloud task stopped at the usage limit or disconnected from GitHub writes no heartbeat.
 
-**Packaging per harness.** For Claude Code the package is a plugin (`.claude-plugin/`: skills,
-hooks, the MCP server, `agents/` with a subagent per tier and `sdlc-reviewer`, `bin/` with the CLI on the Bash PATH, `evals/`), so skills are named `/agentic-sdlc:<skill>`. The plugin's tier agents are the default; `.claude/agents/sdlc-<tier>.md` from `init` carries the binding's models and is used when present (the names differ: `agentic-sdlc:sdlc-<tier>` against `sdlc-<tier>`). `sdlc-reviewer` has no Edit or Write tool, and the guard hook lets it run only `agentic-sdlc` commands in Bash, so `review/review` never runs CR code. Codex and Cursor each have a manifest (`.codex-plugin/`, `.cursor-plugin/`) for skills and MCP (`mcp.json`, `.agents/bin/agentic-sdlc mcp`); neither carries the hook or the agents. `init` always
-copies the pack to `.agents/skills` (the gates and `validate` read it); `init --harness claude` generates one subagent per tier and adds an `@AGENTS.md` import to
-`CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. Codex and Cursor read `.agents/skills`, which `init` writes. Claude
+**Packaging.** The package is a Claude Code plugin (`.claude-plugin/`: skills,
+hooks, the MCP server, `agents/` with a subagent per tier and `sdlc-reviewer`, `bin/` with the CLI on the Bash PATH, `evals/`), so skills are named `/agentic-sdlc:<skill>`. The plugin's tier agents are the default; `.claude/agents/sdlc-<tier>.md` from `init` carries the binding's models and is used when present (the names differ: `agentic-sdlc:sdlc-<tier>` against `sdlc-<tier>`). `sdlc-reviewer` has no Edit or Write tool, and the guard hook lets it run only `agentic-sdlc` commands in Bash, so `review/review` never runs CR code. `init` always
+copies the pack to `.agents/skills` (the gates and `validate` read it); `init` generates one subagent per tier and adds an `@AGENTS.md` import to
+`CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. Claude
 headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-turns`. The cycle
 allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm checks, and adds
 `--disallowedTools` for `forge approve`. The review allows only the CLI and the MCP server.
 
-`profile` in the binding picks one of three paths:
+`profile` in the binding picks one of two paths. Both run on the Claude subscription; no path uses a metered API key.
 
-| | `individual` | `individual-api` | `organization` |
-|---|---|---|---|
-| Who pays | A subscription | A subscription, plus metered API keys | Metered API keys |
-| Scheduler | The subscription's own (a Claude cloud routine, a Codex or Cursor scheduled task) or CI cron with a subscription-authenticated CLI | Any `individual` scheduler, plus a managed-agent deployment | A managed-agent platform, CI with an API key, or the org's job runner |
-| Executors | `harness`; `command` for a CLI logged in with the subscription | All kinds: `managed`, `webhook`, `assign` too | All kinds; stages run on `managed` agents |
-| Forge identities | One (default): yours | One (default), or two | Two: required |
-| Traces | None, or local files | Local files, or `traces.uri` | `traces.uri` on the org's storage |
-| Bench | Small suites inside the plan's usage limits | As the API budget allows | Full suites across models and executors |
+| | `individual` | `organization` |
+|---|---|---|
+| Scheduler | A Claude cloud routine, or CI cron with a subscription-authenticated Claude Code CLI | Same, or the org's job runner |
+| Executors | `harness`; `command` for a CLI logged in with the subscription | Same |
+| Forge identities | One (default): yours | Two: required |
+| Traces | None, or local files | `traces.uri` on the org's storage |
+| Bench | Small suites inside the plan's usage limits | Full suites across models and executors |
 
 `init --profile <p>` writes these defaults. `validate` fails an `organization` binding with no
-`forge.review_identity`, and warns when an `individual` binding names an executor kind that needs
-an API key, or an `organization` binding has no `managed` executor. The runner setup fails under
-`individual` and `individual-api` when `ANTHROPIC_API_KEY` is set, since it outranks the subscription
-token: `individual-api` names a managed executor's key otherwise (`executors.<skill>.token_env`).
+`forge.review_identity`. The runner setup fails when `ANTHROPIC_API_KEY` is set, since it outranks the
+subscription token and bills the API.
 
 **One identity or two.** `forge.review_identity` decides it.
 
-- **One identity** (`review_identity` empty; the `individual` and `individual-api` default). The
+- **One identity** (`review_identity` empty; the `individual` default). The
   factory acts as one account, yours: on a Claude cloud routine, the proxy's GitHub login. There is
   one scheduled job, the cycle. It dispatches `review/review` like any other step, as a harness subagent
   with a fresh context that runs no CR code. `forge verdict` posts the report and no status: a Claude cloud
@@ -669,11 +624,8 @@ with `Access:` and posts nothing. The `sdlc-reviewer` agent cannot write a file,
 **One repo or many.** A binding belongs to one repo; each repo has its own install, cycle, heartbeat
 ticket and pinned version.
 
-- **One repo** (`board.scope` unset): the board serves one repo: a `github-issues` board, a Jira
-  project or Linear team of its own, a `local` board.
-- **Many repos, one board**: a GitHub Project needs no scope, since `board.options.repo` keeps one
-  repo's issues. Any other shared board (one Jira project, one Linear team, one hub repo's
-  `github-issues`) sets `board.scope` in each repo's binding. `board list` then returns only tickets
+- **One repo** (`board.scope` unset): the board serves one repo: its own `github-issues` board or a `local` board.
+- **Many repos, one board**: one hub repo's `github-issues` board; each repo's binding sets `board.scope`. `board list` then returns only tickets
   with `board.scope.label` (`repo:<name>`), and `board create` adds that label. Exactly one repo sets
   `home: true` and lists every label in `repos`: it also lists the tickets with no `repo:` label, and
   `plan/triage` gives each one the label of the repo whose code it is about. Grooming, shaping and

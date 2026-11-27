@@ -30,9 +30,9 @@ meaning when you point at it.
 | comment kind | The role of a factory comment, such as spec, verdict, note, ask or heartbeat. The CLI stamps its first line, and steps find comments by it. |
 | heartbeat | One comment per cycle on the heartbeat ticket: what ran, on which model, what failed. |
 | identity | The GitHub account the factory acts as. One identity is yours; two adds a separate review app. |
-| profile | Who pays for the agents: individual, individual-api or organization. |
-| executor | Who runs a step: a subagent, a local CLI, a bot, a managed agent or a hosted coding agent. |
-| harness | The agent product that runs the cycle: Claude Code, Codex, Cursor or another. |
+| profile | How the factory is run: individual (one identity) or organization (a separate review identity). |
+| executor | Who runs a step: a subagent (`harness`) or a local CLI (`command`). |
+| harness | The agent product that runs the cycle: Claude Code. |
 | port | One group of CLI verbs the skills use: board, forge or Git. |
 | dispatch | Starting one step on one ticket or pull request through its executor. |
 | pin | The file .agents/cli.json: the tag or commit of agentic-sdlc the project runs. An upgrade changes it. |

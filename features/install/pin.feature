@@ -12,7 +12,7 @@ Feature: The CLI pin and the launcher
 
     Scenario: Init pins the CLI at the package's release tag and touches neither package.json nor .npmrc
       Given the project has the file "package.json" holding '{\n    "name": "p"\n}\n'
-      When I run the install command "init --harness cursor"
+      When I run the install command "init"
       Then the installed file ".agents/cli.json" sets "package" to "github:dmitriywind/agentic-sdlc"
       And the installed file ".agents/cli.json" sets "ref" to "v9.9.9"
       And the installed file "package.json" holds '{\n    "name": "p"\n}\n'

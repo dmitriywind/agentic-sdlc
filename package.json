@@ -15,9 +15,6 @@
     "references",
     "docs",
     ".claude-plugin",
-    ".codex-plugin",
-    ".cursor-plugin",
-    "mcp.json",
     "agents",
     "bin",
     "evals",
@@ -38,8 +35,6 @@
     "trunk-based",
     "kanban",
     "github",
-    "jira",
-    "linear",
     "claude-code-plugin"
   ],
   "license": "Apache-2.0",

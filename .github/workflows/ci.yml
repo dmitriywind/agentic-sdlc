@@ -28,4 +28,4 @@ jobs:
           # The build ran in the tests above; a changed or untracked file means the committed copy is stale.
           [ -z "$(git status --porcelain -- dist docs/guide.html)" ] || { git status --porcelain -- dist docs/guide.html; echo "::error::dist/ or docs/guide.html is stale. Run npm run build, then commit them."; exit 1; }
       - name: plugin manifests version equals package.json version
-        run: node -e "const b=require('./package.json').version;for(const f of ['.claude-plugin','.codex-plugin','.cursor-plugin']){const a=require('./'+f+'/plugin.json').version;if(a!==b){console.error('::error::'+f+'/plugin.json '+a+' != package.json '+b);process.exit(1)}}"
+        run: node -e "const b=require('./package.json').version;for(const f of ['.claude-plugin']){const a=require('./'+f+'/plugin.json').version;if(a!==b){console.error('::error::'+f+'/plugin.json '+a+' != package.json '+b);process.exit(1)}}"

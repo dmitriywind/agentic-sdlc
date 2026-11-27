@@ -13,12 +13,12 @@ export const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, s
   vcs: [() => import('./vcs/index.ts'), true, 'start head changed base push cut tag tags drop checkout-tests'],
   dispatch: [() => import('./dispatch.ts'), true, 'dispatch <skill>[/<step>] --ticket <id> | --cr <n> [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]: start the step on its executor'],
   gate: [() => import('./gates.ts'), true, 'branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red skill-regression review provenance'],
-  ledger: [() => import('./ledger.ts'), true, 'runs summary plan record stale hash measures export: the run ledger from heartbeats; export sends runs as OTLP or CDEvents'],
+  ledger: [() => import('./ledger.ts'), true, 'runs summary plan record stale hash measures: the run ledger from heartbeats'],
   bench: [() => import('./bench.ts'), true, 'build propose run report compare'],
   mcp: [() => import('./mcp.ts'), true, 'serve the port verbs as MCP tools over stdio; --allow approve,status'],
 };
 
-const INIT_FLAGS = '[--profile individual|individual-api|organization] [--harness claude|codex|cursor|generic] [--board github|github-issues|jira|linear|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]';
+const INIT_FLAGS = '[--profile individual|organization] [--harness claude] [--board github-issues|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]';
 
 /** The package version: package.json sits one folder above src/ and dist/. */
 const version = () => {

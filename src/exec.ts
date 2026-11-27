@@ -66,7 +66,7 @@ export const http: Http = async (method, url, opts = {}) => {
       const cause = (e as { cause?: { message?: string } }).cause?.message;
       throw new Error(scrubUrl(`${method} request failed: ${(e as Error).message}${cause ? ` (${cause})` : ''}`, url));
     }
-    // A 2xx whose body is not JSON (a webhook answering `accepted`) still succeeded: the write is not repeated.
+    // A 2xx whose body is not JSON (an endpoint answering `accepted`) still succeeded: the write is not repeated.
     if (res.ok) { try { return text ? JSON.parse(text) : {}; } catch { return { raw: text }; } }
     const retry = res.status === 429 || (res.status >= 500 && method.toUpperCase() !== 'POST');
     if (!retry || attempt >= tries) throw new Error(`${method} ${new URL(url).host} -> ${res.status}: ${text.slice(0, 300)}`);

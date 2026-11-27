@@ -87,12 +87,12 @@ Feature: Init upgrades an install
       And the installed file ".agents/skills/sdlc-gone" is absent
       And a line of the output matches "^install: .*, 1 stale, 3 removed$"
 
-  Rule: An upgrade reuses the harness of the install and regenerates what an older release generated
+  Rule: An upgrade keeps the copied skills and regenerates what an older release generated
 
     Background:
       Given I run the install command "init --harness claude --no-plugin"
 
-    Scenario: Init --upgrade without flags keeps the claude harness and its copied skills
+    Scenario: Init --upgrade without flags keeps its copied skills
       Given the package file "skills/plan/steps/triage.md" holds "new triage\n"
       When I run the install command "init --upgrade"
       Then the installed file ".claude/skills/sdlc-plan/steps/triage.md" holds "new triage\n"

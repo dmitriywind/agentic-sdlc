@@ -7,8 +7,8 @@ Feature: Setups that fail at run time are warned about
 
     Background:
       Given a complete binding
-      And the binding value "board.adapter" is '"github"'
-      And the binding value "board.options" is '{"owner":"o","project_number":1,"repo":"o/r"}'
+      And the binding value "board.adapter" is '"github-issues"'
+      And the binding value "board.options" is '{"repo":"o/r"}'
 
     Scenario: An environment label that names no environment warns
       Given the binding value "board.env_labels" is '["env:staging","env:qa"]'

@@ -10,12 +10,6 @@ import { limitsOf, ownersFor } from './ports.ts';
 import { isMarked, matches, stamp } from './comments.ts';
 import { findStep, readSkills, skillOf } from './skills.ts';
 
-const envOf = (env: NodeJS.ProcessEnv, name: string) => {
-  const v = env[name];
-  if (!v) throw new Error(`set the ${name} environment variable`);
-  return v;
-};
-
 const TIERS = ['fast', 'balanced', 'deep'] as const;
 
 /**
@@ -76,7 +70,6 @@ export function childEnv(env: NodeJS.ProcessEnv, secrets: string[]): NodeJS.Proc
   return out;
 }
 
-type Managed = Extract<Executor, { kind: 'managed' }>;
 /** `skill` is the step id; `file` the step file to follow, relative to the project root. */
 type Task = { skill: string; ticket: string; cr: string; file?: string; done?: string; run?: string; limits?: Limits };
 
@@ -102,53 +95,6 @@ export function executorFor(b: Binding, id: string): Executor {
   for (const k of keys) by.set(k, b.executors[k]);
   return by.get(id) ?? by.get(skillOf(id)) ?? b.executors.default;
 }
-
-/**
- * The one request that starts a managed run. Shapes follow each vendor's documented start-a-run call:
- * Claude Managed Agents POST /v1/sessions, Cursor Cloud Agents POST /v1/agents, Gemini Interactions for Antigravity.
- * ponytail: request fields only; polling, follow-ups and event streams are the vendor's, results come back via the board.
- */
-export function managedRequest(ex: Managed, env: NodeJS.ProcessEnv, t: Task, model: string | undefined, stageBody: object):
-  [string, string, { headers: Record<string, string>; body: unknown }] {
-  const token = envOf(env, ex.token_env);
-  const endpoint = (name: string | undefined, dflt: string) => (name ? envOf(env, name) : dflt).replace(/\/$/, '');
-  const text = taskText(t);
-  const api = ex.api ?? 'generic';
-  if ((api === 'claude' || api === 'antigravity') && (t.skill === 'learn/judge' || ex.model)) {
-    throw new Error(`managed api ${api} cannot pin a model; use harness, command or cursor for this stage`);
-  }
-  switch (api) {
-    case 'claude':
-      return ['POST', `${endpoint(ex.endpoint_env, 'https://api.anthropic.com')}/v1/sessions`, {
-        headers: { 'x-api-key': token, 'anthropic-version': '2026-10-21', 'anthropic-beta': 'managed-agents-2026-04-01' },
-        body: {
-          agent: envOf(env, need(ex.agent_env, 'agent_env')),
-          environment_id: envOf(env, need(ex.environment_env, 'environment_env')),
-          initial_events: [{ type: 'user.message', content: [{ type: 'text', text }] }],
-        },
-      }];
-    case 'cursor':
-      return ['POST', `${endpoint(ex.endpoint_env, 'https://api.cursor.com')}/v1/agents`, {
-        headers: { authorization: `Bearer ${token}` },
-        body: { prompt: { text }, repos: [{ url: need(ex.repo_url, 'repo_url') }], autoCreatePR: false, ...(model ? { model } : {}) },
-      }];
-    case 'antigravity':
-      return ['POST', `${endpoint(ex.endpoint_env, 'https://generativelanguage.googleapis.com')}/v1beta/interactions`, {
-        headers: { 'x-goog-api-key': token },
-        body: { agent: ex.agent_env ? envOf(env, ex.agent_env) : 'antigravity-preview-09-2026', environment: 'remote', input: text, background: true },
-      }];
-    default:
-      return ['POST', `${endpoint(need(ex.endpoint_env, 'endpoint_env'), '')}/sessions`, {
-        headers: { authorization: `Bearer ${token}` },
-        body: { agent: envOf(env, need(ex.agent_env, 'agent_env')), task: t, ...stageBody },
-      }];
-  }
-}
-
-const need = <T>(v: T | undefined, name: string): T => {
-  if (v === undefined || v === '') throw new Error(`managed executor needs ${name}`);
-  return v;
-};
 
 /** The flags `dispatch` takes. */
 export const FLAGS = ['ticket', 'cr', 'workdir', 'run', 'run-model', 'unattended'];
@@ -218,8 +164,7 @@ export const cli: PortCli = async (argv, ctx) => {
       key = [ticket || cr || 'factory', skill, f.run, head].filter(Boolean).join('-');
       locked = true;
       const trusted = ownersFor(b.owners, 'board').bots.map((a) => a.toLowerCase());
-      const closer = ex.kind === 'assign' ? String((ex as { user?: string }).user ?? '').toLowerCase() : '';
-      const bot = isBot = (c: { author?: string }) => trusted.includes(String(c.author).toLowerCase()) || (!!closer && String(c.author).toLowerCase() === closer);
+      const bot = isBot = (c: { author?: string }) => trusted.includes(String(c.author).toLowerCase());
       const all = (await boardOf().comments(target)).filter(bot);
       const mine = all.filter((c) => c.body.trimStart().startsWith(matches('dispatch', key))).sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt))[0];
       const at = mine ? Date.parse(mine.createdAt) : NaN;
@@ -243,7 +188,7 @@ export const cli: PortCli = async (argv, ctx) => {
     /** Prints the start record; the marker was posted before the executor started. */
     let marker: string | undefined;
     const done = async (kind: string, ref: string | null, extra: object = {}) => {
-      console.log(JSON.stringify({ kind, ref: ref ?? (kind === 'assign' ? marker ?? null : null), startedAt, ...(run ? { run } : {}), key, done: stamp('done', key), ...(via ? { via } : {}), ...extra }));
+      console.log(JSON.stringify({ kind, ref, startedAt, ...(run ? { run } : {}), key, done: stamp('done', key), ...(via ? { via } : {}), ...extra }));
       return 0;
     };
     const doneLine = stamp('done', key);
@@ -270,7 +215,7 @@ export const cli: PortCli = async (argv, ctx) => {
     const hasLimits = Object.keys(limits).length > 0;
     const info = { ...(judge ?? {}), model: stage.model, mcps: stage.mcps, sandbox: stage.sandbox, ...(hasLimits ? { limits } : {}) };
     // Claim before start: a second fire sees the marker even while this executor is still starting.
-    if (locked || ex.kind === 'assign') {
+    if (locked) {
       marker = (await boardOf().comment(target!, `${stamp('dispatch', key)}\nagentic-sdlc: run step ${skill} (${ex.kind})${limitsText(limits)}; close with ${stamp('done', key)}`)).id;
       const k = key;
       // Two overlapping cycles can both pass the check above. Re-read: the earliest unfinished marker inside
@@ -327,27 +272,8 @@ export const cli: PortCli = async (argv, ctx) => {
         return await done(fire ? 'fire' : 'command', String(child.pid), { log, ...info });
       } finally { closeSync(fd); }
     }
-    const stageBody = { model: stage.model, mcps: Object.entries(stage.mcps).map(([name, m]) => ({ name, url: m.url })), sandbox: stage.sandbox, ...(hasLimits ? { limits } : {}) };
-    if (ex.kind === 'webhook') {
-      const headers: Record<string, string> = ex.token_env ? { authorization: `Bearer ${envOf(ctx.env, ex.token_env)}` } : {};
-      const url = envOf(ctx.env, ex.url_env);
-      sent = true;
-      const r = await ctx.http('POST', url, { headers, body: { skill, file, ticket, cr, callback: null, ...(doneLine ? { done: doneLine } : {}), ...(run ? { run } : {}), ...stageBody } });
-      return await done('webhook', r?.id ?? null);
-    }
-    if (ex.kind === 'managed') {
-      const req = managedRequest(ex, ctx.env, { skill, ticket, cr, file, done: doneLine, run, ...(hasLimits ? { limits } : {}) }, stage.model, stageBody);
-      sent = true;
-      const r = await ctx.http(...req);
-      return await done('managed', r?.id ?? r?.name ?? null);
-    }
-    if (ex.kind !== 'assign') throw new Error(`unknown executor kind '${(ex as { kind: string }).kind}' for ${skill}`);
-    if (!ticket) throw new Error('executor kind assign needs --ticket');
-    await boardOf().assign(ticket, ex.user);
-    return await done('assign', null);
+    throw new Error(`unknown executor kind '${(ex as { kind: string }).kind}' for ${skill}`);
   } catch (e) {
-    // A 4xx answer or a network error means no remote run exists: the done line is still written.
-    if (sent && (e instanceof TypeError || / -> 4\d\d:/.test(String((e as Error).message)))) sent = false;
     if (onFail) await onFail().catch(() => undefined);
     console.error((e as Error).message);
     return 1;

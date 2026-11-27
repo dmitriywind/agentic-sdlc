@@ -17,7 +17,6 @@ import { forbiddenHits, frontmatter, logicalName, readSkills, scorerTargets, ski
 import { BENCH_STEP, OPTIONS as BENCH_OPTIONS } from './bench.ts';
 import { OPTIONS as LEDGER_OPTIONS } from './ledger.ts';
 import { FLAGS as DISPATCH_FLAGS } from './dispatch.ts';
-import { changeMergedEvent, deployEvent, emitGateEvent } from './telemetry.ts';
 
 export interface Deps {
   binding: Binding;
@@ -692,14 +691,12 @@ export const cli: PortCli = (argv, base) =>
       case 'merged': {
         const sha = a.need('sha');
         const r = await merged(deps(), sha);
-        if (r.cr && !r.reason) await emitGateEvent(base, changeMergedEvent(base.binding, { cr: r.cr, sha }));
         return r;
       }
       case 'shipped': {
         if (!a.pos[0]) throw new UsageError('shipped <env> is required');
         const sha = a.need('sha'), result = a.need('result'), version = a.get('version');
         const r = await shipped(deps(), a.pos[0], sha, result, version);
-        await emitGateEvent(base, deployEvent(base.binding, { env: a.pos[0], sha, result, version }));
         return r;
       }
       case 'approval': {

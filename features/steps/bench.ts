@@ -36,7 +36,7 @@ Given('a project that benches with the agent command {string}', (w, command: str
 }));
 Given('the bench demands {int} shared cases and {int} trials', (w, cases: number, trials: number) => w.binding({ learning: { bench_min_cases: cases, bench_trials: trials } }));
 Given('the executors:', (w, t: DataTable) => w.binding({
-  executors: Object.fromEntries(t.hashes().map((r) => [r.name, { kind: r.kind, ...(r.run ? { run: r.run } : {}), ...(r.url_env ? { url_env: r.url_env } : {}), ...(r.max_turns ? { max_turns: Number(r.max_turns) } : {}) }])),
+  executors: Object.fromEntries(t.hashes().map((r) => [r.name, { kind: r.kind, ...(r.run ? { run: r.run } : {}), ...(r.max_turns ? { max_turns: Number(r.max_turns) } : {}) }])),
 }));
 
 // ---- the board and the forge that cases are built from ----

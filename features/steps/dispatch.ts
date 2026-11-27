@@ -1,7 +1,7 @@
 // `agentic-sdlc dispatch`, run in-process (src/dispatch.ts cli) against the installed fixture pack, a local board, a fake exec/http
 // and a fake child process. Nothing is started for real.
 // State on w.state: outs (every JSON line printed), spawn ({ started, line, env, opts }: the last command started), lastDone
-// (the done line of the last start record), managed ({ url, headers, body } or error), judge (the last judgeTier answer).
+// (the done line of the last start record), judge (the last judgeTier answer).
 // The result of a run is w.last: the steps 'the result ... is ...' (board.ts) and 'the exit code is' read it.
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -80,18 +80,6 @@ Then('the command line is the template {string} filled with the quoted words {st
 Then('the command line mentions {string}', (w, text: string) => assert.ok(String(w.state.spawn.line).includes(text), String(w.state.spawn.line)));
 Then('the child environment holds {string} as {string}', (w, name: string, value: string) => assert.equal(w.state.spawn.env[name], value));
 Then('the child environment has no {string}', (w, name: string) => assert.equal(w.state.spawn.env[name], undefined));
-
-// ---- the webhook and managed requests ----
-const body = (w: World) => {
-  const c = w.calls[0];
-  const b = JSON.parse(c.slice(c.indexOf('{')));
-  return b.task ? { ...b, ...b.task } : b;
-};
-Then('the request body holds {string} as the JSON {string}', (w, path: string, json: string) => {
-  let v: Any = body(w);
-  for (const k of path.split('.')) v = v?.[k];
-  assert.deepEqual(v, JSON.parse(json));
-});
 
 // ---- a table of executors for the lookup scenarios ----
 Given('the executors are:', (w, t: DataTable) => {
