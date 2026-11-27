@@ -91,7 +91,8 @@ Feature: Gate human-approval
 
   Rule: With one account an owner approves by the approval label, for the head it was applied to
     GitHub refuses an approving review by the CR's author, so the gate also takes forge.approval_label
-    (default approved) applied by an account the class asks for, outside the bots, after the head reached the forge.
+    (default approved) applied by an account the class asks for after the head reached the forge. An owner who is also
+    the account the factory acts as counts: the guard hook and the CLI keep the agent from writing the label.
 
     Scenario Outline: The label approves only when the right account applied it after the head's push
       Given the binding sets "owners.product" to the list "po, factory-bot"
@@ -106,7 +107,7 @@ Feature: Gate human-approval
         | PO          | 10:05 | success |
         | po          | 09:55 | pending |
         | dana        | 10:05 | pending |
-        | factory-bot | 10:05 | pending |
+        | factory-bot | 10:05 | success |
 
     Scenario: A push withdraws the label
       Given the binding sets "owners.product" to "po"

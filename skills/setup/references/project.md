@@ -29,7 +29,6 @@ failure. Never put a secret or a token in a command: name its env var.
 
 ## One person, one account
 
-With one account as owner and as the account the cycle acts as, `validate` warns that nobody
-outside `owners.bots` can approve a Full-lane change, so such a change never merges. That is the
-person's decision, not yours: leave the warning, and the `person` list of `status` names the
-choices (a second account in `owners.product`, or `forge.human_approval: never`).
+With one account as owner and as the account the cycle acts as, list that login in the owner roles
+and in `owners.bots`. The person approves a Full-lane or factory change with `forge.approval_label`
+on the change request; no step of the pack writes that label.

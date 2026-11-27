@@ -7569,11 +7569,6 @@ function bindingWarnings(b) {
   for (const k of Object.keys(x?.owners ?? {})) if (!["product", "factory", "operator", "security", "compliance", "bots"].includes(k)) w.push(`owners.${k} is not a known owner role (product, factory, operator, security, compliance, bots); remove it`);
   if (x?.product?.kind !== void 0) w.push("product.kind is unused; remove it");
   if (x?.board?.milestone !== void 0) w.push("board.milestone is unused; remove it");
-  const ha = x?.forge?.human_approval ?? "full-lane";
-  if (ha !== "never" && x?.owners) {
-    const o = ownersFor(x.owners, "forge");
-    if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved (by a review or forge.approval_label); take your own account out of owners.bots (owners are trusted without it), or add a second account to owners.product`);
-  }
   const hb = String(x?.heartbeat?.ticket ?? "");
   if (["github-issues", "local"].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb) && hintOf(hb) === void 0) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
   const envs = x?.product?.environments ?? [];
@@ -10686,7 +10681,7 @@ async function approval(d, n, opts = {}) {
       const who = (need2 === "owner" ? o.factory : o.product).map((u) => u.toLowerCase());
       const actor = ev?.actor.toLowerCase() ?? "";
       const fresh = !!ev && !!cr.pushedAt && Date.parse(ev.at) > Date.parse(cr.pushedAt);
-      if (ev?.action === "labeled" && !ev.bot && who.includes(actor) && !bots.includes(actor) && fresh) by = `${actor} (label ${label})`;
+      if (ev?.action === "labeled" && !ev.bot && who.includes(actor) && fresh) by = `${actor} (label ${label})`;
     }
   }
   const pass = need2 === "none" || !!by;
@@ -12485,8 +12480,6 @@ function personSteps(b, trunkLines, warnings) {
     },
     { step: "Optional: connect GitHub in claude.ai, so a board page there can read the issues", where: "https://claude.ai/settings/connectors > GitHub", verified: null }
   ];
-  const both = warnings.find((w) => w.startsWith("forge.human_approval is"));
-  if (both) out.push({ step: "Decide who approves a Full-lane CR", where: ".agents/binding.yml owners.product / owners.bots, or forge.human_approval", text: both, verified: false });
   return out;
 }
 async function approvals(crs, b, classOf) {

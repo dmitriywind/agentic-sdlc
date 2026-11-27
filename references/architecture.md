@@ -655,6 +655,8 @@ reports it, `forge land` waits for it. The `approval` gate's classes, which `for
 | `guardrail` | anything else under `paths.factory`, a CR mixing product and factory paths, unknown paths, deletions, an unreadable head | an `owners.factory` entry approved the head, or applied the label |
 
 The label (`forge.approval_label`) approves the head when its last event on the CR is `labeled`, by an
-account the class asks for, not a forge bot, not in `owners.bots`, not `review_identity`, after the
+account the class asks for, not a forge bot, not `review_identity`, after the
 head's `pushedAt`; no `pushedAt`, no label approval. Every push removes it (`gate approval --pushed`), so
-it approves exactly the head the owner saw.
+it approves exactly the head the owner saw. An owner listed in `owners.bots` too (one account in every
+role) counts: no agent tool writes the label (the guard hook, `board label` and the MCP tool refuse it),
+so the label is a deliberate act outside the agent's tools. It is not proof of a second person.

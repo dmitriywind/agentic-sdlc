@@ -38,7 +38,3 @@ Feature: A binding is validated before anything runs
       Then the warnings mention "env_labels 'env:qa' names no product.environments entry"
       And the warnings do not mention "env:staging"
 
-    Scenario: One account that is both product owner and bot can never approve a Full-lane CR
-      Given the binding value "owners" is '{"product":"me","factory":"me","bots":["me"]}'
-      When the binding is validated
-      Then the warnings mention "every owners.product account is also in owners.bots"
