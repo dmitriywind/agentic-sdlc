@@ -37,7 +37,7 @@ export class GateFakes {
   created: { title: string; body: string; status: string; labels: string[] }[] = [];
   tags: string[] = [];
   tagError?: Error;
-  /** Does the forge search merged CRs by ticket? `asked` lists the tickets it was asked about. */
+  /** Does the forge search merged CRs by ticket, as the github forge does? `asked` lists the tickets it was asked about. */
   searchByTicket = false;
   /** Merged CRs the search index does not show yet. */
   indexTrails = false;

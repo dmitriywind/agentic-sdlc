@@ -1,3 +1,7 @@
-* text=auto
-*.sh text eol=lf
-templates/gates/hooks/pre-push text eol=lf
+# LF everywhere, on every OS: shipped files are hashed (templates/known-hashes.json) and shell scripts run as-is.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff2 binary

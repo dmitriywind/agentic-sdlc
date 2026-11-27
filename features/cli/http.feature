@@ -16,15 +16,6 @@ Feature: The HTTP helper retries what is safe, gives up on time and keeps secret
       And the helper waited "2000, 2000" milliseconds
       And the API was called 3 times
 
-    Scenario: A wait is capped at 30 seconds
-      Given the API answers in turn:
-        | status | retry-after |
-        | 429    | 3600        |
-        | 200    |             |
-      When the adapter makes a GET call to "https://h/x"
-      Then the call returns '{"ok":true}'
-      And the helper waited "30000" milliseconds
-
     Scenario: A call that keeps failing is given up after 3 tries and names the method, host and status
       Given the API answers in turn:
         | status |

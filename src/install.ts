@@ -113,7 +113,7 @@ class Installer {
   /** Install the package file `src` (relative to the package) at `rel`. */
   copy(src: string, rel: string, quiet = false) {
     const data = readFileSync(join(this.pkg, src));
-    return this.put(rel, rel.startsWith('.github/workflows/') ? bindWorkflow(basename(rel), data.toString('utf8'), this.bound) : data, src, quiet);
+    return this.put(rel, posix(rel).startsWith('.github/workflows/') ? bindWorkflow(basename(rel), data.toString('utf8'), this.bound) : data, src, quiet);
   }
   /** Name a file this run does not install (by choice of binding or harness) so it is not reported as stale. */
   skip(rel: string) { this.offered.add(posix(rel)); }

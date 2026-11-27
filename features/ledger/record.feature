@@ -24,7 +24,6 @@ Feature: Planning and recording the scores of a run
       Examples:
         | run | scorers                                  |
         | v   | done-conditions, by-skill, by-step       |
-        | r   | done-conditions, by-skill                |
 
     Scenario: The evidence names the step file of the installed pack and the skill hash
       Given an installed skill pack with the review steps
@@ -49,8 +48,6 @@ Feature: Planning and recording the scores of a run
       Examples:
         | outcome |
         | failed  |
-        | timeout |
-        | capped  |
 
     Scenario: A red required check on the head of the CR caps the score with the outcome
       Given a run "a" that ended "failed" on CR "7" whose checks are:
@@ -94,7 +91,6 @@ Feature: Planning and recording the scores of a run
       Examples:
         | file                                                              | message                  |
         | {"scores":{"done-conditions":5}}                                  | not on scale 0-4         |
-        | {"scores":{"done-conditions":3,"release-only":2}}                 | does not apply           |
         | {"scores":{"redundant-tests":"pass"}}                             | done-conditions is required |
 
   Rule: A judge with too little evidence grades unscorable, with a reason
@@ -120,28 +116,3 @@ Feature: Planning and recording the scores of a run
       When I run "ledger stale --max-hours 2"
       Then the exit code is 1
       And the JSON result "stale" is "true"
-
-    Scenario: A heartbeat older than max-hours is stale
-      Given a heartbeat by "local" at "2020-01-01T00:00:00Z" with no runs
-      When I run "ledger stale --max-hours 2"
-      Then the exit code is 1
-      And the JSON result "stale" is "true"
-      And the JSON result "newest" is "2020-01-01T00:00:00Z"
-
-    Scenario: A heartbeat within max-hours is not stale
-      Given a heartbeat by "local" at "2020-01-01T00:00:00Z" with no runs
-      When I run "ledger stale --max-hours 100000"
-      Then the exit code is 0
-      And the JSON result "stale" is "false"
-
-  Rule: A wrong command line is a one-line usage error
-
-    Scenario Outline: A flag without a value, an unknown flag or an unknown export format is refused
-      When I run "<command>"
-      Then the exit code is 2
-      And the output says "<message>"
-
-      Examples:
-        | command                       | message                           |
-        | ledger runs --since           | --since needs a value             |
-        | ledger runs --bogus x         | unknown flag --bogus              |

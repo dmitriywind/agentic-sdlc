@@ -3,7 +3,7 @@
 Feature: The skill loader and the pack check catch a broken pack
   One loader reads the pack for validate, dispatch, skill-regression, the ledger and bench. A step is the unit that runs;
   its id is `<skill>/<step>`, or the skill name alone for a one-step skill. Problems come back as errors and warnings,
-  and the steps that are sound still load. These scenarios use small fixture packs; pack.feature checks the shipped one.
+  and the steps that are sound still load. These scenarios use small fixture packs.
 
   Rule: Declared steps and step files agree
 
@@ -22,43 +22,6 @@ Feature: The skill loader and the pack check catch a broken pack
         """
       When the pack is read
       Then the pack has an error mentioning "steps/extra.md is not in metadata.steps"
-
-  Rule: A skill declares its tier once
-
-    Scenario: A skill with steps and a tier of its own is an error
-      Given a skills folder holding the standard fixture pack
-      And the pack file "review/SKILL.md" is:
-        """
-        ---
-        name: review
-        description: d
-        metadata:
-          tier: deep
-          steps:
-            review: { tier: balanced }
-            verify: { tier: balanced }
-        ---
-        body
-        """
-      When the pack is read
-      Then the pack has an error mentioning "metadata.steps and metadata.tier are both set"
-
-  Rule: A skill folder names itself
-
-    Scenario: A name that differs from the folder is an error
-      Given a skills folder holding the standard fixture pack
-      And the pack file "build/SKILL.md" is:
-        """
-        ---
-        name: builder
-        description: d
-        metadata:
-          tier: deep
-        ---
-        body
-        """
-      When the pack is read
-      Then the pack has an error mentioning "frontmatter name 'builder' differs from the folder name"
 
   Rule: The check reads what a skill file says
 

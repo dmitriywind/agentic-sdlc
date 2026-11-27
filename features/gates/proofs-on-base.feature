@@ -54,3 +54,5 @@ Feature: Gate proofs-on-base
       Examples:
         | command                     | answer            |
         | exits 0                     | passing           |
+        | exits 1                     | failing           |
+        | is killed by a signal       | not a test result |

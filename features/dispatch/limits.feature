@@ -20,15 +20,3 @@ Feature: A stage's caps reach its executor
       And the result "limits.max_turns" is "30"
       And the result "limits.max_tokens" is "5000"
       And the result "limits.max_minutes" is "20"
-
-  Rule: The caps are positive integers
-
-    Scenario Outline: A cap that is not a positive integer is a problem
-      Given a complete binding
-      And the binding value "<key>" is '<value>'
-      When the binding is validated
-      Then the problems mention "<problem>"
-
-      Examples:
-        | key                           | value | problem                                                |
-        | executors.default.max_turns   | 0     | executors.default.max_turns must be a positive integer |

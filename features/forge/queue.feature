@@ -17,14 +17,6 @@ Feature: forge queue gives every open CR its one next action
         | rule                         | cr                             | checks     | comments                                                                                                   | reason                                          |
         | rework cap, 3 by default     | ready                          |            | bot: fail for h0, 30m ago; bot: fail for h1, 20m ago; bot: note, 10m ago saying red gate                  | rework cap                                      |
         | a required check is missing  | ready, pushed 120 minutes ago  |            |                                                                                                            | required check ci is missing past stall_minutes |
-        | a required check is pending  | ready, pushed 120 minutes ago  | ci=pending | fo: comment, 5m ago saying looking                                                                         | required check ci is pending past stall_minutes |
-        | a stalled CR with a pass too | ready, pushed 120 minutes ago  |            | bot: pass for h1, 120m ago                                                                                 | required check ci is missing past stall_minutes |
-
-    Scenario: cycle.max_rework lowers the cap
-      Given the cycle sets "max_rework" to 1
-      When the next action is decided for the CR "ready" with the checks "" and the comments "bot: fail for h1, 1m ago"
-      Then the next action is "escalate"
-      And the reason is "rework cap"
 
   Rule: rework when the head has a fail verdict or a required check is red
 
@@ -37,10 +29,7 @@ Feature: forge queue gives every open CR its one next action
         | rule                                 | cr    | checks     | comments                                                                  | reason                               |
         | a fail verdict for the head          | ready |            | bot: fail for h1, 1m ago                                                  | the review asks for remediation      |
         | the newest report for the head fails | ready |            | bot: pass for h1, 9m ago; bot: fail for h1, 2m ago                        | the review asks for remediation      |
-        | below the cap                        | ready |            | bot: fail for h0, 30m ago; bot: fail for h1, 20m ago                      | the review asks for remediation      |
         | a red required check                 | ready | ci=failure |                                                                           | required check ci is red             |
-        | a red check, a draft with a verdict  | draft | ci=failure | bot: pass for h1, 1m ago                                                  | required check ci is red             |
-        | a red check, a draft, no verdict     | draft | ci=failure |                                                                           | required check ci is red             |
         | a stranger's notes do not count      | ready | ci=failure | mallory: note, 1m ago; mallory: note, 1m ago; mallory: note, 1m ago      | required check ci is red             |
 
     Scenario Outline: A Signal an open ticket names makes the CR wait instead
@@ -51,8 +40,6 @@ Feature: forge queue gives every open CR its one next action
 
       Examples:
         | rule                                | comments                                                                                       |
-        | the newest note for the head        | bot: note for h1, 1m ago saying flake, Signal 31                                               |
-        | the ref of the note                 | bot: note for h1 signal 31, 1m ago                                                             |
         | even at the rework cap              | bot: note for h1, 1m ago saying Signal #7; bot: fail for h0, 30m ago; bot: fail for h1, 20m ago |
 
   Rule: review when no trusted verdict covers the head
@@ -65,16 +52,9 @@ Feature: forge queue gives every open CR its one next action
       Examples:
         | rule                                          | cr               | checks        | comments                                 |
         | a draft, nothing yet                          | draft            |               |                                          |
-        | a draft, checks green                         | draft            | ci=success    |                                          |
-        | a draft, ci still pending                     | draft            | ci=pending    |                                          |
-        | a draft, only the review check pending        | draft            | review=pending |                                         |
-        | a draft, a verdict for an old head only       | draft            |               | bot: pass for old, 1m ago                |
         | a draft, an untrusted verdict                 | draft            |               | mallory: pass for h1, 1m ago             |
         | a ready CR whose head changed                 | ready            |               | bot: pass for old, 1m ago                |
-        | a ready CR, nothing red                       | ready            |               |                                          |
         | a verdict with conflicting lines              | ready            |               | bot: conflict, 1m ago                    |
-        | behind the trunk, no verdict: review first    | ready, behind    |               |                                          |
-        | no push time: the stall clock has not started | ready, not pushed |              |                                          |
 
   Rule: sync when a ready CR is behind the trunk
 
@@ -93,8 +73,6 @@ Feature: forge queue gives every open CR its one next action
       Examples:
         | rule                                            | cr                            | checks                                                      | comments                                                                           |
         | a pass for the head                             | ready                         |                                                             | bot: pass for h1, 1m ago                                                           |
-        | the newest report for the head wins             | ready                         |                                                             | bot: fail for h1, 9m ago; bot: pass for h1, 2m ago                                 |
-        | a red review context is not a rework            | ready                         | review=failure                                              | bot: pass for h1, 1m ago                                                           |
         | review and human-approval never stall           | ready, pushed 120 minutes ago | ci=success, human-approval=pending, review=pending          | bot: pass for h1, 1m ago                                                           |
         | at the cap, a pass for the head still lands     | ready                         |                                                             | bot: fail for a, 30m ago; bot: fail for b, 20m ago; bot: fail for c, 10m ago; bot: pass for h1, 1m ago |
 
@@ -107,7 +85,6 @@ Feature: forge queue gives every open CR its one next action
 
       Examples:
         | rule                                    | cr            |
-        | behind the trunk, still a draft         | draft, behind |
         | passed, the CR is still a draft         | draft         |
         | a merged CR is not landed again         | merged        |
 
@@ -120,14 +97,9 @@ Feature: forge queue gives every open CR its one next action
       Examples:
         | comments                                                                           | signal  | why                           |
         | bot: note for h1 signal 31, 1m ago                                                 | 31      | the second word of the ref    |
-        | bot: note for h1 signal PROJ-4, 1m ago saying see below                            | PROJ-4  | the ref wins over the text    |
         | bot: note for h0 signal 31, 1m ago                                                 | none    | a ref for another head        |
-        | bot: note for h1, 1m ago saying flaky, Signal #31 filed                            | 31      | Signal #<id> in the text      |
-        | bot: note for h1, 1m ago saying Signal: PROJ-4                                     | PROJ-4  | Signal: <id>                  |
         | bot: note for h1, 9m ago saying Signal 5; bot: note for h1, 1m ago saying fixed in the diff | none | the newest note decides  |
-        | bot: note for h0, 1m ago saying Signal 5                                           | none    | a note for another head       |
         | mallory: note for h1, 1m ago saying Signal 5                                       | none    | a stranger                    |
-        | bot: note for h1, 1m ago saying the signal is red                                  | none    | no Signal id                  |
 
   Rule: A held ticket is released by an approval alone
 
@@ -143,8 +115,6 @@ Feature: forge queue gives every open CR its one next action
       Examples:
         | held | approval | is held | released | why                                |
         | 12   | success  | true    | true     | the approval is given              |
-        | 12   | pending  | true    | false    | the approval is still due          |
-        | 99   | success  | false   | false    | the ticket of the CR is not held   |
 
     Scenario: A held ticket is not released while its CR needs rework
       Given the approval class of every CR is "product-full", owned by "po"

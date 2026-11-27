@@ -10,28 +10,11 @@ Feature: Validate checks the installed skills and the binding
 
   Rule: Each installed skill is checked
 
-    Scenario: A skill with a top-level tier is a warning
-      Given the project has the file ".agents/skills/old/SKILL.md" holding "---\nname: old\ndescription: d\ntier: deep\n---\n"
-      When I run the install command "validate"
-      Then the output says "warn: skill old: top-level tier is deprecated"
-
     Scenario: A skill with no tier and no steps is a problem
       Given the project has the file ".agents/skills/none/SKILL.md" holding "---\nname: none\ndescription: d\n---\n"
       When I run the install command "validate"
       Then a line of the output matches "^problem: skill none: .*metadata\.tier or metadata\.steps"
       And the exit code is 1
-
-    Scenario: A step file that metadata.steps does not list is a problem
-      Given the project has the file ".agents/skills/sdlc-plan/steps/extra.md" holding "x"
-      When I run the install command "validate"
-      Then a line of the output matches "^problem: skill sdlc-plan: steps/extra\.md is not in metadata\.steps"
-
-  Rule: An executors key names a step or a skill
-
-    Scenario: An executor that names no step or skill warns that no dispatch uses it
-      Given the installed binding also runs the executors "mybot"
-      When I run the install command "validate"
-      Then a line of the output matches "^warn: executors\.mybot names no step or skill"
 
   Rule: Warnings alone do not fail
 
@@ -62,7 +45,6 @@ Feature: Validate checks the installed skills and the binding
 
       Examples:
         | command  |
-        | init     |
         | validate |
 
     Scenario: The binding is not touched

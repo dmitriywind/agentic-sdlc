@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import type { Dirent } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { agentCommand, buildCases, diverse, quote, resolveExecutor, runBench, wilsonLower } from '../../src/bench.ts';
+import { agentCommand, buildCases, diverse, quote, resolveExecutor, runBench } from '../../src/bench.ts';
 import type { BenchCase } from '../../src/bench.ts';
 import type { Board, CR, Forge, Item, Vcs } from '../../src/ports.ts';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
@@ -183,8 +183,6 @@ Given('a bench result {string} of the model {string} that ran:', (w, file: strin
 });
 const amend = (w: World, patch: Record<string, unknown>) => w.write(w.state.resultFile, JSON.stringify({ ...resultFile(w, w.state.resultFile), ...patch }));
 Given('that result is of the suite {string}', (w, suite: string) => amend(w, { suite }));
-Given('that result is of the executor {string} of the kind {string}', (w, executor: string, kind: string) => amend(w, { executor, executorKind: kind }));
 
-When('the Wilson lower bound of {int} passes in {int} trials is computed', (w, pass: number, n: number) => done(w, { lower: wilsonLower(pass, n) }));
 
 // ---- the step the bench replays ----

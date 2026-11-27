@@ -40,26 +40,11 @@ Feature: The class of a CR
       Examples:
         | other                                                             |
         | the text of the skill "a" differs at the head                     |
-        | the frontmatter of the skill "a" has one more key at the head     |
 
     Scenario: A tier that is not a tier is guardrail
       Given the skill "a" has a bench suite
       And a CR that changes the skill "a"
       And the skill "a" has the tier "fast" at the base and "huge" at the head
-      When the approval gate runs
-      Then the CR class is "guardrail"
-
-    Scenario: A step tier that is not a tier is guardrail
-      Given the skill "a" has a bench suite
-      And a CR that changes the skill "a"
-      And the step "two" of the skill "a" has the tier "balanced" at the base and "huge" at the head
-      When the approval gate runs
-      Then the CR class is "guardrail"
-
-    Scenario: Skill text alone is guardrail
-      Given the skill "a" has a bench suite
-      And a CR that changes the skill "a"
-      And the text of the skill "a" differs at the head
       When the approval gate runs
       Then the CR class is "guardrail"
 

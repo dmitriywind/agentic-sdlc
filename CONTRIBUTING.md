@@ -16,7 +16,8 @@ npm test
 `npm run test:features`. Narrow a run with environment variables: `FEATURE=gates/approval` (path contains),
 `SCENARIO='Fast-lane'` (title matches), `TAGS=@gate:approval` (any tag). A scenario tagged `@only` runs alone.
 The `@dist` scenario runs the built CLI and fails when `dist/bin.js` is missing: run `npm run build`.
-Tests use fakes and no network.
+Tests use fakes and no network. They run on Linux, macOS and Windows; the launcher scenarios run the POSIX launcher
+with `/bin/sh`, or on Windows with the `sh` of Git for Windows. `.gitattributes` checks every file out with LF.
 
 ## Behaviour: executable features
 
@@ -35,16 +36,20 @@ Layout:
 
 Rules:
 
-1. Every rule in the source has a scenario, and every scenario has executable steps. No prose-only scenario.
+1. Every behaviour a user or the cycle relies on, and every security boundary, has a scenario; every scenario has
+   executable steps. No prose-only scenario. A scenario exercises the product on fixtures: none reads this repo's own
+   files (docs, templates, manifests, the hash list) to check their text. A release invariant of those files is a
+   build step that CI checks, not a test.
 2. One behaviour per scenario. Two outcomes of one action are two `Then` lines; two actions are two scenarios.
 3. The title states the rule in domain words: "A Full-lane CR waits for a human", never a function name or
    "test that ...". Group scenarios under `Rule:` lines; give the Feature a one-paragraph description.
 4. `Given` is state, `When` is one action (one CLI verb, one hook call or one gate run), `Then` is what a
    user observes: exit code, output field, status posted, call made to the forge or board, file written.
    A `Given` never asserts. A `Then` never acts.
-5. Prefer a `Scenario Outline` with an Examples table over copy-paste; a long list of commands is a table.
+5. Prefer a `Scenario Outline` with an Examples table over copy-paste. A row is a distinct rule or a distinct way past a
+   boundary, never one more flag, one more spelling or one more error message of a rule already shown.
 6. Reuse steps. Add a step only when no phrase says it; put it in the area file, or in `common.ts` when a
-   second area needs it. A step no feature uses fails the run, so delete a step with its last scenario.
+   second area needs it. Delete a step, and any fake only it used, with its last scenario.
 7. Binding values appear as keys (`forge.human_approval`), so a scenario holds for every project.
 8. Tags: `@gate:<name>`, `@cli:<verb>`, `@board:<adapter>`, `@skill:<name>` on the Feature. `@skip` skips a
    scenario: put a comment above it that names the reason and the owner of the fix. `@only` is for a local run.
@@ -103,10 +108,10 @@ home; elsewhere a pointer.
 
 The package ships from Git only, never npm. `dist/` is committed: run `npm run build` and commit
 `dist/` with every `src/` change. The build also regenerates `docs/guide.html` from `docs/guide/*.md` and
-`scripts/guide/`: commit it too. CI fails when either is stale. A release bumps `package.json` and
-`.claude-plugin/plugin.json`, runs `npm run hashes` (it appends the hash of every installable file to
-`templates/known-hashes.json`, so `init --upgrade` can tell an old package file from a local edit; it reads the
-full git history, so it is not part of the build), commits the result, then tags `v<version>` on `master`.
+`scripts/guide/`, and appends the hash of every installable file (the trunk's history, the tags and the working tree)
+to `templates/known-hashes.json`, so `init --upgrade` can tell an old package file from a local edit: commit all
+three. CI fails when any is stale. A release bumps `package.json` and `.claude-plugin/plugin.json`, commits, then
+tags `v<version>` on `master`.
 
 ## Changes
 

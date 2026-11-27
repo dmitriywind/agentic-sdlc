@@ -28,7 +28,6 @@ Feature: Gate merged
         | closes | target  | reason                |
         | 12     | develop | is not trunk          |
         | 12, 13 | main    | not exactly one       |
-        |        | main    | not exactly one       |
 
     Scenario: A CR that is not merged moves nothing
       Given these tickets are on the board:

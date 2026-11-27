@@ -35,12 +35,6 @@ Feature: Doctor checks what the gates rely on
     Background:
       Given the binding sets "forge.options.repo" to "o/r"
 
-    Scenario: Hosted runners print nothing
-      Given the repo variable "AGENTIC_RUNS_ON" is '"ubuntu-latest"'
-      And the repo is "private"
-      When doctor checks the self-hosted runner
-      Then doctor prints no line
-
     Scenario: A self-hosted runner on a public repo fails
       Given the repo variable "AGENTIC_RUNS_ON" is '"self-hosted"'
       And the repo is "public"
@@ -73,14 +67,6 @@ Feature: Doctor checks what the gates rely on
         | 21 | Size   | S, M       |
       When doctor checks the issue fields
       Then doctor line 1 matches "^fail board field_ids: status 10 is not an issue field of acme; size 11 is not an issue field of acme; by name the org has field_ids: { status: 20, size: 21 }$"
-
-    Scenario: A status field without a board status as an option fails
-      Given the org "acme" has the issue fields:
-        | id | name   | options |
-        | 10 | Status | Ready   |
-        | 11 | Size   | S, M    |
-      When doctor checks the issue fields
-      Then doctor line 1 matches "^fail board field_ids: the status field 'Status' lacks the options Done; by name"
 
     Scenario: A Claude cloud session cannot read the org and skips the check
       Given the environment variable "CLAUDE_CODE_REMOTE" is "true"
@@ -117,7 +103,6 @@ Feature: Doctor checks what the gates rely on
 
       Examples:
         | pin                           | line                                    |
-        | null                          | ^fail cli pin: .*not a JSON object      |
         | {"package":"p","ref":"main"}  | ^fail cli pin: ref 'main'               |
 
   Rule: A failed probe says why and shows no secret

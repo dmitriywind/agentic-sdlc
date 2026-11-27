@@ -12,8 +12,8 @@ const checkoutPath = (w: World, name: string) => {
   return p as string;
 };
 
-/** The command with {{name}} replaced by the path of that checkout. */
-const expand = (w: World, command: string) => command.replace(/\{\{([^}]+)\}\}/g, (_m, n) => checkoutPath(w, n));
+/** The command with {{name}} replaced by the path of that checkout, written as a shell writes it (forward slashes, also on Windows). */
+const expand = (w: World, command: string) => command.replace(/\{\{([^}]+)\}\}/g, (_m, n) => checkoutPath(w, n).replaceAll('\\', '/'));
 
 const hook = (w: World, tool: string, input: Record<string, unknown>) => {
   const payload: Record<string, unknown> = { cwd: w.state.cwd ?? w.root, tool_name: tool, tool_input: input };

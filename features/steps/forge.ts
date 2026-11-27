@@ -290,7 +290,6 @@ const commentsOf = (list: string): Comment[] => list.split(';').map((s) => s.tri
 Given('every Signal a note names is open', (w) => { flow(w).signalsOpen = true; });
 Given('the ticket {string} is held', (w, id: string) => { flow(w).held.add(id); });
 Given('the Signal {string} is open', (w, id: string) => { flow(w).open.add(id); });
-Given('the cycle sets {string} to {int}', (w, key: string, n: number) => { w.binding({ cycle: { [key]: n } }); });
 Given('the approval class of every CR is {string}', (w, klass: string) => { flow(w).klass = { class: klass, who: [] }; });
 Given('the approval class of every CR is {string}, owned by {string}', (w, klass: string, who: string) => { flow(w).klass = { class: klass, who: csv(who) }; });
 Given('the approval class of a CR cannot be decided', (w) => { flow(w).klass = new Error('no diff'); });

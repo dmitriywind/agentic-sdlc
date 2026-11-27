@@ -1,5 +1,5 @@
 name: ci
-# dist/ is committed: the plugin and github: installs run it. This job fails when it is stale.
+# dist/ is committed: the plugin and github: installs run it. This job fails when it, the guide or the hash list is stale.
 on:
   push:
     branches: [master]
@@ -26,6 +26,6 @@ jobs:
       - name: dist/ matches src/
         run: |
           # The build ran in the tests above; a changed or untracked file means the committed copy is stale.
-          [ -z "$(git status --porcelain -- dist docs/guide.html)" ] || { git status --porcelain -- dist docs/guide.html; echo "::error::dist/ or docs/guide.html is stale. Run npm run build, then commit them."; exit 1; }
+          [ -z "$(git status --porcelain -- dist docs/guide.html templates/known-hashes.json)" ] || { git status --porcelain -- dist docs/guide.html templates/known-hashes.json; echo "::error::dist/, docs/guide.html or templates/known-hashes.json is stale. Run npm run build, then commit them."; exit 1; }
       - name: plugin manifests version equals package.json version
         run: node -e "const b=require('./package.json').version;for(const f of ['.claude-plugin']){const a=require('./'+f+'/plugin.json').version;if(a!==b){console.error('::error::'+f+'/plugin.json '+a+' != package.json '+b);process.exit(1)}}"

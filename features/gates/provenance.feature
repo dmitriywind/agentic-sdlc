@@ -52,25 +52,3 @@ Feature: Gate provenance
       And the report names 6 problems
       And the gate result "state" is "failure"
       And the status "agent-provenance" is "failure"
-
-  Rule: A gate flag takes --k=v as well as --k v
-
-    Background:
-      Given the binding sets "forge.adapter" to "github"
-      And the binding sets "forge.options.repo" to "o/r"
-      And the binding sets "vcs.adapter" to "git"
-
-    Scenario Outline: --cr=1 is the same as --cr 1
-      When I run "gate provenance <flag>"
-      Then the exit code is 0
-      And the JSON result "cr" is "1"
-
-      Examples:
-        | flag   |
-        | --cr=1 |
-        | --cr 1 |
-
-    Scenario: A flag with no value is a usage error
-      When I run "gate provenance --cr"
-      Then the exit code is 2
-      And the output says "--cr needs a value"

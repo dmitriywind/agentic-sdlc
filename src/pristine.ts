@@ -71,11 +71,15 @@ export const skillNames = (skillsDir: string): Set<string> =>
 /** The package path an installed skill file comes from, undone: `.agents/skills/sdlc-build/SKILL.md` reads as `build/SKILL.md` source. */
 const SKILL_ROOT = /^(\.agents\/skills|\.claude\/skills)\/(.+)$/;
 
-/** The hash a file has when its binding values are the template's own: what a released version is compared by. `rel` is its installed path. */
+/**
+ * The hash a file has when its binding values are the template's own: what a released version is compared by. `rel` is its installed path.
+ * Line endings are LF first: a checkout with core.autocrlf (Windows) holds the same released file with CRLF.
+ */
 export function releasedHash(name: string, data: Buffer, rel?: string): string {
-  if (name === 'agentic-sdlc-delivery.yml' || name === 'agentic-sdlc-verify.yml') return sha(bindWorkflow(name, data.toString('utf8'), DEFAULTS));
+  const text = data.toString('utf8').replaceAll('\r\n', '\n');
+  if (name === 'agentic-sdlc-delivery.yml' || name === 'agentic-sdlc-verify.yml') return sha(bindWorkflow(name, text, DEFAULTS));
   const m = rel && name.endsWith('.md') ? SKILL_ROOT.exec(rel.replaceAll('\\', '/')) : null;
-  return sha(m ? renameSkill(m[2], data.toString('utf8'), 'from', new Set()) : data);
+  return sha(m ? renameSkill(m[2], text, 'from', new Set()) : text);
 }
 
 /** One-identity trunk ruleset: GitHub refuses an approving review from the CR's author, so none is asked for. */

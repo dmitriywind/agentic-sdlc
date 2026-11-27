@@ -43,7 +43,7 @@ installed files together.
    (the line names the package file with the new version), a new file is written, and a file the
    package dropped is reported as `stale` and left in place. A file with no lock entry, or a lock entry
    that does not match, counts as edited unless it equals the package's or has the hash of a released
-   version (`templates/known-hashes.json`, built by `npm run hashes`); a kept file's line says it
+   version (`templates/known-hashes.json`, appended by `npm run build`); a kept file's line says it
    `differs from every released version`. `init` writes the delivery workflow's trunk, release prefix and
    delivery, and the verify workflow's install and verify commands, from the binding; a workflow that differs from
    a released version only in those values is updated. A kept pre-push hook keeps its mode. `--force` overwrites your edits to those files. No flag rewrites

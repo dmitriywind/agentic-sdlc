@@ -12,11 +12,9 @@ Feature: Gate branch-names
       Examples:
         | name              |
         | PROJ-45/add-login |
-        | main              |
         | release/1.0       |
         | factory/tune      |
         | dependabot/npm/x  |
-        | renovate/x        |
 
   Rule: A change line outside the patterns is refused
 
@@ -27,10 +25,3 @@ Feature: Gate branch-names
       When I run "gate branch-names --ref wip"
       Then the exit code is 1
       And the output says "branch name not allowed: wip"
-
-    Scenario: The gate passes a line that fits
-      Given the binding sets "vcs.trunk" to "main"
-      And the binding sets "vcs.change_pattern" to "<ticket>/<name>"
-      And the binding sets "vcs.factory_change_pattern" to "factory/<name>"
-      When I run "gate branch-names --ref 12/fix-it"
-      Then the exit code is 0

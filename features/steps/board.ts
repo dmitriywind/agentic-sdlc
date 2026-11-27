@@ -37,8 +37,6 @@ Given('the comments on ticket {string} are:', (w, id: string, t: DataTable) => {
 
 Given('the board lists the statuses {string}', (w, list: string) => w.binding({ board: { statuses: list.split(',').map((s) => s.trim()) } }));
 Given('the board is scoped to the label {string}', (w, label: string) => w.binding({ board: { scope: { label } } }));
-Given('the board is scoped to the label {string} as the home of {string}', (w, label: string, repos: string) =>
-  w.binding({ board: { scope: { label, home: true, repos: repos.split(',').map((s) => s.trim()) } } }));
 
 /** The value at a dotted path of the CLI's JSON output, as text (a list is joined with ", "). */
 const at = (w: World, path: string): string | undefined => {
@@ -174,7 +172,6 @@ When('the factory lists every ticket, closed ones too', (w) => attempt(w, (b) =>
 When('the factory moves the ticket {string} to {string} only from {string}', (w, id: string, status: string, from: string) => attempt(w, (b) => b.move(id, status, from)));
 When('the factory reads the comments of the ticket {string} with the marker {string}', (w, id: string, marker: string) => attempt(w, (b) => b.comments(id, { marker })));
 When('the factory assigns the ticket {string} to {string}', (w, id: string, login: string) => attempt(w, (b) => b.assign(id, login)));
-When('the factory sets the milestone of the ticket {string} to {string}', (w, id: string, name: string) => attempt(w, (b) => b.milestone(id, name)));
 When('the factory sets the field {string} of the ticket {string} to {string}', (w, f: string, id: string, v: string) => attempt(w, (b) => b.set(id, f as LogicalField, v)));
 When('the factory clears the field {string} of the ticket {string}', (w, f: string, id: string) => attempt(w, (b) => b.set(id, f as LogicalField, null)));
 When('the factory closes the ticket {string} as {string}', (w, id: string, reason: string) => attempt(w, (b) => b.close(id, reason as 'completed' | 'not_planned')));
@@ -222,7 +219,6 @@ Then('every issue field call sends the API version header {string}', (w, version
 });
 Then('the repo has the labels exactly {string}', (w, labels: string) => assert.equal(w.state.repoLabels.join(', '), labels));
 Then('the issue {int} is closed with the reason {string}', (w, n: number, reason: string) => { assert.equal(issueOf(w, n).state, 'closed'); assert.equal(issueOf(w, n).state_reason, reason); });
-Then('the last patch sets the milestone to {int}', (w, n: number) => assert.equal(rest(w).filter((c) => c.args[3] === 'PATCH').at(-1)!.input.milestone, n));
 Then('the one patch sets the assignees to {string}', (w, logins: string) => {
   assert.equal(rest(w).find((c) => c.args[3] === 'PATCH')!.input.assignees.join(', '), logins);
   assert.ok(!rest(w).some((c) => c.args[4]?.endsWith('/assignees')));

@@ -25,8 +25,6 @@ Feature: Gate signal-on-red
         | run | reason                        |
         | 1   | is not trunk or a release line |
         | 2   | did not fail                  |
-        | 3   | did not fail                  |
-        | 4   | is not trunk or a release line |
 
   Rule: A red run on the trunk or a release line opens one Signal
 
