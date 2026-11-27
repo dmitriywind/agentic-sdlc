@@ -576,6 +576,8 @@ export async function signal(d: Deps, source: string, title: string, body = '') 
   const text = String(body ?? '').split('\n').map((l) => redact(l, 500)).join('\n').slice(0, 4000);
   const key = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
   const label = `signal:${source}`;
+  // ponytail: GitHub lists a new issue a few seconds late, so the same Signal filed twice inside that window makes two issues.
+  // Real sources repeat minutes apart; add a second look after the create only if a burst source appears.
   const open = (await d.board.list({ label })).find((x) => key(x.title) === key(t) && !d.binding.board.done_statuses.includes(x.status));
   if (open) {
     await d.board.comment(open.id, text || t);

@@ -13,7 +13,7 @@ CLI for anything on the forge. A key whose source says nothing stays `unresolved
 | `commands.fast_check` | the manifest script for typecheck, else lint, else a build that type-checks | the `verify` command |
 | `commands.verify` | the manifest's test script, or what the trunk CI workflow runs as its test step | unresolved |
 | `commands.proofs_on_base` | the test runner of `verify` with `{files}` where its file arguments go | unresolved |
-| `forge.ci_workflow` | the `name:` of the CI workflow file that runs on a push to the trunk | unresolved |
+| `forge.ci_workflow` | the `name:` of the CI workflow file that runs on a push to the trunk | delete the key when no workflow runs on a trunk push |
 | `forge.deploy_workflows` | the `name:` of the workflow that deploys or publishes the first environment, then the last | `[]` when nothing deploys |
 | `product.environments` | the environment names those deploy workflows use, in order; a library: where it publishes | keep the template's |
 | `product.delivery` | `continuous` unless the project releases from a release line the owner approves | `continuous` |

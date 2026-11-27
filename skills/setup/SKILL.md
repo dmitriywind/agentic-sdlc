@@ -19,12 +19,15 @@ One first call decides the job: `agentic-sdlc status` (compact JSON). Follow
    `agentic-sdlc init --upgrade`. Done when it exits 0; keep its `kept` and `next` lines for the report.
 2. **Read the project** as [reading the project](references/project.md) says, and
    `agentic-sdlc forge whoami` for the login, the repo and the default branch.
-3. **Resolve the binding.** `agentic-sdlc validate --json` lists every `unresolved` key with a hint.
+3. **Resolve the binding.** `agentic-sdlc validate --json` lists every `unresolved` key with a hint, and under
+   `missing` the keys the template has and an older binding lacks: add those from the template, and delete
+   `forge.options.token_env` unless the project sets that secret.
    Replace each in `.agents/binding.yml` with the value the project states; delete a key the project
    has no use for only where the reference says it may go. A value no source states stays unresolved
    and goes on the person's list: never write a guess as a fact. Done when every remaining unresolved
    key has a reason.
-4. **Rewrite the generated files** from the new values: `agentic-sdlc init --upgrade` again.
+4. **Rewrite the generated files** from the new values: `agentic-sdlc init --upgrade` again. A pin that is a
+   commit sha stays; only `--ref` moves it.
 5. **Board.** `agentic-sdlc board bootstrap` creates the labels and, while `heartbeat.ticket` is
    unresolved, the heartbeat ticket; put the `heartbeat.id` it prints into `heartbeat.ticket`. A second
    run creates nothing. Done when it prints no new heartbeat.

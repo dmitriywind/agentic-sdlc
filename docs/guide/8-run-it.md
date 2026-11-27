@@ -31,7 +31,8 @@ it is spent, the cycle starts no new feature ticket and the heartbeat says `budg
 ## Upgrade
 
 An upgrade is one factory change: the new package's `init --upgrade` rewrites the pin and the
-installed files together. Ask the `setup` skill, or by hand on a factory branch:
+installed files together. A pin that is a commit sha stays until `--ref <sha>` moves it. Ask the `setup`
+skill, or by hand on a factory branch:
 
 ```bash
 npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v<new> init --upgrade

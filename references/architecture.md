@@ -260,7 +260,6 @@ Keys:
   names each absent one), `ci_workflow`, `deploy_workflows` (at most two: first and last environment).
   `review_token_env` is set exactly when `review_identity` is, and never equals `token_env`. The workflow
   names reach a shell line, so `validate` takes only letters, digits, spaces and `. & ( ) + , / : # - _`.
-  `validate` warns when `human_approval` is not `never` and every `owners.product` account is also a bot.
 - `vcs`: `adapter`, `trunk`, `change_pattern`, `factory_change_pattern`, `release_prefix` (ends in `/`),
   `tag_prefix` (a string), `version_scheme: calver | semver`. `trunk`, `release_prefix` and
   `factory_change_pattern` must be non-empty.

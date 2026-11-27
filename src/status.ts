@@ -86,14 +86,14 @@ export const cli: PortCli = async (argv, ctx) => {
   const print = (o: unknown) => console.log(JSON.stringify(o, null, 2));
   // A cloud routine (the primary runtime) loads only project files, so the install copies the skills and hooks into the repo.
   if (!existsSync(join(ctx.root, BINDING_PATH))) { print({ installed: false, install: 'agentic-sdlc init --no-plugin' }); return 0; }
-  const { validate, trunkProtection, pathWarnings } = await import('./install.ts');
+  const { validate, trunkProtection, pathWarnings, missingKeys } = await import('./install.ts');
   const warnings: string[] = [];
   const problems = validate(ctx.root, warnings);
   let b: Binding;
   try { b = parse(readFileSync(join(ctx.root, BINDING_PATH), 'utf8')) as Binding; } catch (e) { print({ installed: true, ok: false, problems: [(e as Error).message] }); return 1; }
   warnings.push(...bindingWarnings(b), ...pathWarnings(ctx.root, b));
   const open = unresolved(b);
-  const base = { installed: true, problems: problems.filter((p) => !/ is unresolved: /.test(p)), unresolved: open, warnings };
+  const base = { installed: true, problems: problems.filter((p) => !/ is unresolved: /.test(p)), unresolved: open, missing: missingKeys(ctx.root), warnings };
   if (problems.length) { print({ ...base, ok: false, person: personSteps(b, [], warnings) }); return 1; }
 
   const c = { ...ctx, binding: b };

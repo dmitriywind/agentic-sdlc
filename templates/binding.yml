@@ -29,7 +29,7 @@ forge:
   verify_check_name: Required
   required_checks: [ticket-linkage, Required, proofs-on-base, review, human-approval, skill-regression]
   planned_checks: []
-  ci_workflow: "unresolved: the name of the CI workflow that runs on a trunk push"
+  ci_workflow: "unresolved: the name of the CI workflow that runs on a trunk push (delete the key when none does)"
   deploy_workflows: ["unresolved: the deploy workflow names, first and last environment ([] when nothing deploys)"]
 
 vcs:
