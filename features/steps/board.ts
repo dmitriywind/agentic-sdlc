@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import type { World } from '../support/world.ts';
-import { createBoard } from '../../src/board/index.ts';
+import { bootstrap, createBoard } from '../../src/board/index.ts';
 import type { AdapterContext, Board, Item, LogicalField } from '../../src/ports.ts';
 
 const run = (w: World, line: string) => {
@@ -241,3 +241,19 @@ Given('the comment {int} of the ticket {string} was written by {string} at {stri
 Then('the comment {int} of the ticket {string} reads:', (w, i: number, id: string, doc: string) => assert.equal(boardDb(w).comments[id][i].body.trimEnd(), doc.trimEnd()));
 Then('the ticket {string} carries the labels {string}', (w, id: string, labels: string) =>
   assert.equal(boardDb(w).items.find((t: Item) => t.id === id).labels.join(', '), labels));
+
+// ---- board bootstrap ----
+When('the factory bootstraps the board', async (w) => {
+  const board = boardOf(w);
+  const b = JSON.parse(w.read('.agents/binding.yml'));
+  w.state.prevHeartbeat = w.state.result?.heartbeat;
+  await attempt(w, () => bootstrap(board, b));
+  assert.ok(!w.state.error, String(w.state.error));
+});
+Then('the bootstrap created the labels {string}', (w, labels: string) => assert.equal(w.state.result.labels.created.join(', '), labels));
+Then('the bootstrap created a heartbeat ticket', (w) => {
+  const hb = w.state.result.heartbeat;
+  assert.equal(hb.created, true);
+  assert.deepEqual(issueOf(w, Number(hb.id)).labels, [], 'the heartbeat carries a label');
+});
+Then('the bootstrap found the same heartbeat ticket', (w) => assert.deepEqual(w.state.result.heartbeat, { id: w.state.prevHeartbeat.id, created: false }));

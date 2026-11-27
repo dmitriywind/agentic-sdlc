@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { next } from '../../src/next.ts';
+import { liveStatus } from '../../src/status.ts';
 import { createLocalBoard } from '../../src/board/local.ts';
 import { stamp } from '../../src/comments.ts';
 import { parseHeartbeat } from '../../src/ledger.ts';
@@ -78,3 +79,21 @@ Then('the last comment on the heartbeat ticket is the done line of the key {stri
   assert.equal(String(hbComments(w).at(-1)?.body).split('\n')[0], stamp('done', key));
 });
 
+
+// ---- status: what waits on the person (src/status.ts "liveStatus"), on the same fixtures ----
+Given('the open CR {string} closes {string} and waits for an approval by {string}', (w, n: string, ticket: string, who: string) => {
+  const cr: CR = { n, url: `cr${n}`, title: '', source: `${ticket}/x`, target: 'main', headSha: 'h1', baseSha: 'b', draft: false, state: 'open', behind: false, closes: [ticket], checks: [{ name: 'human-approval', state: 'pending' }], body: '', author: 'bot', pushedAt: new Date().toISOString() };
+  (w.state.crs ??= []).push(cr);
+  (w.state.approvers ??= {})[n] = who;
+});
+When('the person asks for the status', async (w) => {
+  const ctx = w.adapterContext() as AdapterContext;
+  const crs: CR[] = w.state.crs ?? [];
+  const forge = { list: async () => crs, comments: async () => [] } as unknown as Forge;
+  const classOf = async (cr: CR) => (w.state.approvers?.[cr.n] ? { class: 'product-full', who: [w.state.approvers[cr.n]] } : { class: 'product-fast', who: [] });
+  w.state.status = await liveStatus({ b: ctx.binding, root: w.root, board: createLocalBoard(ctx), forge, crs, classOf });
+});
+Then('the status waits on the hold of {string}', (w, id: string) =>
+  assert.ok(w.state.status.waiting.some((x: { kind: string; ticket?: string }) => x.kind === 'hold' && x.ticket === id), JSON.stringify(w.state.status.waiting)));
+Then('the status waits on the approval of CR {string} by {string} with the label {string}', (w, n: string, who: string, label: string) =>
+  assert.deepEqual(w.state.status.waiting.find((x: { kind: string; cr?: string }) => x.kind === 'approval' && x.cr === n), { kind: 'approval', cr: n, url: `cr${n}`, ticket: w.state.crs.find((c: CR) => c.n === n).closes[0], class: 'product-full', who: [who], label }));

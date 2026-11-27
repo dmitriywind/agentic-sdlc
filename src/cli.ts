@@ -6,10 +6,11 @@ import type { AdapterContext, PortCli } from './ports.ts';
 // [module, needs binding, verbs]. install.ts serves init|validate|doctor and takes the group as its verb.
 export const GROUPS: Record<string, [() => Promise<{ cli: PortCli }>, boolean, string]> = {
   init: [() => import('./install.ts'), false, 'copy skills, write the binding and CI gates'],
-  validate: [() => import('./install.ts'), false, 'check the binding and skills'],
+  validate: [() => import('./install.ts'), false, '[--json]: check the binding and skills; --json also lists the unresolved binding values'],
   doctor: [() => import('./install.ts'), false, 'validate, then probe board, forge and vcs'],
-  board: [() => import('./board/index.ts'), true, 'list get create move set label assign milestone comment comments hold holds release close child'],
-  forge: [() => import('./forge/index.ts'), true, 'open view diff list ready draft sync automerge cut approve approvals comment comments verdict land queue status runs run'],
+  status: [() => import('./status.ts'), false, 'what waits on you (holds, approvals), what the next cycle does, what is broken, the steps only you can take'],
+  board: [() => import('./board/index.ts'), true, 'list get create move set label assign milestone comment comments hold holds release close child bootstrap'],
+  forge: [() => import('./forge/index.ts'), true, 'open view diff list ready draft sync automerge cut approve approvals comment comments verdict land queue status runs run whoami'],
   vcs: [() => import('./vcs/index.ts'), true, 'start head changed base push cut tag tags drop checkout-tests'],
   dispatch: [() => import('./dispatch.ts'), true, 'dispatch <skill>[/<step>] --ticket <id> | --cr <n> [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]: start the step on its executor'],
   gate: [() => import('./gates.ts'), true, 'branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red signal skill-regression review provenance'],

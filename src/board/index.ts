@@ -1,6 +1,6 @@
 import type { AdapterContext, Binding, Board, Comment, Hold, Item, LogicalField, PortCli } from '../ports.ts';
 import { ownersFor } from '../ports.ts';
-import { validateBinding } from '../binding.ts';
+import { UNRESOLVED, validateBinding } from '../binding.ts';
 import { isFactoryComment, isMarked, matches, parseKind, parseWritableKind, selectComments, stamp, stampBody } from '../comments.ts';
 import { UsageError, bodyFile, parseStrict, type VerbSpec } from '../forge/util.ts';
 import { createGithubIssuesBoard } from './github-issues.ts';
@@ -90,6 +90,21 @@ export async function holds(board: Board, b: Binding): Promise<Hold[]> {
   return out;
 }
 
+/** The heartbeat ticket `board bootstrap` (and `init --board local`) creates, found again by its title. */
+export const HEARTBEAT = { title: 'agentic-sdlc heartbeat', body: 'agentic-sdlc heartbeat comments. Not a ticket.' };
+
+/**
+ * `board bootstrap`: the labels the binding names (board.labels, env_labels, signal:<stream>, forge.approval_label, and the
+ * adapter's status and field labels) and, while heartbeat.ticket is unset or unresolved, the heartbeat ticket. Idempotent.
+ */
+export async function bootstrap(board: Board, b: Binding) {
+  const labels = [...Object.values(b.board.labels ?? {}), ...(b.board.env_labels ?? []), ...(b.board.signal_streams ?? []).map((s) => `signal:${s}`), b.forge?.approval_label || 'approved'];
+  const hb = String(b.heartbeat?.ticket ?? '').trim();
+  const known = hb && !hb.startsWith(UNRESOLVED) ? hb : undefined;
+  const r = board.bootstrap ? await board.bootstrap(labels, known ? undefined : HEARTBEAT) : { created: [] };
+  return { labels: { created: r.created }, heartbeat: known ? { id: known, created: false } : r.heartbeat ?? null };
+}
+
 /** The flags each verb accepts; anything else is a usage error. */
 export const VERBS: Record<string, VerbSpec> = {
   list: { value: ['status', 'label', 'search', 'state'] },
@@ -107,6 +122,7 @@ export const VERBS: Record<string, VerbSpec> = {
   release: {},
   close: { value: ['reason'] },
   child: {},
+  bootstrap: {},
 };
 
 const USAGE = `usage: agentic-sdlc board <verb>
@@ -118,7 +134,8 @@ const USAGE = `usage: agentic-sdlc board <verb>
   comment <id> --body-file <f> [--kind <kind> [--ref <value>]]
   comments <id> [--last <n>] [--kind <kind> [--ref <value>] | --marker <text>] [--author <a>]... [--trusted]
   hold <id> --kind <trigger> --body-file <f>    holds    release <id>
-  close <id> --reason completed|not_planned    child <parent> <child>`;
+  close <id> --reason completed|not_planned    child <parent> <child>
+  bootstrap   (the labels and the heartbeat ticket the binding needs; idempotent)`;
 
 export const cli: PortCli = async (argv, base) => {
   const [verb, ...rest] = argv;
@@ -193,6 +210,7 @@ export const cli: PortCli = async (argv, base) => {
         out = await board.milestone(id, a.has('clear') ? null : a.pos[1]);
         break;
       case 'child': need(2); out = await board.child(id, a.pos[1]); break;
+      case 'bootstrap': out = await bootstrap(board, base.binding); break;
       default: throw new Usage(`unknown board verb '${verb}'`);
     }
     console.log(JSON.stringify(out, null, 2));

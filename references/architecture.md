@@ -34,8 +34,8 @@ owner opens at Backlog).
 agents/                      plugin subagents: sdlc-fast, sdlc-balanced, sdlc-deep, sdlc-reviewer
 bin/agentic-sdlc             plugin shim: the CLI on the Bash PATH (the project's `.agents/bin/agentic-sdlc`, else its node_modules build, else dist/bin.js)
 evals/                       plugin evals for skill triggering (`claude plugin eval`)
-hooks/                       plugin hooks (hooks.json, guard.mjs) and the plugin's MCP launcher (mcp.mjs)
-skills/                      the skill pack: seven skills, one per phase (section 5)
+hooks/                       plugin hooks (hooks.json, guard.mjs, session-start.mjs) and the plugin's MCP launcher (mcp.mjs)
+skills/                      the skill pack: seven phase skills and setup (section 5)
   sdlc/                      navigator: one cycle
     routes.yml               the routing rules as data, read by `next` (section 11.3)
     references/contract.md   words, roles, trust, waits and the rules every step follows
@@ -47,9 +47,10 @@ skills/                      the skill pack: seven skills, one per phase (sectio
   ship/                      the release line (release-line delivery only)
   learn/     steps/judge.md steps/improve.md                 the learning loop (learning.enabled)
   escalate/                  classify, ask, hold; run inside any step
+  setup/     references/project.md                           install or repair the factory; answer what waits on the person
 scorers/                     the shipped scorer rubrics, copied to .agents/scorers/
 templates/
-  binding.yml                the binding template with every key documented
+  binding.yml                the binding template: every key init writes, unresolved values marked (section 4)
   gates/github/              GitHub Actions workflows and the trunk ruleset
   gates/hooks/               pre-push
   bin/                       the launcher init installs at .agents/bin/agentic-sdlc
@@ -61,6 +62,7 @@ src/
   ports.ts                   port interfaces and shared types
   binding.ts                 load and validate the binding
   install.ts                 init / validate / doctor
+  status.ts                  status: what waits on the person, the next cycle, what is broken (section 10)
   board/   github-issues.ts local.ts index.ts
   forge/   github.ts flow.ts util.ts index.ts
   vcs/     git.ts index.ts
@@ -113,6 +115,7 @@ Every verb takes only the flags it lists: an unknown flag, a value flag with no 
 | `hold <id> --kind <trigger> --body-file <f>` | Adds `board.labels.human` and posts the ask with its `ask` marker for `<trigger>` (the `escalate` trigger, lower case) | `Item` |
 | `holds` | The held tickets. A reply is a comment by any owner role, never an `owners.bots`-only account, after the last ask; an account in both lists counts when its comment carries no factory marker | `[{ id, kind, askedAt, replied: boolean, reply? }]` |
 | `release <id>` | Removes `board.labels.human`; the ticket keeps its Status | `Item` |
+| `bootstrap` | Creates what the board needs, idempotent: every label the binding names (`board.labels`, `board.env_labels`, `signal:<stream>` per `board.signal_streams`, `forge.approval_label`, and on `github-issues` the `status:`, size and priority labels a field id does not replace) and, while `heartbeat.ticket` is unset or unresolved, the heartbeat ticket, found again by its title `agentic-sdlc heartbeat` (`github-issues`: an open issue with no status label; `local`: status Cancelled). Port method `bootstrap?(labels, heartbeat?)` | `{ labels: { created: string[] }, heartbeat: { id, created } \| null }` |
 
 `Item = { id, title, url, status, kind?, labels[], fields: Record<logicalField,string>, milestone?, parent?, children[], assignees[], createdAt, updatedAt, statusChangedAt? }`. `statusChangedAt` is when the ticket entered its status; `ledger measures` reads it for tickets at Done. `github-issues` sets it to the issue's `closed_at` for a closed issue at Done and leaves it unset otherwise.
 Logical fields: `size`, `priority`, `lane`, `shipped`, `release_version`. The binding maps each to
@@ -147,6 +150,7 @@ projects). Credentials only from env vars the binding names; never from a file i
 | (no verb) `labelEvents(n)`, `unlabel(n, label)` | Port methods the `approval` gate alone calls: the CR's label history (`{ label, action: labeled\|unlabeled, actor, bot, at }`, the forge's clock; GitHub: `issues/{n}/events`), and the removal of one label (absent is fine). Optional: a forge without them has no label approval | |
 | `runs [--ref <r>] [--failed]` | CI runs (the newest 30) | `Run[]` |
 | `run <id>` | One CI run by id; a run that does not exist fails (exit 1) | `Run` |
+| `whoami` | The login the forge acts as (`gh api user`; where that route is refused, the repo owner, with `loginFrom: repo-owner`), the repo and its default branch when readable. Port method `whoami?()` | `{ login, loginFrom: 'user'\|'repo-owner', repo?, defaultBranch? }` |
 | `cut <revision> <version>` | Starts the release workflow `agentic-sdlc-release.yml`, which runs in Environment `agentic-release` (the Product owner approves it) and pushes the release line with the release bot's token. Returns the run this dispatch created: the newest run id above every id seen before it | `{ requested: true, run?, url? }` |
 
 `queue` owns the CR decisions the skills only obey. `ticket` is the one id the CR closes (absent for a factory or dependency CR), `class` the approval gate's class, `held` whether its ticket carries `board.labels.human`, `release: true` on a held ticket whose CR is `land` with its `human-approval` status success under a class that needs a human (an approval on the forge alone answers a Sign-off ask; the navigator releases the hold), `since` when the row's state began, `reason` one line for the action. `reworks` counts the CR's trusted fail verdicts and trusted `note`s (a `note` names the cause of a red check or a request to a person's CR). A check named by `forge.review_check_name` or `human-approval` never counts as red, pending or missing here. The first match wins:
@@ -222,8 +226,18 @@ secrets. The trunk needs every required check green and, with two identities, th
 
 ## 4. The binding (`.agents/binding.yml`)
 
-[`templates/binding.yml`](../templates/binding.yml) is the one reference: it lists every key with
-its meaning and default, and `validate` checks the adapter options per adapter. It also requires `vcs.trunk`, `vcs.release_prefix` (ending in `/`) and `vcs.factory_change_pattern` to be non-empty and `vcs.tag_prefix` to be a string. Its top-level
+[`templates/binding.yml`](../templates/binding.yml) holds every key `init` writes, one line each, and names the
+optional keys per group; this section and `validate` hold their meaning, and `validate` checks the adapter options per adapter.
+**Unresolved values.** A value `init` cannot know from the project is the string `unresolved: <hint>` (owners, `vcs.trunk`
+unless `origin/HEAD` names it, `commands.*`, `forge.ci_workflow`, `forge.deploy_workflows`, `heartbeat.ticket` unless the
+board is `local`, `forge.review_identity` for `organization`, a repo with no GitHub origin). `validate` fails on each one
+(`<key> is unresolved: <hint>`); `validate --json` prints `{ ok, problems, warnings, unresolved: [{ key, hint }] }`, the
+unresolved values apart from the other problems, exit 1 while any problem is left. `init` writes no unresolved value
+into a generated file: a workflow gets the default instead, until the binding is resolved and `init --upgrade` reruns.
+`init` leaves out each `paths.*` file key whose file the project does not have (globs and `importance_doc`, which it
+writes, stay). `forge.ci_workflow` (the trunk CI workflow) and `forge.deploy_workflows` (at most two: the first and the
+last environment's deploy) are the workflow names `init` writes into `agentic-sdlc-delivery.yml`; `validate` takes only
+plain names (letters, digits, spaces and `. & ( ) + , / : # - _`), since they reach a shell line there. It also requires `vcs.trunk`, `vcs.release_prefix` (ending in `/`) and `vcs.factory_change_pattern` to be non-empty and `vcs.tag_prefix` to be a string. Its top-level
 groups are `version`, `profile`, `owners`, `board`, `forge`, `vcs`, `product`, `executors`, `mcps`,
 `traces`, `models`, `agent_command`, `commands`, `paths`, the sizing and flow keys, `cycle`,
 `heartbeat` and `learning`.
@@ -288,16 +302,19 @@ Keys this contract relies on by name:
 ## 5. Skills
 
 Seven skills, one per phase: `sdlc` (the navigator), `plan`, `build`, `review`, `ship`, `learn` and
-`escalate`. A **step** is the unit that runs, named `<skill>/<step>`; a one-step skill is named by
+`escalate`; and `setup`, which no route dispatches: it installs or repairs the factory in a project (`init`,
+the binding's unresolved values from the project and `forge whoami`, `board bootstrap`, `validate --json` and `doctor`
+until clean, the install as a factory CR) and answers what waits on the person from `status`. A **step** is the unit that runs, named `<skill>/<step>`; a one-step skill is named by
 the skill (`build`, `ship`, `escalate`, `sdlc`). `dispatch`, the ledger's `skill` field, the bench,
 a scorer's `applies_to`, the `executors` keys and the `Agent-Skill` trailer all name a run this way.
 
-- **Frontmatter**: `name`, `description` (a trigger sentence), and `metadata.steps: { <step>: { tier
+- **Frontmatter**: `name`, `description` (a trigger sentence starting "Use when", naming when to load the skill and
+  never summarising its workflow: a model that reads a summary follows it instead of the body), and `metadata.steps: { <step>: { tier
   } }` for a multi-step skill (each step in `steps/<step>.md`) or `metadata.tier` for a one-step
   skill (the step is the SKILL.md body). `tier` is `fast`, `balanced` or `deep`; `models` maps it to
   a model. `disable-model-invocation: true` marks skills only a person or the cycle starts (`ship`,
   `learn`); `user-invocable: false` marks a skill only the navigator or another step runs (`plan`, `build`,
-  `review`, `escalate`). `sdlc` has neither flag. The `internal-skills-not-direct` and
+  `review`, `escalate`). `sdlc` and `setup` have neither flag. The `internal-skills-not-direct` and
   `release-not-model-invoked` evals check the two lists.
 - **Body**: the SKILL.md of a multi-step skill is a table of its steps (what each runs on, its
   tier, what it ends with) and the rules common to them. A step points to
@@ -539,9 +556,30 @@ longer ships, deleting none. A file with no lock entry, or a lock entry that doe
 hash is one a released version had (`templates/known-hashes.json`, appended by `npm run build`;
 the delivery and verify workflows are compared with their binding values normalised, and `init` writes those values
 from `vcs.trunk`, `vcs.release_prefix`, `product.delivery`, `commands.install` and `commands.verify`).
+The delivery workflow is also compared with `forge.ci_workflow` and `forge.deploy_workflows` normalised.
 `--force` overwrites locally edited template files only. No flag rewrites `.agents/binding.yml` (to
 regenerate it, delete it) or adds a second heartbeat ticket; `init` and `validate` print an `info:` line
-listing the template's top- and second-level binding keys that the binding does not set.
+listing the template's top- and second-level binding keys that the binding does not set (not `paths.*`, which `init`
+prunes), and `init` ends with a `next:` line naming the unresolved keys.
+
+**Self-guide.** `agentic-sdlc status` (no binding needed) prints one compact JSON report. Without a binding:
+`{ installed: false, install }`, the install command (`init --no-plugin`, since a cloud routine, the primary runtime,
+loads only project files). With one: `{ installed, ok, problems, unresolved, warnings, waiting, cycle, heartbeat, broken,
+person }`. `waiting` lists each hold (`{ kind: hold, ticket, ask, since, replied }`, from `board holds`) and each open, ready
+CR whose `human-approval` check is not green and whose class needs an approver (`{ kind: approval, cr, url, ticket?,
+class, who, label }`, `who` from the approval gate's `approvalWho`, `label` the `forge.approval_label`). `cycle` is `next`
+in short (`idle`, `work` as one line each, `later` as a count, `releases`, `budget`); `heartbeat` the newest trusted
+heartbeat's `at` and age in hours; `broken` every read that failed and `next`'s errors. `person` lists the steps only the
+person can take (the forge app, the scheduled routine with its prompt and triggers, the trunk ruleset, the optional
+connector, the approval decision when every product owner is also a bot), each `{ step, where, text?, verified }`, where
+`verified` is `null` when the CLI cannot check it; a step verified true is left out. With binding problems it stops after
+`problems`, `unresolved`, `warnings` and `person`. Exit 1 when anything is broken or invalid. It decides nothing: the
+`setup` skill answers from it.
+
+**Session start.** The plugin's `SessionStart` hook (`hooks/session-start.mjs`) prints a few lines of orientation to
+stdout: with `.agents/binding.yml`, that the project runs the factory, that the `sdlc` skill runs a cycle and the `setup`
+skill installs, repairs or answers what waits on the person, and that board, forge and VCS work goes through the CLI;
+without a binding, one line offering `setup`. Under the plugin it names `agentic-sdlc:<skill>`, otherwise the copied names.
 
 Gates always run in the forge's CI, so trunk guarantees never depend on the runtime. A gate blocks a
 merge only where the forge enforces it: `doctor` warns when the trunk has no enforced ruleset or branch
@@ -568,12 +606,12 @@ The dead-man check is its own workflow, `agentic-sdlc-dead-man.yml`, installed b
 a cloud task stopped at the usage limit or disconnected from GitHub writes no heartbeat.
 
 **Packaging.** The package is a Claude Code plugin (`.claude-plugin/`: skills,
-hooks, the MCP server, `agents/` with a subagent per tier and `sdlc-reviewer`, `bin/` with the CLI on the Bash PATH, `evals/`), so skills are named `/agentic-sdlc:<skill>`. The plugin's tier agents are the default; `.claude/agents/sdlc-<tier>.md` from `init` carries the binding's models and is used when present (the names differ: `agentic-sdlc:sdlc-<tier>` against `sdlc-<tier>`). `sdlc-reviewer` has no Edit or Write tool, and the guard hook lets it run only `agentic-sdlc` commands in Bash, so `review/review` never runs CR code. `init` always
+hooks, the MCP server, `agents/` with a subagent per tier and `sdlc-reviewer`, `bin/` with the CLI on the Bash PATH, `evals/`), so skills are named `/agentic-sdlc:<skill>`. The plugin's tier agents are the default, each with an explicit `model` and `effort` (fast: sonnet, low; balanced: sonnet, medium; deep: opus, high; `sdlc-reviewer`: sonnet, medium, `maxTurns` 60), so none inherits the session's model by omission; their per-run turn caps stay in `executors.<stage>.max_turns`. `.claude/agents/sdlc-<tier>.md` from `init` carries the binding's models (the one home of a project's choice; the template sets sonnet, sonnet, opus) and is used when present (the names differ: `agentic-sdlc:sdlc-<tier>` against `sdlc-<tier>`). `sdlc-reviewer` has no Edit or Write tool, and the guard hook lets it run only `agentic-sdlc` commands in Bash, so `review/review` never runs CR code. `init` always
 copies the pack to `.agents/skills` (the gates and `validate` read it); `init` generates one subagent per tier and adds an `@AGENTS.md` import to
 `CLAUDE.md`. `--no-plugin` copies the skills to `.claude/skills` instead and writes `.mcp.json`, for a setup without the plugin, such as a cloud session. It also
 keeps the review sandbox there: it writes the plugin's `agents/sdlc-reviewer.md` to `.claude/agents/sdlc-reviewer.md` (its MCP tools named
-`mcp__agentic-sdlc__*`, its skill `sdlc-review`), copies `hooks/guard.mjs` to `.agents/hooks/guard.mjs` and merges the entries of the
-plugin's `hooks/hooks.json`, with that path, into `.claude/settings.json` (adds a missing entry, keeps every other key; a second run
+`mcp__agentic-sdlc__*`, its skill `sdlc-review`), copies every script `hooks/hooks.json` runs (`guard.mjs`, `session-start.mjs`) to
+`.agents/hooks/` and merges every event's entries of the plugin's `hooks/hooks.json`, with that path, into `.claude/settings.json` (adds a missing entry, keeps every other key; a second run
 writes nothing). The plugin's files are the one source; `init --upgrade` follows them like any installed file. Claude
 headless runs pass `--permission-mode acceptEdits`, `--allowedTools` and `--max-turns`. The cycle
 allows the CLI, the MCP server, `git add`, `git commit`, `git push` and the npm checks, and adds

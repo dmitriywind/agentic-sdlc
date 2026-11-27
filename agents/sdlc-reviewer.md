@@ -1,7 +1,8 @@
 ---
 name: sdlc-reviewer
 description: Runs the review/review step on one change request in a fresh context. It reads files and runs only the agentic-sdlc CLI and MCP tools; it cannot edit files or run the CR's code. The sdlc skill hands every review/review step to this agent.
-model: inherit
+model: sonnet
+effort: medium
 tools: Read, Grep, Glob, Skill, Bash, mcp__plugin_agentic-sdlc_agentic-sdlc__*
 disallowedTools: Edit, Write, NotebookEdit, Agent
 maxTurns: 60

@@ -217,5 +217,14 @@ export function github(ctx: AdapterContext): Forge {
       if (!/^\d+$/.test(String(id))) throw new Error(`forge: not a run id: ${id}`);
       return runOf(JSON.parse(await gh(['run', 'view', String(id), '--json', RUN_FIELDS])));
     },
+    async whoami() {
+      // The login gh acts as (a cloud session's proxy may refuse the user route: then the repo owner, said so).
+      let login = '', loginFrom: 'user' | 'repo-owner' = 'user';
+      try { login = String(JSON.parse(await gh(['api', 'user'])).login ?? ''); } catch { /* refused or unauthenticated */ }
+      if (!login && repo) { login = repo.split('/')[0]; loginFrom = 'repo-owner'; }
+      let defaultBranch: string | undefined;
+      try { defaultBranch = JSON.parse(await gh(['api', api])).default_branch || undefined; } catch { /* unreadable: unknown */ }
+      return { login, loginFrom, ...(repo ? { repo } : {}), ...(defaultBranch ? { defaultBranch } : {}) };
+    },
   };
 }

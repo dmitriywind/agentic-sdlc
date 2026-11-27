@@ -162,5 +162,23 @@ export function createGithubIssuesBoard(ctx: AdapterContext): Board {
       await api('POST', `issues/${parent}/sub_issues`, { sub_issue_id: (await issue(child)).id });
       return get(parent);
     },
+    async bootstrap(ls, hb) {
+      // The status labels (unless an issue field holds the status) and the labels of the fields with fixed values.
+      const b = ctx.binding?.board;
+      const want = [...new Set([
+        ...(fieldIds.status ? [] : (b?.statuses ?? []).map((s) => STATUS + s)),
+        ...(fieldIds.size ? [] : ((ctx.binding as { sizes?: string[] })?.sizes ?? []).map((s) => prefix('size') + s)),
+        ...(fieldIds.priority ? [] : ((ctx.binding as { priorities?: string[] })?.priorities ?? []).map((s) => prefix('priority') + s)),
+        ...ls,
+      ])];
+      known = new Set((await all('labels')).map((l) => String(l.name).toLowerCase()));
+      const created = want.filter((l) => !known!.has(l.toLowerCase()));
+      await ensureLabels(created);
+      if (!hb) return { created };
+      // An open issue with no status label is off the board; the title finds it again on a second run.
+      const had = (await all('issues?state=open')).find((i) => !i.pull_request && i.title === hb.title && statusOf(i) === undefined);
+      if (had) return { created, heartbeat: { id: String(had.number), created: false } };
+      return { created, heartbeat: { id: String((await api('POST', 'issues', { title: hb.title, body: hb.body, labels: [] })).number), created: true } };
+    },
   };
 }

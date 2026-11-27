@@ -7278,7 +7278,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse7(src, reviver, options) {
+    function parse8(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -7319,7 +7319,7 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports.parse = parse7;
+    exports.parse = parse8;
     exports.parseAllDocuments = parseAllDocuments;
     exports.parseDocument = parseDocument2;
     exports.stringify = stringify;
@@ -7420,10 +7420,17 @@ function loadBinding(root) {
   }
   return (0, import_yaml.parse)(text);
 }
+function unresolved(b, at = "") {
+  const h = hintOf(b);
+  if (h !== void 0) return [{ key: at, hint: h }];
+  if (!b || typeof b !== "object") return [];
+  return Object.entries(b).flatMap(([k, v]) => unresolved(v, at ? `${at}.${k}` : k));
+}
 function validateBinding(b) {
   const p = [];
   const x = b;
   if (!x || typeof x !== "object") return ["binding is empty"];
+  for (const u of unresolved(x)) p.push(`${u.key} is unresolved: ${u.hint}`);
   if (x.version !== 2) p.push("version must be 2");
   if (!PROFILES.includes(x.profile)) p.push(`profile '${x.profile}' must be one of ${PROFILES.join("|")}`);
   const who = (w) => typeof w === "string" && !!w || !!w && typeof w === "object" && typeof w.board === "string" && !!w.board && typeof w.forge === "string" && !!w.forge;
@@ -7519,6 +7526,10 @@ function validateBinding(b) {
       p.push(`board.scope.repos must list every repo label, this repo's included, each starting '${pre}:'`);
     else if (!sc.home && sc.repos !== void 0) p.push("board.scope.repos is for the home repo only (board.scope.home: true)");
   }
+  const wfName = (v) => typeof v === "string" && (v.startsWith(UNRESOLVED) || /^[\w .&()+,/:#-]+$/.test(v));
+  if (x.forge?.ci_workflow !== void 0 && !wfName(x.forge.ci_workflow)) p.push("forge.ci_workflow must be a workflow name (letters, digits, spaces and . & ( ) + , / : # - _)");
+  const dw = x.forge?.deploy_workflows;
+  if (dw !== void 0 && !(Array.isArray(dw) && dw.length <= 2 && dw.every(wfName))) p.push("forge.deploy_workflows must list at most two workflow names: the first environment's deploy, then the last's");
   const ha = x.forge?.human_approval;
   if (ha !== void 0 && !HUMAN_APPROVAL.includes(ha)) p.push(`forge.human_approval '${ha}' is not one of ${HUMAN_APPROVAL.join("|")}`);
   const al = x.forge?.approval_label;
@@ -7564,7 +7575,7 @@ function bindingWarnings(b) {
     if (o.product.length && o.product.every((p) => o.bots.includes(p))) w.push(`forge.human_approval is ${ha} but every owners.product account is also in owners.bots: no human outside the bots can approve, so a Full-lane CR can never be approved (by a review or forge.approval_label); take your own account out of owners.bots (owners are trusted without it), or add a second account to owners.product`);
   }
   const hb = String(x?.heartbeat?.ticket ?? "");
-  if (["github-issues", "local"].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb)) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
+  if (["github-issues", "local"].includes(x?.board?.adapter) && hb && !/^\d+$/.test(hb) && hintOf(hb) === void 0) w.push(`heartbeat.ticket '${hb}' is not an issue number; the ${x.board.adapter} board addresses tickets by number`);
   const envs = x?.product?.environments ?? [];
   for (const l of x?.board?.env_labels ?? []) if (String(l).startsWith("env:") && !envs.includes(String(l).slice(4))) w.push(`board.env_labels '${l}' names no product.environments entry`);
   if ((x?.product?.evidence ?? []).length && !x?.commands?.evidence_check) w.push("product.evidence is set but commands.evidence_check is unset: no release can show its evidence");
@@ -7588,7 +7599,7 @@ function shippedOptions(envs, delivery = "release-line") {
   const inRelease = delivery === "release-line" && envs.length > 1;
   return ["Not shipped", ...envs.slice(0, -1).map((e) => `On ${e}`), ...inRelease ? ["In release"] : [], `On ${envs[envs.length - 1]}`];
 }
-var import_yaml, BINDING_PATH, ADAPTERS, OPTIONS, REQUIRED, PROOFS, EXECUTORS, EXECUTOR_KEYS, HUMAN_APPROVAL, SANDBOXES, PROFILES, DELIVERY, PROVENANCE, EVIDENCE, TIERS, STATUSES;
+var import_yaml, BINDING_PATH, ADAPTERS, OPTIONS, REQUIRED, PROOFS, EXECUTORS, EXECUTOR_KEYS, HUMAN_APPROVAL, SANDBOXES, PROFILES, DELIVERY, PROVENANCE, EVIDENCE, TIERS, STATUSES, UNRESOLVED, unresolvedValue, hintOf;
 var init_binding = __esm({
   "src/binding.ts"() {
     "use strict";
@@ -7644,6 +7655,9 @@ var init_binding = __esm({
     EVIDENCE = ["sbom", "provenance", "signature"];
     TIERS = ["fast", "balanced", "deep"];
     STATUSES = ["Ideas", "Signals", "Backlog", "Ready", "In progress", "In review", "Done", "Cancelled"];
+    UNRESOLVED = "unresolved:";
+    unresolvedValue = (hint) => `${UNRESOLVED} ${hint}`;
+    hintOf = (v) => typeof v === "string" && v.startsWith(UNRESOLVED) ? v.slice(UNRESOLVED.length).trim() : void 0;
   }
 });
 
@@ -8098,6 +8112,22 @@ ${i.body ?? ""}`.toLowerCase().includes(w))).map((i) => toItem(i, false)).filter
     async child(parent, child) {
       await api("POST", `issues/${parent}/sub_issues`, { sub_issue_id: (await issue(child)).id });
       return get(parent);
+    },
+    async bootstrap(ls, hb) {
+      const b = ctx.binding?.board;
+      const want = [.../* @__PURE__ */ new Set([
+        ...fieldIds.status ? [] : (b?.statuses ?? []).map((s) => STATUS + s),
+        ...fieldIds.size ? [] : (ctx.binding?.sizes ?? []).map((s) => prefix("size") + s),
+        ...fieldIds.priority ? [] : (ctx.binding?.priorities ?? []).map((s) => prefix("priority") + s),
+        ...ls
+      ])];
+      known = new Set((await all("labels")).map((l) => String(l.name).toLowerCase()));
+      const created = want.filter((l) => !known.has(l.toLowerCase()));
+      await ensureLabels(created);
+      if (!hb) return { created };
+      const had = (await all("issues?state=open")).find((i) => !i.pull_request && i.title === hb.title && statusOf(i) === void 0);
+      if (had) return { created, heartbeat: { id: String(had.number), created: false } };
+      return { created, heartbeat: { id: String((await api("POST", "issues", { title: hb.title, body: hb.body, labels: [] })).number), created: true } };
     }
   };
 }
@@ -8220,6 +8250,12 @@ function createLocalBoard(ctx) {
     close(id, reason) {
       return edit(id, (it) => setStatus(it, reason === "completed" ? "Done" : "Cancelled"));
     },
+    async bootstrap(_labels, hb) {
+      if (!hb) return { created: [] };
+      const had = load().items.find((i) => i.title === hb.title && i.status === "Cancelled");
+      if (had) return { created: [], heartbeat: { id: had.id, created: false } };
+      return { created: [], heartbeat: { id: (await this.create({ title: hb.title, body: hb.body, status: "Cancelled" })).id, created: true } };
+    },
     child(parent, child) {
       return edit(parent, (p, db) => {
         const c = find(db, child);
@@ -8241,7 +8277,9 @@ var init_local = __esm({
 // src/board/index.ts
 var board_exports = {};
 __export(board_exports, {
+  HEARTBEAT: () => HEARTBEAT,
   VERBS: () => VERBS,
+  bootstrap: () => bootstrap,
   cli: () => cli,
   createBoard: () => createBoard,
   hold: () => hold,
@@ -8328,7 +8366,14 @@ async function holds(board, b) {
   }
   return out;
 }
-var Usage, asked, byTime, VERBS, USAGE, cli;
+async function bootstrap(board, b) {
+  const labels = [...Object.values(b.board.labels ?? {}), ...b.board.env_labels ?? [], ...(b.board.signal_streams ?? []).map((s) => `signal:${s}`), b.forge?.approval_label || "approved"];
+  const hb = String(b.heartbeat?.ticket ?? "").trim();
+  const known = hb && !hb.startsWith(UNRESOLVED) ? hb : void 0;
+  const r = board.bootstrap ? await board.bootstrap(labels, known ? void 0 : HEARTBEAT) : { created: [] };
+  return { labels: { created: r.created }, heartbeat: known ? { id: known, created: false } : r.heartbeat ?? null };
+}
+var Usage, asked, byTime, HEARTBEAT, VERBS, USAGE, cli;
 var init_board = __esm({
   "src/board/index.ts"() {
     "use strict";
@@ -8341,6 +8386,7 @@ var init_board = __esm({
     Usage = UsageError;
     asked = (c) => isMarked(c.body, "ask");
     byTime = (x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt);
+    HEARTBEAT = { title: "agentic-sdlc heartbeat", body: "agentic-sdlc heartbeat comments. Not a ticket." };
     VERBS = {
       list: { value: ["status", "label", "search", "state"] },
       get: {},
@@ -8356,7 +8402,8 @@ var init_board = __esm({
       holds: {},
       release: {},
       close: { value: ["reason"] },
-      child: {}
+      child: {},
+      bootstrap: {}
     };
     USAGE = `usage: agentic-sdlc board <verb>
   list [--status <s>]... [--label <l>] [--search <text>] [--state all]    get <id>
@@ -8367,7 +8414,8 @@ var init_board = __esm({
   comment <id> --body-file <f> [--kind <kind> [--ref <value>]]
   comments <id> [--last <n>] [--kind <kind> [--ref <value>] | --marker <text>] [--author <a>]... [--trusted]
   hold <id> --kind <trigger> --body-file <f>    holds    release <id>
-  close <id> --reason completed|not_planned    child <parent> <child>`;
+  close <id> --reason completed|not_planned    child <parent> <child>
+  bootstrap   (the labels and the heartbeat ticket the binding needs; idempotent)`;
     cli = async (argv, base) => {
       const [verb, ...rest] = argv;
       try {
@@ -8478,6 +8526,9 @@ var init_board = __esm({
           case "child":
             need2(2);
             out = await board.child(id, a.pos[1]);
+            break;
+          case "bootstrap":
+            out = await bootstrap(board, base.binding);
             break;
           default:
             throw new Usage(`unknown board verb '${verb}'`);
@@ -8858,6 +8909,23 @@ function github(ctx) {
     async run(id) {
       if (!/^\d+$/.test(String(id))) throw new Error(`forge: not a run id: ${id}`);
       return runOf(JSON.parse(await gh(["run", "view", String(id), "--json", RUN_FIELDS])));
+    },
+    async whoami() {
+      let login = "", loginFrom = "user";
+      try {
+        login = String(JSON.parse(await gh(["api", "user"])).login ?? "");
+      } catch {
+      }
+      if (!login && repo) {
+        login = repo.split("/")[0];
+        loginFrom = "repo-owner";
+      }
+      let defaultBranch;
+      try {
+        defaultBranch = JSON.parse(await gh(["api", api])).default_branch || void 0;
+      } catch {
+      }
+      return { login, loginFrom, ...repo ? { repo } : {}, ...defaultBranch ? { defaultBranch } : {} };
     }
   };
 }
@@ -11167,7 +11235,8 @@ var init_forge = __esm({
       approve: {},
       approvals: {},
       runs: { value: ["ref"], bool: ["failed"] },
-      run: {}
+      run: {},
+      whoami: {}
     };
     cli7 = (argv, ctx) => guard(async () => {
       const [verb, ...rest] = argv;
@@ -11251,6 +11320,9 @@ var init_forge = __esm({
           return f.approvals(n());
         case "run":
           return f.run(n());
+        case "whoami":
+          if (!f.whoami) throw new Error("forge whoami: this forge adapter cannot say who it acts as");
+          return f.whoami();
         case "runs":
           return f.runs({ ref: a.get("ref"), failed: a.has("failed") });
         default:
@@ -11267,7 +11339,7 @@ import { posix } from "path";
 import { join as join9 } from "path";
 function bindWorkflow(name, text, v) {
   if (name === "agentic-sdlc-delivery.yml")
-    return text.replace(/^(\s+TRUNK: )\S+(?=\s+# set:)/m, `$1${v.trunk}`).replace(/^(\s+RELEASE_PREFIX: )\S+(?=\s+# set:)/m, `$1${v.releasePrefix}`).replace(/^(\s+DELIVERY: )\S+(?=\s+# set:)/m, `$1${v.delivery}`).replace(/(# set: your vcs\.trunk\n\s+branches: )\[[^\]]*\]/, `$1[${v.trunk}]`);
+    return text.replace(/^(\s+TRUNK: )\S+(?=\s+# set:)/m, `$1${v.trunk}`).replace(/^(\s+RELEASE_PREFIX: )\S+(?=\s+# set:)/m, `$1${v.releasePrefix}`).replace(/^(\s+DELIVERY: )\S+(?=\s+# set:)/m, `$1${v.delivery}`).replace(/(# set: your vcs\.trunk\n\s+branches: )\[[^\]]*\]/, `$1[${v.trunk}]`).replace(/(# set: your staging deploy workflow name[^\n]*\n\s+workflows: )\[[^\]]*\]/, (_, a) => a + JSON.stringify([v.deployFirst, v.deployLast, v.ci]).replaceAll('","', '", "')).replace(/(# set: the deploy\/publish workflow for the first environment[^\n]*\n\s+if \[ "\$RUN_NAME" = )"[^"]*"/, (_, a) => a + JSON.stringify(v.deployFirst)).replace(/(# set: the deploy\/publish workflow for the last environment[^\n]*\n[^\n]*\n\s+if \[ "\$RUN_NAME" = )"[^"]*"/, (_, a) => a + JSON.stringify(v.deployLast)).replace(/(# set: your trunk CI workflow name\n\s+if: >-\n[^\n]*?github\.event\.workflow_run\.name == )'[^']*'/, (_, a) => `${a}'${v.ci.replaceAll("'", "''")}'`);
   if (name === "agentic-sdlc-verify.yml")
     return text.replace(/^(\s+run: ).*?(?=\s+# set: the binding's commands\.install)/gm, (_, a) => a + yamlScalar(v.install)).replace(/^(\s+run: ).*?(?=\s+# set: the binding's commands\.verify)/gm, (_, a) => a + yamlScalar(v.verify));
   return text;
@@ -11313,7 +11385,7 @@ var init_pristine = __esm({
   "src/pristine.ts"() {
     "use strict";
     sha = (data) => createHash2("sha256").update(data).digest("hex");
-    DEFAULTS = { trunk: "main", releasePrefix: "release/", delivery: "release-line", install: "npm ci", verify: "npm test" };
+    DEFAULTS = { trunk: "main", releasePrefix: "release/", delivery: "release-line", install: "npm ci", verify: "npm test", ci: "CI", deployFirst: "Deploy staging", deployLast: "Deploy production" };
     yamlScalar = (v) => /^[\w./ -]+$/.test(v) ? v : JSON.stringify(v);
     COPY_PREFIX = "sdlc-";
     skillNames = (skillsDir) => new Set(existsSync7(skillsDir) ? readdirSync5(skillsDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name) : []);
@@ -11360,6 +11432,7 @@ function missingBindingKeys(template2, binding) {
   const out = [];
   for (const [k, v] of Object.entries(t)) {
     if (!(k in b)) out.push(k);
+    else if (k === "paths") continue;
     else if (isMap(v) && isMap(b[k])) {
       for (const k2 of Object.keys(v)) if (!(k2 in b[k])) out.push(`${k}.${k2}`);
     }
@@ -11441,7 +11514,7 @@ function claudeSetup(root, inst, log, noPlugin, upgrade) {
   }
   for (const tier of TIERS4) {
     const rel = `.claude/agents/sdlc-${tier}.md`;
-    const model = !models[tier] || /^your-/.test(models[tier]) ? "inherit" : models[tier];
+    const model = !models[tier] || /^your-/.test(models[tier]) || String(models[tier]).startsWith(UNRESOLVED) ? "inherit" : models[tier];
     inst.put(rel, `---
 name: sdlc-${tier}
 description: Runs one agentic-sdlc step whose tier is ${tier}. The sdlc skill hands a step to this agent when the step is at the ${tier} tier.
@@ -11472,27 +11545,39 @@ Do not start subagents.
 function reviewSandbox(root, inst, log) {
   const agent = readFileSync9(need(inst.pkg, "agents/sdlc-reviewer.md"), "utf8").replaceAll("mcp__plugin_agentic-sdlc_agentic-sdlc__", "mcp__agentic-sdlc__").replaceAll("agentic-sdlc:review", `${COPY_PREFIX}review`).replace(/\b([Tt]he) plugin's /g, "$1 ");
   inst.put(".claude/agents/sdlc-reviewer.md", agent, "agents/sdlc-reviewer.md");
-  inst.copy("hooks/guard.mjs", GUARD);
-  const want = JSON.parse(readFileSync9(need(inst.pkg, "hooks/hooks.json"), "utf8").replaceAll("${CLAUDE_PLUGIN_ROOT}/hooks/guard.mjs", `\${CLAUDE_PROJECT_DIR}/${GUARD}`));
+  const hooksJson = readFileSync9(need(inst.pkg, "hooks/hooks.json"), "utf8");
+  for (const n of new Set([...hooksJson.matchAll(/\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/([\w.-]+\.mjs)/g)].map((m) => m[1]))) inst.copy(`hooks/${n}`, `.agents/hooks/${n}`);
+  const want = JSON.parse(hooksJson.replaceAll("${CLAUDE_PLUGIN_ROOT}/hooks/", "${CLAUDE_PROJECT_DIR}/.agents/hooks/"));
   const rel = ".claude/settings.json", file = join10(root, rel);
   const had = existsSync8(file);
   const doc = had ? parseJson(readFileSync9(file, "utf8") || "{}", rel) : {};
-  const pre = (doc.hooks ??= {}).PreToolUse ??= [];
-  const has = (e) => pre.some((x) => x?.matcher === e.matcher && JSON.stringify(x.hooks) === JSON.stringify(e.hooks));
-  const add = want.hooks.PreToolUse.filter((e) => !has(e));
-  if (!add.length) {
-    log.push(`kept ${rel} (the guard hook is registered)`);
+  let added = 0;
+  for (const [event, entries] of Object.entries(want.hooks)) {
+    const cur = (doc.hooks ??= {})[event] ??= [];
+    const has = (e) => cur.some((x) => x?.matcher === e.matcher && JSON.stringify(x.hooks) === JSON.stringify(e.hooks));
+    const add = entries.filter((e) => !has(e));
+    cur.push(...add);
+    added += add.length;
+  }
+  if (!added) {
+    log.push(`kept ${rel} (the guard and session-start hooks are registered)`);
     return;
   }
-  pre.push(...add);
   mkdirSync4(dirname4(file), { recursive: true });
   writeFileSync4(file, JSON.stringify(doc, null, 2) + "\n");
-  log.push(`${had ? "updated" : "wrote"} ${rel}: the guard hook (${GUARD})`);
+  log.push(`${had ? "updated" : "wrote"} ${rel}: the guard hook (${GUARD}) and the session-start hook`);
 }
 function originRepo(root) {
   try {
     const url = execFileSync2("git", ["remote", "get-url", "origin"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     return /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(url)?.[1];
+  } catch {
+    return void 0;
+  }
+}
+function originHead(root) {
+  try {
+    return execFileSync2("git", ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim().replace(/^origin\//, "") || void 0;
   } catch {
     return void 0;
   }
@@ -11544,7 +11629,7 @@ async function init(root, argv, log) {
       doc.set("traces", { uri: ".agents/runtime/traces/{run_id}.jsonl" });
       doc.setIn(["forge", "options", "token_env"], "AGENTIC_FORGE_TOKEN");
       doc.setIn(["forge", "options", "review_token_env"], "AGENTIC_REVIEW_TOKEN");
-      doc.setIn(["forge", "review_identity"], "your-review-app[bot]");
+      doc.setIn(["forge", "review_identity"], unresolvedValue("the review account or app login"));
     }
     const repo = forge === "github" ? originRepo(root) : void 0;
     if (repo) {
@@ -11553,12 +11638,22 @@ async function init(root, argv, log) {
       log.push(`set the repo ${repo} from git remote origin`);
     }
     if (board === "local") {
-      const hb = await createLocalBoard({ root }).create({ title: "Heartbeat", body: "agentic-sdlc heartbeat comments. Not a ticket.", status: "Cancelled" });
+      const hb = await createLocalBoard({ root }).create({ ...HEARTBEAT, status: "Cancelled" });
       doc.setIn(["heartbeat", "ticket"], hb.id);
       log.push(`created heartbeat ticket ${hb.id} on the local board`);
-    } else log.push("create the heartbeat ticket on the board and put its id in heartbeat.ticket");
+    }
+    const trunk = originHead(root);
+    if (trunk) doc.setIn(["vcs", "trunk"], trunk);
+    const paths = doc.get("paths");
+    for (const it of [...paths?.items ?? []]) {
+      const k = String(it.key?.value ?? it.key), v = it.value?.toJSON?.() ?? it.value?.value;
+      if (["factory", "lane_areas", "no_proof", "importance_doc"].includes(k)) continue;
+      const kept = [v].flat().filter((f2) => typeof f2 === "string" && existsSync8(join10(root, f2)));
+      if (!kept.length) paths.delete(k);
+      else if (Array.isArray(v) && kept.length < v.length) paths.set(k, kept);
+    }
     mkdirSync4(dirname4(bindingFile), { recursive: true });
-    writeFileSync4(bindingFile, String(doc));
+    writeFileSync4(bindingFile, doc.toString({ lineWidth: 0, flowCollectionPadding: false }));
     log.push(`wrote ${BINDING_PATH}`);
   }
   const gates = join10(pkg, "templates", "gates");
@@ -11566,12 +11661,16 @@ async function init(root, argv, log) {
   const bound = (0, import_yaml5.parse)(readFileSync9(bindingFile, "utf8"));
   const continuous = bound?.product?.delivery === "continuous";
   const oneIdentity = !bound?.forge?.review_identity;
+  const real = (v, d) => typeof v === "string" && v && !v.startsWith(UNRESOLVED) ? v : d;
   inst.bound = {
-    trunk: bound?.vcs?.trunk || DEFAULTS.trunk,
-    releasePrefix: bound?.vcs?.release_prefix || DEFAULTS.releasePrefix,
-    delivery: bound?.product?.delivery || DEFAULTS.delivery,
-    install: bound?.commands?.install || DEFAULTS.install,
-    verify: bound?.commands?.verify || DEFAULTS.verify
+    trunk: real(bound?.vcs?.trunk, DEFAULTS.trunk),
+    releasePrefix: real(bound?.vcs?.release_prefix, DEFAULTS.releasePrefix),
+    delivery: real(bound?.product?.delivery, DEFAULTS.delivery),
+    install: real(bound?.commands?.install, DEFAULTS.install),
+    verify: real(bound?.commands?.verify, DEFAULTS.verify),
+    ci: real(bound?.forge?.ci_workflow, DEFAULTS.ci),
+    deployFirst: real(bound?.forge?.deploy_workflows?.[0], DEFAULTS.deployFirst),
+    deployLast: real(bound?.forge?.deploy_workflows?.at?.(-1), DEFAULTS.deployLast)
   };
   {
     const tdir = `templates/gates/${forge}`;
@@ -11620,6 +11719,8 @@ async function init(root, argv, log) {
   inst.finish();
   const missing = missingKeysLine(missingBindingKeys(readFileSync9(need(pkg, "templates/binding.yml"), "utf8"), readFileSync9(bindingFile, "utf8")));
   if (missing) log.push(missing);
+  const open = unresolved((0, import_yaml5.parse)(readFileSync9(bindingFile, "utf8")));
+  if (open.length) log.push(`next: ${open.length} binding value${open.length === 1 ? " is" : "s are"} unresolved (${open.map((u) => u.key).join(", ")}); run the setup skill, or read agentic-sdlc validate --json`);
   const c = inst.counts;
   log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept (differ from every released version), ${c.stale} stale${c.removed ? `, ${c.removed} removed` : ""}`);
   const changed = c.wrote + c.updated + c.removed > 0 || agentsChanged;
@@ -11776,7 +11877,7 @@ function cliPin(root) {
 }
 function pathWarnings(root, b) {
   const paths = b?.paths ?? {};
-  return Object.entries(paths).filter(([k, v]) => !["factory", "light_verify", "lane_areas", "no_proof"].includes(k) && typeof v === "string" && v && !existsSync8(join10(root, v))).map(([k, v]) => `paths.${k} names ${v}, which does not exist in the project; the skills will read nothing there`);
+  return Object.entries(paths).filter(([k, v]) => !["factory", "lane_areas", "no_proof"].includes(k) && typeof v === "string" && v && !existsSync8(join10(root, v))).map(([k, v]) => `paths.${k} names ${v}, which does not exist in the project; the skills will read nothing there`);
 }
 var import_yaml5, START, END, POINTER, INSTALL_LOCK, LEGACY_LOCK, TIERS4, FORGES, INIT_FLAGS, flagsOf, need, parseJson, readJson2, filesUnder, posix2, Installer, missingKeysLine, CLI_PIN, CLI_PACKAGE, LAUNCHER, IGNORED, isSha, isTag, GUARD, envNames, redact2, firstLines, probeFailure, cli8;
 var init_install = __esm({
@@ -11994,9 +12095,13 @@ ${END}`;
           return 0;
         }
         if (verb === "validate" || verb === "doctor") {
+          const json = rest[0] === "--json" && verb === "validate";
+          if (rest.length && !json) {
+            console.error(`usage: agentic-sdlc ${verb}${verb === "validate" ? " [--json]" : ""}`);
+            return 2;
+          }
           const warnings = [];
           const problems = validate(ctx.root, warnings);
-          problems.forEach((p) => console.error(`problem: ${p}`));
           try {
             {
               const lb = loadBinding(ctx.root);
@@ -12004,6 +12109,16 @@ ${END}`;
             }
           } catch {
           }
+          if (json) {
+            let open = [];
+            try {
+              open = unresolved(loadBinding(ctx.root));
+            } catch {
+            }
+            out(JSON.stringify({ ok: !problems.length, problems: problems.filter((p) => !/ is unresolved: /.test(p)), warnings, unresolved: open }, null, 2));
+            return problems.length ? 1 : 0;
+          }
+          problems.forEach((p) => console.error(`problem: ${p}`));
           warnings.forEach((m) => console.error(`warn: ${m}`));
           try {
             const info = missingKeysLine(missingBindingKeys(readFileSync9(join10(packageRoot(), "templates/binding.yml"), "utf8"), readFileSync9(join10(ctx.root, BINDING_PATH), "utf8")));
@@ -12055,7 +12170,7 @@ ${END}`;
           }
           return bad ? 1 : 0;
         }
-        console.error("usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness claude] [--profile individual|organization] [--no-plugin] [--upgrade] [--force] | validate | doctor");
+        console.error("usage: agentic-sdlc init [--board ...] [--forge github] [--vcs git] [--harness claude] [--profile individual|organization] [--no-plugin] [--upgrade] [--force] | validate [--json] | doctor");
         return 2;
       } catch (e) {
         console.error(redact2(e.message, ctx.env));
@@ -12344,6 +12459,143 @@ ${USAGE4}`);
   }
 });
 
+// src/status.ts
+var status_exports = {};
+__export(status_exports, {
+  cli: () => cli10,
+  liveStatus: () => liveStatus,
+  personSteps: () => personSteps
+});
+import { existsSync as existsSync10, readFileSync as readFileSync11 } from "fs";
+import { join as join12 } from "path";
+function personSteps(b, trunkLines, warnings) {
+  const repo = String(b.forge?.options?.repo ?? b.board?.options?.repo ?? "<owner>/<repo>");
+  const out = [
+    { step: "Install the Claude GitHub App on the repo", where: `https://github.com/apps/claude/installations/new (pick ${repo} only)`, verified: null },
+    {
+      step: "Create the cloud routine that runs one cycle",
+      where: "https://claude.ai/code/routines > New routine: this repo; an environment with AGENTIC_SDLC_UNATTENDED=1 and the setup script of templates/runner/claude-routine.md; model: the binding's models.fast",
+      text: "Prompt: the text of .agents/cycle-prompt.md below its --- line. Triggers: a Schedule (custom cron, at least 1 hour apart, e.g. 7 */2 * * *) and, where the routine offers it, a GitHub event trigger on Issues (opened, labeled) for this repo",
+      verified: null
+    },
+    {
+      step: `Protect ${b.vcs?.trunk ?? "the trunk"} with the required checks`,
+      where: `https://github.com/${repo}/settings/rules > New ruleset > Import a ruleset: .github/rulesets/trunk.json (once it is merged)`,
+      verified: trunkLines.some((l) => l.startsWith("ok   trunk protection")) ? true : trunkLines.some((l) => /^(warn: trunk protection|fail trunk protection)/.test(l)) ? false : null
+    },
+    { step: "Optional: connect GitHub in claude.ai, so a board page there can read the issues", where: "https://claude.ai/settings/connectors > GitHub", verified: null }
+  ];
+  const both = warnings.find((w) => w.startsWith("forge.human_approval is"));
+  if (both) out.push({ step: "Decide who approves a Full-lane CR", where: ".agents/binding.yml owners.product / owners.bots, or forge.human_approval", text: both, verified: false });
+  return out;
+}
+async function approvals(crs, b, classOf) {
+  const out = [];
+  for (const cr of crs) {
+    const st = cr.checks.find((c) => c.name === "human-approval")?.state;
+    if (cr.draft || !st || st === "success") continue;
+    const { class: klass, who } = await classOf(cr);
+    if (!who.length) continue;
+    out.push({ kind: "approval", cr: cr.n, url: cr.url, ...cr.closes[0] ? { ticket: cr.closes[0] } : {}, class: klass, who, label: b.forge.approval_label || "approved" });
+  }
+  return out;
+}
+async function liveStatus(d) {
+  const { b, root, board, forge, crs, classOf, head } = d;
+  const broken = [];
+  const waiting = [];
+  try {
+    for (const h of await holds(board, b)) waiting.push({ kind: "hold", ticket: h.id, ask: h.kind, since: h.askedAt, replied: h.replied });
+  } catch (e) {
+    broken.push(`board holds: ${e.message.split("\n")[0]}`);
+  }
+  try {
+    waiting.push(...await approvals(crs, b, classOf));
+  } catch (e) {
+    broken.push(`approvals: ${e.message.split("\n")[0]}`);
+  }
+  let cycle;
+  try {
+    const n = await next({ b, root, board, forge, classOf, head });
+    const line = (w) => `${w.step} ${w.ticket ? `#${w.ticket}` : ""}${w.cr ? ` CR ${w.cr}` : ""}: ${w.reason}`.replace(/ {2,}/g, " ");
+    cycle = { idle: n.idle, work: n.work.map(line), later: n.later.length, releases: n.holds, ...n.budget ? { budget: n.budget } : {} };
+    broken.push(...n.errors.map((e) => e.msg));
+  } catch (e) {
+    broken.push(`next: ${e.message.split("\n")[0]}`);
+  }
+  let heartbeat = null;
+  try {
+    const o = ownersFor(b.owners, "board");
+    const beat = (await readLedger(board, b.heartbeat.ticket, o.bots)).map((x) => parseHeartbeat(x.body)).find((hb) => hb?.at);
+    if (beat) heartbeat = { at: beat.at, ageHours: Math.round((Date.now() - Date.parse(beat.at)) / 36e5 * 10) / 10 };
+  } catch (e) {
+    broken.push(`ledger: ${e.message.split("\n")[0]}`);
+  }
+  return { waiting, cycle, heartbeat, broken };
+}
+var import_yaml7, cli10;
+var init_status = __esm({
+  "src/status.ts"() {
+    "use strict";
+    import_yaml7 = __toESM(require_dist(), 1);
+    init_binding();
+    init_board();
+    init_next();
+    init_ledger();
+    init_ports();
+    cli10 = async (argv, ctx) => {
+      if (argv.length > 1) {
+        console.error("usage: agentic-sdlc status");
+        return 2;
+      }
+      const print = (o) => console.log(JSON.stringify(o, null, 2));
+      if (!existsSync10(join12(ctx.root, BINDING_PATH))) {
+        print({ installed: false, install: "agentic-sdlc init --no-plugin" });
+        return 0;
+      }
+      const { validate: validate2, trunkProtection: trunkProtection2, pathWarnings: pathWarnings2 } = await Promise.resolve().then(() => (init_install(), install_exports));
+      const warnings = [];
+      const problems = validate2(ctx.root, warnings);
+      let b;
+      try {
+        b = (0, import_yaml7.parse)(readFileSync11(join12(ctx.root, BINDING_PATH), "utf8"));
+      } catch (e) {
+        print({ installed: true, ok: false, problems: [e.message] });
+        return 1;
+      }
+      warnings.push(...bindingWarnings(b), ...pathWarnings2(ctx.root, b));
+      const open = unresolved(b);
+      const base = { installed: true, problems: problems.filter((p) => !/ is unresolved: /.test(p)), unresolved: open, warnings };
+      if (problems.length) {
+        print({ ...base, ok: false, person: personSteps(b, [], warnings) });
+        return 1;
+      }
+      const c = { ...ctx, binding: b };
+      const broken = [];
+      const { createBoard: createBoard2 } = await Promise.resolve().then(() => (init_board(), board_exports));
+      const board = createBoard2({ ...c, options: b.board.options });
+      let forge;
+      let crs = [];
+      try {
+        const { createForge: createForge2 } = await Promise.resolve().then(() => (init_forge(), forge_exports));
+        const f = createForge2({ ...c, options: b.forge.options });
+        crs = await f.list({ state: "open", checks: true });
+        forge = { ...f, list: async () => crs };
+      } catch (e) {
+        broken.push(`forge: ${e.message.split("\n")[0]}`);
+      }
+      const { depsOf: depsOf2, approvalWho: approvalWho2 } = await Promise.resolve().then(() => (init_gates(), gates_exports));
+      const gd = depsOf2(c);
+      const classOf = (cr) => approvalWho2(gd, cr);
+      const live = await liveStatus({ b, root: ctx.root, board, forge, crs, classOf, head: () => headSha(c) });
+      broken.push(...live.broken);
+      const person = personSteps(b, forge ? trunkProtection2(b, ctx) : [], warnings).filter((p) => p.verified !== true);
+      print({ ...base, ok: !broken.length, waiting: live.waiting, cycle: live.cycle, heartbeat: live.heartbeat, broken, person });
+      return broken.length ? 1 : 0;
+    };
+  }
+});
+
 // src/mcp.ts
 var mcp_exports = {};
 __export(mcp_exports, {
@@ -12351,12 +12603,12 @@ __export(mcp_exports, {
   MODERN_VERSIONS: () => MODERN_VERSIONS,
   PROTOCOL_VERSIONS: () => PROTOCOL_VERSIONS,
   allowList: () => allowList,
-  cli: () => cli10,
+  cli: () => cli11,
   handle: () => handle
 });
-import { mkdtempSync as mkdtempSync4, readFileSync as readFileSync11, rmSync as rmSync4, writeFileSync as writeFileSync5 } from "fs";
+import { mkdtempSync as mkdtempSync4, readFileSync as readFileSync12, rmSync as rmSync4, writeFileSync as writeFileSync5 } from "fs";
 import { tmpdir as tmpdir4 } from "os";
-import { join as join12 } from "path";
+import { join as join13 } from "path";
 import { createInterface } from "readline";
 function allowList(arg) {
   const out = /* @__PURE__ */ new Set();
@@ -12420,13 +12672,13 @@ async function callTool(name, args, ctx, allow) {
   }
   let dir;
   if (s.body) {
-    dir = mkdtempSync4(join12(tmpdir4(), "agentic-sdlc-mcp-"));
-    writeFileSync5(join12(dir, "body.md"), String(args.body));
-    argv.push("--body-file", join12(dir, "body.md"));
+    dir = mkdtempSync4(join13(tmpdir4(), "agentic-sdlc-mcp-"));
+    writeFileSync5(join13(dir, "body.md"), String(args.body));
+    argv.push("--body-file", join13(dir, "body.md"));
   }
   try {
-    const { cli: cli11 } = await MODULES[s.group]();
-    const r = await capture(() => cli11(argv, ctx));
+    const { cli: cli12 } = await MODULES[s.group]();
+    const r = await capture(() => cli12(argv, ctx));
     if (r.code === 0) {
       let structured;
       try {
@@ -12492,7 +12744,7 @@ async function handle(msg, ctx, allow = /* @__PURE__ */ new Set()) {
       return err(-32601, `method not found: ${msg.method}`);
   }
 }
-var MODULES, S, TOOLS, GUARDED, served, PROTOCOL_VERSIONS, MODERN_VERSIONS, META, SERVER_INFO, READ, DESTRUCTIVE, IDEMPOTENT, LOCAL, annotations, schema, wire, queue2, realWrite, version, isModern, cli10;
+var MODULES, S, TOOLS, GUARDED, served, PROTOCOL_VERSIONS, MODERN_VERSIONS, META, SERVER_INFO, READ, DESTRUCTIVE, IDEMPOTENT, LOCAL, annotations, schema, wire, queue2, realWrite, version, isModern, cli11;
 var init_mcp = __esm({
   "src/mcp.ts"() {
     "use strict";
@@ -12624,12 +12876,12 @@ var init_mcp = __esm({
     wire = (k) => "--" + k.replace(/_/g, "-");
     queue2 = Promise.resolve();
     realWrite = process.stdout.write.bind(process.stdout);
-    version = () => JSON.parse(readFileSync11(new URL("../package.json", import.meta.url), "utf8")).version;
+    version = () => JSON.parse(readFileSync12(new URL("../package.json", import.meta.url), "utf8")).version;
     isModern = (msg) => {
       const m = msg.params?._meta;
       return m !== null && typeof m === "object" && (`${META}protocolVersion` in m || `${META}clientCapabilities` in m);
     };
-    cli10 = async (argv, ctx) => {
+    cli11 = async (argv, ctx) => {
       if (argv.includes("--help") || argv.includes("-h")) {
         console.log(`usage: agentic-sdlc mcp [--allow approve,status]
   JSON-RPC over stdio, one message per line.
@@ -12669,7 +12921,7 @@ var init_mcp = __esm({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync12 } from "fs";
+import { readFileSync as readFileSync13 } from "fs";
 async function main(argv, env = process.env) {
   let root = process.cwd();
   const args = [...argv];
@@ -12719,8 +12971,8 @@ ${help()}`);
     Object.defineProperty(ctx, "binding", { enumerable: true, get: () => b ??= loadBinding(root) });
   }
   try {
-    const { cli: cli11 } = await entry[0]();
-    return await cli11(entry[1] ? rest : [group, ...rest], ctx);
+    const { cli: cli12 } = await entry[0]();
+    return await cli12(entry[1] ? rest : [group, ...rest], ctx);
   } catch (e) {
     console.error(e.message);
     return 1;
@@ -12734,10 +12986,11 @@ var init_cli = __esm({
     init_exec();
     GROUPS = {
       init: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "copy skills, write the binding and CI gates"],
-      validate: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "check the binding and skills"],
+      validate: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "[--json]: check the binding and skills; --json also lists the unresolved binding values"],
       doctor: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "validate, then probe board, forge and vcs"],
-      board: [() => Promise.resolve().then(() => (init_board(), board_exports)), true, "list get create move set label assign milestone comment comments hold holds release close child"],
-      forge: [() => Promise.resolve().then(() => (init_forge(), forge_exports)), true, "open view diff list ready draft sync automerge cut approve approvals comment comments verdict land queue status runs run"],
+      status: [() => Promise.resolve().then(() => (init_status(), status_exports)), false, "what waits on you (holds, approvals), what the next cycle does, what is broken, the steps only you can take"],
+      board: [() => Promise.resolve().then(() => (init_board(), board_exports)), true, "list get create move set label assign milestone comment comments hold holds release close child bootstrap"],
+      forge: [() => Promise.resolve().then(() => (init_forge(), forge_exports)), true, "open view diff list ready draft sync automerge cut approve approvals comment comments verdict land queue status runs run whoami"],
       vcs: [() => Promise.resolve().then(() => (init_vcs(), vcs_exports)), true, "start head changed base push cut tag tags drop checkout-tests"],
       dispatch: [() => Promise.resolve().then(() => (init_dispatch(), dispatch_exports)), true, "dispatch <skill>[/<step>] --ticket <id> | --cr <n> [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]: start the step on its executor"],
       gate: [() => Promise.resolve().then(() => (init_gates(), gates_exports)), true, "branch-names linkage approval proofs-on-base merged shipped evidence signal-on-red signal skill-regression review provenance"],
@@ -12749,7 +13002,7 @@ var init_cli = __esm({
     INIT_FLAGS2 = "[--profile individual|organization] [--harness claude] [--board github-issues|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]";
     version2 = () => {
       try {
-        return JSON.parse(readFileSync12(new URL("../package.json", import.meta.url), "utf8")).version;
+        return JSON.parse(readFileSync13(new URL("../package.json", import.meta.url), "utf8")).version;
       } catch {
         return "unknown";
       }

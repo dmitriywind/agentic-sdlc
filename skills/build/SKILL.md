@@ -1,6 +1,6 @@
 ---
 name: build
-description: Build a ticket's spec test first on one short-lived change line and open the draft change request, or rework an open one. Use on the top unheld Ready ticket, a ticket at In progress, a ticket at In review that no open CR closes, a CR the queue sends to rework, or a CR a person opened that must go to review.
+description: Use when the cycle routes a Ready or In progress ticket, an In review ticket no open change request closes, or a change request to rework or to hand to review.
 user-invocable: false
 metadata:
   tier: balanced

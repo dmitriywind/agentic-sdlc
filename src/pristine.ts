@@ -11,8 +11,8 @@ export const isInstallable = (path: string) =>
   /^(skills|scorers)\/./.test(path) || /^templates\/(gates|bin)\/./.test(path) || /^templates\/runner\/(setup\.sh|cycle-prompt\.md|review-prompt\.md)$/.test(path);
 
 /** The binding values written into the stock workflows (the `# set:` lines init derives from the binding). */
-export type Bound = { trunk: string; releasePrefix: string; delivery: string; install: string; verify: string };
-export const DEFAULTS: Bound = { trunk: 'main', releasePrefix: 'release/', delivery: 'release-line', install: 'npm ci', verify: 'npm test' };
+export type Bound = { trunk: string; releasePrefix: string; delivery: string; install: string; verify: string; ci: string; deployFirst: string; deployLast: string };
+export const DEFAULTS: Bound = { trunk: 'main', releasePrefix: 'release/', delivery: 'release-line', install: 'npm ci', verify: 'npm test', ci: 'CI', deployFirst: 'Deploy staging', deployLast: 'Deploy production' };
 
 const yamlScalar = (v: string) => (/^[\w./ -]+$/.test(v) ? v : JSON.stringify(v));
 
@@ -23,7 +23,12 @@ export function bindWorkflow(name: string, text: string, v: Bound): string {
       .replace(/^(\s+TRUNK: )\S+(?=\s+# set:)/m, `$1${v.trunk}`)
       .replace(/^(\s+RELEASE_PREFIX: )\S+(?=\s+# set:)/m, `$1${v.releasePrefix}`)
       .replace(/^(\s+DELIVERY: )\S+(?=\s+# set:)/m, `$1${v.delivery}`)
-      .replace(/(# set: your vcs\.trunk\n\s+branches: )\[[^\]]*\]/, `$1[${v.trunk}]`);
+      .replace(/(# set: your vcs\.trunk\n\s+branches: )\[[^\]]*\]/, `$1[${v.trunk}]`)
+      // The workflow names it watches: forge.deploy_workflows (first and last environment) and forge.ci_workflow.
+      .replace(/(# set: your staging deploy workflow name[^\n]*\n\s+workflows: )\[[^\]]*\]/, (_, a) => a + JSON.stringify([v.deployFirst, v.deployLast, v.ci]).replaceAll('","', '", "'))
+      .replace(/(# set: the deploy\/publish workflow for the first environment[^\n]*\n\s+if \[ "\$RUN_NAME" = )"[^"]*"/, (_, a) => a + JSON.stringify(v.deployFirst))
+      .replace(/(# set: the deploy\/publish workflow for the last environment[^\n]*\n[^\n]*\n\s+if \[ "\$RUN_NAME" = )"[^"]*"/, (_, a) => a + JSON.stringify(v.deployLast))
+      .replace(/(# set: your trunk CI workflow name\n\s+if: >-\n[^\n]*?github\.event\.workflow_run\.name == )'[^']*'/, (_, a) => `${a}'${v.ci.replaceAll("'", "''")}'`);
   if (name === 'agentic-sdlc-verify.yml')
     return text
       .replace(/^(\s+run: ).*?(?=\s+# set: the binding's commands\.install)/gm, (_, a) => a + yamlScalar(v.install))
