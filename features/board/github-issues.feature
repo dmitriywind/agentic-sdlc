@@ -21,6 +21,34 @@ Feature: The github-issues board
       And the listed ticket "2" has the labels "bug"
       And every call is a gh api call under the repo, never GraphQL, gh issue or gh project
 
+  Rule: The list is the open tickets, without their bodies
+
+    Scenario: A closed ticket is listed only when asked for, and no ticket carries its body
+      Given the github-issues board adapter
+      And the repo has these issues:
+        | number | labels      | state  |
+        | 1      | status:Ready |        |
+        | 2      | status:Done  | closed |
+      When the factory lists the tickets in the status "Done"
+      Then the listed ticket ids are ""
+      When the factory lists every ticket, closed ones too
+      Then the listed ticket ids are "1, 2"
+      And the listed tickets carry no body
+
+  Rule: An open issue with a signal label and no status is a Signal
+
+    Scenario: An unboarded signal is listed at Signals, and a closed one is not
+      Given the github-issues board adapter
+      And the repo has these issues:
+        | number | labels                  | state  |
+        | 1      | signal:alert            |        |
+        | 2      | signal:alert            | closed |
+        | 3      | bug                     |        |
+      When the factory lists the tickets in the status "Signals"
+      Then the listed ticket ids are "1"
+      When the factory gets the ticket "1"
+      Then the returned ticket has the status "Signals"
+
   Rule: A move swaps the status label
 
     Scenario: A move from the right status replaces the status label and keeps the others

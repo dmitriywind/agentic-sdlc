@@ -13,7 +13,9 @@ What you do after the first cycle: watch it, upgrade it, and keep the repo and t
 `ledger summary` reads the heartbeats: runs, outcomes and failures by cluster. `ledger stale` fails
 when no heartbeat arrived in time; schedule it where a failure alerts you.
 
-`init` installs that check as its own workflow, `agentic-sdlc-dead-man.yml`, for every runtime: it runs every 3 hours outside the cycle and fails when no heartbeat landed for `--max-hours` (set it above your cycle cadence). It catches what stops silently: a cloud task whose runs are rejected at the usage limit, a task switched off after 72 hours without a GitHub connection, a run that shows Succeeded and did nothing.
+`init` installs that check as its own workflow, `agentic-sdlc-dead-man.yml`, for every runtime: it runs every 3 hours outside the cycle and fails when no heartbeat landed for `--max-hours` (set it above your cycle cadence). It catches what stops silently: a cloud task whose runs are rejected at the usage limit, a task switched off after 72 hours without a GitHub connection, a run that shows Succeeded and did nothing. When it fails it files one Signal (`gate signal --source factory`); the next failing tick comments on that Signal instead of opening another.
+
+Other intake files its Signal the same way: `init` installs `agentic-sdlc-signal.yml`, which turns a `repository_dispatch` of type `signal` (an alert webhook, a script) into a Signal, and an issue form `.github/ISSUE_TEMPLATE/signal.yml`. An open issue with a `signal:<stream>` label and no `status:` label lists as `Signals`, so an issue made from a phone is triaged too. The first Signal filed creates the labels; create `signal:owner` and `status:Signals` once if the form is used first.
 
 `ledger measures` prints deploy frequency, lead time, change failure rate, time to restore and
 rework rate over the last 30 days (`--days <n>`), computed from the board and the forge. A measure

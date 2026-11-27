@@ -4,9 +4,8 @@ Follow the [contract](../../sdlc/references/contract.md). Order: `signal:securit
 signals from the last environment of `board.env_labels`, then the oldest. A signal body has four
 parts: what, why, constraints, open questions; a missing part is written as "none".
 
-1. **Read.** First put every open ticket with a `signal:<stream>` label of `board.signal_streams`
-   and no Status on the board (`board list --label signal:<stream>`, then `board move <id>
-   Signals`). Then `board get <id>` and `board comments <id>`. Done when you can state the claim,
+1. **Read.** `board get <id>` and `board comments <id>` (an issue with a `signal:<stream>` label and
+   no Status already lists at Signals; a repeated CI or factory signal is one ticket with comments). Done when you can state the claim,
    its `signal:<stream>` label and its evidence.
 2. **Security.** For a security report, or any signal that describes active exploitation, follow
    `paths.security_policy`: acknowledge once through the contact the report gives, and keep exploit

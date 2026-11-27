@@ -40,7 +40,7 @@ board:
   env_labels: [env:staging, env:production] # on a signal from a deployed environment
   done_statuses: [Done, Cancelled] # statuses that count as closed (open blockers, gates, bench cases)
   views: [Board, Signals, Human, Release, Roadmap] # saved views the sdlc skill describes
-  signal_streams: [alert, feedback, owner, security, ci, deploy, maintenance] # label signal:<stream>; maintenance: dependency, advisory, end-of-life and expiry scanners
+  signal_streams: [alert, feedback, owner, security, ci, deploy, maintenance, factory] # label signal:<stream>; maintenance: dependency, advisory, end-of-life and expiry scanners
   # scope:                      # many repos, one board (unset: this board serves one repo). Each repo's binding names its own label.
   #   label: repo:app-a         # this repo's tickets carry it; board list shows only them; board create adds it
   #   home: true                # in exactly one repo: it also lists tickets with no repo: label and triage gives each one a label

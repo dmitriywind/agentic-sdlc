@@ -1,0 +1,33 @@
+name: agentic-sdlc signal
+# Intake from outside GitHub: a monitor, an alert webhook or a script files a Signal with
+#   gh api repos/<owner>/<repo>/dispatches -f event_type=signal -f 'client_payload[source]=alert' -f 'client_payload[title]=...' -f 'client_payload[body]=...'
+# (a token with write access). The same source and title files one Signal; a repeat comments on the open one.
+on:
+  repository_dispatch:
+    types: [signal]
+permissions:
+  contents: read
+  issues: write
+defaults:
+  run:
+    shell: bash   # self-hosted Windows runners default to PowerShell
+jobs:
+  signal:
+    runs-on: ${{ fromJSON(vars.AGENTIC_RUNS_ON_TRUSTED || vars.AGENTIC_RUNS_ON || '"ubuntu-latest"') }}   # jobs that hold secrets
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Signal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
+          # The payload is attacker-shaped text: it goes through the environment, never into the script line.
+          SIGNAL_SOURCE: ${{ github.event.client_payload.source }}
+          SIGNAL_TITLE: ${{ github.event.client_payload.title }}
+          SIGNAL_BODY: ${{ github.event.client_payload.body }}
+        run: .agents/bin/agentic-sdlc gate signal --source "$SIGNAL_SOURCE" --title "$SIGNAL_TITLE" --body "$SIGNAL_BODY"

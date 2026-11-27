@@ -92,7 +92,7 @@ export async function holds(board: Board, b: Binding): Promise<Hold[]> {
 
 /** The flags each verb accepts; anything else is a usage error. */
 export const VERBS: Record<string, VerbSpec> = {
-  list: { value: ['status', 'label', 'search'] },
+  list: { value: ['status', 'label', 'search', 'state'] },
   get: {},
   create: { value: ['title', 'body-file', 'status', 'label', 'parent', 'milestone'] },
   move: { value: ['only-from'] },
@@ -110,7 +110,7 @@ export const VERBS: Record<string, VerbSpec> = {
 };
 
 const USAGE = `usage: agentic-sdlc board <verb>
-  list [--status <s>]... [--label <l>] [--search <text>]    get <id>
+  list [--status <s>]... [--label <l>] [--search <text>] [--state all]    get <id>
   create --title <t> --body-file <f> --status <s> [--label <l>]... [--parent <id>] [--milestone <m>]
   move <id> <status> [--only-from <s>]    set <id> <field> <value> | --clear
   milestone <id> <name> | --clear
@@ -133,7 +133,12 @@ export const cli: PortCli = async (argv, base) => {
     const [id] = a.pos;
     let out: unknown;
     switch (verb) {
-      case 'list': out = await board.list({ status: a.all('status'), label: a.get('label'), search: a.get('search') }); break;
+      case 'list': {
+        const state = a.get('state');
+        if (state !== undefined && state !== 'open' && state !== 'all') throw new Usage('board list: --state is open or all');
+        out = await board.list({ status: a.all('status'), label: a.get('label'), search: a.get('search'), state });
+        break;
+      }
       case 'get': need(1); out = await board.get(id); break;
       case 'create':
         out = await board.create({
