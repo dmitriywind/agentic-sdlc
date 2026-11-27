@@ -193,6 +193,10 @@ export function missingBindingKeys(template: string, binding: string): string[] 
   }
   return out;
 }
+/** The template's binding keys the project's binding does not set; none when the package has no template to compare with. */
+export function missingKeys(root: string): string[] {
+  try { return missingBindingKeys(readFileSync(join(packageRoot(), 'templates/binding.yml'), 'utf8'), readFileSync(join(root, BINDING_PATH), 'utf8')); } catch { return []; }
+}
 const missingKeysLine = (keys: string[]) => keys.length ? `info: binding keys in the template that this binding does not set: ${keys.join(', ')}` : undefined;
 
 /** Register the agentic-sdlc stdio server (the launcher) in the project's .mcp.json, keeping other servers. */
@@ -224,7 +228,7 @@ const isTag = (s: unknown) => typeof s === 'string' && /^v\d+\.\d+\.\d+(?:[-+.][
 
 /**
  * Write the CLI pin, a factory file (git only: the npm name agentic-sdlc belongs to another package). The ref is the running
- * package's version tag, or --ref. An upgrade moves it, unless the file was hand-edited to a sha that init did not write.
+ * package's version tag, or --ref. An upgrade moves a tag; a commit sha (only --ref or the project writes one) stays until --ref or --force.
  */
 function pinCli(inst: Installer, version: string, ref: string | undefined, force: boolean) {
   const file = join(inst.root, CLI_PIN);
@@ -234,7 +238,7 @@ function pinCli(inst: Installer, version: string, ref: string | undefined, force
     const raw = readFileSync(file);
     const cur = parseJson(raw.toString('utf8'), CLI_PIN);
     if (typeof cur.package === 'string' && cur.package) pkgName = cur.package;
-    if (!ref && !force && isSha(cur.ref) && sha(raw) !== inst.lock[CLI_PIN]) {
+    if (!ref && !force && isSha(cur.ref)) {
       inst.counts.kept++;
       inst.log.push(`kept ${CLI_PIN} (its ref is a commit sha you set; --ref <sha|vX.Y.Z> or --force moves it)`);
       return;
@@ -708,15 +712,13 @@ export const cli: PortCli = async (argv, ctx) => {
         // One machine-readable call for the setup skill: what is wrong, what is doubtful, what init could not know.
         let open: { key: string; hint: string }[] = [];
         try { open = unresolved(loadBinding(ctx.root)); } catch { /* no binding: a problem */ }
-        out(JSON.stringify({ ok: !problems.length, problems: problems.filter((p) => !/ is unresolved: /.test(p)), warnings, unresolved: open }, null, 2));
+        out(JSON.stringify({ ok: !problems.length, problems: problems.filter((p) => !/ is unresolved: /.test(p)), warnings, unresolved: open, missing: missingKeys(ctx.root) }, null, 2));
         return problems.length ? 1 : 0;
       }
       problems.forEach((p) => console.error(`problem: ${p}`));
       warnings.forEach((m) => console.error(`warn: ${m}`));
-      try {
-        const info = missingKeysLine(missingBindingKeys(readFileSync(join(packageRoot(), 'templates/binding.yml'), 'utf8'), readFileSync(join(ctx.root, BINDING_PATH), 'utf8')));
-        if (info) out(info);
-      } catch { /* no package templates to compare with */ }
+      const info = missingKeysLine(missingKeys(ctx.root));
+      if (info) out(info);
       if (problems.length) return 1;
       out('validate: ok');
       if (verb === 'validate') return 0;

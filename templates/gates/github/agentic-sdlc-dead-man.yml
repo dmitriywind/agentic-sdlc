@@ -34,4 +34,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           AGENTIC_FORGE_TOKEN: ${{ secrets.AGENTIC_FORGE_TOKEN || github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: .agents/bin/agentic-sdlc gate signal --source factory --title "Factory silent: no fresh heartbeat" --body "The dead-man check failed. run: $RUN_URL"
+        run: |
+          .agents/bin/agentic-sdlc gate signal --source factory --title "Factory silent: no fresh heartbeat" --body "The dead-man check failed. run: $RUN_URL"

@@ -47,6 +47,10 @@ Feature: Validate checks the installed skills and the binding
         | command  |
         | validate |
 
+    Scenario: validate --json lists them under missing
+      When I run the install command "validate --json"
+      Then the output matches "missing.: \[\s+.vcs.trunk.,\s+.slo."
+
     Scenario: The binding is not touched
       When I run the install command "init"
       Then the installed file ".agents/binding.yml" does not match "slo|trunk: main"

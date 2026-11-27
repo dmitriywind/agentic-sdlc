@@ -37,6 +37,13 @@ Feature: The CLI pin and the launcher
       Then the installed file ".agents/cli.json" sets "ref" to "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       And the output says "kept .agents/cli.json"
 
+    Scenario: A commit sha that --ref set is kept by a later upgrade
+      Given I run the install command "init --ref bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      And the package is at version "9.11.0"
+      When I run the install command "init --upgrade"
+      Then the installed file ".agents/cli.json" sets "ref" to "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      And the output says "kept .agents/cli.json"
+
   Rule: The launcher installs the pinned ref once and runs it
 
     Background:

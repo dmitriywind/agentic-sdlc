@@ -11397,6 +11397,7 @@ __export(install_exports, {
   implementerToken: () => implementerToken,
   issueFields: () => issueFields,
   missingBindingKeys: () => missingBindingKeys,
+  missingKeys: () => missingKeys,
   packageRoot: () => packageRoot,
   pathWarnings: () => pathWarnings,
   probeFailure: () => probeFailure,
@@ -11434,6 +11435,13 @@ function missingBindingKeys(template2, binding) {
   }
   return out;
 }
+function missingKeys(root) {
+  try {
+    return missingBindingKeys(readFileSync9(join10(packageRoot(), "templates/binding.yml"), "utf8"), readFileSync9(join10(root, BINDING_PATH), "utf8"));
+  } catch {
+    return [];
+  }
+}
 function registerMcp(pkg, root, force, log, upgrade) {
   const want = JSON.parse(readFileSync9(need(pkg, "templates/mcp/claude.json"), "utf8"));
   const rel = ".mcp.json";
@@ -11464,7 +11472,7 @@ function pinCli(inst, version3, ref, force) {
     const raw = readFileSync9(file);
     const cur = parseJson(raw.toString("utf8"), CLI_PIN);
     if (typeof cur.package === "string" && cur.package) pkgName = cur.package;
-    if (!ref && !force && isSha(cur.ref) && sha(raw) !== inst.lock[CLI_PIN]) {
+    if (!ref && !force && isSha(cur.ref)) {
       inst.counts.kept++;
       inst.log.push(`kept ${CLI_PIN} (its ref is a commit sha you set; --ref <sha|vX.Y.Z> or --force moves it)`);
       return;
@@ -12110,16 +12118,13 @@ ${END}`;
               open = unresolved(loadBinding(ctx.root));
             } catch {
             }
-            out(JSON.stringify({ ok: !problems.length, problems: problems.filter((p) => !/ is unresolved: /.test(p)), warnings, unresolved: open }, null, 2));
+            out(JSON.stringify({ ok: !problems.length, problems: problems.filter((p) => !/ is unresolved: /.test(p)), warnings, unresolved: open, missing: missingKeys(ctx.root) }, null, 2));
             return problems.length ? 1 : 0;
           }
           problems.forEach((p) => console.error(`problem: ${p}`));
           warnings.forEach((m) => console.error(`warn: ${m}`));
-          try {
-            const info = missingKeysLine(missingBindingKeys(readFileSync9(join10(packageRoot(), "templates/binding.yml"), "utf8"), readFileSync9(join10(ctx.root, BINDING_PATH), "utf8")));
-            if (info) out(info);
-          } catch {
-          }
+          const info = missingKeysLine(missingKeys(ctx.root));
+          if (info) out(info);
           if (problems.length) return 1;
           out("validate: ok");
           if (verb === "validate") return 0;
@@ -12546,7 +12551,7 @@ var init_status = __esm({
         print({ installed: false, install: "agentic-sdlc init --no-plugin" });
         return 0;
       }
-      const { validate: validate2, trunkProtection: trunkProtection2, pathWarnings: pathWarnings2 } = await Promise.resolve().then(() => (init_install(), install_exports));
+      const { validate: validate2, trunkProtection: trunkProtection2, pathWarnings: pathWarnings2, missingKeys: missingKeys2 } = await Promise.resolve().then(() => (init_install(), install_exports));
       const warnings = [];
       const problems = validate2(ctx.root, warnings);
       let b;
@@ -12558,7 +12563,7 @@ var init_status = __esm({
       }
       warnings.push(...bindingWarnings(b), ...pathWarnings2(ctx.root, b));
       const open = unresolved(b);
-      const base = { installed: true, problems: problems.filter((p) => !/ is unresolved: /.test(p)), unresolved: open, warnings };
+      const base = { installed: true, problems: problems.filter((p) => !/ is unresolved: /.test(p)), unresolved: open, missing: missingKeys2(ctx.root), warnings };
       if (problems.length) {
         print({ ...base, ok: false, person: personSteps(b, [], warnings) });
         return 1;
