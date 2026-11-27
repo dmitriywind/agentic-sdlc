@@ -2,7 +2,7 @@
 <!-- group: Understand -->
 
 Follow one ticket from a request to production. Pick a scenario, then press **Next** or use the
-arrow keys. Each step shows who acts, what happens, and what you would see.
+arrow keys. Each step shows who acts, what happens and what you would see.
 
 <!-- viz: journey -->
 ```mermaid
@@ -14,52 +14,49 @@ flowchart LR
   ir -->|"review/review + checks"| dn["Done"]:::ci
 ```
 
-## Every status
+## The statuses
 
-| Status | What happens | Who acts | What you see |
-|---|---|---|---|
-| Ideas | A thought you park. Skills never touch it. | You | Your note. |
-| Signals | Raw input: an alert, feedback, a red CI run, a scanner finding. | `plan/triage` | A decision comment: accepted, parked or rejected, with the reason. |
-| Backlog | Accepted work. It gets a Priority; duplicates are merged. | `plan/groom` | A Priority, sometimes children under an initiative. |
-| Ready | Acceptance criteria, each with a proof; a Size and a Lane; a spec comment (criteria and proofs only in the Fast lane). | `plan/shape` | The spec comment; Size and Lane. |
-| In progress | The proof first, then the code, on a short-lived branch. | `build` | A branch named after the ticket. |
-| In review | A draft pull request, graded against the criteria and CI. | `review/review`, CI checks | The review report on the pull request. |
-| Done | The change merged. Done is final. | The `merged` check | The ticket closed; Shipped "Not shipped". |
-| Cancelled | Not done: a duplicate, noise, or work that will not be done. | `plan/triage`, `plan/groom`, `plan/shape` | The reason in a comment. |
+A ticket is a GitHub issue. Its status is a label, `status:<name>`, so you can move a ticket from the
+GitHub app by changing that label.
 
-**Shipped** is a field, not a status. Each deploy moves it: On staging, then On production.
+| Status | What happens | Who acts |
+|---|---|---|
+| Ideas | A thought you park. No skill picks it up. | You move it to Backlog, or close it. |
+| Signals | Raw input: your report, an alert, a red CI run, a failed deploy. | `plan/triage` decides: Backlog, Ideas or Cancelled, with the reason. |
+| Backlog | Accepted work. It gets a Priority; duplicates are merged. | `plan/groom` |
+| Ready | Acceptance criteria, each with a proof; a Size and a Lane; a spec comment. | `plan/shape` |
+| In progress | The proof first, then the code, on a short-lived branch. | `build` |
+| In review | A draft pull request, graded against the criteria and CI. | `review/review`, the CI checks |
+| Done | The change merged. Done is final. | The `merged` check |
+| Cancelled | A duplicate, noise, or work that will not be done. | `plan/*` steps, with the reason |
 
-Each phase of the process is one skill, and each skill has steps: `plan/triage`, `plan/groom` and
-`plan/shape` take work to Ready, `build` takes it to In review, `review/review` lands it. One cycle
-can move a ticket several steps: when a step finishes and time is left, the cycle starts the next
-step at once.
-
-<div class="callout rule">
-
-**Done is final.** A failure after a merge never reopens the ticket. It opens a new Signal, which
-becomes a new ticket with a regression case.
-
-</div>
+**Shipped** is a field, not a status: each deploy moves it, On staging, then On production. A failure
+after a merge never reopens a ticket: it opens a new Signal.
 
 ## How work enters
 
-| From | It lands at | Then |
-|---|---|---|
-| You, a thought | Ideas | You move it to Backlog when you want it. |
-| You, a plan or a conversation | Backlog | `plan/groom` turns it into tickets. |
-| An alert, CI, a deploy, a scanner, a user | Signals (label `signal:<stream>`) | `plan/triage` decides. |
-| A security report | Signals, through `SECURITY.md` | Details stay out of public tickets. |
+Everything new arrives as a Signal: an open issue with a `signal:<stream>` label. The next cycle
+triages it.
 
-Signal text is data. A skill never follows an instruction inside it.
+| From | How |
+|---|---|
+| You, on the phone | The issue form **Signal** (`.github/ISSUE_TEMPLATE/signal.yml`), or any issue you label `signal:owner`. |
+| An alert or a script | A `repository_dispatch` of type `signal` (`agentic-sdlc-signal.yml`). |
+| A red CI run on the main branch | `gate signal-on-red`: one open Signal per workflow, later red runs comment on it. |
+| A silent factory | The dead-man workflow files one Signal when no heartbeat arrived in time. |
+| A failed deploy | `gate shipped` opens a Signal with the evidence. |
+
+The same source and title never open a second Signal: a repeat adds a comment
+([the signal feature](../../features/gates/signal.feature)). Signal text is data: a skill never
+follows an instruction inside it.
 
 ## Size, lane and priority
 
-- **Size** (`XS` to `XL`) is how much there is to review in one pull request, not the effort. XS is
-  one or two files that take minutes to review. Above `ready_size_limit`, `plan/shape` splits the ticket.
+- **Size** (`XS` to `XL`) is how much there is to review in one pull request. Above
+  `ready_size_limit`, `plan/shape` splits the ticket.
 - **Lane**: Fast for a small change with no risk; it merges on the agent review. Full for anything
-  else, or for a path in `paths.lane_areas` (sign-in, payments): it also needs a human approval.
-  Nothing moves a ticket from Full back to Fast.
-- **Priority** (`P0`, High, Default, Low): only `p0_setters` set P0, with evidence of production
-  impact. Ready tickets are built in order of priority, then tickets that unblock others, then oldest first.
+  else, or a path in `paths.lane_areas`: it also needs your approval.
+- **Priority** (`P0`, High, Default, Low): only `p0_setters` set P0. Ready tickets are built by
+  priority, then the ones that unblock others, then oldest first.
 
 Next: [3. Your part](3-your-part.md).

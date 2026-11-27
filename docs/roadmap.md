@@ -1,34 +1,32 @@
 # Roadmap
 
-What comes next for agentic-sdlc, in order. This repo does not run its own factory, so this file
-is its backlog. A finished item leaves this file; the git log holds it.
+This repo's backlog, in order. A finished item leaves this file; the git log and the release tags
+are the history.
 
 ## Now
 
-Each item needs a real run, not more code. Cloud runtime facts live in
-[contract section 10](../references/architecture.md) and
-[claude-routine.md](../templates/runner/claude-routine.md).
-
-| Item | Why | Done when |
-|---|---|---|
-| Two identities from the cloud | `organization` needs a review app; a cloud session acts as one account through the proxy. | A review routine fired by the cycle publishes a `forge verdict` that posts `review` and approves as a second identity from a cloud session. |
-| The launcher on a real runner | Every workflow job, the pre-push hook, the runner setup and the MCP entry run the CLI through `.agents/bin/agentic-sdlc`; no real runner has run it. | The launcher installs the pinned CLI in CI and in a cloud session, and a workflow job and the MCP entry run through it. |
-| One cycle on the pilot with the seven-skill pack | The navigator, `forge queue`, `forge land` and the holds verbs have not driven a real board. | One cycle on the pilot routes by `forge queue`, lands a CR with `forge land` and writes a heartbeat with no `errors`. |
-| Pilot on a real product repo | Review and merge are not proved on a real repo yet. | Three scheduled cloud runs in a row write a heartbeat with no `errors`, and one ticket goes from Ready to Done with no hand fix. |
-| The release workflow on a sandbox repo | The cut step passes the release token to `git push` through `GIT_CONFIG_*`; the workflow shell has only been read. | One `forge cut` pushes a release line on a sandbox repo. |
-| Real clients against the MCP server and the plugin | The server answers a scripted stdio session in a cloud session on both shapes; no real client has connected. The plugin agents, the `bin/` shim and the reviewer's Bash limit are built from the docs. | One Claude Code session lists the tools and runs one cycle; `claude plugin eval` passes once. |
+| Item | Done when |
+|---|---|
+| The first real pilot cycle | On a real product repository, scheduled cloud routines run the cycle: three runs in a row write a heartbeat with no `errors`, and one ticket goes from Signal to Done with no hand fix. |
+| Proof on real GitHub | Each is seen once on a real repo: a push removes the approval label and the gate then waits; the routine's Issue event trigger starts a cycle on a new Signal; every board and forge verb the cycle calls works over REST behind the cloud proxy. |
+| One account passes the human gate | With one GitHub account as owner and as `owners.bots` (a cloud routine acts as the owner), the approval gate ignores the owner's label (`src/gates.ts` `approval`), so a Full-lane or factory change cannot be approved. A way for that one person to approve the head they saw, with the agent still unable to. |
+| The phone board page | A Claude artifact page over the GitHub connector: live columns by `status:` label, a drag is a label change, a comment box, a new Signal button. |
+| A guard for manual status moves | A workflow that reverses a status label change no rule allows, and says why in a comment. |
 
 ## Next
 
 | Item | Why |
 |---|---|
-| An approval class for security paths | `owners.security` is asked by the `escalate` skill only. A `paths.security` list would let the `approval` gate require a security owner's approval. |
-| Status history on the board port | `ledger measures` reads lead time from `createdAt` and `statusChangedAt`: no adapter gives the time a ticket first reached In progress. |
+| Ledger-driven learning | Learn from heartbeat `errors`, rework counts and escalation clusters the ledger already holds, instead of a bench of 60 replays (20 cases, 3 trials) per side. |
+| Sub-issue counts in `board list` | `list` leaves `children` empty; only `get` reads sub-issues, so `next` calls `get` per initiative. |
+| MCP tools for `status`, `board bootstrap` and `forge whoami` | A session with MCP and no shell cannot install, repair or answer what waits. |
+| The delivery workflow reads `product.environments` | It calls `gate shipped` with the fixed names `first-env` and `last-env`, which the gate refuses unless the binding names its environments so. |
 
-## Later
+## Candidates to cut
 
-| Item | Why |
+| Item | Why it may go |
 |---|---|
-| An Agent Trace record from the `provenance` gate | The gate reports agent and human commits as JSON; the Agent Trace spec could not be read when it was built. |
-| Source provenance attestations | The SLSA Source track map in [forges.md](forges.md) lists this as the largest gap: the gates decide, but nothing signs what they decided. |
-| A bench token budget | `learning.bench_budget` caps runs and minutes; bench results carry no token count. |
+| `init --profile organization` | Two identities need a second account and a second routine; the one flow has one person. |
+| `board.scope` | Many repos on one board; the one flow has one repo. |
+| The legacy `.agents/skills.lock.json` migration | `init` reads it once and removes it; it only serves installs made before `install.lock.json`. |
+| Bench reporting by executor | `bench run --executor` and per-executor results; the one runtime is Claude Code. |

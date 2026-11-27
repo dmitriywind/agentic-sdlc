@@ -1,4 +1,4 @@
-# Source: src/board/local.ts and src/board/index.ts; references/architecture.md "Board port"
+# Source: src/board/local.ts and src/board/index.ts; references/architecture.md section 3.1
 @board:local
 Feature: The local board
   A project with no tracker keeps its tickets in .agents/board.json and drives them through `agentic-sdlc board`.

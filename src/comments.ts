@@ -4,7 +4,7 @@ import { UsageError } from './forge/util.ts';
 /**
  * The marker registry: the one table of comment kinds and the exact first line each carries.
  * A marker is always the first line of a comment; readers match it with `matches`, writers stamp it with `stamp`.
- * Formats are the ones existing boards already hold (references/architecture.md, "Markers").
+ * Formats are the ones existing boards already hold (references/architecture.md section 11.1).
  */
 export const KINDS = ['spec', 'verdict', 'note', 'verify', 'manual-check', 'ask', 'heartbeat', 'scores', 'release-proposal', 'release-cut', 'dispatch', 'done'] as const;
 export type Kind = (typeof KINDS)[number];

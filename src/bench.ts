@@ -1,4 +1,4 @@
-// The bench: cases from the project's own merged tickets, replayed headless (references/architecture.md 6.6).
+// The bench: cases from the project's own merged tickets, replayed headless (references/architecture.md 6.7).
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';

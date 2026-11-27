@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>agentic-sdlc Guide</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="How agentic-sdlc moves work from a signal to production with agents, and how you set it up: step through real scenarios, compare setups, and get your init command.">
+<meta name="description" content="How agentic-sdlc moves work from a signal to production with agents, and how you set it up: step through real scenarios and install it.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
@@ -265,7 +265,7 @@ async function go(id) { try { history.pushState(null, '', '#' + id); } catch {} 
 function overview() {
   return '<header class="hero"><span class="eyebrow">agentic-sdlc · v0.1</span><h1>Software delivery run by agents, with gates they cannot skip</h1>'
     + '<p class="lead">You put work on a board. Every hour an agent run moves each ticket one step: it shapes it, builds it, reviews it and merges it. CI decides what merges. You answer when a rule says a person must decide.</p>'
-    + '<div class="cta"><a class="btn primary" href="#1-what-it-is">Start reading</a><a class="btn" href="#7-choose">Choose your setup</a></div></header>'
+    + '<div class="cta"><a class="btn primary" href="#1-what-it-is">Start reading</a><a class="btn" href="#7-install">Install</a></div></header>'
     + '<div class="tiles"><div class="tile"><b>Agents cannot skip the gates</b><span>Six required CI checks decide every merge.</span></div>'
     + '<div class="tile"><b>You act on asks, not on every step</b><span>Holds, approvals and releases come to you as one comment each.</span></div>'
     + '<div class="tile"><b>Every run leaves a record</b><span>Each cycle writes a heartbeat: what ran, on which model, what failed.</span></div></div>'

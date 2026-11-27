@@ -1,63 +1,76 @@
 # 3. Your part
 <!-- group: Understand -->
 
-The factory asks a person only when a rule says so. Each ask is one comment that you answer on the
-ticket or on the pull request. Try a hold below: a skill stops, asks, and resumes after your reply.
+The factory asks you only when a rule says so. Each ask is one comment on the issue or the pull
+request, and the ticket gets the `needs-human` label (a **hold**). Try a hold below: a step stops,
+asks, and the ticket resumes after your reply.
 
 <!-- viz: hold -->
 ```mermaid
 sequenceDiagram
-  participant K as A skill
+  participant K as A step
   participant B as Board
   participant Y as You
-  K->>B: One "Needs human" comment, label needs-human
-  Note over B: Every skill skips the ticket
+  K->>B: One ask comment, label needs-human
+  Note over B: Every step skips the ticket
   Y->>B: Reply in a comment
   Note over B: The next cycle removes the label and resumes
 ```
 
 ## Every ask you can get
 
-| You get | From | You do |
-|---|---|---|
-| A "Needs human" comment on a ticket | `escalate`, inside any step | Reply in a comment. |
-| A request to approve a Full-lane change | `escalate`, when `forge land` reports that a person must approve | Approve the pull request's latest commit: with one account, add the `approved` label (`forge.approval_label`) to it. The approval alone releases the ticket; a reply is optional. |
-| A request to confirm a `manual` criterion | `review/review` | Reply that you checked it on this version. |
-| A release ready for approval | `ship` | Reply to the proposal, then approve the release workflow run. |
-| A factory change of class `guardrail` | `learn/improve` | Review and approve it as the factory owner. |
-| A question about an unclear idea | `plan/groom` | Answer it, or leave the ticket in Ideas. |
+| You get | You do |
+|---|---|
+| An ask on a ticket (`needs-human`) | Reply in a comment. The next cycle releases the hold. |
+| A Full-lane pull request waiting for approval | Look at the change, then add the `approved` label (`forge.approval_label`) to the pull request. |
+| A factory change (class `guardrail`) | The same: review it, then add the `approved` label. |
+| A `manual` criterion to confirm | Reply that you checked it on this version. |
+| A release to approve (release-line delivery only) | Reply to the proposal, then approve the release workflow run. |
+
+The approval label counts only for the commit you looked at: every push removes it, and a label
+added before the latest push does not count. The agent cannot add it: the guard hook and the CLI
+refuse. It counts only when the account that added it is an owner and is not in `owners.bots`
+([the approval feature](../../features/gates/approval.feature), [the guard feature](../../features/guard/push-guard.feature)).
 
 ## Who you are
 
-| Role | Setting | Acts through |
-|---|---|---|
-| Product owner | `owners.product` | Ideas, Priority and P0, answers to holds, Full-lane and release approvals. |
-| Factory owner | `owners.factory` | The settings, the skills and the checks; approves `guardrail` factory changes. |
-| The factory | `owners.bots` | The cycle and the review run. Only these accounts' heartbeats count. |
-| Operator, security, compliance | `owners.operator`, `owners.security`, `owners.compliance` | Optional. Deploy and incident asks, security findings, release evidence gaps. With no such role, the ask goes to the product or factory owner. |
-| Anyone else | | A pull request like any other, through the same checks. A Signal or `SECURITY.md` to report. |
+The binding names you in three roles:
 
-Each owner setting takes one account or a list. Any account in the list counts as the owner: any factory owner's approval passes a `guardrail` change, and a reply from any of them settles a hold. A reply from an account only in `owners.bots` never does; an account in both (one person running the factory) counts when the comment carries no factory marker. The first account is the primary, the one an ask is addressed to.
+| Setting | Means |
+|---|---|
+| `owners.product` | You decide the product: ideas, priorities, P0, Full-lane approvals. |
+| `owners.factory` | You own the skills, the binding and the checks, and approve factory changes. |
+| `owners.bots` | The account the factory acts as. In a cloud routine that is your own GitHub login. |
 
-## A week with it
+<div class="callout warn">
 
-<div class="callout">
-
-**Product owner**
-- Put ideas in Ideas; move the ones you want to Backlog.
-- Answer holds: filter the board on the `needs-human` label.
-- Approve Full-lane pull requests and releases.
-- Set P0 only with evidence of production impact.
+**One account in every role.** Your replies still count, since a reply carries no factory marker.
+But GitHub refuses your review of a pull request your account opened, and the gate ignores a label
+from an account in `owners.bots`. So nothing can approve a Full-lane or factory change. `validate`
+warns, and `status` puts the decision on your list: add a second GitHub account of yours to
+`owners.product` and `owners.factory` and approve with it, or set `forge.human_approval: never` so
+Full-lane changes merge on the agent review. A factory change then still waits for an approval: you
+merge it yourself on GitHub, as the repo admin the trunk ruleset lets bypass.
 
 </div>
 
+Optional roles (`owners.operator`, `owners.security`, `owners.compliance`) take asks of their kind;
+without them those asks come to you.
+
+## A day from the phone
+
 <div class="callout">
 
-**Factory owner**
-- Read the heartbeats; act when `errors` repeat.
-- Watch the dead-man check (`ledger stale`): it fails when no cycle ran in time.
-- Review `guardrail` factory changes from the learning loop.
-- Upgrade one repo at a time ([9. Run it](9-run-it.md)).
+- **Morning.** GitHub notifications show new asks. Filter the issues on `needs-human`; reply to each.
+- **A pull request waits.** Open it in the GitHub app, read the diff and the review comment, add the
+  `approved` label (from an owner account outside `owners.bots`, see above).
+- **An idea.** New issue with the **Signal** form. It is triaged on the next cycle. A thought you want
+  to keep but not start: label it `status:Ideas`.
+- **What is going on?** In a Claude Code session on the repo, ask what waits on you. The `setup` skill
+  answers from `agentic-sdlc status`: holds, approvals, the next cycle, the last heartbeat, what is
+  broken ([the status feature](../../features/cycle/status.feature)). Not yet tried in a cloud session
+  from a phone.
+- **Silence.** If no cycle ran in time, the dead-man check files a Signal, and GitHub notifies you.
 
 </div>
 

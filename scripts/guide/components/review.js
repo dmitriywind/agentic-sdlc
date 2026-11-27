@@ -34,7 +34,7 @@
       s.push(['land', 'rev', 'gh', 'forge land: only human-approval is missing, so it reports who must approve',
         'escalate asks that person and holds the ticket.']);
       s.push(ids === 'one'
-        ? ['human', 'you', 'gh', 'A collaborator approves the head, or you merge as admin']
+        ? ['human', 'you', 'gh', 'An owner outside owners.bots adds the approval label after the latest push, or a collaborator approves the head']
         : ['human', 'you', 'gh', 'A human owner approves the head']);
       s.push(['ha', 'ci', 'gh', 'Posts human-approval = success']);
       s.push(['merge', 'gh', 'gh', 'The next cycle\'s forge land merges: all six checks are green']);
