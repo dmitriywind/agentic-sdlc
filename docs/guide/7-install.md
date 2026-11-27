@@ -63,7 +63,7 @@ The `local` board is a file, `.agents/board.json`:
 
 ```bash
 mkdir try-agentic && cd try-agentic && git init -b main
-npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.1.2 init --board local --no-plugin
+npx --yes --allow-git=root github:dmitriywind/agentic-sdlc#v0.2.0 init --board local --no-plugin
 printf 'Show a greeting on the home page.\n' > body.md
 .agents/bin/agentic-sdlc board create --title "Greeting" --body-file body.md --status Backlog
 .agents/bin/agentic-sdlc dispatch plan/shape --ticket 2
