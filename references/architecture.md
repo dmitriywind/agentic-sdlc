@@ -90,6 +90,7 @@ binding names, never from a file in the repo.
 | `holds` | Held tickets. A reply is a comment after the last ask by an owner role, never by an `owners.bots`-only account; an account in both counts when its comment has no factory marker | `[{ id, kind, askedAt, replied, reply? }]` |
 | `release <id>` | Remove `board.labels.human`; the Status stays | `Item` |
 | `bootstrap` | Idempotent: create every label the binding names (`board.labels`, `board.env_labels`, `signal:<stream>` per `board.signal_streams`, `forge.approval_label`; on `github-issues` the `status:`, size and priority labels no field id replaces) and, while `heartbeat.ticket` is unset or unresolved, the heartbeat ticket, found again by its title `agentic-sdlc heartbeat` (`github-issues`: an open issue with no status label; `local`: status Cancelled) | `{ labels: { created }, heartbeat: { id, created } \| null }` |
+| `page --out <dir> [--connector <name>]` | `github-issues` only. Writes the owner's board page `<dir>/index.html` (`templates/board/index.html` with the binding's repo, statuses, priorities, sizes, labels, environments and Shipped values) and `<dir>/board.json`: the open tickets, the tickets Done in the last 14 days, the totals of each milestone, and the last and the last green run of `forge.deploy_workflows` for the first and the last environment. The page reads and writes tickets through the claude.ai connector `<name>` (default `GitHub`, the GitHub MCP server); without it the page shows `board.json` read-only. Not an MCP tool | `{ page, data, title, capabilities }` |
 
 `Item = { id, title, url, status, kind?, labels[], fields, milestone?, parent?, children[], assignees[],
 createdAt, updatedAt, statusChangedAt? }`. Logical fields: `size`, `priority`, `lane`, `shipped`,
@@ -127,7 +128,7 @@ Adapters:
 | `status <sha> --context <c> --state pending\|success\|failure --description <d> [--url <u>]` | Commit status with `options.review_token_env`, or with one identity the implementer's token. Refuses the contexts the gates own: `human-approval`, `ticket-linkage`, `proofs-on-base`, `agent-provenance` | `{}` |
 | `approve <n>` | Approving review as `review_identity`. Refused with one identity | `{}` |
 | `approvals <n>` | The CR's reviews | `{ user, state, sha }[]` |
-| `runs [--ref <r>] [--failed]` | The newest 30 CI runs | `Run[]` |
+| `runs [--ref <r>] [--failed] [--workflow <name>]` | The newest 30 CI runs; `--workflow` keeps those of one workflow | `Run[]` |
 | `run <id>` | One CI run; a missing one exits 1 | `Run` |
 | `whoami` | The login the forge acts as (`gh api user`; where refused, the repo owner with `loginFrom: repo-owner`), the repo and its default branch when readable | `{ login, loginFrom, repo?, defaultBranch? }` |
 | `cut <revision> <version>` | Start `agentic-sdlc-release.yml` (Environment `agentic-release`, which the Product owner approves); returns the run this dispatch created | `{ requested, run?, url? }` |
@@ -251,8 +252,8 @@ Keys:
   comments --trusted`) use `board`; forge reads (`approval`, `forge comments --trusted`) use `forge`. An
   unknown key is a warning; `forge.review_identity` must not be an owner.
 - `board`: `adapter`, `options` (`repo`, `field_ids`), `statuses`, `fields`, `labels` (`human`, `bug`,
-  `feature`, `release`), `env_labels`, `done_statuses`, `signal_streams`, optional `later_milestone` and
-  `scope: { label, home, repos }` (section 10).
+  `feature`, `release`), `env_labels`, `done_statuses`, `signal_streams`, optional `later_milestone`,
+  `page` (the URL of the published board page; `status` shows it) and `scope: { label, home, repos }` (section 10).
 - `forge`: `adapter`, `options` (`repo`, `token_env`, `review_token_env`), `review_identity` (empty: one
   identity), `human_approval: full-lane | always | never` (default `full-lane`), `approval_label` (default
   `approved`; empty fails), `provenance: off | warn | require` (default `off`), `review_check_name`,

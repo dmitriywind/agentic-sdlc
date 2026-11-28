@@ -113,7 +113,8 @@ export interface Forge {
   unlabel?(n: string, label: string): Promise<void>;
   /** Every commit of the CR, oldest first, with message and authors (gate provenance). Throws when the list cannot be read whole. */
   commits(n: string): Promise<CrCommit[]>;
-  runs(q?: { ref?: string; failed?: boolean }): Promise<Run[]>;
+  /** The newest 30 CI runs; `workflow` keeps those of one workflow, by its name. */
+  runs(q?: { ref?: string; failed?: boolean; workflow?: string }): Promise<Run[]>;
   /** One CI run by id; throws when it does not exist. */
   run(id: string): Promise<Run>;
   /** The account the forge acts as, and the repo and its default branch when readable (`forge whoami`). Optional. */
@@ -244,6 +245,8 @@ export interface Binding {
     env_labels: string[];
     done_statuses: string[];
     later_milestone?: string;
+    /** The URL of the published board page (`board page`); status shows it. */
+    page?: string;
     views?: string[];
     signal_streams: string[];
     /** Many repos on one board: this repo's tickets carry `label`; `home` also takes items with no label of its prefix. Unset: one repo. */

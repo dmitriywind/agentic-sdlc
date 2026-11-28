@@ -211,6 +211,7 @@ export function github(ctx: AdapterContext): Forge {
       const a = ['run', 'list', '--limit', '30', '--json', RUN_FIELDS];
       if (q.ref) a.push('--branch', q.ref);
       if (q.failed) a.push('--status', 'failure');
+      if (q.workflow) a.push('--workflow', q.workflow);
       return JSON.parse(await gh(a)).map(runOf);
     },
     async run(id) {

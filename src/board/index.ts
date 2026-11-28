@@ -5,6 +5,11 @@ import { isFactoryComment, isMarked, matches, parseKind, parseWritableKind, sele
 import { UsageError, bodyFile, parseStrict, type VerbSpec } from '../forge/util.ts';
 import { createGithubIssuesBoard } from './github-issues.ts';
 import { createLocalBoard } from './local.ts';
+import { boardPage } from './page.ts';
+import { createForge } from '../forge/index.ts';
+import { packageRoot } from '../install.ts';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 export function createBoard(ctx: AdapterContext): Board {
   const make = { 'github-issues': createGithubIssuesBoard, local: createLocalBoard }[ctx.binding.board.adapter];
@@ -123,6 +128,7 @@ export const VERBS: Record<string, VerbSpec> = {
   close: { value: ['reason'] },
   child: {},
   bootstrap: {},
+  page: { value: ['out', 'connector'] },
 };
 
 const USAGE = `usage: agentic-sdlc board <verb>
@@ -135,7 +141,8 @@ const USAGE = `usage: agentic-sdlc board <verb>
   comments <id> [--last <n>] [--kind <kind> [--ref <value>] | --marker <text>] [--author <a>]... [--trusted]
   hold <id> --kind <trigger> --body-file <f>    holds    release <id>
   close <id> --reason completed|not_planned    child <parent> <child>
-  bootstrap   (the labels and the heartbeat ticket the binding needs; idempotent)`;
+  bootstrap   (the labels and the heartbeat ticket the binding needs; idempotent)
+  page --out <dir> [--connector <name>]   (the owner's board page and its data file, to publish on claude.ai)`;
 
 export const cli: PortCli = async (argv, base) => {
   const [verb, ...rest] = argv;
@@ -211,6 +218,16 @@ export const cli: PortCli = async (argv, base) => {
         break;
       case 'child': need(2); out = await board.child(id, a.pos[1]); break;
       case 'bootstrap': out = await bootstrap(board, base.binding); break;
+      case 'page': {
+        const dir = resolve(base.root, req('out'));
+        let forge; try { forge = createForge({ ...base, options: base.binding.forge.options }); } catch { /* no forge: the page shows no deploy */ }
+        const p = await boardPage({ board, forge, binding: base.binding, connector: a.get('connector'), template: readFileSync(join(packageRoot(), 'templates/board/index.html'), 'utf8') });
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, 'index.html'), p.html);
+        writeFileSync(join(dir, 'board.json'), JSON.stringify(p.data));
+        out = { page: join(dir, 'index.html'), data: join(dir, 'board.json'), title: p.title, capabilities: p.capabilities };
+        break;
+      }
       default: throw new Usage(`unknown board verb '${verb}'`);
     }
     console.log(JSON.stringify(out, null, 2));

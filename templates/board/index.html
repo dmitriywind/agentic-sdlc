@@ -1,0 +1,412 @@
+<title>__TITLE__</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one board, read left to right as the path of a ticket: New, Backlog, Ready, In progress, In review, Done,
+   then one column for each environment. Above it: the counts and the milestones, which both filter the board.
+   Only the page scrolls. A column shows its first tickets and grows on request. */
+:root{--bg:#fbfbfa;--lane:#f1f1ef;--card:#ffffff;--fg:#17181a;--muted:#6b6f76;--line:#e2e2df;--accent:#3d5afe;--accent-fg:#ffffff;--hold:#b25e09;--hold-bg:#fff1dc;--hot:#c62828;--ok:#1b7f5c;--ok-bg:#e3f4ec;
+  --s1:#c9ccd3;--s2:#8c9eff;--s3:#f0b35b;--s4:#69d6ae;--s5:#1b7f5c;
+  --sans:Inter,system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1012;--lane:#16171a;--card:#1d1e22;--fg:#e9eaec;--muted:#8d9199;--line:#2a2c31;--accent:#8c9eff;--accent-fg:#0f1012;--hold:#ffb866;--hold-bg:#3a2a12;--hot:#ff8a80;--ok:#69d6ae;--ok-bg:#14271f;--s1:#3a3d44;--s5:#2fa67c;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1012;--lane:#16171a;--card:#1d1e22;--fg:#e9eaec;--muted:#8d9199;--line:#2a2c31;--accent:#8c9eff;--accent-fg:#0f1012;--hold:#ffb866;--hold-bg:#3a2a12;--hot:#ff8a80;--ok:#69d6ae;--ok-bg:#14271f;--s1:#3a3d44;--s5:#2fa67c;color-scheme:dark}
+html{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+body{background:var(--bg);color:var(--fg);font:13px/1.4 var(--sans)}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+*{box-sizing:border-box}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-block:10px;border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.bar h1{font:600 14px/1 var(--sans);margin:0 8px 0 0}
+.bar input{flex:1;min-width:120px;background:var(--lane);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+.bar .when{font-size:11px;color:var(--muted)}
+.btn{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent;font-weight:500}
+.btn:disabled{opacity:.5;cursor:default}
+.note{padding-block:6px;font-size:12px;background:var(--hold-bg);color:var(--hold)}
+main{padding-block:14px 48px;display:flex;flex-direction:column;gap:18px}
+.glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 12px;text-align:left;display:flex;flex-direction:column;gap:1px;min-width:0}
+.tile b{font:600 20px/1.15 var(--sans);font-variant-numeric:tabular-nums}
+.tile span{font-size:12px;color:var(--muted)}
+.tile.attn b{color:var(--hold)}
+.tile[aria-pressed="true"],.ms[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.bad{color:var(--hot)}.good{color:var(--ok)}
+/* milestones */
+.mss{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px}
+.ms{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 12px;text-align:left;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ms .top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.ms .top b{font-weight:600}
+.ms small{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.seg{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--line)}
+.seg i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:4px;background:var(--c)}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.fchip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--fg)}
+.fchip[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+.ms{cursor:pointer}
+.ms .mv{background:none;border:1px solid var(--line);border-radius:5px;padding:0 6px;color:var(--muted);line-height:18px}
+.ms .mv:disabled{opacity:.3}
+.ms .tools{display:flex;gap:4px;align-items:center}
+#msd>summary{display:none}
+.tabs{display:none}
+/* board */
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:start}
+.col{background:var(--lane);border-radius:8px;display:flex;flex-direction:column;min-width:0;padding-bottom:6px}
+.col.env{background:var(--ok-bg)}
+.col.you{background:var(--hold-bg)}
+.col.over{outline:2px dashed var(--accent)}
+.col header{padding:9px 10px 7px}
+.col header div{display:flex;justify-content:space-between;font-weight:600;font-size:12px}
+.col header small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+.col ul{list-style:none;margin:0;padding:0 6px;display:flex;flex-direction:column;gap:5px}
+.card{width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:7px 9px;display:block;text-decoration:none;color:var(--fg)}
+.card:hover{border-color:var(--muted)}
+.card[draggable="true"]{cursor:grab}
+.busy{opacity:.5}
+.card .t{display:block;overflow-wrap:anywhere}
+.id{font-family:var(--mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.chips{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:5px;font-size:11px;color:var(--muted)}
+.chip{border:1px solid var(--line);border-radius:4px;padding:0 5px;white-space:nowrap}
+.chip.hold{background:var(--hold-bg);color:var(--hold);border-color:transparent}
+.chip.hot{color:var(--hot);border-color:currentColor}
+.more{margin:6px 6px 0;background:none;border:1px dashed var(--line);border-radius:6px;padding:5px;color:var(--muted);font-size:12px}
+.empty{color:var(--muted);font-size:12px;padding:2px 10px 4px;margin:0}
+/* sheet */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;justify-content:flex-end;z-index:20}
+.sheet{width:min(520px,100%);height:100%;background:var(--bg);border-left:1px solid var(--line);display:flex;flex-direction:column;gap:12px;overflow-y:auto;scrollbar-width:thin;padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) 16px}
+.sheet h2{font:600 16px/1.3 var(--sans);margin:0;overflow-wrap:anywhere}
+.line{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.field{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted);flex:1 1 110px}
+.field select{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px;font-size:13px;color:var(--fg)}
+.comments{display:flex;flex-direction:column;gap:8px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+.c .who{font-size:11px;color:var(--muted);margin-bottom:3px}
+.c .body{white-space:pre-wrap;overflow-wrap:anywhere}
+textarea{width:100%;min-height:84px;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:8px 10px;resize:vertical}
+.msg{font-size:12px;color:var(--muted);margin:0}
+.msg.err{color:var(--hot)}.msg.ok{color:var(--ok)}
+a{color:var(--accent)}
+@media (max-width:759px){
+  .bar .when{display:none}
+  .bar h1{flex-basis:100%}
+  .glance{grid-template-columns:repeat(3,1fr)}
+  .tile.dup{display:none}
+  .tile{padding:7px 8px}.tile b{font-size:17px}.tile span{font-size:11px}
+  #msd>summary{display:block;cursor:pointer;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);font-weight:600;list-style:none}
+  #msd[open]>summary{margin-bottom:8px}
+  .mss{grid-template-columns:1fr}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px}
+  .tabs button{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:12px}
+  .tabs button[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:transparent;font-weight:600}
+  .board{grid-template-columns:1fr}
+  .col{display:none}.col.on{display:flex}
+  .card{padding:10px 11px}.card .t{font-size:14px}
+  .btn,.fchip{padding-block:7px}
+}
+</style>
+<div class="bar gut">
+  <h1 id="title">Board</h1>
+  <input id="q" type="search" placeholder="Filter by text or #number" aria-label="Filter tickets">
+  <span class="when" id="when"></span>
+  <button class="btn" id="refresh">Refresh</button>
+  <button class="btn" id="theme" aria-label="Switch between light and dark"></button>
+</div>
+<div class="note gut" id="note" hidden></div>
+<main class="gut">
+  <section class="glance" id="glance" aria-label="Counts"></section>
+  <section class="filters" id="filters" aria-label="Filters"></section>
+  <details id="msd"><summary id="mssum">Milestones</summary><section class="mss" id="mss" aria-label="Milestones"></section></details>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Columns"></nav>
+  <section class="board" id="board" aria-label="Board"></section>
+</main>
+<div class="scrim" id="scrim" hidden><aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="st"></aside></div>
+<script>
+// Project values: agentic-sdlc board page writes them from .agents/binding.yml.
+const CFG=/*CFG*/{}/*END*/;
+const PR=Object.fromEntries(CFG.priorities.map((p,i)=>[p,i]));
+const S={items:[],done:[],live:false,filter:"",ms:"",held:false,more:{},prio:new Set(),bug:false,tab:"",order:[],db:null,open:null,mcp:null,stamp:null,msMap:{},closedAt:{},snapDone:[],meta:{milestones:[],envs:[],at:null}};
+const $=id=>document.getElementById(id);
+const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
+const P=p=>CFG.f[p]||p; // a logical field to its label prefix
+const val=(labels,p)=>{const k=P(p)+":",l=labels.find(x=>x.startsWith(k));return l?l.slice(k.length):""};
+const issueUrl=n=>"https://github.com/"+CFG.owner+"/"+CFG.repo+"/issues/"+n;
+const norm=i=>({n:i.number,t:i.title||"",labels:(i.labels||[]).slice(),comments:i.comments||0,m:S.msMap[i.number],at:i.updated_at||""});
+const day=iso=>new Date(iso).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+const snapAt=()=>S.meta.at?new Date(S.meta.at).toLocaleString():"the snapshot";
+
+const dark=()=>{const t=document.documentElement.dataset.theme;return t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches};
+function themeLabel(){$("theme").textContent=dark()?"☀ Light":"☾ Dark"}
+$("theme").onclick=()=>{document.documentElement.dataset.theme=dark()?"light":"dark";themeLabel()};
+new MutationObserver(themeLabel).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",themeLabel);themeLabel();
+
+function explain(e){
+  const c=e&&e.code,s=CFG.server;
+  if(c==="server_not_connected"||c==="selection_required")return "No "+s+" connector. Add it in claude.ai, Settings, Connectors, then open the board again.";
+  if(c==="needs_reauth")return "The "+s+" connector must sign in again. Reconnect it in claude.ai, Settings, Connectors.";
+  if(c==="not_in_manifest"||c==="consent_required"||c==="not_granted")return "This page is not allowed to use "+s+". Allow it in the page's Permissions menu.";
+  if(c==="approval_required")return "This action needs your approval. Open the board in claude.ai and try again.";
+  if(c==="blocked_by_policy")return "Your organization blocks this "+s+" action.";
+  if(c==="tool_error")return "GitHub refused the action: "+String(e.message||"").slice(0,200);
+  if(c==="server_unavailable"||c==="upstream_error")return "GitHub did not answer. The action may or may not have happened. Refresh, then try again.";
+  return "The action failed ("+(c||"unknown")+").";
+}
+function note(text,warn){const n=$("note");n.hidden=!warn;n.textContent=warn?text:"";if(!warn)$("when").textContent=text}
+
+// Where a done ticket is. Its shipped label says it when the factory set one; else the dates say it:
+// done before the build that staging runs means on staging. ponytail: a date rule, not a commit check.
+function env(name){return S.meta.envs.find(e=>e.name===name)||{name}}
+function place(i){
+  const sh=val(i.labels,"shipped");
+  if(sh in CFG.ship)return CFG.ship[sh];
+  const good=env(CFG.envs[0]).good;
+  return good&&i.at&&i.at<=good.at?0:-1;
+}
+function match(i){const q=S.filter.trim().toLowerCase();
+  return (!q||i.t.toLowerCase().includes(q)||("#"+i.n).includes(q))&&(!S.ms||(i.m||"None")===S.ms)&&(!S.held||i.labels.includes(CFG.human))&&(!S.prio.size||S.prio.has(val(i.labels,"priority")))&&(!S.bug||i.labels.includes(CFG.bug))}
+const byPrio=(a,b)=>(PR[val(a.labels,"priority")]??9)-(PR[val(b.labels,"priority")]??9)||b.n-a.n;
+function card(i,tag){
+  const li=el("li"),b=i.done?el("a","card"):el("button","card");
+  if(i.done){b.href=issueUrl(i.n);b.target="_blank";b.rel="noopener"}
+  else{b.type="button";b.dataset.n=i.n;b.onclick=()=>openTicket(i.n);
+    if(S.live){b.draggable=true;b.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/plain",String(i.n));e.dataTransfer.effectAllowed="move"})}}
+  b.append(el("span","t",i.t));
+  const c=el("span","chips");c.append(el("span","id","#"+i.n));
+  if(i.labels.includes(CFG.human))c.append(el("span","chip hold","needs you"));
+  const p=val(i.labels,"priority");if(p&&CFG.priorities.indexOf(p)<2&&CFG.priorities.length>2)c.append(el("span","chip hot",p));
+  if(tag)c.append(el("span","chip",tag));
+  if(i.m&&!S.ms)c.append(el("span","chip",i.m));
+  b.append(c);li.append(b);return li;
+}
+function envLine(e){
+  const s=el("small");
+  if(!e.last){s.textContent="No deploy yet";return s}
+  if(e.last.ok)s.append(el("span","good","Deployed "+day(e.last.at)));
+  else{s.append(el("span","bad","Deploy failed "+day(e.last.at)));if(e.good)s.append(document.createTextNode(", runs build of "+day(e.good.at)))}
+  return s;
+}
+function column(key,title,sub,items,status,cls,tagOf){
+  const c=el("div","col"+(cls?" "+cls:"")+(S.tab===key?" on":"")),h=el("header"),top=el("div");c.dataset.count=items.length;c.dataset.key=key;c.dataset.title=title;
+  top.append(el("span",null,title),el("span","id",String(items.length)));h.append(top);if(sub)h.append(sub);c.append(h);
+  const lim=S.more[key]||8,ul=el("ul");items.slice(0,lim).forEach(i=>ul.append(card(i,tagOf&&tagOf(i))));c.append(ul);
+  if(!items.length)c.append(el("p","empty","None"));
+  if(items.length>lim){const b=el("button","more","Show "+Math.min(25,items.length-lim)+" more of "+(items.length-lim));b.type="button";b.onclick=()=>{S.more[key]=lim+25;render()};c.append(b)}
+  if(status&&S.live){
+    c.addEventListener("dragover",e=>{e.preventDefault();c.classList.add("over")});
+    c.addEventListener("dragleave",()=>c.classList.remove("over"));
+    c.addEventListener("drop",e=>{e.preventDefault();c.classList.remove("over");const n=Number(e.dataTransfer.getData("text/plain"));if(n)setField(n,"status",status)});
+  }
+  return c;
+}
+function render(){
+  const items=S.items.filter(match).sort(byPrio),done=S.done.filter(match);
+  const st=s=>items.filter(i=>val(i.labels,"status")===s);
+  const fresh=st("Signals").concat(st("Ideas"));
+  const merged=done.filter(i=>place(i)<0),last=CFG.envs.length-1,low=e=>e.toLowerCase();
+
+
+  // counts: over the whole board, not the filtered one, so the numbers stay put
+  const all=S.items,cnt=s=>all.filter(i=>val(i.labels,"status")===s).length,heldN=all.filter(i=>i.labels.includes(CFG.human)).length;
+  const g=$("glance");g.replaceChildren();
+  const tile=(num,label,extra,cls)=>{const a=el("div","tile"+(cls?" "+cls:""));a.append(el("b",null,String(num)),el("span",null,label));if(extra)a.append(extra);g.append(a);return a};
+  const hb=el("button","tile"+(heldN?" attn":""));hb.type="button";hb.setAttribute("aria-pressed",String(!!S.held));
+  hb.append(el("b",null,String(heldN)),el("span",null,S.held?"wait for you · showing only these":"wait for you · show only these"));hb.onclick=()=>{S.held=!S.held;render()};g.append(hb);
+  tile(cnt("Ideas"),"ideas to shape with you",null,"dup");
+  tile(cnt("Signals"),"signals for the factory",null,"dup");
+  tile(cnt("In progress")+cnt("In review"),"in work or in review",null,"dup");
+  tile(S.done.filter(i=>place(i)<0).length,"done, not deployed",null,"dup");
+  CFG.envs.forEach((e,k)=>{const x=el("span");x.append(envLine(env(e)));tile(S.done.filter(i=>place(i)===k).length,"on "+low(e)+(k<last?", last 14 days":""),x)});
+
+  // milestones: what is planned, in work, done, and where the done work runs
+  const box=$("mss");box.replaceChildren();
+  const rank=t=>{const k=S.order.indexOf(t);return k<0?999:k};
+  const names=S.meta.milestones.slice().sort((x,y)=>rank(x.t)-rank(y.t)); // without an order from the person: the order of the data file
+  const move=(t,d)=>{const o=names.map(m=>m.t),k=o.indexOf(t),j=k+d;if(j<0||j>=o.length)return;[o[k],o[j]]=[o[j],o[k]];S.order=o;render();
+    if(S.db)S.db.doc("prefs/board").set({order:o}).catch(()=>{})};
+  $("mssum").textContent="Milestones"+(S.ms?": "+S.ms:"");
+  for(const m of names){
+    const mine=all.filter(i=>i.m===m.t),work=mine.filter(i=>["In progress","In review"].includes(val(i.labels,"status"))).length,planned=mine.length-work;
+    // a closed ticket older than the "done lately" list counts as on the first environment
+    const mDone=S.done.filter(i=>i.m===m.t),notDep=mDone.filter(i=>place(i)<0).length;
+    const on=CFG.envs.map((e,k)=>k?mDone.filter(i=>place(i)===k).length:0);on[0]=Math.max(0,(m.closed||0)-notDep-on.reduce((a,b)=>a+b,0));
+    const total=planned+work+(m.closed||0)||1;
+    const btn=el("div","ms");btn.setAttribute("role","button");btn.tabIndex=0;btn.setAttribute("aria-pressed",String(S.ms===m.t));
+    const top=el("span","top"),tools=el("span","tools"),k=names.indexOf(m);
+    tools.append(el("small",null,(m.due?"due "+day(m.due)+" · ":"")+Math.round(100*(m.closed||0)/total)+"% done"));
+    for(const [d,label,sym] of [[-1,"Move "+m.t+" earlier","‹"],[1,"Move "+m.t+" later","›"]]){const b=el("button","mv",sym);b.type="button";b.setAttribute("aria-label",label);
+      b.disabled=k+d<0||k+d>=names.length;b.onclick=e=>{e.stopPropagation();move(m.t,d)};tools.append(b)}
+    top.append(el("b",null,m.t),tools);
+    const seg=el("span","seg"),leg=el("span","legend");
+    for(const [n,label,color] of [...CFG.envs.map((e,k)=>[on[k],"on "+low(e),k===last?"--s5":"--s4"]).reverse(),[notDep,"done, not deployed","--s3"],[work,"in work","--s2"],[planned,"planned","--s1"]]){
+      const part=el("i");part.style.width=(100*n/total)+"%";part.style.background="var("+color+")";seg.append(part);
+      const l=el("span",null,n+" "+label);l.style.setProperty("--c","var("+color+")");leg.append(l)}
+    const pick=()=>{S.ms=S.ms===m.t?"":m.t;render()};btn.append(top,seg,leg);btn.onclick=pick;btn.onkeydown=e=>{if(e.target===btn&&(e.key==="Enter"||e.key===" ")){e.preventDefault();pick()}};box.append(btn);
+  }
+
+  const fl=$("filters");fl.replaceChildren(el("span",null,"Priority"));
+  const chip=(label,on,toggle)=>{const b=el("button","fchip",label);b.type="button";b.setAttribute("aria-pressed",String(on));b.onclick=()=>{toggle();render()};fl.append(b)};
+  for(const p of CFG.priorities)chip(p,S.prio.has(p),()=>S.prio.has(p)?S.prio.delete(p):S.prio.add(p));
+  chip("Bugs only",S.bug,()=>{S.bug=!S.bug});
+  if(S.prio.size||S.bug||S.ms||S.held||S.filter){const c=el("button","fchip","Clear filters");c.type="button";c.onclick=()=>{S.prio.clear();S.bug=false;S.ms="";S.held=false;S.filter="";$("q").value="";render()};fl.append(c)}
+
+  // the board
+  const board=$("board");board.replaceChildren();
+  const has=x=>CFG.statuses.includes(x);
+  const specs=[["ideas","Ideas","You and Claude shape these","you"],["signals","Signals","The factory picks these up"],["backlog","Backlog","Accepted, not specified"],
+    ["ready","Ready","Specified, not started"],["progress","In progress","The factory builds it"],["review","In review","A pull request is open"]];
+  for(const [key,name,sub,cls] of specs)if(has(name))board.append(column(key,name,el("small",null,sub),st(name),name,cls));
+  board.append(column("done","Done",el("small",null,"Merged, not deployed"),merged));
+  CFG.envs.forEach((e,k)=>board.append(column("env"+k,"On "+low(e),envLine(env(e)),done.filter(i=>place(i)===k),null,"env")));
+  // the phone shows one column; the switcher is the row of columns with their counts
+  const cols=[...board.children];
+  if(!S.tab){S.tab=(cols.find(c=>["review","progress","ready"].includes(c.dataset.key)&&c.dataset.count!=="0")||cols[Math.min(2,cols.length-1)]).dataset.key;cols.forEach(c=>c.classList.toggle("on",c.dataset.key===S.tab))}
+  const tabs=$("tabs");tabs.replaceChildren();
+  for(const c of cols){const b=el("button",null,c.dataset.title+" "+c.dataset.count);b.type="button";b.setAttribute("role","tab");b.setAttribute("aria-selected",String(c.dataset.key===S.tab));
+    b.onclick=()=>{S.tab=c.dataset.key;render()};tabs.append(b)}
+}
+
+// Reads. Tickets come live from GitHub through the connector. The snapshot file gives what the connector
+// cannot list: milestone totals and deploy runs; and the whole board when there is no connector.
+async function loadSnapshot(){
+  try{
+    const b=await (await fetch("board.json")).json();
+    const lab=i=>[i.s&&P("status")+":"+i.s,i.p&&P("priority")+":"+i.p,i.z&&P("size")+":"+i.z,i.l&&P("lane")+":"+i.l,i.sh&&P("shipped")+":"+i.sh,i.h&&CFG.human,i.k==="bug"&&CFG.bug].filter(Boolean);
+    S.meta={milestones:b.milestones||[],envs:b.envs||[],at:b.at};
+    for(const i of b.items.concat(b.done||[]))S.msMap[i.n]=i.m||"";
+    S.items=b.items.map(i=>({n:i.n,t:i.t,m:i.m,labels:lab(i)}));
+    S.done=(b.done||[]).map(i=>({n:i.n,t:i.t,m:i.m,at:i.c,done:true,labels:lab(i)}));
+    S.snapDone=S.done;for(const i of b.done||[])S.closedAt[i.n]=i.c;for(const n of b.old||[])S.closedAt[n]="";
+  }catch{note("The board data did not load. Ask Claude to publish the board again.",true)}
+}
+async function loadLive(fresh){
+  const opt=fresh?{cache:{refresh:true}}:undefined;
+  let after,all=[];
+  for(let page=0;page<10;page++){
+    const input={owner:CFG.owner,repo:CFG.repo,state:"OPEN",perPage:100,fields:["number","title","labels","comments"]};
+    if(after)input.after=after;
+    const r=await S.mcp.callTool(CFG.server,"list_issues",input,opt);
+    const p=r.payload||{};all=all.concat((p.issues||[]).map(norm));
+    if(!p.pageInfo||!p.pageInfo.hasNextPage||!p.pageInfo.endCursor)break;after=p.pageInfo.endCursor;
+  }
+  S.items=all;S.live=true;S.stamp=Date.now();
+  try{ // done lately: closed tickets at Done, changed in the last 14 days
+    const r=await S.mcp.callTool(CFG.server,"list_issues",{owner:CFG.owner,repo:CFG.repo,state:"CLOSED",labels:[P("status")+":Done"],since:new Date(Date.now()-14*864e5).toISOString(),orderBy:"UPDATED_AT",direction:"DESC",perPage:50,fields:["number","title","labels","updated_at"]},opt);
+    // the list has no close date (a label edit also counts as a change): take it from the snapshot, else read the ticket
+    const from=new Date(Date.now()-14*864e5).toISOString(),found=[];let reads=0;
+    for(const i of ((r.payload||{}).issues||[]).map(norm)){
+      if(S.closedAt[i.n]===undefined&&reads<15){reads++;
+        try{const g=await S.mcp.callTool(CFG.server,"issue_read",{method:"get",owner:CFG.owner,repo:CFG.repo,issue_number:i.n},{cache:{staleTime:86400000,gcTime:604800000}});
+          const iss=(g.payload||{}).issue||{};S.closedAt[i.n]=iss.closed_at||"";if(typeof iss.milestone==="string")S.msMap[i.n]=iss.milestone}catch{break}}
+      const at=S.closedAt[i.n];if(at&&at>=from)found.push({...i,m:S.msMap[i.n],at,done:true});
+    }
+    const seen=new Set(found.map(i=>i.n));
+    S.done=found.concat(S.snapDone.filter(i=>!seen.has(i.n)&&i.at>=from)).sort((a,b)=>b.at.localeCompare(a.at));
+  }catch{/* the snapshot's list stays */}
+  note("Live, read "+new Date(S.stamp).toLocaleTimeString()+" · deploys as of "+snapAt());
+  render();
+  const unknown=all.filter(i=>i.m===undefined).slice(0,20);
+  for(const i of unknown){
+    try{const r=await S.mcp.callTool(CFG.server,"issue_read",{method:"get",owner:CFG.owner,repo:CFG.repo,issue_number:i.n},{cache:{staleTime:3600000,gcTime:86400000}});
+      const iss=(r.payload||{}).issue||{};i.m=S.msMap[i.n]=typeof iss.milestone==="string"?iss.milestone:((iss.milestone&&iss.milestone.title)||"")}
+    catch{break}
+  }
+  if(unknown.length)render();
+}
+async function refresh(fresh){
+  if(!S.mcp)return;$("refresh").disabled=true;
+  try{await loadLive(fresh)}
+  catch(e){S.live=false;note("Board as of "+snapAt()+", read-only. "+explain(e),true);render()}
+  $("refresh").disabled=false;
+}
+// Writes go to GitHub at once. A label change replaces the whole label set there, so: read the labels, change one, write all.
+async function mutate(n,change,done){
+  const it=S.items.find(i=>i.n===n);if(!it||!S.live)return;
+  document.querySelectorAll('[data-n="'+n+'"]').forEach(e=>e.classList.add("busy"));
+  try{
+    const r=await S.mcp.callTool(CFG.server,"issue_read",{method:"get_labels",owner:CFG.owner,repo:CFG.repo,issue_number:n},{cache:false});
+    const cur=((r.payload||{}).labels||[]).map(l=>typeof l==="string"?l:l.name).filter(Boolean);
+    const next=change(cur);
+    await S.mcp.callTool(CFG.server,"issue_write",{method:"update",owner:CFG.owner,repo:CFG.repo,issue_number:n,labels:next});
+    S.mcp.invalidate(CFG.server,"list_issues").catch(()=>{});
+    it.labels=next;note(done);
+  }catch(e){note("#"+n+": "+explain(e),true)}
+  render();if(S.open===n)openTicket(n,true);
+}
+function setField(n,prefix,value){
+  const it=S.items.find(i=>i.n===n);if(!it||val(it.labels,prefix)===value)return;
+  mutate(n,cur=>cur.filter(l=>!l.startsWith(P(prefix)+":")).concat(value?[P(prefix)+":"+value]:[]),"#"+n+": "+prefix+" is "+(value||"cleared")+" on GitHub.");
+}
+function release(n){mutate(n,cur=>cur.filter(l=>l!==CFG.human),"#"+n+": the hold is released on GitHub.")}
+
+// The ticket sheet.
+function select(label,options,current,onchange){
+  const f=el("label","field",label),s=el("select");
+  for(const o of [""].concat(options)){const op=el("option",null,o||"None");op.value=o;if(o===current)op.selected=true;s.append(op)}
+  s.disabled=!S.live;s.onchange=()=>onchange(s.value);f.append(s);return f;
+}
+async function openTicket(n,keep){
+  const it=S.items.find(i=>i.n===n);if(!it)return;S.open=n;
+  const sheet=$("sheet"),draft=keep&&$("cbody")?$("cbody").value:"";sheet.replaceChildren();
+  const top=el("div","line");const gh=el("a",null,"Open on GitHub");gh.href=issueUrl(n);gh.target="_blank";gh.rel="noopener";
+  const x=el("button","btn","Close");x.onclick=closeTicket;x.style.marginLeft="auto";top.append(el("span","id","#"+n),gh,x);
+  const h=el("h2",null,it.t);h.id="st";
+  const f=el("div","line");
+  f.append(select("Status",CFG.statuses,val(it.labels,"status"),v=>v&&setField(n,"status",v)),
+    select("Priority",CFG.priorities,val(it.labels,"priority"),v=>setField(n,"priority",v)),
+    select("Size",CFG.sizes,val(it.labels,"size"),v=>setField(n,"size",v)),
+    select("Lane",CFG.lanes,val(it.labels,"lane"),v=>setField(n,"lane",v)));
+  sheet.append(top,h,f,el("p","msg",it.m?"Milestone "+it.m:"No milestone"));
+  if(it.labels.includes(CFG.human)){const r=el("div","line");r.append(el("span","chip hold","The factory waits for you on this ticket"));
+    if(S.live){const b=el("button","btn","Release the hold");b.onclick=()=>release(n);r.append(b)}sheet.append(r)}
+  const cm=el("div","comments");cm.append(el("p","msg",S.live?"Loading comments...":"Comments need the "+CFG.server+" connector."));sheet.append(cm);
+  if(S.live){
+    const ta=el("textarea");ta.id="cbody";ta.placeholder="Write a comment. The factory reads it on its next cycle.";ta.value=draft;
+    const send=el("button","btn primary","Comment"),msg=el("span","msg"),r=el("div","line");r.append(send,msg);
+    send.onclick=async()=>{
+      const body=ta.value.trim();if(!body){msg.className="msg err";msg.textContent="Write the comment first.";return}
+      send.disabled=true;msg.className="msg";msg.textContent="Sending...";
+      try{await S.mcp.callTool(CFG.server,"add_issue_comment",{owner:CFG.owner,repo:CFG.repo,issue_number:n,body});
+        ta.value="";msg.className="msg ok";msg.textContent="Comment posted on GitHub.";it.comments=(it.comments||0)+1;loadComments(n,cm)}
+      catch(e){msg.className="msg err";msg.textContent=explain(e)}
+      send.disabled=false;
+    };
+    ta.oninput=()=>{if(msg.classList.contains("err"))msg.textContent=""};
+    sheet.append(ta,r);loadComments(n,cm);
+  }
+  $("scrim").hidden=false;if(!keep)x.focus();
+}
+// GitHub returns comments oldest first, 100 to a page: read the last page.
+async function loadComments(n,box){
+  try{
+    const it=S.items.find(i=>i.n===n),page=Math.max(1,Math.ceil(((it&&it.comments)||0)/100));
+    const r=await S.mcp.callTool(CFG.server,"issue_read",{method:"get_comments",owner:CFG.owner,repo:CFG.repo,issue_number:n,perPage:100,page},{cache:false});
+    if(S.open!==n)return;const list=((r.payload||{}).comments||[]).slice(-30);box.replaceChildren();
+    if(!list.length){box.append(el("p","msg","No comments."));return}
+    for(const c of list){const d=el("div","c");
+      d.append(el("div","who",((c.user&&c.user.login)||"unknown")+" · "+(c.created_at?new Date(c.created_at).toLocaleString():"")),
+        el("div","body",String(c.body||"").replace(/<!--[\s\S]*?-->/g,"").trim()||"(marker only)"));box.append(d)}
+  }catch(e){if(S.open===n)box.replaceChildren(el("p","msg err",explain(e)))}
+}
+function closeTicket(){S.open=null;$("scrim").hidden=true}
+$("scrim").addEventListener("click",e=>{if(e.target===$("scrim"))closeTicket()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.open)closeTicket()});
+$("q").oninput=e=>{S.filter=e.target.value;render()};
+$("refresh").onclick=()=>refresh(true);
+$("title").textContent=CFG.repo+" board";
+
+(async()=>{
+  const wide=matchMedia("(min-width:760px)"),fit=()=>{$("msd").open=wide.matches};fit();wide.addEventListener("change",fit);
+  await loadSnapshot();note("Connecting...");render();
+  try{S.db=window.claude&&window.claude.use?await window.claude.use("db"):null;
+    if(S.db){const d=await S.db.doc("prefs/board").get();const o=d.exists&&d.data().order;if(Array.isArray(o)){S.order=o.filter(x=>typeof x==="string");render()}}}catch{}
+  try{S.mcp=window.claude&&window.claude.use?await window.claude.use("mcp"):null}catch{S.mcp=null}
+  if(!S.mcp){$("refresh").hidden=true;note("Board as of "+snapAt()+", read-only. Edits need the "+CFG.server+" connector on claude.ai.",true);return}
+  await refresh(false);
+  setInterval(()=>{if(!document.hidden&&!S.open)refresh(true)},120000);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden&&!S.open&&S.stamp&&Date.now()-S.stamp>60000)refresh(true)});
+})();
+</script>

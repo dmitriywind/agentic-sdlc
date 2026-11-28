@@ -35,7 +35,9 @@ export function personSteps(b: Binding, trunkLines: string[], warnings: string[]
       where: `https://github.com/${repo}/settings/rules > New ruleset > Import a ruleset: .github/rulesets/trunk.json (once it is merged)`,
       verified: trunkLines.some((l) => l.startsWith('ok   trunk protection')) ? true : trunkLines.some((l) => /^(warn: trunk protection|fail trunk protection)/.test(l)) ? false : null,
     },
-    { step: 'Optional: connect GitHub in claude.ai, so a board page there can read the issues', where: 'https://claude.ai/settings/connectors > GitHub', verified: null },
+    b.board?.page
+      ? { step: 'Open the board page', where: b.board.page, verified: true }
+      : { step: 'For the board page: add the custom connector GitHub on claude.ai, then install its GitHub app on the repo owner', where: 'https://claude.ai/customize/connectors (name GitHub, URL https://api.githubcopilot.com/mcp/); https://github.com/apps/claude-github-mcp-connector/installations/new', verified: null },
   ];
   return out;
 }

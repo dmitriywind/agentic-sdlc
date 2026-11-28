@@ -5,7 +5,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { Given, When, Then, type DataTable } from '../support/steps.ts';
 import type { World } from '../support/world.ts';
 import { bootstrap, createBoard } from '../../src/board/index.ts';
-import type { AdapterContext, Board, Item, LogicalField } from '../../src/ports.ts';
+import { boardPage, type BoardPage } from '../../src/board/page.ts';
+import type { AdapterContext, Board, Forge, Item, LogicalField, Run } from '../../src/ports.ts';
 
 const run = (w: World, line: string) => {
   const o = w.cliLine(line);
@@ -143,6 +144,7 @@ Given('the repo has these issues:', (w, t: DataTable) => {
     ...(r.state ? { state: r.state, closed_at: r['closed at'] } : {}),
     ...(r['issue fields'] ? { issue_field_values: csv(r['issue fields']).map((kv) => { const [k, v] = kv.split('='); return fieldValue(w, w.state.options.field_ids[k], v); }) } : {}),
     ...(r.assignee ? { assignees: [{ login: r.assignee }] } : {}),
+    ...(r.milestone ? { milestone: { title: r.milestone } } : {}),
   })));
 });
 Given('the board maps the issue fields {string}', (w, map: string) => {
@@ -257,3 +259,35 @@ Then('the bootstrap created a heartbeat ticket', (w) => {
   assert.deepEqual(issueOf(w, Number(hb.id)).labels, [], 'the heartbeat carries a label');
 });
 Then('the bootstrap found the same heartbeat ticket', (w) => assert.deepEqual(w.state.result.heartbeat, { id: w.state.prevHeartbeat.id, created: false }));
+
+// ---- board page ----
+Given('the workflow {string} ran {string} at {string} on {string}', (w, name: string, state: string, at: string, sha: string) => {
+  (w.state.runs ??= [] as Run[]).push({ id: String(w.state.runs?.length ?? 0), name, ref: 'main', sha, state: state as Run['state'], url: 'run-' + sha, at });
+});
+When('the factory builds the board page on {string}', async (w, now: string) => {
+  const asked = w.bindingPatch.board?.adapter; // the adapter the scenario set, before the fake board sets its own
+  const board = boardOf(w);
+  const b = JSON.parse(w.read('.agents/binding.yml'));
+  if (asked) b.board.adapter = asked;
+  b.board.options = w.state.options; // the options the fake adapter got
+  const forge = { runs: async (q: { workflow?: string } = {}) => ((w.state.runs ?? []) as Run[]).filter((r) => r.name === q.workflow).sort((x, y) => y.at.localeCompare(x.at)) } as unknown as Forge;
+  const template = readFileSync(new URL('../../templates/board/index.html', import.meta.url), 'utf8');
+  w.state.result = undefined; w.state.error = undefined;
+  try { w.state.result = await boardPage({ board, forge, binding: b, template, now: new Date(now) }); } catch (e) { w.state.error = e; }
+});
+const pageOf = (w: World) => { assert.ok(!w.state.error, String(w.state.error)); return w.state.result as BoardPage & { data: Any }; };
+const cfgOf = (w: World) => JSON.parse(/const CFG=(\{.*\});/.exec(pageOf(w).html)![1]);
+Then('the board data lists the open tickets {string}', (w, ids: string) => assert.equal(pageOf(w).data.items.map((i: Any) => i.n).join(', '), ids));
+Then('the board data lists the done tickets {string}', (w, ids: string) => assert.equal(pageOf(w).data.done.map((i: Any) => i.n).join(', '), ids));
+Then('the board data has the milestone {string} with {int} open and {int} closed', (w, t: string, open: number, closed: number) =>
+  assert.deepEqual(pageOf(w).data.milestones.find((m: Any) => m.t === t), { t, open, closed }));
+Then('the board data says the last deploy of {string} failed and it runs {string}', (w, env: string, sha: string) => {
+  const e = pageOf(w).data.envs.find((x: Any) => x.name === env);
+  assert.equal(e.last.ok, false); assert.equal(e.good.sha, sha);
+});
+Then('the board data says {string} has no deploy', (w, env: string) => assert.equal(pageOf(w).data.envs.find((x: Any) => x.name === env).last, null));
+Then('the page names the repo {string} and the environments {string}', (w, repo: string, envs: string) => {
+  const c = cfgOf(w); assert.equal(c.owner + '/' + c.repo, repo); assert.equal(c.envs.join(', '), envs);
+});
+Then('the page maps the shipped value {string} to the environment {string}', (w, value: string, env: string) => { const c = cfgOf(w); assert.equal(c.envs[c.ship[value]], env); });
+Then('the page holds no {string}', (w, text: string) => assert.ok(!pageOf(w).html.includes(text)));

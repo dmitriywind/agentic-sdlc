@@ -69,6 +69,12 @@ without them those asks come to you.
   answers from `agentic-sdlc status`: holds, approvals, the next cycle, the last heartbeat, what is
   broken ([the status feature](../../features/cycle/status.feature)). Not yet tried in a cloud session
   from a phone.
+- **The whole board on one page.** The `setup` skill publishes a board page on claude.ai and puts its link into
+  `board.page`. The page shows what waits for you, each status from Ideas to In review, what is done, and what
+  runs in each environment; each milestone shows the same split. With the GitHub connector on claude.ai you
+  drag a ticket, change its fields and comment there, and each action writes to the issue
+  ([the board page feature](../../features/board/page.feature)). Checked on a desktop browser; a comment and a
+  drag from the page are not yet tried.
 - **Silence.** If no cycle ran in time, the dead-man check files a Signal, and GitHub notifies you.
 
 </div>
