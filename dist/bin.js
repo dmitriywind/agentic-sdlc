@@ -8269,272 +8269,92 @@ var init_local = __esm({
   }
 });
 
-// src/board/index.ts
-var board_exports = {};
-__export(board_exports, {
-  HEARTBEAT: () => HEARTBEAT,
-  VERBS: () => VERBS,
-  bootstrap: () => bootstrap,
-  cli: () => cli,
-  createBoard: () => createBoard,
-  hold: () => hold,
-  holds: () => holds
-});
-function createBoard(ctx) {
-  const make = { "github-issues": createGithubIssuesBoard, local: createLocalBoard }[ctx.binding.board.adapter];
-  if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
-  const missing = validateBinding({ ...ctx.binding, board: { ...ctx.binding.board, options: ctx.options } }).map((m) => /^board\.options\.(\w+) is required/.exec(m)?.[1]).filter(Boolean).map((k) => `board.options.${k}`);
-  if (missing.length) throw new Error(`board adapter '${ctx.binding.board.adapter}' needs binding keys: ${missing.join(", ")}; run: agentic-sdlc validate`);
-  const board = checked(make(ctx), ctx);
-  const scope = ctx.binding.board.scope;
-  if (!scope?.label) return board;
-  const pre = scope.label.slice(0, scope.label.indexOf(":") + 1);
-  const mine = (i) => i.labels.includes(scope.label) || !!scope.home && !i.labels.some((l) => l.startsWith(pre));
-  return {
-    ...board,
-    list: async (q) => (await board.list(q)).filter(mine),
-    create: (t) => board.create({ ...t, labels: [.../* @__PURE__ */ new Set([...t.labels ?? [], scope.label])] })
-  };
-}
-function checked(b, ctx) {
-  const numeric = ctx.binding.board.adapter === "github-issues";
-  const statuses = ctx.binding.board.statuses;
-  const id = (v) => {
-    if (numeric && v !== void 0 && !/^\d+$/.test(String(v))) throw new Error(`board: not an issue number: ${v}`);
-    return v;
-  };
-  const status = (s) => {
-    if (Array.isArray(statuses) && statuses.length && !statuses.includes(s)) throw new Error(`board: status '${s}' is not in board.statuses (${statuses.join(", ")})`);
-    return s;
-  };
-  return {
-    ...b,
-    get: async (i) => b.get(id(i)),
-    create: async (t) => {
-      id(t.parent);
-      status(t.status);
-      return b.create(t);
-    },
-    move: async (i, s, from) => b.move(id(i), status(s), from),
-    set: async (i, f, v) => b.set(id(i), f, v),
-    label: async (i, op, l) => b.label(id(i), op, l),
-    assign: async (i, u) => b.assign(id(i), u),
-    milestone: async (i, m) => b.milestone(id(i), m),
-    comment: async (i, body) => b.comment(id(i), body),
-    comments: async (i, q) => b.comments(id(i), q),
-    close: async (i, r) => b.close(id(i), r),
-    child: async (p, c) => b.child(id(p), id(c))
-  };
-}
-async function hold(board, b, id, kind, body) {
-  const trigger = kind.trim();
-  if (!trigger || /[\r\n]/.test(trigger)) throw new Usage("board hold: --kind is one non-empty line");
-  const text = body.replace(/^### Needs human[^\n]*\n+/, "");
-  const item = await board.label(id, "add", b.board.labels.human);
-  await board.comment(id, `${stamp("ask", trigger)}
-
-${text.trim()}
-`);
-  return item;
-}
-async function holds(board, b) {
-  const o = ownersFor(b.owners, "board");
-  const owners = new Set([...o.product, ...o.factory, ...o.operator, ...o.security, ...o.compliance].map((x) => x.toLowerCase()));
-  const bots = new Set(o.bots.map((x) => x.toLowerCase()));
-  const out = [];
-  for (const item of await board.list({ label: b.board.labels.human })) {
-    const all = [...await board.comments(item.id)].sort(byTime);
-    const ask = all.find(asked);
-    const line = ask?.body.split("\n")[0].slice(matches("ask").length).replace(/^:\s*/, "").trim();
-    const after = ask ? all.filter((c) => !asked(c) && Date.parse(c.createdAt) > Date.parse(ask.createdAt)) : [];
-    const reply = after.find((c) => {
-      const a = c.author?.toLowerCase();
-      return !!a && owners.has(a) && (!bots.has(a) || !isFactoryComment(c.body, { specMarker: b.spec_marker }));
-    });
-    out.push({
-      id: item.id,
-      kind: line || "unspecified",
-      askedAt: ask?.createdAt ?? item.updatedAt,
-      replied: !!reply,
-      ...reply ? { reply: { author: reply.author, createdAt: reply.createdAt, ...reply.url ? { url: reply.url } : {} } } : {}
-    });
+// src/board/page.ts
+async function boardPage(d) {
+  const b = d.binding, bb = b.board;
+  if (bb.adapter !== "github-issues") throw new Error(`board page: needs the github-issues board (this one is ${bb.adapter})`);
+  const [owner, repo] = String(bb.options?.repo ?? "").split("/");
+  if (!owner || !repo) throw new Error("board page: board.options.repo is not owner/name");
+  const envs = b.product?.environments ?? [], doneAt = bb.done_statuses ?? ["Done", "Cancelled"];
+  const since = new Date((d.now ?? /* @__PURE__ */ new Date()).getTime() - DAYS * 864e5).toISOString();
+  const all = await d.board.list({ state: "all" });
+  const human = bb.labels?.human ?? "needs-human", bug = bb.labels?.bug ?? "bug";
+  const row = (i) => ({
+    n: Number(i.id),
+    t: i.title,
+    s: i.status,
+    z: i.fields.size ?? "",
+    p: i.fields.priority ?? "",
+    l: i.fields.lane ?? "",
+    sh: i.fields.shipped ?? "",
+    h: i.labels.includes(human),
+    k: i.labels.includes(bug) ? "bug" : "",
+    m: i.milestone ?? "",
+    c: i.statusChangedAt ?? ""
+  });
+  const items = all.filter((i) => !doneAt.includes(i.status)).map(row);
+  const done = all.filter((i) => i.status === "Done" && (i.statusChangedAt ?? "") >= since).map(row).sort((x, y) => y.c.localeCompare(x.c));
+  const ms = /* @__PURE__ */ new Map();
+  for (const i of all) {
+    if (!i.milestone || i.status === "Cancelled") continue;
+    const m = ms.get(i.milestone) ?? { t: i.milestone, open: 0, closed: 0 };
+    if (i.status === "Done") m.closed++;
+    else m.open++;
+    ms.set(i.milestone, m);
   }
-  return out;
-}
-async function bootstrap(board, b) {
-  const labels = [...Object.values(b.board.labels ?? {}), ...b.board.env_labels ?? [], ...(b.board.signal_streams ?? []).map((s) => `signal:${s}`), b.forge?.approval_label || "approved"];
-  const hb = String(b.heartbeat?.ticket ?? "").trim();
-  const known = hb && !hb.startsWith(UNRESOLVED) ? hb : void 0;
-  const r = board.bootstrap ? await board.bootstrap(labels, known ? void 0 : HEARTBEAT) : { created: [] };
-  return { labels: { created: r.created }, heartbeat: known ? { id: known, created: false } : r.heartbeat ?? null };
-}
-var Usage, asked, byTime, HEARTBEAT, VERBS, USAGE, cli;
-var init_board = __esm({
-  "src/board/index.ts"() {
-    "use strict";
-    init_ports();
-    init_binding();
-    init_comments();
-    init_util();
-    init_github_issues();
-    init_local();
-    Usage = UsageError;
-    asked = (c) => isMarked(c.body, "ask");
-    byTime = (x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt);
-    HEARTBEAT = { title: "agentic-sdlc heartbeat", body: "agentic-sdlc heartbeat comments. Not a ticket." };
-    VERBS = {
-      list: { value: ["status", "label", "search", "state"] },
-      get: {},
-      create: { value: ["title", "body-file", "status", "label", "parent", "milestone"] },
-      move: { value: ["only-from"] },
-      set: { bool: ["clear"] },
-      label: {},
-      assign: { bool: ["none"] },
-      milestone: { bool: ["clear"] },
-      comment: { value: ["body-file", "kind", "ref"] },
-      comments: { value: ["last", "marker", "author", "kind", "ref"], bool: ["trusted"], num: ["last"] },
-      hold: { value: ["kind", "body-file"] },
-      holds: {},
-      release: {},
-      close: { value: ["reason"] },
-      child: {},
-      bootstrap: {}
-    };
-    USAGE = `usage: agentic-sdlc board <verb>
-  list [--status <s>]... [--label <l>] [--search <text>] [--state all]    get <id>
-  create --title <t> --body-file <f> --status <s> [--label <l>]... [--parent <id>] [--milestone <m>]
-  move <id> <status> [--only-from <s>]    set <id> <field> <value> | --clear
-  milestone <id> <name> | --clear
-  label <id> add|remove <label>           assign <id> <user> | --none
-  comment <id> --body-file <f> [--kind <kind> [--ref <value>]]
-  comments <id> [--last <n>] [--kind <kind> [--ref <value>] | --marker <text>] [--author <a>]... [--trusted]
-  hold <id> --kind <trigger> --body-file <f>    holds    release <id>
-  close <id> --reason completed|not_planned    child <parent> <child>
-  bootstrap   (the labels and the heartbeat ticket the binding needs; idempotent)`;
-    cli = async (argv, base) => {
-      const [verb, ...rest] = argv;
+  const later = bb.later_milestone;
+  const milestones = [...ms.values()].sort((x, y) => Number(x.t === later) - Number(y.t === later) || x.t.localeCompare(y.t));
+  const wf = b.forge?.deploy_workflows ?? [];
+  const envRows = [];
+  for (const [k, name] of envs.entries()) {
+    const workflow = k === 0 ? wf[0] : k === envs.length - 1 ? wf[wf.length - 1] : void 0;
+    let last = null, good = null;
+    if (workflow && d.forge) {
       try {
-        if (!verb || verb === "--help") {
-          console.log(USAGE);
-          return verb ? 0 : 2;
-        }
-        if (!Object.hasOwn(VERBS, verb)) throw new Usage(`unknown board verb '${verb}'`);
-        const a = parseStrict("board", verb, rest, VERBS[verb]);
-        const need2 = (n) => {
-          if (a.pos.length < n) throw new Usage(`board ${verb}: missing argument`);
-        };
-        const req = (k) => a.need(k);
-        const body = () => bodyFile(a);
-        const board = createBoard({ ...base, options: base.binding.board.options });
-        const [id] = a.pos;
-        let out;
-        switch (verb) {
-          case "list": {
-            const state = a.get("state");
-            if (state !== void 0 && state !== "open" && state !== "all") throw new Usage("board list: --state is open or all");
-            out = await board.list({ status: a.all("status"), label: a.get("label"), search: a.get("search"), state });
-            break;
-          }
-          case "get":
-            need2(1);
-            out = await board.get(id);
-            break;
-          case "create":
-            out = await board.create({
-              title: req("title"),
-              body: body(),
-              status: req("status"),
-              labels: a.all("label"),
-              parent: a.get("parent"),
-              milestone: a.get("milestone")
-            });
-            break;
-          case "move":
-            need2(2);
-            out = await board.move(id, a.pos[1], a.get("only-from"));
-            break;
-          case "set":
-            need2(a.has("clear") ? 2 : 3);
-            out = await board.set(id, a.pos[1], a.has("clear") ? null : a.pos[2]);
-            break;
-          case "label":
-            need2(3);
-            if (a.pos[1] !== "add" && a.pos[1] !== "remove") throw new Usage("label: add or remove");
-            if (a.pos[1] === "add" && a.pos[2].toLowerCase() === (base.binding.forge?.approval_label || "approved").toLowerCase()) throw new Error(`board label: '${a.pos[2]}' is forge.approval_label, the owner's approval; only the owner applies it, on the forge`);
-            out = await board.label(id, a.pos[1], a.pos[2]);
-            break;
-          case "assign":
-            need2(a.has("none") ? 1 : 2);
-            out = await board.assign(id, a.has("none") ? null : a.pos[1]);
-            break;
-          case "comment": {
-            need2(1);
-            if (a.has("ref") && !a.has("kind")) throw new Usage("board comment: --ref needs --kind");
-            if (a.get("kind") === "heartbeat") {
-              let f;
-              try {
-                f = JSON.parse(body()).factory;
-              } catch {
-              }
-              if (f !== void 0 && !(typeof f === "string" && /^[0-9a-f]{7,40}$/.test(f))) throw new Usage("board comment: heartbeat factory must be a hex sha (the sha field of vcs head)");
-            }
-            out = await board.comment(id, a.has("kind") ? stampBody(body(), parseWritableKind(a.get("kind")), a.get("ref"), { specMarker: base.binding.spec_marker }) : body());
-            break;
-          }
-          case "hold":
-            need2(1);
-            out = await hold(board, base.binding, id, req("kind"), body());
-            break;
-          case "holds":
-            out = await holds(board, base.binding);
-            break;
-          case "release":
-            need2(1);
-            out = await board.label(id, "remove", base.binding.board.labels.human);
-            break;
-          case "comments": {
-            need2(1);
-            if (a.has("kind") && a.has("marker")) throw new Usage("board comments: --kind and --marker together");
-            if (a.has("ref") && !a.has("kind")) throw new Usage("board comments: --ref needs --kind");
-            const marker = a.has("kind") ? matches(parseKind(a.get("kind")), a.get("ref"), { specMarker: base.binding.spec_marker }) : a.get("marker");
-            out = selectComments(await board.comments(id, { marker }), {
-              owners: ownersFor(base.binding.owners, "board"),
-              authors: a.all("author"),
-              trusted: a.has("trusted"),
-              last: a.get("last") ? Number(a.get("last")) : void 0,
-              marker
-            });
-            break;
-          }
-          case "close": {
-            need2(1);
-            const r = req("reason");
-            if (r !== "completed" && r !== "not_planned") throw new Usage("--reason completed|not_planned");
-            out = await board.close(id, r);
-            break;
-          }
-          case "milestone":
-            need2(a.has("clear") ? 1 : 2);
-            if (a.has("clear") && a.pos.length > 1) throw new Usage("board milestone: a name and --clear together");
-            out = await board.milestone(id, a.has("clear") ? null : a.pos[1]);
-            break;
-          case "child":
-            need2(2);
-            out = await board.child(id, a.pos[1]);
-            break;
-          case "bootstrap":
-            out = await bootstrap(board, base.binding);
-            break;
-          default:
-            throw new Usage(`unknown board verb '${verb}'`);
-        }
-        console.log(JSON.stringify(out, null, 2));
-        return 0;
-      } catch (e) {
-        console.error(e.message);
-        return e instanceof Usage ? 2 : 1;
+        const runs = (await d.forge.runs({ workflow })).filter((r) => r.state !== "pending");
+        const g = runs.find((r) => r.state === "success");
+        if (runs[0]) last = { at: runs[0].at, ok: runs[0].state === "success", url: runs[0].url };
+        if (g) good = { at: g.at, sha: g.sha.slice(0, 7), url: g.url };
+      } catch {
       }
-    };
+    }
+    envRows.push({ name, last, good });
+  }
+  const ship = {};
+  for (const o of shippedOptions(envs, b.product?.delivery)) ship[o] = o === "Not shipped" ? -1 : o === "In release" ? Math.max(0, envs.length - 2) : envs.indexOf(o.slice(3));
+  const f = Object.fromEntries(["size", "priority", "lane", "shipped"].map((k) => [k, (bb.fields?.[k] ?? k).toLowerCase()]));
+  const server = d.connector ?? "GitHub";
+  const cfg = {
+    server,
+    owner,
+    repo,
+    statuses: (bb.statuses ?? []).filter((s) => !doneAt.includes(s)),
+    priorities: b.priorities ?? [],
+    sizes: b.sizes ?? [],
+    lanes: ["Fast", "Full"],
+    human,
+    bug,
+    envs,
+    ship,
+    f: { status: "status", ...f }
+  };
+  const title = `${repo} board`;
+  const json = JSON.stringify(cfg).replaceAll("<", "\\u003c");
+  if (!d.template.includes("/*CFG*/{}/*END*/")) throw new Error("board page: the template has no CFG marker");
+  const html2 = d.template.replace("/*CFG*/{}/*END*/", () => json).replace("__TITLE__", () => title.replace(/[<>&]/g, ""));
+  return {
+    html: html2,
+    title,
+    data: { at: (d.now ?? /* @__PURE__ */ new Date()).toISOString(), repo: `${owner}/${repo}`, milestones, envs: envRows, items, done },
+    capabilities: { mcp: { servers: [{ server, tools: ["list_issues", "issue_read", "issue_write", "add_issue_comment"] }] }, db: {} }
+  };
+}
+var DAYS;
+var init_page = __esm({
+  "src/board/page.ts"() {
+    "use strict";
+    init_binding();
+    DAYS = 14;
   }
 });
 
@@ -8899,6 +8719,7 @@ function github(ctx) {
       const a = ["run", "list", "--limit", "30", "--json", RUN_FIELDS];
       if (q.ref) a.push("--branch", q.ref);
       if (q.failed) a.push("--status", "failure");
+      if (q.workflow) a.push("--workflow", q.workflow);
       return JSON.parse(await gh(a)).map(runOf);
     },
     async run(id) {
@@ -9083,7 +8904,7 @@ __export(dispatch_exports, {
   REVIEW_FIRE_ENV: () => REVIEW_FIRE_ENV,
   REVIEW_STEP: () => REVIEW_STEP,
   childEnv: () => childEnv,
-  cli: () => cli2,
+  cli: () => cli,
   executorFor: () => executorFor,
   judgeTier: () => judgeTier,
   limitsText: () => limitsText,
@@ -9134,7 +8955,7 @@ function executorFor(b, id) {
   for (const k of keys) by.set(k, b.executors[k]);
   return by.get(id) ?? by.get(skillOf(id)) ?? b.executors.default;
 }
-var TIERS2, BASE_ENV, spawnChild, setSpawn, subject, limitsText, taskText, REVIEW_STEP, REVIEW_FIRE_ENV, FLAGS, cli2;
+var TIERS2, BASE_ENV, spawnChild, setSpawn, subject, limitsText, taskText, REVIEW_STEP, REVIEW_FIRE_ENV, FLAGS, cli;
 var init_dispatch = __esm({
   "src/dispatch.ts"() {
     "use strict";
@@ -9160,7 +8981,7 @@ var init_dispatch = __esm({
     REVIEW_STEP = "review/review";
     REVIEW_FIRE_ENV = "AGENTIC_REVIEW_FIRE_CMD";
     FLAGS = ["ticket", "cr", "workdir", "run", "run-model", "unattended"];
-    cli2 = async (argv, ctx) => {
+    cli = async (argv, ctx) => {
       let onFail;
       let sent = false;
       try {
@@ -9489,8 +9310,8 @@ var init_git = __esm({
 // src/vcs/index.ts
 var vcs_exports = {};
 __export(vcs_exports, {
-  VERBS: () => VERBS2,
-  cli: () => cli3,
+  VERBS: () => VERBS,
+  cli: () => cli2,
   createVcs: () => createVcs
 });
 function createVcs(ctx) {
@@ -9498,14 +9319,14 @@ function createVcs(ctx) {
   if (!make) throw new Error(`unknown vcs adapter: ${ctx.binding.vcs.adapter}`);
   return make(ctx);
 }
-var adapters, VERBS2, cli3;
+var adapters, VERBS, cli2;
 var init_vcs = __esm({
   "src/vcs/index.ts"() {
     "use strict";
     init_util();
     init_git();
     adapters = { git };
-    VERBS2 = {
+    VERBS = {
       start: {},
       head: {},
       base: {},
@@ -9517,10 +9338,10 @@ var init_vcs = __esm({
       changed: { value: ["since"] },
       tags: { value: ["prefix"] }
     };
-    cli3 = (argv, ctx) => guard(async () => {
+    cli2 = (argv, ctx) => guard(async () => {
       const [verb, ...rest] = argv;
-      if (!verb || !Object.hasOwn(VERBS2, verb)) throw new UsageError(`unknown vcs verb: ${verb ?? ""}`);
-      const a = parseStrict("vcs", verb, rest, VERBS2[verb]);
+      if (!verb || !Object.hasOwn(VERBS, verb)) throw new UsageError(`unknown vcs verb: ${verb ?? ""}`);
+      const a = parseStrict("vcs", verb, rest, VERBS[verb]);
       const v = createVcs({ ...ctx, options: ctx.binding.vcs.options ?? {} });
       const need2 = (i) => {
         if (!a.pos[i]) throw new UsageError(`vcs ${verb}: missing argument`);
@@ -9567,7 +9388,7 @@ __export(ledger_exports, {
   SCORE_SCORER: () => SCORE_SCORER,
   byScorer: () => byScorer,
   changeFailures: () => changeFailures,
-  cli: () => cli4,
+  cli: () => cli3,
   clusters: () => clusters,
   errorBudget: () => errorBudget,
   flattenRuns: () => flattenRuns,
@@ -9914,7 +9735,7 @@ async function headSha(ctx) {
     return void 0;
   }
 }
-var import_yaml3, HEARTBEAT_MARKER, SCORE_SCORER, isFail, SCORES_MARKER, GRADE_MARKER, parseGrades, normaliseError, summarise, isScores, USAGE2, OPTIONS2, cli4;
+var import_yaml3, HEARTBEAT_MARKER, SCORE_SCORER, isFail, SCORES_MARKER, GRADE_MARKER, parseGrades, normaliseError, summarise, isScores, USAGE, OPTIONS2, cli3;
 var init_ledger = __esm({
   "src/ledger.ts"() {
     "use strict";
@@ -9945,13 +9766,13 @@ var init_ledger = __esm({
       ...ticketUse(rows, o.maxTokensPerTicket)
     });
     isScores = (c) => c.body.trimStart().startsWith(SCORES_MARKER);
-    USAGE2 = [
+    USAGE = [
       "usage: ledger runs [--since <days>] [--skill <s>] | ledger summary [--since <days>] | ledger measures [--days <n>] | ledger hash <skill-dir>",
       "       ledger plan --run <id> | ledger record --run <id> --file <scores.json> | ledger stale --max-hours <h>",
       "       ledger heartbeat [--file <report.json>] [--next <next.json>] [--key <claim key>]"
     ].join("\n");
     OPTIONS2 = { since: { type: "string" }, skill: { type: "string" }, run: { type: "string" }, file: { type: "string" }, days: { type: "string" }, "max-hours": { type: "string" }, next: { type: "string" }, key: { type: "string" } };
-    cli4 = async (argv, ctx) => {
+    cli3 = async (argv, ctx) => {
       const [verb, ...rest] = argv;
       let a;
       try {
@@ -9961,20 +9782,20 @@ var init_ledger = __esm({
         return 2;
       }
       const days = a.values.days === void 0 ? 30 : Number(a.values.days);
-      if (verb === "measures" && !(days > 0)) return console.error(USAGE2), 2;
+      if (verb === "measures" && !(days > 0)) return console.error(USAGE), 2;
       const sinceDays = a.values.since === void 0 ? void 0 : Number(a.values.since);
-      if (sinceDays !== void 0 && !(sinceDays >= 0)) return console.error(USAGE2), 2;
+      if (sinceDays !== void 0 && !(sinceDays >= 0)) return console.error(USAGE), 2;
       const maxHours = Number(a.values["max-hours"]);
-      if (verb === "stale" && !(maxHours > 0)) return console.error(USAGE2), 2;
-      if ((verb === "plan" || verb === "record") && !a.values.run) return console.error(USAGE2), 2;
-      if (verb === "record" && !a.values.file) return console.error(USAGE2), 2;
+      if (verb === "stale" && !(maxHours > 0)) return console.error(USAGE), 2;
+      if ((verb === "plan" || verb === "record") && !a.values.run) return console.error(USAGE), 2;
+      if (verb === "record" && !a.values.file) return console.error(USAGE), 2;
       try {
         if (verb === "hash") {
-          if (!a.positionals[0]) return console.error(USAGE2), 2;
+          if (!a.positionals[0]) return console.error(USAGE), 2;
           console.log(JSON.stringify({ skill: a.positionals[0], hash: hashSkill(resolve(ctx.root, a.positionals[0])) }));
           return 0;
         }
-        if (!["runs", "summary", "plan", "record", "stale", "measures", "heartbeat"].includes(verb)) return console.error(USAGE2), 2;
+        if (!["runs", "summary", "plan", "record", "stale", "measures", "heartbeat"].includes(verb)) return console.error(USAGE), 2;
         const b = ctx.binding;
         const { createBoard: createBoard2 } = await Promise.resolve().then(() => (init_board(), board_exports));
         const board = await createBoard2({ ...ctx, options: b.board.options });
@@ -10047,7 +9868,7 @@ __export(bench_exports, {
   area: () => area,
   benchStepFile: () => benchStepFile,
   buildCases: () => buildCases,
-  cli: () => cli5,
+  cli: () => cli4,
   compare: () => compare,
   diverse: () => diverse,
   fill: () => fill,
@@ -10319,7 +10140,7 @@ function compare(a0, b0, o = {}) {
     regressed: short.length > 0 || sb.lower < sa.lower
   };
 }
-var BENCH_STEP, benchStepFile, CASES_FILE, SUITES_DIR, RESULTS_DIR, suiteFile, PROOF_FILE, addedFiles, VERIFY_CONFIG, rule, fill, shell, specAuthors, dropAll, MAX_FILE_CHARS, USAGE3, readJson, OPTIONS3, cli5;
+var BENCH_STEP, benchStepFile, CASES_FILE, SUITES_DIR, RESULTS_DIR, suiteFile, PROOF_FILE, addedFiles, VERIFY_CONFIG, rule, fill, shell, specAuthors, dropAll, MAX_FILE_CHARS, USAGE2, readJson, OPTIONS3, cli4;
 var init_bench = __esm({
   "src/bench.ts"() {
     "use strict";
@@ -10355,7 +10176,7 @@ var init_bench = __esm({
       }
     };
     MAX_FILE_CHARS = 2e4;
-    USAGE3 = [
+    USAGE2 = [
       "usage: bench build [--suite <name>] [--paths <glob>]\u2026 [--per-size <n>] [--limit n] [--merged-limit n] [--since <date>]",
       "       bench propose --suite <name> [--n k] [--merged-limit n] [--since <date>]",
       "       bench run [--suite <s>] --model <id> | --executor <name|json> [--model <id>] [--factory <rev>] [--cases <ids>] [--trials <n>] [--allow-over-budget] [--dry-run]",
@@ -10379,7 +10200,7 @@ var init_bench = __esm({
       trials: { type: "string" },
       "allow-over-budget": { type: "boolean" }
     };
-    cli5 = async (argv, ctx) => {
+    cli4 = async (argv, ctx) => {
       const [verb, ...rest] = argv;
       let a;
       try {
@@ -10393,14 +10214,14 @@ var init_bench = __esm({
       try {
         if (verb === "compare") {
           const [pa, pb] = a.positionals;
-          if (!pa || !pb) return console.error(USAGE3), 2;
+          if (!pa || !pb) return console.error(USAGE2), 2;
           const r = compare(readJson(resolve2(root, pa)), readJson(resolve2(root, pb)), { minCases: binding?.learning?.bench_min_cases, trials: binding?.learning?.bench_trials });
           console.log(JSON.stringify(r, null, 2));
           return r.regressed ? 1 : 0;
         }
         const suite = a.values.suite;
         const mergedLimit = a.values["merged-limit"] ? Number(a.values["merged-limit"]) : void 0;
-        if (mergedLimit !== void 0 && !(mergedLimit > 0) || a.values.since !== void 0 && Number.isNaN(Date.parse(a.values.since))) return console.error(USAGE3), 2;
+        if (mergedLimit !== void 0 && !(mergedLimit > 0) || a.values.since !== void 0 && Number.isNaN(Date.parse(a.values.since))) return console.error(USAGE2), 2;
         const suiteCases = (s) => readJson(join7(root, suiteFile(s))).cases;
         const allCases = async (limit, o) => {
           const { createBoard: createBoard2 } = await Promise.resolve().then(() => (init_board(), board_exports));
@@ -10408,7 +10229,7 @@ var init_bench = __esm({
           return buildCases(await createBoard2(with_(binding.board.options)), await createForge2(with_(binding.forge.options)), binding, limit, { ...o, mergedLimit, since: a.values.since });
         };
         if (verb === "report") {
-          if (!suite) return console.error(USAGE3), 2;
+          if (!suite) return console.error(USAGE2), 2;
           const dir = join7(root, RESULTS_DIR);
           const files = a.positionals.length ? a.positionals.map((p) => resolve2(root, p)) : existsSync5(dir) ? readdirSync3(dir).filter((f) => f.endsWith(".json")).map((f) => join7(dir, f)) : [];
           const results = files.map((f) => readJson(f)).filter((r) => r.suite === suite);
@@ -10416,9 +10237,9 @@ var init_bench = __esm({
           return 0;
         }
         if (verb === "propose") {
-          if (!suite) return console.error(USAGE3), 2;
+          if (!suite) return console.error(USAGE2), 2;
           const n = a.values.n ? Number(a.values.n) : binding.learning.bench_size;
-          if (!(n > 0)) return console.error(USAGE3), 2;
+          if (!(n > 0)) return console.error(USAGE2), 2;
           const sdir = join7(root, SUITES_DIR);
           const used = new Set((existsSync5(sdir) ? readdirSync3(sdir).filter((f) => f.endsWith(".json")) : []).flatMap((f) => readJson(join7(sdir, f)).cases.map((c) => c.id)));
           const fresh = (await allCases(Infinity, { perSize: Infinity })).filter((c) => !used.has(c.id));
@@ -10428,7 +10249,7 @@ var init_bench = __esm({
         if (verb === "build") {
           const limit = a.values.limit ? Number(a.values.limit) : binding.learning.bench_size;
           const perSize = a.values["per-size"] ? Number(a.values["per-size"]) : void 0;
-          if (!(limit > 0) || perSize !== void 0 && !(perSize > 0)) return console.error(USAGE3), 2;
+          if (!(limit > 0) || perSize !== void 0 && !(perSize > 0)) return console.error(USAGE2), 2;
           const cases = await allCases(limit, { paths: a.values.paths, perSize });
           const rel = suite ? suiteFile(suite) : CASES_FILE;
           const file = join7(root, rel);
@@ -10439,7 +10260,7 @@ var init_bench = __esm({
         }
         if (verb === "run") {
           const trials = a.values.trials ? Number(a.values.trials) : binding.learning?.bench_trials ?? 3;
-          if (!a.values.model && !a.values.executor || !(Number.isInteger(trials) && trials > 0)) return console.error(USAGE3), 2;
+          if (!a.values.model && !a.values.executor || !(Number.isInteger(trials) && trials > 0)) return console.error(USAGE2), 2;
           const executor = a.values.executor ? resolveExecutor(a.values.executor, binding) : void 0;
           const model = a.values.model ?? binding.models.balanced;
           const executorName = a.values.executor ? a.values.executor.trim().startsWith("{") ? "inline" : a.values.executor : void 0;
@@ -10462,7 +10283,7 @@ var init_bench = __esm({
           } else console.log(JSON.stringify(r, null, 2));
           return 0;
         }
-        console.error(USAGE3);
+        console.error(USAGE2);
         return 2;
       } catch (e) {
         console.error(e.message);
@@ -10483,7 +10304,7 @@ __export(gates_exports, {
   benchedSkills: () => benchedSkills,
   branchNames: () => branchNames,
   classify: () => classify,
-  cli: () => cli6,
+  cli: () => cli5,
   cliCalls: () => cliCalls,
   cliFlags: () => cliFlags,
   cliVerbs: () => cliVerbs,
@@ -10962,12 +10783,12 @@ async function signal(d, source, title, body = "") {
   return { created: true, id: item.id };
 }
 function cliVerbs() {
-  const out = { board: new Set(Object.keys(VERBS)), forge: new Set(Object.keys(VERBS3)), vcs: new Set(Object.keys(VERBS2)) };
+  const out = { board: new Set(Object.keys(VERBS2)), forge: new Set(Object.keys(VERBS3)), vcs: new Set(Object.keys(VERBS)) };
   for (const g of ["gate", "ledger", "bench"]) out[g] = new Set(GROUPS[g][2].split(":")[0].split(/\s+/).filter((w) => /^[a-z][a-z-]*$/.test(w)));
   return out;
 }
 function cliFlags(group, verb) {
-  const table = { board: VERBS, forge: VERBS3, vcs: VERBS2 }[group];
+  const table = { board: VERBS2, forge: VERBS3, vcs: VERBS }[group];
   if (table) {
     const v = table[verb];
     return /* @__PURE__ */ new Set([...v?.value ?? [], ...v?.bool ?? []]);
@@ -11070,7 +10891,7 @@ function depsOf(base) {
   };
   return d;
 }
-var import_yaml4, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tiersOf, withoutTier, tiersValid, nameHas, readDiff, DEPENDENCY_LINES, DEPENDENCY_BOTS, TRAILER_LINE, TRAILER_VALUE, trailerValue, FORGE_WEB, redact, cleanUrl, mdFiles, cli6;
+var import_yaml4, matchesAny, factoryGlobs, TUNING_KEYS, SKILL_MD, TIERS3, tiersOf, withoutTier, tiersValid, nameHas, readDiff, DEPENDENCY_LINES, DEPENDENCY_BOTS, TRAILER_LINE, TRAILER_VALUE, trailerValue, FORGE_WEB, redact, cleanUrl, mdFiles, cli5;
 var init_gates = __esm({
   "src/gates.ts"() {
     "use strict";
@@ -11116,7 +10937,7 @@ var init_gates = __esm({
     redact = (s, max = 120) => String(s ?? "").replace(/[\x00-\x1f]/g, " ").replace(/\b[A-Za-z0-9_+/=-]{32,}\b/g, "[redacted]").slice(0, max);
     cleanUrl = (u) => redact(String(u ?? "").replace(/^(\w+:\/\/)[^/@]*@/, "$1").replace(/[?#].*$/, ""), 200);
     mdFiles = (dir) => readdirSync4(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? mdFiles(join8(dir, e.name)).map((f) => `${e.name}/${f}`) : e.name.endsWith(".md") ? [e.name] : []);
-    cli6 = (argv, base) => guard(async () => {
+    cli5 = (argv, base) => guard(async () => {
       const [gate, ...rest] = argv;
       const a = parseArgs(rest, ["stdin-prepush", "pushed"]);
       const deps = () => depsOf(base);
@@ -11192,7 +11013,7 @@ var forge_exports = {};
 __export(forge_exports, {
   GATE_CONTEXTS: () => GATE_CONTEXTS,
   VERBS: () => VERBS3,
-  cli: () => cli7,
+  cli: () => cli6,
   createForge: () => createForge
 });
 function createForge(ctx) {
@@ -11200,7 +11021,7 @@ function createForge(ctx) {
   if (!make) throw new Error(`unknown forge adapter: ${ctx.binding.forge.adapter}`);
   return make(ctx);
 }
-var GATE_CONTEXTS, adapters2, VERBS3, cli7;
+var GATE_CONTEXTS, adapters2, VERBS3, cli6;
 var init_forge = __esm({
   "src/forge/index.ts"() {
     "use strict";
@@ -11229,11 +11050,11 @@ var init_forge = __esm({
       status: { value: ["state", "context", "description", "url"] },
       approve: {},
       approvals: {},
-      runs: { value: ["ref"], bool: ["failed"] },
+      runs: { value: ["ref", "workflow"], bool: ["failed"] },
       run: {},
       whoami: {}
     };
-    cli7 = (argv, ctx) => guard(async () => {
+    cli6 = (argv, ctx) => guard(async () => {
       const [verb, ...rest] = argv;
       if (!verb || !Object.hasOwn(VERBS3, verb)) throw new UsageError(`unknown forge verb: ${verb ?? ""}`);
       const a = parseStrict("forge", verb, rest, VERBS3[verb]);
@@ -11319,7 +11140,7 @@ var init_forge = __esm({
           if (!f.whoami) throw new Error("forge whoami: this forge adapter cannot say who it acts as");
           return f.whoami();
         case "runs":
-          return f.runs({ ref: a.get("ref"), failed: a.has("failed") });
+          return f.runs({ ref: a.get("ref"), failed: a.has("failed"), workflow: a.get("workflow") });
         default:
           throw new UsageError(`unknown forge verb: ${verb}`);
       }
@@ -11327,11 +11148,301 @@ var init_forge = __esm({
   }
 });
 
+// src/board/index.ts
+var board_exports = {};
+__export(board_exports, {
+  HEARTBEAT: () => HEARTBEAT,
+  VERBS: () => VERBS2,
+  bootstrap: () => bootstrap,
+  cli: () => cli7,
+  createBoard: () => createBoard,
+  hold: () => hold,
+  holds: () => holds
+});
+import { mkdirSync as mkdirSync4, readFileSync as readFileSync8, writeFileSync as writeFileSync4 } from "fs";
+import { join as join9, resolve as resolve4 } from "path";
+function createBoard(ctx) {
+  const make = { "github-issues": createGithubIssuesBoard, local: createLocalBoard }[ctx.binding.board.adapter];
+  if (!make) throw new Error(`unknown board adapter '${ctx.binding.board.adapter}'`);
+  const missing = validateBinding({ ...ctx.binding, board: { ...ctx.binding.board, options: ctx.options } }).map((m) => /^board\.options\.(\w+) is required/.exec(m)?.[1]).filter(Boolean).map((k) => `board.options.${k}`);
+  if (missing.length) throw new Error(`board adapter '${ctx.binding.board.adapter}' needs binding keys: ${missing.join(", ")}; run: agentic-sdlc validate`);
+  const board = checked(make(ctx), ctx);
+  const scope = ctx.binding.board.scope;
+  if (!scope?.label) return board;
+  const pre = scope.label.slice(0, scope.label.indexOf(":") + 1);
+  const mine = (i) => i.labels.includes(scope.label) || !!scope.home && !i.labels.some((l) => l.startsWith(pre));
+  return {
+    ...board,
+    list: async (q) => (await board.list(q)).filter(mine),
+    create: (t) => board.create({ ...t, labels: [.../* @__PURE__ */ new Set([...t.labels ?? [], scope.label])] })
+  };
+}
+function checked(b, ctx) {
+  const numeric = ctx.binding.board.adapter === "github-issues";
+  const statuses = ctx.binding.board.statuses;
+  const id = (v) => {
+    if (numeric && v !== void 0 && !/^\d+$/.test(String(v))) throw new Error(`board: not an issue number: ${v}`);
+    return v;
+  };
+  const status = (s) => {
+    if (Array.isArray(statuses) && statuses.length && !statuses.includes(s)) throw new Error(`board: status '${s}' is not in board.statuses (${statuses.join(", ")})`);
+    return s;
+  };
+  return {
+    ...b,
+    get: async (i) => b.get(id(i)),
+    create: async (t) => {
+      id(t.parent);
+      status(t.status);
+      return b.create(t);
+    },
+    move: async (i, s, from) => b.move(id(i), status(s), from),
+    set: async (i, f, v) => b.set(id(i), f, v),
+    label: async (i, op, l) => b.label(id(i), op, l),
+    assign: async (i, u) => b.assign(id(i), u),
+    milestone: async (i, m) => b.milestone(id(i), m),
+    comment: async (i, body) => b.comment(id(i), body),
+    comments: async (i, q) => b.comments(id(i), q),
+    close: async (i, r) => b.close(id(i), r),
+    child: async (p, c) => b.child(id(p), id(c))
+  };
+}
+async function hold(board, b, id, kind, body) {
+  const trigger = kind.trim();
+  if (!trigger || /[\r\n]/.test(trigger)) throw new Usage("board hold: --kind is one non-empty line");
+  const text = body.replace(/^### Needs human[^\n]*\n+/, "");
+  const item = await board.label(id, "add", b.board.labels.human);
+  await board.comment(id, `${stamp("ask", trigger)}
+
+${text.trim()}
+`);
+  return item;
+}
+async function holds(board, b) {
+  const o = ownersFor(b.owners, "board");
+  const owners = new Set([...o.product, ...o.factory, ...o.operator, ...o.security, ...o.compliance].map((x) => x.toLowerCase()));
+  const bots = new Set(o.bots.map((x) => x.toLowerCase()));
+  const out = [];
+  for (const item of await board.list({ label: b.board.labels.human })) {
+    const all = [...await board.comments(item.id)].sort(byTime);
+    const ask = all.find(asked);
+    const line = ask?.body.split("\n")[0].slice(matches("ask").length).replace(/^:\s*/, "").trim();
+    const after = ask ? all.filter((c) => !asked(c) && Date.parse(c.createdAt) > Date.parse(ask.createdAt)) : [];
+    const reply = after.find((c) => {
+      const a = c.author?.toLowerCase();
+      return !!a && owners.has(a) && (!bots.has(a) || !isFactoryComment(c.body, { specMarker: b.spec_marker }));
+    });
+    out.push({
+      id: item.id,
+      kind: line || "unspecified",
+      askedAt: ask?.createdAt ?? item.updatedAt,
+      replied: !!reply,
+      ...reply ? { reply: { author: reply.author, createdAt: reply.createdAt, ...reply.url ? { url: reply.url } : {} } } : {}
+    });
+  }
+  return out;
+}
+async function bootstrap(board, b) {
+  const labels = [...Object.values(b.board.labels ?? {}), ...b.board.env_labels ?? [], ...(b.board.signal_streams ?? []).map((s) => `signal:${s}`), b.forge?.approval_label || "approved"];
+  const hb = String(b.heartbeat?.ticket ?? "").trim();
+  const known = hb && !hb.startsWith(UNRESOLVED) ? hb : void 0;
+  const r = board.bootstrap ? await board.bootstrap(labels, known ? void 0 : HEARTBEAT) : { created: [] };
+  return { labels: { created: r.created }, heartbeat: known ? { id: known, created: false } : r.heartbeat ?? null };
+}
+var Usage, asked, byTime, HEARTBEAT, VERBS2, USAGE3, cli7;
+var init_board = __esm({
+  "src/board/index.ts"() {
+    "use strict";
+    init_ports();
+    init_binding();
+    init_comments();
+    init_util();
+    init_github_issues();
+    init_local();
+    init_page();
+    init_forge();
+    init_install();
+    Usage = UsageError;
+    asked = (c) => isMarked(c.body, "ask");
+    byTime = (x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt);
+    HEARTBEAT = { title: "agentic-sdlc heartbeat", body: "agentic-sdlc heartbeat comments. Not a ticket." };
+    VERBS2 = {
+      list: { value: ["status", "label", "search", "state"] },
+      get: {},
+      create: { value: ["title", "body-file", "status", "label", "parent", "milestone"] },
+      move: { value: ["only-from"] },
+      set: { bool: ["clear"] },
+      label: {},
+      assign: { bool: ["none"] },
+      milestone: { bool: ["clear"] },
+      comment: { value: ["body-file", "kind", "ref"] },
+      comments: { value: ["last", "marker", "author", "kind", "ref"], bool: ["trusted"], num: ["last"] },
+      hold: { value: ["kind", "body-file"] },
+      holds: {},
+      release: {},
+      close: { value: ["reason"] },
+      child: {},
+      bootstrap: {},
+      page: { value: ["out", "connector"] }
+    };
+    USAGE3 = `usage: agentic-sdlc board <verb>
+  list [--status <s>]... [--label <l>] [--search <text>] [--state all]    get <id>
+  create --title <t> --body-file <f> --status <s> [--label <l>]... [--parent <id>] [--milestone <m>]
+  move <id> <status> [--only-from <s>]    set <id> <field> <value> | --clear
+  milestone <id> <name> | --clear
+  label <id> add|remove <label>           assign <id> <user> | --none
+  comment <id> --body-file <f> [--kind <kind> [--ref <value>]]
+  comments <id> [--last <n>] [--kind <kind> [--ref <value>] | --marker <text>] [--author <a>]... [--trusted]
+  hold <id> --kind <trigger> --body-file <f>    holds    release <id>
+  close <id> --reason completed|not_planned    child <parent> <child>
+  bootstrap   (the labels and the heartbeat ticket the binding needs; idempotent)
+  page --out <dir> [--connector <name>]   (the owner's board page and its data file, to publish on claude.ai)`;
+    cli7 = async (argv, base) => {
+      const [verb, ...rest] = argv;
+      try {
+        if (!verb || verb === "--help") {
+          console.log(USAGE3);
+          return verb ? 0 : 2;
+        }
+        if (!Object.hasOwn(VERBS2, verb)) throw new Usage(`unknown board verb '${verb}'`);
+        const a = parseStrict("board", verb, rest, VERBS2[verb]);
+        const need2 = (n) => {
+          if (a.pos.length < n) throw new Usage(`board ${verb}: missing argument`);
+        };
+        const req = (k) => a.need(k);
+        const body = () => bodyFile(a);
+        const board = createBoard({ ...base, options: base.binding.board.options });
+        const [id] = a.pos;
+        let out;
+        switch (verb) {
+          case "list": {
+            const state = a.get("state");
+            if (state !== void 0 && state !== "open" && state !== "all") throw new Usage("board list: --state is open or all");
+            out = await board.list({ status: a.all("status"), label: a.get("label"), search: a.get("search"), state });
+            break;
+          }
+          case "get":
+            need2(1);
+            out = await board.get(id);
+            break;
+          case "create":
+            out = await board.create({
+              title: req("title"),
+              body: body(),
+              status: req("status"),
+              labels: a.all("label"),
+              parent: a.get("parent"),
+              milestone: a.get("milestone")
+            });
+            break;
+          case "move":
+            need2(2);
+            out = await board.move(id, a.pos[1], a.get("only-from"));
+            break;
+          case "set":
+            need2(a.has("clear") ? 2 : 3);
+            out = await board.set(id, a.pos[1], a.has("clear") ? null : a.pos[2]);
+            break;
+          case "label":
+            need2(3);
+            if (a.pos[1] !== "add" && a.pos[1] !== "remove") throw new Usage("label: add or remove");
+            if (a.pos[1] === "add" && a.pos[2].toLowerCase() === (base.binding.forge?.approval_label || "approved").toLowerCase()) throw new Error(`board label: '${a.pos[2]}' is forge.approval_label, the owner's approval; only the owner applies it, on the forge`);
+            out = await board.label(id, a.pos[1], a.pos[2]);
+            break;
+          case "assign":
+            need2(a.has("none") ? 1 : 2);
+            out = await board.assign(id, a.has("none") ? null : a.pos[1]);
+            break;
+          case "comment": {
+            need2(1);
+            if (a.has("ref") && !a.has("kind")) throw new Usage("board comment: --ref needs --kind");
+            if (a.get("kind") === "heartbeat") {
+              let f;
+              try {
+                f = JSON.parse(body()).factory;
+              } catch {
+              }
+              if (f !== void 0 && !(typeof f === "string" && /^[0-9a-f]{7,40}$/.test(f))) throw new Usage("board comment: heartbeat factory must be a hex sha (the sha field of vcs head)");
+            }
+            out = await board.comment(id, a.has("kind") ? stampBody(body(), parseWritableKind(a.get("kind")), a.get("ref"), { specMarker: base.binding.spec_marker }) : body());
+            break;
+          }
+          case "hold":
+            need2(1);
+            out = await hold(board, base.binding, id, req("kind"), body());
+            break;
+          case "holds":
+            out = await holds(board, base.binding);
+            break;
+          case "release":
+            need2(1);
+            out = await board.label(id, "remove", base.binding.board.labels.human);
+            break;
+          case "comments": {
+            need2(1);
+            if (a.has("kind") && a.has("marker")) throw new Usage("board comments: --kind and --marker together");
+            if (a.has("ref") && !a.has("kind")) throw new Usage("board comments: --ref needs --kind");
+            const marker = a.has("kind") ? matches(parseKind(a.get("kind")), a.get("ref"), { specMarker: base.binding.spec_marker }) : a.get("marker");
+            out = selectComments(await board.comments(id, { marker }), {
+              owners: ownersFor(base.binding.owners, "board"),
+              authors: a.all("author"),
+              trusted: a.has("trusted"),
+              last: a.get("last") ? Number(a.get("last")) : void 0,
+              marker
+            });
+            break;
+          }
+          case "close": {
+            need2(1);
+            const r = req("reason");
+            if (r !== "completed" && r !== "not_planned") throw new Usage("--reason completed|not_planned");
+            out = await board.close(id, r);
+            break;
+          }
+          case "milestone":
+            need2(a.has("clear") ? 1 : 2);
+            if (a.has("clear") && a.pos.length > 1) throw new Usage("board milestone: a name and --clear together");
+            out = await board.milestone(id, a.has("clear") ? null : a.pos[1]);
+            break;
+          case "child":
+            need2(2);
+            out = await board.child(id, a.pos[1]);
+            break;
+          case "bootstrap":
+            out = await bootstrap(board, base.binding);
+            break;
+          case "page": {
+            const dir = resolve4(base.root, req("out"));
+            let forge;
+            try {
+              forge = createForge({ ...base, options: base.binding.forge.options });
+            } catch {
+            }
+            const p = await boardPage({ board, forge, binding: base.binding, connector: a.get("connector"), template: readFileSync8(join9(packageRoot(), "templates/board/index.html"), "utf8") });
+            mkdirSync4(dir, { recursive: true });
+            writeFileSync4(join9(dir, "index.html"), p.html);
+            writeFileSync4(join9(dir, "board.json"), JSON.stringify(p.data));
+            out = { page: join9(dir, "index.html"), data: join9(dir, "board.json"), title: p.title, capabilities: p.capabilities };
+            break;
+          }
+          default:
+            throw new Usage(`unknown board verb '${verb}'`);
+        }
+        console.log(JSON.stringify(out, null, 2));
+        return 0;
+      } catch (e) {
+        console.error(e.message);
+        return e instanceof Usage ? 2 : 1;
+      }
+    };
+  }
+});
+
 // src/pristine.ts
 import { createHash as createHash2 } from "crypto";
-import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync8 } from "fs";
+import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync9 } from "fs";
 import { posix } from "path";
-import { join as join9 } from "path";
+import { join as join10 } from "path";
 function bindWorkflow(name, text, v) {
   if (name === "agentic-sdlc-delivery.yml")
     return text.replace(/^(\s+TRUNK: )\S+(?=\s+# set:)/m, `$1${v.trunk}`).replace(/^(\s+RELEASE_PREFIX: )\S+(?=\s+# set:)/m, `$1${v.releasePrefix}`).replace(/^(\s+DELIVERY: )\S+(?=\s+# set:)/m, `$1${v.delivery}`).replace(/(# set: your vcs\.trunk\n\s+branches: )\[[^\]]*\]/, `$1[${v.trunk}]`).replace(/(# set: your staging deploy workflow name[^\n]*\n\s+workflows: )\[[^\]]*\]/, (_, a) => a + JSON.stringify([v.deployFirst, v.deployLast, v.ci]).replaceAll('","', '", "')).replace(/(# set: the deploy\/publish workflow for the first environment[^\n]*\n\s+if \[ "\$RUN_NAME" = )"[^"]*"/, (_, a) => a + JSON.stringify(v.deployFirst)).replace(/(# set: the deploy\/publish workflow for the last environment[^\n]*\n[^\n]*\n\s+if \[ "\$RUN_NAME" = )"[^"]*"/, (_, a) => a + JSON.stringify(v.deployLast)).replace(/(# set: your trunk CI workflow name\n\s+if: >-\n[^\n]*?github\.event\.workflow_run\.name == )'[^']*'/, (_, a) => `${a}'${v.ci.replaceAll("'", "''")}'`);
@@ -11372,8 +11483,8 @@ function oneIdentityRuleset(text) {
   return JSON.stringify(rs, null, 2) + "\n";
 }
 function knownHashes(pkg) {
-  const f = join9(pkg, "templates", "known-hashes.json");
-  return new Set(existsSync7(f) ? JSON.parse(readFileSync8(f, "utf8")) : []);
+  const f = join10(pkg, "templates", "known-hashes.json");
+  return new Set(existsSync7(f) ? JSON.parse(readFileSync9(f, "utf8")) : []);
 }
 var sha, lfSha, DEFAULTS, yamlScalar, COPY_PREFIX, skillNames, SKILL_ROOT;
 var init_pristine = __esm({
@@ -11409,13 +11520,13 @@ __export(install_exports, {
   validate: () => validate
 });
 import { execFileSync as execFileSync2 } from "child_process";
-import { chmodSync as chmodSync2, existsSync as existsSync8, mkdirSync as mkdirSync4, readFileSync as readFileSync9, readdirSync as readdirSync6, rmSync as rmSync3, rmdirSync, statSync, writeFileSync as writeFileSync4 } from "fs";
-import { basename, dirname as dirname4, join as join10, resolve as resolve4 } from "path";
+import { chmodSync as chmodSync2, existsSync as existsSync8, mkdirSync as mkdirSync5, readFileSync as readFileSync10, readdirSync as readdirSync6, rmSync as rmSync3, rmdirSync, statSync, writeFileSync as writeFileSync5 } from "fs";
+import { basename, dirname as dirname4, join as join11, resolve as resolve5 } from "path";
 import { fileURLToPath } from "url";
 function packageRoot(env = process.env) {
-  if (env.AGENTIC_SDLC_PACKAGE) return resolve4(env.AGENTIC_SDLC_PACKAGE);
+  if (env.AGENTIC_SDLC_PACKAGE) return resolve5(env.AGENTIC_SDLC_PACKAGE);
   let d = dirname4(fileURLToPath(import.meta.url));
-  while (!existsSync8(join10(d, "package.json"))) {
+  while (!existsSync8(join11(d, "package.json"))) {
     const up = dirname4(d);
     if (up === d) throw new Error("cannot find the agentic-sdlc package root");
     d = up;
@@ -11438,16 +11549,16 @@ function missingBindingKeys(template2, binding) {
 }
 function missingKeys(root) {
   try {
-    return missingBindingKeys(readFileSync9(join10(packageRoot(), "templates/binding.yml"), "utf8"), readFileSync9(join10(root, BINDING_PATH), "utf8"));
+    return missingBindingKeys(readFileSync10(join11(packageRoot(), "templates/binding.yml"), "utf8"), readFileSync10(join11(root, BINDING_PATH), "utf8"));
   } catch {
     return [];
   }
 }
 function registerMcp(pkg, root, force, log, upgrade) {
-  const want = JSON.parse(readFileSync9(need(pkg, "templates/mcp/claude.json"), "utf8"));
+  const want = JSON.parse(readFileSync10(need(pkg, "templates/mcp/claude.json"), "utf8"));
   const rel = ".mcp.json";
-  const file = join10(root, rel);
-  const cur = existsSync8(file) ? readFileSync9(file, "utf8") : "";
+  const file = join11(root, rel);
+  const cur = existsSync8(file) ? readFileSync10(file, "utf8") : "";
   const doc = cur.trim() ? parseJson(cur, rel) : {};
   const had = doc.mcpServers?.["agentic-sdlc"];
   const old = had?.command === "npx" && Array.isArray(had.args) && had.args.includes("agentic-sdlc");
@@ -11461,16 +11572,16 @@ function registerMcp(pkg, root, force, log, upgrade) {
   }
   doc.mcpServers = { ...doc.mcpServers, ...want.mcpServers };
   const next2 = JSON.stringify(doc, null, 2) + "\n";
-  mkdirSync4(dirname4(file), { recursive: true });
-  writeFileSync4(file, next2);
+  mkdirSync5(dirname4(file), { recursive: true });
+  writeFileSync5(file, next2);
   log.push(`wrote ${rel}`);
 }
 function pinCli(inst, version3, ref, force) {
-  const file = join10(inst.root, CLI_PIN);
+  const file = join11(inst.root, CLI_PIN);
   inst.offered.add(CLI_PIN);
   let pkgName = CLI_PACKAGE, want = ref ?? `v${version3}`;
   if (existsSync8(file)) {
-    const raw = readFileSync9(file);
+    const raw = readFileSync10(file);
     const cur = parseJson(raw.toString("utf8"), CLI_PIN);
     if (typeof cur.package === "string" && cur.package) pkgName = cur.package;
     if (!ref && !force && isSha(cur.ref)) {
@@ -11481,30 +11592,30 @@ function pinCli(inst, version3, ref, force) {
   }
   const data = JSON.stringify({ package: pkgName, ref: want }, null, 2) + "\n";
   const had = existsSync8(file);
-  if (had && sha(readFileSync9(file)) === sha(data)) {
+  if (had && sha(readFileSync10(file)) === sha(data)) {
     inst.lock[CLI_PIN] = sha(data);
     return;
   }
-  mkdirSync4(dirname4(file), { recursive: true });
-  writeFileSync4(file, data);
+  mkdirSync5(dirname4(file), { recursive: true });
+  writeFileSync5(file, data);
   inst.lock[CLI_PIN] = sha(data);
   if (had) inst.counts.updated++;
   else inst.counts.wrote++;
   inst.log.push(`${had ? "updated" : "wrote"} ${CLI_PIN} (ref ${want})`);
 }
 function ignoreCliCache(root, log) {
-  const file = join10(root, ".agents", ".gitignore");
-  let text = existsSync8(file) ? readFileSync9(file, "utf8") : "";
+  const file = join11(root, ".agents", ".gitignore");
+  let text = existsSync8(file) ? readFileSync10(file, "utf8") : "";
   const add = IGNORED.filter((e) => !new RegExp(`^/?${e.slice(0, -1).replace(/\./g, "\\.")}/?\\s*$`, "m").test(text));
   if (!add.length) return;
   text += (text && !text.endsWith("\n") ? "\n" : "") + add.map((e) => e + "\n").join("");
-  mkdirSync4(dirname4(file), { recursive: true });
-  writeFileSync4(file, text);
+  mkdirSync5(dirname4(file), { recursive: true });
+  writeFileSync5(file, text);
   log.push(`added ${add.join(", ")} to .agents/.gitignore`);
 }
 function oldPinHint(root, log) {
   try {
-    const doc = JSON.parse(readFileSync9(join10(root, "package.json"), "utf8"));
+    const doc = JSON.parse(readFileSync10(join11(root, "package.json"), "utf8"));
     if (doc?.devDependencies?.["agentic-sdlc"] !== void 0)
       log.push(`package.json pins agentic-sdlc as a devDependency: remove it with npm rm agentic-sdlc (the pin is ${CLI_PIN})`);
   } catch {
@@ -11513,7 +11624,7 @@ function oldPinHint(root, log) {
 function claudeSetup(root, inst, log, noPlugin, upgrade) {
   let models = {};
   try {
-    models = (0, import_yaml5.parse)(readFileSync9(join10(root, BINDING_PATH), "utf8"))?.models ?? {};
+    models = (0, import_yaml5.parse)(readFileSync10(join11(root, BINDING_PATH), "utf8"))?.models ?? {};
   } catch {
   }
   for (const tier of TIERS4) {
@@ -11531,12 +11642,12 @@ its last Done when, and report the result and the evidence. Call the CLI as \`ag
 Do not start subagents.
 `, void 0, false, (t) => t.includes("npx --no agentic-sdlc"));
   }
-  const file = join10(root, "CLAUDE.md");
-  const cur = existsSync8(file) ? readFileSync9(file, "utf8") : "";
+  const file = join11(root, "CLAUDE.md");
+  const cur = existsSync8(file) ? readFileSync10(file, "utf8") : "";
   if (/^@AGENTS\.md\s*$/m.test(cur)) log.push("kept CLAUDE.md (imports @AGENTS.md)");
   else if (upgrade) log.push("kept CLAUDE.md: it does not import @AGENTS.md; add the line in a product change");
   else {
-    writeFileSync4(file, (cur ? cur.replace(/\n*$/, "\n\n") : "") + "@AGENTS.md\n");
+    writeFileSync5(file, (cur ? cur.replace(/\n*$/, "\n\n") : "") + "@AGENTS.md\n");
     log.push(cur ? "appended @AGENTS.md to CLAUDE.md" : "wrote CLAUDE.md (@AGENTS.md)");
   }
   if (noPlugin) {
@@ -11547,14 +11658,14 @@ Do not start subagents.
   log.push("headless runs load it from the pinned package: claude -p ... --plugin-dir .agents/.cli/<ref>/node_modules/agentic-sdlc (the ref in .agents/cli.json)");
 }
 function reviewSandbox(root, inst, log) {
-  const agent = readFileSync9(need(inst.pkg, "agents/sdlc-reviewer.md"), "utf8").replaceAll("mcp__plugin_agentic-sdlc_agentic-sdlc__", "mcp__agentic-sdlc__").replaceAll("agentic-sdlc:review", `${COPY_PREFIX}review`).replace(/\b([Tt]he) plugin's /g, "$1 ");
+  const agent = readFileSync10(need(inst.pkg, "agents/sdlc-reviewer.md"), "utf8").replaceAll("mcp__plugin_agentic-sdlc_agentic-sdlc__", "mcp__agentic-sdlc__").replaceAll("agentic-sdlc:review", `${COPY_PREFIX}review`).replace(/\b([Tt]he) plugin's /g, "$1 ");
   inst.put(".claude/agents/sdlc-reviewer.md", agent, "agents/sdlc-reviewer.md");
-  const hooksJson = readFileSync9(need(inst.pkg, "hooks/hooks.json"), "utf8");
+  const hooksJson = readFileSync10(need(inst.pkg, "hooks/hooks.json"), "utf8");
   for (const n of new Set([...hooksJson.matchAll(/\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/([\w.-]+\.mjs)/g)].map((m) => m[1]))) inst.copy(`hooks/${n}`, `.agents/hooks/${n}`);
   const want = JSON.parse(hooksJson.replaceAll("${CLAUDE_PLUGIN_ROOT}/hooks/", "${CLAUDE_PROJECT_DIR}/.agents/hooks/"));
-  const rel = ".claude/settings.json", file = join10(root, rel);
+  const rel = ".claude/settings.json", file = join11(root, rel);
   const had = existsSync8(file);
-  const doc = had ? parseJson(readFileSync9(file, "utf8") || "{}", rel) : {};
+  const doc = had ? parseJson(readFileSync10(file, "utf8") || "{}", rel) : {};
   let added = 0;
   for (const [event, entries] of Object.entries(want.hooks)) {
     const cur = (doc.hooks ??= {})[event] ??= [];
@@ -11567,8 +11678,8 @@ function reviewSandbox(root, inst, log) {
     log.push(`kept ${rel} (the guard and session-start hooks are registered)`);
     return;
   }
-  mkdirSync4(dirname4(file), { recursive: true });
-  writeFileSync4(file, JSON.stringify(doc, null, 2) + "\n");
+  mkdirSync5(dirname4(file), { recursive: true });
+  writeFileSync5(file, JSON.stringify(doc, null, 2) + "\n");
   log.push(`${had ? "updated" : "wrote"} ${rel}: the guard hook (${GUARD}) and the session-start hook`);
 }
 function originRepo(root) {
@@ -11599,31 +11710,31 @@ async function init(root, argv, log) {
   if (!FORGES.includes(forge)) throw new Error(`--forge must be one of ${FORGES.join("|")}, got '${forge}'`);
   if (harness !== "claude") throw new Error(`--harness must be claude, got '${harness}'`);
   const pkg = packageRoot();
-  const pkgJson = join10(pkg, "package.json");
+  const pkgJson = join11(pkg, "package.json");
   const version3 = existsSync8(pkgJson) ? readJson2(pkgJson).version : "next";
   if (f.ref !== void 0 && !isSha(f.ref) && !isTag(f.ref)) throw new Error(`--ref must be a 40-hex commit sha or a version tag like v${version3}, got '${f.ref}'`);
   const skills = need(pkg, "skills");
   const inst = new Installer(root, pkg, force, log);
   inst.skills("skills", ".agents/skills", true);
-  const noPlugin = f["no-plugin"] === "true" || f.upgrade === "true" && existsSync8(join10(root, ".claude/skills"));
+  const noPlugin = f["no-plugin"] === "true" || f.upgrade === "true" && existsSync8(join11(root, ".claude/skills"));
   if (noPlugin) inst.skills("skills", ".claude/skills", true);
-  else for (const n of filesUnder(skills)) inst.skip(join10(".claude/skills", inst.installedName(n)));
+  else for (const n of filesUnder(skills)) inst.skip(join11(".claude/skills", inst.installedName(n)));
   pinCli(inst, version3, f.ref, force);
-  if (inst.copy("templates/bin/agentic-sdlc", LAUNCHER)) chmodSync2(join10(root, LAUNCHER), 493);
+  if (inst.copy("templates/bin/agentic-sdlc", LAUNCHER)) chmodSync2(join11(root, LAUNCHER), 493);
   ignoreCliCache(root, log);
-  const upgrade = existsSync8(join10(root, BINDING_PATH));
+  const upgrade = existsSync8(join11(root, BINDING_PATH));
   oldPinHint(root, log);
   if (noPlugin) registerMcp(pkg, root, force, log, upgrade);
   else log.push("MCP server: provided by the agentic-sdlc Claude Code plugin (use --no-plugin to write .mcp.json instead)");
-  const scorers = join10(pkg, "scorers");
+  const scorers = join11(pkg, "scorers");
   if (existsSync8(scorers)) {
-    for (const n of filesUnder(scorers)) inst.copy(join10("scorers", n), join10(".agents", "scorers", n));
+    for (const n of filesUnder(scorers)) inst.copy(join11("scorers", n), join11(".agents", "scorers", n));
   }
-  const bindingFile = join10(root, BINDING_PATH);
+  const bindingFile = join11(root, BINDING_PATH);
   const hadBinding = existsSync8(bindingFile);
   if (hadBinding) log.push(`kept ${BINDING_PATH}`);
   else {
-    const doc = (0, import_yaml5.parseDocument)(readFileSync9(need(pkg, "templates/binding.yml"), "utf8"));
+    const doc = (0, import_yaml5.parseDocument)(readFileSync10(need(pkg, "templates/binding.yml"), "utf8"));
     doc.setIn(["board", "adapter"], board);
     doc.setIn(["forge", "adapter"], forge);
     doc.setIn(["vcs", "adapter"], vcs);
@@ -11652,17 +11763,17 @@ async function init(root, argv, log) {
     for (const it of [...paths?.items ?? []]) {
       const k = String(it.key?.value ?? it.key), v = it.value?.toJSON?.() ?? it.value?.value;
       if (["factory", "lane_areas", "no_proof", "importance_doc"].includes(k)) continue;
-      const kept = [v].flat().filter((f2) => typeof f2 === "string" && existsSync8(join10(root, f2)));
+      const kept = [v].flat().filter((f2) => typeof f2 === "string" && existsSync8(join11(root, f2)));
       if (!kept.length) paths.delete(k);
       else if (Array.isArray(v) && kept.length < v.length) paths.set(k, kept);
     }
-    mkdirSync4(dirname4(bindingFile), { recursive: true });
-    writeFileSync4(bindingFile, doc.toString({ lineWidth: 0, flowCollectionPadding: false }));
+    mkdirSync5(dirname4(bindingFile), { recursive: true });
+    writeFileSync5(bindingFile, doc.toString({ lineWidth: 0, flowCollectionPadding: false }));
     log.push(`wrote ${BINDING_PATH}`);
   }
-  const gates = join10(pkg, "templates", "gates");
+  const gates = join11(pkg, "templates", "gates");
   const dir = need(pkg, `templates/gates/${forge}`);
-  const bound = (0, import_yaml5.parse)(readFileSync9(bindingFile, "utf8"));
+  const bound = (0, import_yaml5.parse)(readFileSync10(bindingFile, "utf8"));
   const continuous = bound?.product?.delivery === "continuous";
   const oneIdentity = !bound?.forge?.review_identity;
   const real = (v, d) => typeof v === "string" && v && !v.startsWith(UNRESOLVED) ? v : d;
@@ -11679,13 +11790,13 @@ async function init(root, argv, log) {
   {
     const tdir = `templates/gates/${forge}`;
     for (const n of readdirSync6(dir).filter((n2) => n2.endsWith(".yml"))) {
-      if (continuous && n === "agentic-sdlc-release.yml") inst.skip(join10(".github", "workflows", n));
-      else inst.copy(`${tdir}/${n}`, join10(".github", "workflows", n));
+      if (continuous && n === "agentic-sdlc-release.yml") inst.skip(join11(".github", "workflows", n));
+      else inst.copy(`${tdir}/${n}`, join11(".github", "workflows", n));
     }
-    if (existsSync8(join10(dir, "ISSUE_TEMPLATE", "signal.yml"))) inst.copy(`${tdir}/ISSUE_TEMPLATE/signal.yml`, ".github/ISSUE_TEMPLATE/signal.yml");
-    if (existsSync8(join10(dir, "pull_request_template.md"))) inst.copy(`${tdir}/pull_request_template.md`, ".github/pull_request_template.md");
-    if (existsSync8(join10(dir, "ruleset.trunk.json"))) {
-      let text = readFileSync9(join10(dir, "ruleset.trunk.json"), "utf8");
+    if (existsSync8(join11(dir, "ISSUE_TEMPLATE", "signal.yml"))) inst.copy(`${tdir}/ISSUE_TEMPLATE/signal.yml`, ".github/ISSUE_TEMPLATE/signal.yml");
+    if (existsSync8(join11(dir, "pull_request_template.md"))) inst.copy(`${tdir}/pull_request_template.md`, ".github/pull_request_template.md");
+    if (existsSync8(join11(dir, "ruleset.trunk.json"))) {
+      let text = readFileSync10(join11(dir, "ruleset.trunk.json"), "utf8");
       if (oneIdentity) {
         parseJson(text, "ruleset.trunk.json");
         text = oneIdentityRuleset(text);
@@ -11694,36 +11805,36 @@ async function init(root, argv, log) {
       log.push("import .github/rulesets/trunk.json in the repo settings (Rules > Rulesets) to protect the trunk");
       log.push(oneIdentity ? "one identity: the ruleset needs no approving review and pins every required check to GitHub Actions (integration_id 15368); a Full-lane CR waits on human-approval until a collaborator approves its head or you apply forge.approval_label to it" : "its CI checks are pinned to GitHub Actions (integration_id 15368); review and human-approval are posted with the review token: pin them to your review GitHub App's id if it is an App (a PAT cannot be pinned)");
     }
-    if (continuous && existsSync8(join10(dir, "ruleset.release.json"))) inst.skip(".github/rulesets/release.json");
-    if (!continuous && existsSync8(join10(dir, "ruleset.release.json"))) {
+    if (continuous && existsSync8(join11(dir, "ruleset.release.json"))) inst.skip(".github/rulesets/release.json");
+    if (!continuous && existsSync8(join11(dir, "ruleset.release.json"))) {
       inst.copy(`${tdir}/ruleset.release.json`, ".github/rulesets/release.json");
       log.push("import .github/rulesets/release.json (Rules > Rulesets) and add the release bot (app or role) as a bypass actor; set its include to your vcs.release_prefix");
     }
   }
-  if (existsSync8(join10(gates, "hooks", "pre-push"))) {
-    if (inst.copy("templates/gates/hooks/pre-push", ".agents/hooks/pre-push")) chmodSync2(join10(root, ".agents", "hooks", "pre-push"), 493);
+  if (existsSync8(join11(gates, "hooks", "pre-push"))) {
+    if (inst.copy("templates/gates/hooks/pre-push", ".agents/hooks/pre-push")) chmodSync2(join11(root, ".agents", "hooks", "pre-push"), 493);
     log.push("enable the hook with: git config core.hooksPath .agents/hooks");
   }
-  const setup = join10(pkg, "templates", "runner", "setup.sh");
+  const setup = join11(pkg, "templates", "runner", "setup.sh");
   if (existsSync8(setup)) inst.copy("templates/runner/setup.sh", ".agents/runner-setup.sh");
   for (const n of ["cycle-prompt.md", "review-prompt.md"]) {
-    const prompt2 = join10(pkg, "templates", "runner", n);
-    if (existsSync8(prompt2)) inst.copy(`templates/runner/${n}`, join10(".agents", n));
+    const prompt2 = join11(pkg, "templates", "runner", n);
+    if (existsSync8(prompt2)) inst.copy(`templates/runner/${n}`, join11(".agents", n));
   }
-  const agents = join10(root, "AGENTS.md");
-  const cur = existsSync8(agents) ? readFileSync9(agents, "utf8") : "";
+  const agents = join11(root, "AGENTS.md");
+  const cur = existsSync8(agents) ? readFileSync10(agents, "utf8") : "";
   const s = cur.indexOf(START), e = cur.indexOf(END);
   const next2 = s >= 0 && e > s ? cur.slice(0, s) + POINTER + cur.slice(e + END.length) : (cur ? cur.replace(/\n*$/, "\n\n") : "") + POINTER + "\n";
   const agentsChanged = next2 !== cur && !upgrade;
   if (agentsChanged) {
-    writeFileSync4(agents, next2);
+    writeFileSync5(agents, next2);
     log.push("updated AGENTS.md");
   } else if (next2 !== cur) log.push("kept AGENTS.md: its agentic-sdlc block differs from this release; update it in a product change");
   claudeSetup(root, inst, log, noPlugin, upgrade);
   inst.finish();
-  const missing = missingKeysLine(missingBindingKeys(readFileSync9(need(pkg, "templates/binding.yml"), "utf8"), readFileSync9(bindingFile, "utf8")));
+  const missing = missingKeysLine(missingBindingKeys(readFileSync10(need(pkg, "templates/binding.yml"), "utf8"), readFileSync10(bindingFile, "utf8")));
   if (missing) log.push(missing);
-  const open = unresolved((0, import_yaml5.parse)(readFileSync9(bindingFile, "utf8")));
+  const open = unresolved((0, import_yaml5.parse)(readFileSync10(bindingFile, "utf8")));
   if (open.length) log.push(`next: ${open.length} binding value${open.length === 1 ? " is" : "s are"} unresolved (${open.map((u) => u.key).join(", ")}); run the setup skill, or read agentic-sdlc validate --json`);
   const c = inst.counts;
   log.push(`install: ${c.wrote} new, ${c.updated} updated, ${c.kept} kept (differ from every released version), ${c.stale} stale${c.removed ? `, ${c.removed} removed` : ""}`);
@@ -11740,7 +11851,7 @@ function validate(root, warnings = []) {
   } catch (e) {
     problems.push(e.message);
   }
-  const dir = join10(root, ".agents", "skills");
+  const dir = join11(root, ".agents", "skills");
   if (!existsSync8(dir)) return [...problems, ".agents/skills is missing"];
   const pack = readSkills(dir);
   problems.push(...pack.errors.map((m) => `skill ${m}`));
@@ -11836,9 +11947,9 @@ function issueFields(b, ctx) {
   return [`fail board field_ids: ${bad.join("; ")}; by name the org has field_ids: { ${Object.entries(want).map(([k, v]) => `${k}: ${v}`).join(", ")} }`];
 }
 function deliveryWorkflow(b, root) {
-  const f = join10(root, ".github", "workflows", "agentic-sdlc-delivery.yml");
+  const f = join11(root, ".github", "workflows", "agentic-sdlc-delivery.yml");
   if (!existsSync8(f)) return void 0;
-  const wf = (0, import_yaml5.parse)(readFileSync9(f, "utf8"));
+  const wf = (0, import_yaml5.parse)(readFileSync10(f, "utf8"));
   const br = wf?.on?.push?.branches ?? [];
   if (!br.includes(b.vcs.trunk))
     return `fail delivery workflow: push branches ${br.join(", ")} do not name trunk ${b.vcs.trunk}; edit its 'set:' lines`;
@@ -11850,19 +11961,19 @@ function deliveryWorkflow(b, root) {
   return `ok   delivery workflow: names trunk ${b.vcs.trunk}`;
 }
 function unpinnedActions(root) {
-  const dir = join10(root, ".github", "workflows");
+  const dir = join11(root, ".github", "workflows");
   if (!existsSync8(dir)) return void 0;
-  const bad = readdirSync6(dir).filter((n) => /^agentic-sdlc-.*\.ya?ml$/.test(n)).flatMap((n) => [...readFileSync9(join10(dir, n), "utf8").matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)/gm)].map((m) => m[1]).filter((u) => !u.startsWith("./") && !/@[0-9a-f]{40}$/.test(u)).map((u) => `${n}: ${u}`));
+  const bad = readdirSync6(dir).filter((n) => /^agentic-sdlc-.*\.ya?ml$/.test(n)).flatMap((n) => [...readFileSync10(join11(dir, n), "utf8").matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)/gm)].map((m) => m[1]).filter((u) => !u.startsWith("./") && !/@[0-9a-f]{40}$/.test(u)).map((u) => `${n}: ${u}`));
   return bad.length ? `warn workflow actions: not pinned to a commit SHA (${[...new Set(bad)].join(", ")}); a tag can move, so let Dependabot's github-actions ecosystem pin them` : void 0;
 }
 function cliPin(root) {
   const out = [];
-  const file = join10(root, CLI_PIN);
+  const file = join11(root, CLI_PIN);
   if (!existsSync8(file)) out.push(`fail cli pin: ${CLI_PIN} is missing; run agentic-sdlc init`);
   else {
     let pin;
     try {
-      pin = JSON.parse(readFileSync9(file, "utf8"));
+      pin = JSON.parse(readFileSync10(file, "utf8"));
     } catch (e) {
       out.push(`fail cli pin: ${CLI_PIN} is not valid JSON (${e.message})`);
     }
@@ -11874,14 +11985,14 @@ function cliPin(root) {
       else out.push(`fail cli pin: ref '${pin.ref ?? ""}' in ${CLI_PIN} is neither a 40-hex commit sha nor a version tag like v1.2.3`);
     }
   }
-  const launcher = join10(root, LAUNCHER);
+  const launcher = join11(root, LAUNCHER);
   if (!existsSync8(launcher)) out.push(`fail cli pin: ${LAUNCHER} is missing; run agentic-sdlc init`);
   else if (process.platform !== "win32" && !(statSync(launcher).mode & 73)) out.push(`fail cli pin: ${LAUNCHER} is not executable; chmod +x ${LAUNCHER}`);
   return out;
 }
 function pathWarnings(root, b) {
   const paths = b?.paths ?? {};
-  return Object.entries(paths).filter(([k, v]) => !["factory", "lane_areas", "no_proof"].includes(k) && typeof v === "string" && v && !existsSync8(join10(root, v))).map(([k, v]) => `paths.${k} names ${v}, which does not exist in the project; the skills will read nothing there`);
+  return Object.entries(paths).filter(([k, v]) => !["factory", "lane_areas", "no_proof"].includes(k) && typeof v === "string" && v && !existsSync8(join11(root, v))).map(([k, v]) => `paths.${k} names ${v}, which does not exist in the project; the skills will read nothing there`);
 }
 var import_yaml5, START, END, POINTER, INSTALL_LOCK, LEGACY_LOCK, TIERS4, FORGES, INIT_FLAGS, flagsOf, need, parseJson, readJson2, filesUnder, posix2, Installer, missingKeysLine, CLI_PIN, CLI_PACKAGE, LAUNCHER, IGNORED, isSha, isTag, GUARD, envNames, redact2, firstLines, probeFailure, cli8;
 var init_install = __esm({
@@ -11919,7 +12030,7 @@ ${END}`;
       return f;
     };
     need = (pkg, rel) => {
-      const p = join10(pkg, rel);
+      const p = join11(pkg, rel);
       if (!existsSync8(p)) throw new Error(`package is missing ${rel} (looked in ${pkg})`);
       return p;
     };
@@ -11930,8 +12041,8 @@ ${END}`;
         throw new Error(`${p} is not valid JSON (${e.message}); fix it and run init again`);
       }
     };
-    readJson2 = (p) => parseJson(readFileSync9(p, "utf8"), basename(p));
-    filesUnder = (dir) => readdirSync6(dir).flatMap((n) => statSync(join10(dir, n)).isDirectory() ? filesUnder(join10(dir, n)).map((f) => join10(n, f)) : [n]);
+    readJson2 = (p) => parseJson(readFileSync10(p, "utf8"), basename(p));
+    filesUnder = (dir) => readdirSync6(dir).flatMap((n) => statSync(join11(dir, n)).isDirectory() ? filesUnder(join11(dir, n)).map((f) => join11(n, f)) : [n]);
     posix2 = (p) => p.replaceAll("\\", "/");
     Installer = class {
       lock = {};
@@ -11951,7 +12062,7 @@ ${END}`;
         this.log = log;
         this.known = knownHashes(pkg);
         for (const f of [LEGACY_LOCK, INSTALL_LOCK]) {
-          const file = join10(root, f);
+          const file = join11(root, f);
           if (existsSync8(file)) Object.assign(this.lock, readJson2(file));
         }
       }
@@ -11959,10 +12070,10 @@ ${END}`;
       put(rel, data, src, quiet = false, legacy) {
         rel = posix2(rel);
         this.offered.add(rel);
-        const to = join10(this.root, rel), want = lfSha(Buffer.from(data));
+        const to = join11(this.root, rel), want = lfSha(Buffer.from(data));
         let how = "wrote";
         if (existsSync8(to)) {
-          const bytes = readFileSync9(to), have = lfSha(bytes);
+          const bytes = readFileSync10(to), have = lfSha(bytes);
           if (have === want) {
             this.lock[rel] = want;
             return true;
@@ -11971,12 +12082,12 @@ ${END}`;
           else if (this.force) how = "overwrote";
           else {
             this.counts.kept++;
-            this.log.push(`kept ${rel} (differs from every released version; ${src ? `--force overwrites, see ${join10(this.pkg, src)}` : "--force regenerates it"})`);
+            this.log.push(`kept ${rel} (differs from every released version; ${src ? `--force overwrites, see ${join11(this.pkg, src)}` : "--force regenerates it"})`);
             return false;
           }
         }
-        mkdirSync4(dirname4(to), { recursive: true });
-        writeFileSync4(to, data);
+        mkdirSync5(dirname4(to), { recursive: true });
+        writeFileSync5(to, data);
         this.lock[rel] = want;
         if (how === "wrote") this.counts.wrote++;
         else this.counts.updated++;
@@ -11985,7 +12096,7 @@ ${END}`;
       }
       /** Install the package file `src` (relative to the package) at `rel`. */
       copy(src, rel, quiet = false) {
-        const data = readFileSync9(join10(this.pkg, src));
+        const data = readFileSync10(join11(this.pkg, src));
         return this.put(rel, posix2(rel).startsWith(".github/workflows/") ? bindWorkflow(basename(rel), data.toString("utf8"), this.bound) : data, src, quiet);
       }
       /** Name a file this run does not install (by choice of binding or harness) so it is not reported as stale. */
@@ -11999,17 +12110,17 @@ ${END}`;
        */
       skills(src, dest, copied = false) {
         const before = this.counts.wrote + this.counts.updated;
-        const names = skillNames(join10(this.pkg, src));
-        for (const f of filesUnder(join10(this.pkg, src))) {
-          const from = join10(src, f);
+        const names = skillNames(join11(this.pkg, src));
+        for (const f of filesUnder(join11(this.pkg, src))) {
+          const from = join11(src, f);
           if (!copied) {
-            this.copy(from, join10(dest, f), true);
+            this.copy(from, join11(dest, f), true);
             continue;
           }
           const seg = posix2(f).split("/");
           const folder = names.has(seg[0]) && seg[0] !== "sdlc" ? COPY_PREFIX + seg[0] : seg[0];
-          const rel = join10(dest, folder, ...seg.slice(1));
-          const data = readFileSync9(join10(this.pkg, from));
+          const rel = join11(dest, folder, ...seg.slice(1));
+          const data = readFileSync10(join11(this.pkg, from));
           this.put(rel, f.endsWith(".md") ? renameSkill(posix2(f), data.toString("utf8"), "to", names) : data, from, true);
         }
         const n = this.counts.wrote + this.counts.updated - before;
@@ -12018,11 +12129,11 @@ ${END}`;
       /** A package skill file's path inside a copied install's skills folder. */
       installedName(f) {
         const seg = posix2(f).split("/");
-        return join10(seg[0] !== "sdlc" ? COPY_PREFIX + seg[0] : seg[0], ...seg.slice(1));
+        return join11(seg[0] !== "sdlc" ? COPY_PREFIX + seg[0] : seg[0], ...seg.slice(1));
       }
       /** Is the installed file `rel` an unedited copy of some released version (its lock hash, or a known hash)? */
       pristine(rel) {
-        const bytes = readFileSync9(join10(this.root, rel));
+        const bytes = readFileSync10(join11(this.root, rel));
         return lfSha(bytes) === this.lock[rel] || this.known.has(releasedHash(basename(rel), bytes, rel));
       }
       /**
@@ -12032,17 +12143,17 @@ ${END}`;
        * Then save the lock.
        */
       finish() {
-        const skillFiles = [".agents/skills", ".claude/skills"].flatMap((d) => existsSync8(join10(this.root, d)) ? filesUnder(join10(this.root, d)).map((f) => posix2(join10(d, f))) : []);
+        const skillFiles = [".agents/skills", ".claude/skills"].flatMap((d) => existsSync8(join11(this.root, d)) ? filesUnder(join11(this.root, d)).map((f) => posix2(join11(d, f))) : []);
         for (const rel of [.../* @__PURE__ */ new Set([...Object.keys(this.lock), ...skillFiles])].sort()) {
           if (this.offered.has(rel)) continue;
-          if (!existsSync8(join10(this.root, rel))) {
+          if (!existsSync8(join11(this.root, rel))) {
             delete this.lock[rel];
             continue;
           }
           if (this.pristine(rel)) {
-            rmSync3(join10(this.root, rel));
+            rmSync3(join11(this.root, rel));
             delete this.lock[rel];
-            for (let d = dirname4(join10(this.root, rel)); /[\\/]\.(?:agents|claude)[\\/]skills[\\/]./.test(d.slice(this.root.length)); d = dirname4(d)) {
+            for (let d = dirname4(join11(this.root, rel)); /[\\/]\.(?:agents|claude)[\\/]skills[\\/]./.test(d.slice(this.root.length)); d = dirname4(d)) {
               if (readdirSync6(d).length) break;
               rmdirSync(d);
             }
@@ -12053,10 +12164,10 @@ ${END}`;
             this.log.push(`stale ${rel}: no longer part of the package`);
           }
         }
-        const file = join10(this.root, INSTALL_LOCK);
-        mkdirSync4(dirname4(file), { recursive: true });
-        writeFileSync4(file, JSON.stringify(Object.fromEntries(Object.entries(this.lock).sort(([a], [b]) => a < b ? -1 : 1)), null, 2) + "\n");
-        const legacy = join10(this.root, LEGACY_LOCK);
+        const file = join11(this.root, INSTALL_LOCK);
+        mkdirSync5(dirname4(file), { recursive: true });
+        writeFileSync5(file, JSON.stringify(Object.fromEntries(Object.entries(this.lock).sort(([a], [b]) => a < b ? -1 : 1)), null, 2) + "\n");
+        const legacy = join11(this.root, LEGACY_LOCK);
         if (existsSync8(legacy)) {
           rmSync3(legacy);
           this.log.push(`removed ${LEGACY_LOCK}: merged into ${INSTALL_LOCK}`);
@@ -12190,13 +12301,13 @@ __export(next_exports, {
   readRoutes: () => readRoutes,
   template: () => template
 });
-import { existsSync as existsSync9, readFileSync as readFileSync10 } from "fs";
-import { join as join11 } from "path";
+import { existsSync as existsSync9, readFileSync as readFileSync11 } from "fs";
+import { join as join12 } from "path";
 import { parseArgs as parseArgs4 } from "util";
 function readRoutes(root) {
-  const installed = join11(root, ".agents", "skills", "sdlc", "routes.yml");
+  const installed = join12(root, ".agents", "skills", "sdlc", "routes.yml");
   const file = existsSync9(installed) ? installed : new URL("../skills/sdlc/routes.yml", import.meta.url);
-  return (0, import_yaml6.parse)(readFileSync10(file, "utf8"));
+  return (0, import_yaml6.parse)(readFileSync11(file, "utf8"));
 }
 function template(s, b, id = "") {
   if (s === void 0 || s === null) return void 0;
@@ -12467,8 +12578,8 @@ __export(status_exports, {
   liveStatus: () => liveStatus,
   personSteps: () => personSteps
 });
-import { existsSync as existsSync10, readFileSync as readFileSync11 } from "fs";
-import { join as join12 } from "path";
+import { existsSync as existsSync10, readFileSync as readFileSync12 } from "fs";
+import { join as join13 } from "path";
 function personSteps(b, trunkLines, warnings) {
   const repo = String(b.forge?.options?.repo ?? b.board?.options?.repo ?? "<owner>/<repo>");
   const out = [
@@ -12484,7 +12595,7 @@ function personSteps(b, trunkLines, warnings) {
       where: `https://github.com/${repo}/settings/rules > New ruleset > Import a ruleset: .github/rulesets/trunk.json (once it is merged)`,
       verified: trunkLines.some((l) => l.startsWith("ok   trunk protection")) ? true : trunkLines.some((l) => /^(warn: trunk protection|fail trunk protection)/.test(l)) ? false : null
     },
-    { step: "Optional: connect GitHub in claude.ai, so a board page there can read the issues", where: "https://claude.ai/settings/connectors > GitHub", verified: null }
+    b.board?.page ? { step: "Open the board page", where: b.board.page, verified: true } : { step: "For the board page: add the custom connector GitHub on claude.ai, then install its GitHub app on the repo owner", where: "https://claude.ai/customize/connectors (name GitHub, URL https://api.githubcopilot.com/mcp/); https://github.com/apps/claude-github-mcp-connector/installations/new", verified: null }
   ];
   return out;
 }
@@ -12548,7 +12659,7 @@ var init_status = __esm({
         return 2;
       }
       const print = (o) => console.log(JSON.stringify(o, null, 2));
-      if (!existsSync10(join12(ctx.root, BINDING_PATH))) {
+      if (!existsSync10(join13(ctx.root, BINDING_PATH))) {
         print({ installed: false, install: "agentic-sdlc init --no-plugin" });
         return 0;
       }
@@ -12557,7 +12668,7 @@ var init_status = __esm({
       const problems = validate2(ctx.root, warnings);
       let b;
       try {
-        b = (0, import_yaml7.parse)(readFileSync11(join12(ctx.root, BINDING_PATH), "utf8"));
+        b = (0, import_yaml7.parse)(readFileSync12(join13(ctx.root, BINDING_PATH), "utf8"));
       } catch (e) {
         print({ installed: true, ok: false, problems: [e.message] });
         return 1;
@@ -12605,9 +12716,9 @@ __export(mcp_exports, {
   cli: () => cli11,
   handle: () => handle
 });
-import { mkdtempSync as mkdtempSync4, readFileSync as readFileSync12, rmSync as rmSync4, writeFileSync as writeFileSync5 } from "fs";
+import { mkdtempSync as mkdtempSync4, readFileSync as readFileSync13, rmSync as rmSync4, writeFileSync as writeFileSync6 } from "fs";
 import { tmpdir as tmpdir4 } from "os";
-import { join as join13 } from "path";
+import { join as join14 } from "path";
 import { createInterface } from "readline";
 function allowList(arg) {
   const out = /* @__PURE__ */ new Set();
@@ -12671,9 +12782,9 @@ async function callTool(name, args, ctx, allow) {
   }
   let dir;
   if (s.body) {
-    dir = mkdtempSync4(join13(tmpdir4(), "agentic-sdlc-mcp-"));
-    writeFileSync5(join13(dir, "body.md"), String(args.body));
-    argv.push("--body-file", join13(dir, "body.md"));
+    dir = mkdtempSync4(join14(tmpdir4(), "agentic-sdlc-mcp-"));
+    writeFileSync6(join14(dir, "body.md"), String(args.body));
+    argv.push("--body-file", join14(dir, "body.md"));
   }
   try {
     const { cli: cli12 } = await MODULES[s.group]();
@@ -12875,7 +12986,7 @@ var init_mcp = __esm({
     wire = (k) => "--" + k.replace(/_/g, "-");
     queue2 = Promise.resolve();
     realWrite = process.stdout.write.bind(process.stdout);
-    version = () => JSON.parse(readFileSync12(new URL("../package.json", import.meta.url), "utf8")).version;
+    version = () => JSON.parse(readFileSync13(new URL("../package.json", import.meta.url), "utf8")).version;
     isModern = (msg) => {
       const m = msg.params?._meta;
       return m !== null && typeof m === "object" && (`${META}protocolVersion` in m || `${META}clientCapabilities` in m);
@@ -12920,7 +13031,7 @@ var init_mcp = __esm({
 });
 
 // src/cli.ts
-import { readFileSync as readFileSync13 } from "fs";
+import { readFileSync as readFileSync14 } from "fs";
 async function main(argv, env = process.env) {
   let root = process.cwd();
   const args = [...argv];
@@ -12988,7 +13099,7 @@ var init_cli = __esm({
       validate: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "[--json]: check the binding and skills; --json also lists the unresolved binding values"],
       doctor: [() => Promise.resolve().then(() => (init_install(), install_exports)), false, "validate, then probe board, forge and vcs"],
       status: [() => Promise.resolve().then(() => (init_status(), status_exports)), false, "what waits on you (holds, approvals), what the next cycle does, what is broken, the steps only you can take"],
-      board: [() => Promise.resolve().then(() => (init_board(), board_exports)), true, "list get create move set label assign milestone comment comments hold holds release close child bootstrap"],
+      board: [() => Promise.resolve().then(() => (init_board(), board_exports)), true, "list get create move set label assign milestone comment comments hold holds release close child bootstrap page"],
       forge: [() => Promise.resolve().then(() => (init_forge(), forge_exports)), true, "open view diff list ready draft sync automerge cut approve approvals comment comments verdict land queue status runs run whoami"],
       vcs: [() => Promise.resolve().then(() => (init_vcs(), vcs_exports)), true, "start head changed base push cut tag tags drop checkout-tests"],
       dispatch: [() => Promise.resolve().then(() => (init_dispatch(), dispatch_exports)), true, "dispatch <skill>[/<step>] --ticket <id> | --cr <n> [--run <id>] [--run-model <m>] [--workdir <d>] [--unattended]: start the step on its executor"],
@@ -13001,7 +13112,7 @@ var init_cli = __esm({
     INIT_FLAGS2 = "[--profile individual|organization] [--harness claude] [--board github-issues|local] [--forge github] [--vcs git] [--no-plugin] [--upgrade] [--force]";
     version2 = () => {
       try {
-        return JSON.parse(readFileSync13(new URL("../package.json", import.meta.url), "utf8")).version;
+        return JSON.parse(readFileSync14(new URL("../package.json", import.meta.url), "utf8")).version;
       } catch {
         return "unknown";
       }

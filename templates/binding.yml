@@ -8,7 +8,7 @@ owners: # a login, { board, forge }, or a list (the first is the primary); optio
   factory: "unresolved: the factory owner's forge login"
   bots: ["unresolved: the forge login the factory runs as"]
 
-board: # optional: later_milestone, scope { label, home, repos }
+board: # optional: later_milestone, page (the URL of the published board page), scope { label, home, repos }
   adapter: github-issues # github-issues | local
   options: {} # github-issues: { repo: owner/name, field_ids?: { status: <id>, ... } }; local: {}
   statuses: [Ideas, Signals, Backlog, Ready, In progress, In review, Done, Cancelled]
