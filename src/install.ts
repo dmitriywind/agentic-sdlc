@@ -223,7 +223,7 @@ function registerMcp(pkg: string, root: string, force: boolean, log: string[], u
 const CLI_PIN = '.agents/cli.json';
 const CLI_PACKAGE = 'github:dmitriywind/agentic-sdlc';
 const LAUNCHER = '.agents/bin/agentic-sdlc';
-const IGNORED = ['.cli/', 'work/']; // the launcher's cache, vcs start's workdirs
+const IGNORED = ['.cli/', 'work/', '!bin/']; // the launcher's cache, vcs start's workdirs; !bin/ keeps the launcher tracked under a root rule like [Bb]in/ (.NET)
 const isSha = (s: unknown) => typeof s === 'string' && /^[0-9a-f]{40}$/.test(s);
 const isTag = (s: unknown) => typeof s === 'string' && /^v\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.+-]+)?$/.test(s);
 

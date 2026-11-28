@@ -443,7 +443,7 @@ or a tag `v<version>` (a tag can move: `doctor` warns). `init` writes the runnin
 (into a temporary folder, then renamed; npm output to stderr) and execs its `dist/bin.js`. It refuses a
 ref or package that could read as an option or leave the folder, and ends with one line when node or npm
 is missing or the fetch fails. Every workflow job, the pre-push hook, `runner-setup.sh` and the MCP entry
-run through it. `init` adds `.cli/` and `work/` to `.agents/.gitignore`, writes nothing into
+run through it. `init` adds `.cli/`, `work/` and `!bin/` (the launcher stays tracked when a root rule ignores `bin/`) to `.agents/.gitignore`, writes nothing into
 `package.json` or `.npmrc` (and prints `npm rm agentic-sdlc` when a devDependency pins it). `doctor`
 checks the pin and that the launcher is executable.
 
