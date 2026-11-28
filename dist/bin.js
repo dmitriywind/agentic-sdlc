@@ -12067,7 +12067,7 @@ ${END}`;
     CLI_PIN = ".agents/cli.json";
     CLI_PACKAGE = "github:dmitriywind/agentic-sdlc";
     LAUNCHER = ".agents/bin/agentic-sdlc";
-    IGNORED = [".cli/", "work/"];
+    IGNORED = [".cli/", "work/", "!bin/"];
     isSha = (s) => typeof s === "string" && /^[0-9a-f]{40}$/.test(s);
     isTag = (s) => typeof s === "string" && /^v\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.+-]+)?$/.test(s);
     GUARD = ".agents/hooks/guard.mjs";

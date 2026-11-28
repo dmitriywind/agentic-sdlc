@@ -18,6 +18,12 @@ Feature: The CLI pin and the launcher
       And the installed file "package.json" holds '{\n    "name": "p"\n}\n'
       And the installed file ".npmrc" is absent
 
+    Scenario: The launcher stays tracked in a project that ignores bin folders
+      Given the project has the file ".gitignore" holding "[Bb]in/\n"
+      When I run the install command "init"
+      Then the installed file ".agents/.gitignore" contains "!bin/"
+      And the installed file ".gitignore" holds "[Bb]in/\n"
+
   Rule: An upgrade moves the pin that init wrote and keeps the one the project chose
 
     Background:
